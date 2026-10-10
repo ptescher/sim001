@@ -10,18 +10,27 @@ struct ResolvedGPixel {
     material: ResolvedMaterial,
 }
 
+/// t1s_sim patch: shading-point lift per metre of camera distance (see gpixel_resolve).
+const SHADING_LIFT: f32 = 0.0015;
+
 fn gpixel_resolve(gpixel: vec4<u32>, depth: f32, pixel_id: vec2<u32>, view_size: vec2<f32>, world_from_clip: mat4x4<f32>) -> ResolvedGPixel {
-    let world_position = reconstruct_world_position(pixel_id, depth, view_size, world_from_clip);
+    let surface_position = reconstruct_world_position(pixel_id, depth, view_size, world_from_clip);
     // t1s_sim patch: interpolated normals can face away from the camera at grazing angles
     // (ridge silhouettes on smooth-shaded terrain). The BRDF returns zero for N.V <= 0, which
     // shows up as black slivers, so bend such normals until they face the viewer slightly.
     let near_position = reconstruct_world_position(pixel_id, 1.0, view_size, world_from_clip);
-    let wo = normalize(near_position - world_position);
+    let wo = normalize(near_position - surface_position);
     var world_normal = octahedral_decode(unpack_24bit_normal(gpixel.a));
     let n_dot_v = dot(world_normal, wo);
     if n_dot_v < 0.05 {
         world_normal = normalize(world_normal + wo * (0.05 - n_dot_v));
     }
+    // t1s_sim patch: lift the shading point off the surface in proportion to its distance.
+    // Distant terrain is coarse (metres per triangle) under smooth normals, so rays leaving
+    // the flat triangle clip its neighbours and every small facet shadows itself into a dark
+    // triangle (the "shadow terminator" problem). The lift grows with the triangle size the
+    // terrain LODs use, and stays at millimetres to centimetres close up.
+    let world_position = surface_position + world_normal * (distance(surface_position, near_position) * SHADING_LIFT);
 
     let base_rough = unpack4x8unorm(gpixel.r);
     let base_color = pow(base_rough.rgb, vec3(2.2));
