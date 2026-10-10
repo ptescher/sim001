@@ -1,0 +1,188 @@
+//! Sensor video feed: the sim streams its gimballed camera to the ground station over TCP.
+//!
+//! Server (sim) → client (GCS): a [`FrameHeader`] followed by `stride * height` bytes of BGRA8
+//! (sRGB) pixels, one message per frame. Client → server: [`GimbalCmd`] messages, any time.
+//! Everything is little-endian. Raw frames keep it simple and latency-free on localhost
+//! (1280×720 at 30 fps is ~110 MB/s, nothing for loopback).
+
+use std::io::{self, Read, Write};
+
+pub const DEFAULT_PORT: u16 = 5600;
+const FRAME_MAGIC: [u8; 4] = *b"T1SF";
+const CMD_MAGIC: [u8; 4] = *b"T1SC";
+pub const FORMAT_BGRA8: u16 = 1;
+
+/// Gimbal limits (degrees). Pan is body-relative, + right; tilt + up; hfov is the zoom.
+pub const PAN_LIMIT: f32 = 170.0;
+pub const TILT_MIN: f32 = -90.0;
+pub const TILT_MAX: f32 = 20.0;
+pub const HFOV_MIN: f32 = 4.0;
+pub const HFOV_MAX: f32 = 90.0;
+pub const HFOV_DEFAULT: f32 = 75.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Gimbal {
+    pub pan: f32,
+    pub tilt: f32,
+    pub hfov: f32,
+}
+
+impl Default for Gimbal {
+    fn default() -> Self {
+        Gimbal { pan: 0.0, tilt: 0.0, hfov: HFOV_DEFAULT }
+    }
+}
+
+impl Gimbal {
+    pub fn clamped(self) -> Gimbal {
+        Gimbal {
+            pan: self.pan.clamp(-PAN_LIMIT, PAN_LIMIT),
+            tilt: self.tilt.clamp(TILT_MIN, TILT_MAX),
+            hfov: self.hfov.clamp(HFOV_MIN, HFOV_MAX),
+        }
+    }
+
+    /// Looking straight ahead along the airframe, so flight symbology is conformal.
+    pub fn is_boresight(&self) -> bool {
+        self.pan.abs() < 0.5 && self.tilt.abs() < 0.5
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FrameHeader {
+    pub format: u16,
+    pub width: u16,
+    pub height: u16,
+    /// Bytes per row (rows may be padded).
+    pub stride: u32,
+    pub frame: u32,
+    /// Simulation time of the frame, seconds.
+    pub sim_time: f32,
+    /// Gimbal state the frame was rendered with.
+    pub gimbal: Gimbal,
+}
+
+impl FrameHeader {
+    pub const SIZE: usize = 36;
+
+    pub fn payload_len(&self) -> usize {
+        self.stride as usize * self.height as usize
+    }
+
+    pub fn encode(&self) -> [u8; Self::SIZE] {
+        let mut b = [0u8; Self::SIZE];
+        b[0..4].copy_from_slice(&FRAME_MAGIC);
+        b[4..6].copy_from_slice(&self.format.to_le_bytes());
+        b[6..8].copy_from_slice(&self.width.to_le_bytes());
+        b[8..10].copy_from_slice(&self.height.to_le_bytes());
+        // 10..12 reserved
+        b[12..16].copy_from_slice(&self.stride.to_le_bytes());
+        b[16..20].copy_from_slice(&self.frame.to_le_bytes());
+        b[20..24].copy_from_slice(&self.sim_time.to_le_bytes());
+        b[24..28].copy_from_slice(&self.gimbal.pan.to_le_bytes());
+        b[28..32].copy_from_slice(&self.gimbal.tilt.to_le_bytes());
+        b[32..36].copy_from_slice(&self.gimbal.hfov.to_le_bytes());
+        b
+    }
+
+    pub fn decode(b: &[u8; Self::SIZE]) -> io::Result<FrameHeader> {
+        if b[0..4] != FRAME_MAGIC {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "bad feed frame magic"));
+        }
+        let u16_at = |i: usize| u16::from_le_bytes([b[i], b[i + 1]]);
+        let u32_at = |i: usize| u32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+        let f32_at = |i: usize| f32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+        let h = FrameHeader {
+            format: u16_at(4),
+            width: u16_at(6),
+            height: u16_at(8),
+            stride: u32_at(12),
+            frame: u32_at(16),
+            sim_time: f32_at(20),
+            gimbal: Gimbal { pan: f32_at(24), tilt: f32_at(28), hfov: f32_at(32) },
+        };
+        if h.format != FORMAT_BGRA8 || (h.stride as usize) < h.width as usize * 4 || h.payload_len() > 64 << 20 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "unsupported feed frame"));
+        }
+        Ok(h)
+    }
+}
+
+/// Writes one frame (header + pixels).
+pub fn write_frame(w: &mut impl Write, header: &FrameHeader, pixels: &[u8]) -> io::Result<()> {
+    debug_assert_eq!(pixels.len(), header.payload_len());
+    w.write_all(&header.encode())?;
+    w.write_all(pixels)
+}
+
+/// Reads one frame into `buf` (resized as needed).
+pub fn read_frame(r: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<FrameHeader> {
+    let mut hb = [0u8; FrameHeader::SIZE];
+    r.read_exact(&mut hb)?;
+    let h = FrameHeader::decode(&hb)?;
+    buf.resize(h.payload_len(), 0);
+    r.read_exact(buf)?;
+    Ok(h)
+}
+
+/// Absolute gimbal command from the ground station.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GimbalCmd(pub Gimbal);
+
+impl GimbalCmd {
+    pub const SIZE: usize = 16;
+
+    pub fn encode(&self) -> [u8; Self::SIZE] {
+        let mut b = [0u8; Self::SIZE];
+        b[0..4].copy_from_slice(&CMD_MAGIC);
+        b[4..8].copy_from_slice(&self.0.pan.to_le_bytes());
+        b[8..12].copy_from_slice(&self.0.tilt.to_le_bytes());
+        b[12..16].copy_from_slice(&self.0.hfov.to_le_bytes());
+        b
+    }
+
+    pub fn decode(b: &[u8; Self::SIZE]) -> io::Result<GimbalCmd> {
+        if b[0..4] != CMD_MAGIC {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "bad gimbal command magic"));
+        }
+        let f = |i: usize| f32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+        let g = Gimbal { pan: f(4), tilt: f(8), hfov: f(12) };
+        if !(g.pan.is_finite() && g.tilt.is_finite() && g.hfov.is_finite()) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "non-finite gimbal command"));
+        }
+        Ok(GimbalCmd(g.clamped()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_roundtrip() {
+        let h = FrameHeader {
+            format: FORMAT_BGRA8,
+            width: 4,
+            height: 2,
+            stride: 16,
+            frame: 7,
+            sim_time: 12.5,
+            gimbal: Gimbal { pan: -30.0, tilt: -10.0, hfov: 20.0 },
+        };
+        let px: Vec<u8> = (0..32).collect();
+        let mut wire = Vec::new();
+        write_frame(&mut wire, &h, &px).unwrap();
+        let mut buf = Vec::new();
+        let got = read_frame(&mut wire.as_slice(), &mut buf).unwrap();
+        assert_eq!(got, h);
+        assert_eq!(buf, px);
+    }
+
+    #[test]
+    fn gimbal_cmd_clamps() {
+        let c = GimbalCmd(Gimbal { pan: 400.0, tilt: -200.0, hfov: 1.0 });
+        let back = GimbalCmd::decode(&c.encode()).unwrap().0;
+        assert_eq!(back, Gimbal { pan: PAN_LIMIT, tilt: TILT_MIN, hfov: HFOV_MIN });
+        assert!(GimbalCmd::decode(&[0; 16]).is_err());
+    }
+}

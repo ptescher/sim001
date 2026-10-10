@@ -1,0 +1,21 @@
+[package]
+name = "t1s_gcs"
+version = "0.1.0"
+edition = "2024"
+description = "Ground control station for the T1-S sim + ArduPlane SITL, built on GPUI"
+
+[dependencies]
+gpui = "0.2.2"
+mavlink = { version = "0.19", default-features = false, features = ["std", "transport-tcp", "transport-udp", "dialect-ardupilotmega", "dialect-common"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+t1s_station = { path = "../station" }
+raw-window-handle = "0.6"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", features = ["NSScreen", "NSWindow", "NSResponder", "NSGraphics", "NSView", "NSButton", "NSControl"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSGeometry"] }
+
+# Keep `cargo run` (debug) usable: optimize dependencies.
+[profile.dev.package."*"]
+opt-level = 3

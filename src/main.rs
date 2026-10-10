@@ -1,0 +1,260 @@
+//! HEEWING T1-S Ranger flight simulator.
+//!
+//!   cargo run --release                 ray-traced (Bevy Solari), built-in flight modes
+//!   cargo run --release -- --raster     classic rasterized lighting with shadow maps
+//!   cargo run --release -- --ardupilot  physics backend for ArduPilot SITL (JSON, UDP 9002)
+//!   cargo run --release -- --selftest   headless flight-model checks
+//!   cargo run --release -- --export-map gcs/assets   map + heights for the ground station
+//!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
+//!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
+//!   --frameless                                 transparent title bar, no title or buttons
+
+mod ardupilot;
+mod camera;
+mod gc_pad;
+mod foliage;
+mod geom;
+mod grass;
+mod hud;
+mod feed;
+mod input;
+mod loading;
+mod mapgen;
+mod placement;
+mod mesh_util;
+mod model;
+mod pad_overlay;
+mod physics;
+mod scenery;
+mod script;
+mod selftest;
+mod sim;
+#[cfg(target_os = "macos")]
+mod switch_hid;
+mod terrain;
+mod terrain_render;
+mod treegen;
+mod vegetation;
+mod world;
+
+use bevy::light::atmosphere::ScatteringMedium;
+use bevy::prelude::*;
+use bevy::solari::SolariPlugins;
+use bevy::window::{PresentMode, WindowLevel, WindowResolution};
+use input::{Action, PilotInput};
+use sim::{SimCore, AP_MODES};
+use std::sync::{Arc, Mutex};
+
+/// Physics step for standalone mode (ArduPilot mode is paced by SITL's frame rate).
+const PHYSICS_DT: f32 = 1.0 / 600.0;
+
+#[derive(Resource, Clone)]
+pub struct SharedSim(pub Arc<Mutex<SimCore>>);
+
+#[derive(Resource, Clone)]
+pub struct RenderSettings {
+    pub raytracing: bool,
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SimSet {
+    Input,
+    Logic,
+    Visual,
+}
+
+fn main() {
+    install_controller_mappings();
+    let args: Vec<String> = std::env::args().collect();
+    let flag = |f: &str| args.iter().any(|a| a == f);
+    if flag("--selftest") {
+        selftest::run_all();
+        return;
+    }
+    if let Some(dir) = args.iter().position(|a| a == "--export-map").map(|i| args.get(i + 1).map_or("gcs/assets", |s| s.as_str())) {
+        mapgen::export(dir);
+        return;
+    }
+    let ap_port: u16 = args
+        .iter()
+        .position(|a| a == "--ap-port")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(9002);
+    let ap_enabled = flag("--ardupilot");
+    let raytracing = !flag("--raster");
+
+    // Trees/obstacles are generated with the rest of the world on the loading screen.
+    let core = Arc::new(Mutex::new(SimCore::new(physics::t1s_params(), vec![], ap_enabled, ap_port)));
+    if ap_enabled {
+        ardupilot::spawn_bridge(core.clone(), ap_port);
+    }
+
+    let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
+    let feed = flag("--feed").then(|| feed::FeedConfig {
+        port: arg("--feed").and_then(|p| p.parse().ok()).unwrap_or(t1s_station::feed::DEFAULT_PORT),
+        size: arg("--feed-size")
+            .and_then(|s| s.split_once('x'))
+            .and_then(|(w, h)| Some(UVec2::new(w.parse().ok()?, h.parse().ok()?)))
+            .unwrap_or(UVec2::new(1280, 720)),
+    });
+    let window_rect = arg("--window-rect").and_then(|s| t1s_station::layout::Rect::parse(s));
+    let frameless = flag("--frameless");
+    // A frameless window's content fills its frame; otherwise allow for the title bar.
+    let title_bar: f32 = if frameless { 0.0 } else { arg("--title-bar").and_then(|s| s.parse().ok()).unwrap_or(28.0) };
+    if flag("--exit-with-parent") {
+        placement::exit_with_parent();
+    }
+
+    let shots = flag("--shots");
+    let mut app = App::new();
+    app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            // Keep the window visible during scripted captures (occluded windows aren't presented).
+            window_level: if shots { WindowLevel::AlwaysOnTop } else { WindowLevel::Normal },
+            title: "HEEWING T1-S Ranger Sim".into(),
+            resolution: WindowResolution::new(1600, 900),
+            present_mode: PresentMode::AutoVsync,
+            // --frameless (set by the ground station): the view runs under a transparent title
+            // bar with no title or buttons, like the station's other panes.
+            titlebar_transparent: frameless,
+            fullsize_content_view: frameless,
+            titlebar_show_title: !frameless,
+            titlebar_show_buttons: !frameless,
+            ..default()
+        }),
+        ..default()
+    }));
+    if raytracing {
+        app.add_plugins(SolariPlugins);
+    }
+    app.insert_resource(SharedSim(core))
+        .insert_resource(RenderSettings { raytracing })
+        .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(GlobalAmbientLight::NONE)
+        .init_resource::<hud::HudState>()
+        .init_resource::<pad_overlay::PadOverlayState>()
+        .insert_resource(gc_pad::GcPads::new(flag("--debug-input")))
+        .configure_sets(Update, (SimSet::Input, SimSet::Logic, SimSet::Visual).chain())
+        .add_plugins(input::InputPlugin)
+        .add_systems(Startup, (setup, grass::setup_grass))
+        .add_systems(Update, sim_update.in_set(SimSet::Logic).run_if(in_state(loading::AppState::Running)))
+        .add_systems(
+            Update,
+            (model::sync_plane, world::update_windsock, scenery::animate_scenery, camera::update_camera, grass::stream_grass.run_if(in_state(loading::AppState::Running)), hud::update_hud, pad_overlay::update_pad_overlay)
+                .chain()
+                .in_set(SimSet::Visual),
+        );
+    camera::camera_plugin(&mut app);
+    if let Some(cfg) = feed {
+        feed::feed_plugin(&mut app, cfg);
+    }
+    if let Some(r) = window_rect {
+        app.insert_resource(placement::WindowRect(r, title_bar)).add_systems(Update, placement::place_window);
+    }
+    loading::loading_plugin(&mut app);
+    if let Some(dir) = args.iter().position(|a| a == "--shots").and_then(|i| args.get(i + 1)) {
+        std::fs::create_dir_all(dir).ok();
+        app.insert_resource(script::ShotScript { dir: dir.clone(), t: 0.0, done: vec![] })
+            .add_systems(
+                Update,
+                script::run_script.after(SimSet::Input).before(SimSet::Logic).run_if(in_state(loading::AppState::Running)),
+            )
+            .add_systems(Update, script::log_state.after(SimSet::Visual))
+            .add_systems(Update, script::shot_loading.run_if(in_state(loading::AppState::Loading)));
+    }
+    app.run();
+}
+
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+    mut media: ResMut<Assets<ScatteringMedium>>,
+    settings: Res<RenderSettings>,
+) {
+    world::spawn_world(&mut commands, &mut meshes, &mut materials, &mut images, &mut media, &settings);
+    model::spawn_plane(&mut commands, &mut meshes, &mut materials);
+    camera::spawn_camera(&mut commands, &settings, &mut images);
+    hud::spawn_hud(&mut commands);
+    pad_overlay::spawn_pad_overlay(&mut commands);
+}
+
+fn sim_update(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut input: ResMut<PilotInput>,
+    sim: Res<SharedSim>,
+    mut acc: Local<f32>,
+) {
+    let mut c = sim.0.lock().unwrap();
+    c.sticks = input.sticks;
+
+    for a in input.actions.clone() {
+        match a {
+            Action::Launch => c.state.launch(),
+            Action::Reset => c.reset(),
+            Action::Mode if !c.ap.enabled => c.mode = c.mode.next(),
+            Action::Rates => c.high_rates = !c.high_rates,
+            Action::Pause => c.paused = !c.paused,
+            Action::DiffThrust => c.diff_thrust = !c.diff_thrust,
+            Action::Recharge => {
+                c.state.recharge();
+                input.notice = "Fresh 4S 1800 mAh pack".into();
+            }
+            Action::ApArm => c.ap.arm_switch = !c.ap.arm_switch,
+            Action::ApMode | Action::Mode => {
+                c.ap.mode_index = (c.ap.mode_index + 1) % AP_MODES.len();
+            }
+            _ => {}
+        }
+    }
+
+    // Wind controls.
+    if keys.just_pressed(KeyCode::BracketRight) {
+        c.wind.speed = (c.wind.speed + 1.0).min(15.0);
+    }
+    if keys.just_pressed(KeyCode::BracketLeft) {
+        c.wind.speed = (c.wind.speed - 1.0).max(0.0);
+    }
+    if keys.just_pressed(KeyCode::Period) {
+        c.wind.from_dir += 15f32.to_radians();
+    }
+    if keys.just_pressed(KeyCode::Comma) {
+        c.wind.from_dir -= 15f32.to_radians();
+    }
+    if keys.just_pressed(KeyCode::Slash) {
+        c.wind.turbulence = if c.wind.turbulence >= 0.99 { 0.0 } else { (c.wind.turbulence + 0.25).min(1.0) };
+    }
+
+    if c.ap.enabled {
+        // Physics is stepped in lockstep by the ArduPilot bridge thread.
+        return;
+    }
+    if c.paused {
+        *acc = 0.0;
+        return;
+    }
+    *acc += time.delta_secs().min(0.1);
+    while *acc >= PHYSICS_DT {
+        c.step_standalone(PHYSICS_DT);
+        *acc -= PHYSICS_DT;
+    }
+}
+
+/// Extra SDL mappings for controllers whose exact USB version isn't in gilrs' bundled
+/// database (e.g. Switch Pro Controllers reporting version 0x0200 on macOS).
+fn install_controller_mappings() {
+    const PRO: &str = "Nintendo Switch Pro Controller,a:b0,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,guide:b12,leftshoulder:b4,leftstick:b10,lefttrigger:b6,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b11,righttrigger:b7,rightx:a2,righty:a3,start:b9,x:b2,y:b3,platform:Mac OS X,";
+    let mut mappings: Vec<String> = ["030000007e0500000920000000020000", "030000007e0500000920000001020000"]
+        .iter()
+        .map(|guid| format!("{guid},{PRO}"))
+        .collect();
+    if let Ok(existing) = std::env::var("SDL_GAMECONTROLLERCONFIG") {
+        mappings.insert(0, existing);
+    }
+    // SAFETY: called first thing in main, before any other threads exist.
+    unsafe { std::env::set_var("SDL_GAMECONTROLLERCONFIG", mappings.join("\n")) };
+}

@@ -1,0 +1,7 @@
+[package]
+name = "t1s_station"
+version = "0.1.0"
+edition = "2024"
+description = "Shared between t1s_sim and t1s_gcs: the sensor video feed protocol and the window layout planner"
+
+[dependencies]
