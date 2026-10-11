@@ -1,0 +1,25 @@
+Story: From plan to flight
+  As a pilot at the field
+  I want to plan a mission, upload it and throw the plane into it
+  So that it flies the mission on its own
+
+  This tutorial shows all the steps of a flight. You plan a short circuit on the map, and
+  you write it to the plane. Then you arm the plane, select AUTO and throw the plane. After
+  the throw, ArduPlane flies the circuit. [[Planning a mission]] and [[Flying a mission]]
+  give more information about each part.
+
+  Scenario: Plan, upload, arm, AUTO, throw
+    When the operator toggles the planning tool
+    Then the map tool is PLAN
+    When the operator adds a takeoff
+    When the operator plans two waypoints
+    When the operator adds a return home
+    Then the plan has 4 items
+    When the operator uploads the plan
+    Then the vehicle mission is up to date
+    When the operator arms the vehicle
+    Then the vehicle is armed
+    When the operator switches to AUTO
+    Then the autopilot mode is AUTO
+    When the pilot throws the plane in the sim
+    Then the plane is flying the mission

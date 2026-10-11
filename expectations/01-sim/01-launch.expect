@@ -1,0 +1,36 @@
+Feature: Hand launch
+  The plane starts in your hand. To throw it, hold the throttle above 55 %, as you do at the
+  field. You can also press Space. R picks the plane up again: the sim carries it back to
+  your hand, and then you can throw it again. [[Your first throw]] shows each step.
+
+  Expectation: Throttle up throws the plane
+    This is the launch that you use at the field. Hold the throttle above 55 % for a short
+    time, and the plane goes.
+    Given the plane is in hand
+    When the throttle is above 55 %
+    Then the plane is flying
+
+  Expectation: Space throws the plane
+    Space throws the plane at the throttle that you set. Use it when you fly with the
+    throttle low, or when the sim waits for a throw in AUTO.
+    Given the plane is in hand
+    And the sim is running
+    When the pilot throws the plane
+    Then the plane is flying
+
+  Expectation: Reset picks the plane back up
+    Close the throttle first. If the throttle is open, the plane goes again when it is back
+    in your hand. While the sim carries the plane back, the HUD says "Bringing it back to
+    your hand...".
+    Given the throttle is below 55 %
+    When the pilot resets the plane
+    Then the plane is in hand
+
+  Expectation: A throw with the nose down crashes the plane
+    If you hold the stick forward, the plane flies into the ground immediately after it
+    leaves your hand.
+    Overrides: Throttle up throws the plane
+    Given the plane is in hand
+    And the pitch stick is forward
+    When the throttle is above 55 %
+    Then the plane is crashed

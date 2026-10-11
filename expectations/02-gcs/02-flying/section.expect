@@ -1,0 +1,17 @@
+Section: Flying a mission
+  In AUTO, ArduPlane flies the items of the mission in order. After the last item, it
+  decides where to go. It also decides when the mission starts again from the first item.
+
+Vocabulary:
+  Phrase: the plane is flying a three-waypoint mission
+    Say: do the steps of [[From plan to flight]], but plan only three waypoints, with no takeoff and no return
+    Given the plan has 3 items
+    And the last plan item is WAYPOINT
+    And the vehicle mission is up to date
+    And the vehicle is armed
+    And the autopilot mode is AUTO
+    And the plane is flying the mission
+    And the vehicle's current item is 1
+
+Background:
+  Given the plane is flying a three-waypoint mission

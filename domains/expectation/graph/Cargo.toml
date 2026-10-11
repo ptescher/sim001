@@ -1,0 +1,12 @@
+[package]
+name = "expectation_graph"
+version = "0.1.0"
+edition = "2024"
+description = "Expectation domain: conflict detection, override precedence and the flow DAG"
+
+[dependencies]
+expectation_model = { path = "../model" }
+design_theme = { path = "../../design/theme" }
+
+[dev-dependencies]
+expectation_language = { path = "../language" }

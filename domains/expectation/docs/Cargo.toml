@@ -1,0 +1,11 @@
+[package]
+name = "expectation_docs"
+version = "0.1.0"
+edition = "2024"
+description = "Expectation domain: documentation from expectations, stories, results and screenshots"
+
+[dependencies]
+expectation_model = { path = "../model" }
+expectation_graph = { path = "../graph" }
+expectation_story = { path = "../story" }
+design_theme = { path = "../../design/theme" }

@@ -1,0 +1,21 @@
+Feature: Flight modes
+  M steps through MANUAL, ANGLE (self-levelling) and ACRO (rate), and back to MANUAL. The
+  plane starts in MANUAL. The calibration wizard ignores it, like every other button.
+
+  Expectation: MANUAL to ANGLE
+    Given the flight mode is MANUAL
+    And the calibration wizard is closed
+    When the pilot presses flight mode
+    Then the flight mode is ANGLE
+
+  Expectation: ANGLE to ACRO
+    Given the flight mode is ANGLE
+    And the calibration wizard is closed
+    When the pilot presses flight mode
+    Then the flight mode is ACRO
+
+  Expectation: ACRO back to MANUAL
+    Given the flight mode is ACRO
+    And the calibration wizard is closed
+    When the pilot presses flight mode
+    Then the flight mode is MANUAL

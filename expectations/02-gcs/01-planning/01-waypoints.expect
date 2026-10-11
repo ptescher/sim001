@@ -1,0 +1,42 @@
+Feature: Waypoints
+  When PLAN is selected, each click on the map adds a [[waypoint]] at the end of the plan, at
+  the [[plan altitude]]. A right-click removes the last item, and CLEAR removes all items.
+  The map shows the plan as a dashed line, and the mission on the vehicle as a solid line.
+
+  Expectation: A click adds a waypoint
+    Given the map tool is PLAN
+    When the operator clicks the map
+    Then the plan goes up by 1
+    And the last plan item is WAYPOINT
+    And the newest waypoint is at the plan altitude
+
+  Expectation: Right-click removes the last item
+    Given the map tool is PLAN
+    And the plan has at least 1 item
+    When the operator right-clicks the map
+    Then the plan goes down by 1
+
+  Expectation: Right-click on an empty plan does nothing
+    Given the map tool is PLAN
+    And the plan has 0 items
+    When the operator right-clicks the map
+    Then the plan stays the same
+
+  Expectation: CLEAR empties the plan
+    When the operator clears the plan
+    Then the plan has 0 items
+    And the takeoff is not planned
+
+  Expectation: A full plan takes no more waypoints
+    ArduPilot keeps approximately 650 mission items in its memory, so the plan stops at 650.
+    With BRD_SD_MISSION and an SD card, ArduPilot keeps more.
+    Overrides: A click adds a waypoint
+    Given the map tool is PLAN
+    And the plan has 650 items
+    When the operator clicks the map
+    Then the plan stays the same
+
+  Expectation: An empty plan has no last item
+    Docs: hidden
+    Given the plan has 0 items
+    Then the last plan item is none

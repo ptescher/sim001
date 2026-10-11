@@ -1,0 +1,28 @@
+Feature: Map tools
+  When you drag the tactical map, it pans. PLAN and GOTO change what a click on the map does.
+  With PLAN, a click adds a waypoint to the plan. With GOTO, a click sends the plane to that
+  point. Press the same tool again to go back to panning.
+
+  Expectation: PLAN picks the planning tool
+    Given the map tool is not PLAN
+    When the operator toggles the planning tool
+    Then the map tool is PLAN
+
+  Expectation: PLAN again goes back to panning
+    Given the map tool is PLAN
+    When the operator toggles the planning tool
+    Then the map tool is pan
+
+  Expectation: GOTO picks the fly-to tool
+    Given the map tool is not GOTO
+    When the operator toggles the fly-to tool
+    Then the map tool is GOTO
+
+  Expectation: A GOTO click flies the plane there
+    The plane flies to the point at its current altitude, and then it circles the point in
+    [[GUIDED]]. The map goes back to panning.
+    Given the map tool is GOTO
+    And the vehicle is armed
+    When the operator clicks the map
+    Then the autopilot mode is GUIDED
+    And the map tool is pan

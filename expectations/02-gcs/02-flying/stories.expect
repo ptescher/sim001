@@ -1,0 +1,31 @@
+Story: Flying the circuit and coming home
+  As a pilot
+  I want the plane to fly the waypoints in order and come home after the last one
+  So that all I have to do is throw it and catch it
+
+  After the throw, the plane flies its mission without your help. At each waypoint, the
+  [[current item]] on the map moves to the next one. After the last waypoint, the mode
+  changes to RTL.
+
+  Scenario: Three waypoints, then home
+    When the plane reaches a waypoint
+    Then the vehicle's current item is 2
+    When the plane reaches a waypoint
+    Then the vehicle's current item is 3
+    When the plane reaches the last item
+    Then the plane is flying home
+    And the autopilot mode is RTL
+
+Story: Flying the circuit again
+  As a pilot
+  I want to start the mission over without landing
+  So that I can fly another lap
+
+  WP1 sends the plane back to the first item of its mission. Thus the plane flies the
+  circuit again, and it does not land.
+
+  Scenario: Back to the first waypoint
+    When the plane reaches a waypoint
+    Then the vehicle's current item is 2
+    When the operator restarts the mission
+    Then the vehicle's current item is 1

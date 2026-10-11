@@ -1,0 +1,40 @@
+Feature: The end of a mission
+  After the last item, a plane flies home in [[RTL]]. But if the mission ends with a loiter
+  or a landing, the plane does that. A copter circles at the last waypoint, and a rover
+  stays where it is.
+
+  Expectation: Each waypoint reached moves the mission on
+    Given the plane is flying the mission
+    When the plane reaches a waypoint
+    Then the vehicle's current item goes up by 1
+
+  Expectation: After the last waypoint the plane flies home
+    Given the plane is flying the mission
+    And the last plan item is WAYPOINT
+    And the vehicle mission is up to date
+    When the plane reaches the last item
+    Then the autopilot mode is RTL
+    And the plane is flying home
+
+  Expectation: A mission that ends with a loiter keeps circling
+    Given the plane is flying the mission
+    And the last plan item is LOITER_UNLIM or LOITER_TURNS
+    And the vehicle mission is up to date
+    When the plane reaches the last item
+    Then the autopilot mode is AUTO
+    And the plane is loitering
+
+  Expectation: A mission that ends with a landing lands
+    Given the plane is flying the mission
+    And the last plan item is LAND
+    And the vehicle mission is up to date
+    When the plane reaches the last item
+    Then the plane is on the ground
+
+  Expectation: A mission that ends with RTL flies home in AUTO
+    Given the plane is flying the mission
+    And the last plan item is RTL
+    And the vehicle mission is up to date
+    When the plane reaches the last item
+    Then the autopilot mode is AUTO
+    And the plane is flying home

@@ -1,0 +1,47 @@
+Feature: Vehicle commands
+  ARM needs a second press to confirm it. For a plane, [[home]] is the point where you arm
+  it, and [[RTL]] brings the plane back to that point. The mode buttons change the flight
+  mode of ArduPilot. If the vehicle has no mission, AUTO asks you to confirm, because the
+  plane would go to RTL immediately.
+
+  Expectation: Arming sets home
+    If the button shows ARM: NOT READY, wait. ArduPilot does its pre-arm checks first, and
+    the button shows ARM when they pass.
+    Given the vehicle is disarmed
+    And the link is connected
+    When the operator arms the vehicle
+    Then the vehicle is armed
+    And the home position is set
+
+  Expectation: DISARM disarms
+    Given the vehicle is armed
+    When the operator disarms the vehicle
+    Then the vehicle is disarmed
+
+  Expectation: AUTO flies the vehicle's mission
+    Given the vehicle mission is not empty
+    When the operator switches to AUTO
+    Then the autopilot mode is AUTO
+    And the vehicle's current item is 1
+
+  Expectation: AUTO with no mission asks first
+    If you did not upload a mission, AUTO would go to RTL immediately. Thus the button
+    changes to AUTO: NO MISSION?, and the MESSAGES screen tells you why. To change to AUTO,
+    press the button again in four seconds or less.
+    Given the vehicle mission is empty
+    When the operator switches to AUTO
+    Then the autopilot mode stays the same
+
+  Expectation: AUTO twice goes anyway
+    Given the vehicle mission is empty
+    When the operator switches to AUTO anyway
+    Then the autopilot mode is AUTO
+
+  Expectation: In AUTO, a throw starts the mission
+    With the physics of the sim, the takeoff waits for a [[hand launch]]. The HUD of the sim
+    says "AUTO takeoff: throw it (SPACE or B)". The motors start after the throw.
+    Given the autopilot mode is AUTO
+    And the vehicle is armed
+    And the plane is on the ground
+    When the pilot throws the plane in the sim
+    Then the plane is flying the mission

@@ -1,0 +1,22 @@
+Feature: Restarting a mission
+  WP1 sends the mission back to its first item. A plane also starts its mission again when
+  you disarm it. In AUTO, it keeps its place, so that a mission can continue after a landing.
+  In ArduPilot, MIS_RESTART and an RC switch with option 24 also restart the mission.
+
+  Expectation: WP1 restarts the mission
+    Given the vehicle mission is not empty
+    When the operator restarts the mission
+    Then the vehicle's current item is 1
+
+  Expectation: Disarming outside AUTO restarts the mission
+    Given the vehicle is armed
+    And the vehicle mission is not empty
+    And the autopilot mode is not AUTO
+    When the operator disarms the vehicle
+    Then the vehicle's current item is 1
+
+  Expectation: Disarming in AUTO keeps the plane's place
+    Given the vehicle is armed
+    And the autopilot mode is AUTO
+    When the operator disarms the vehicle
+    Then the vehicle's current item stays the same

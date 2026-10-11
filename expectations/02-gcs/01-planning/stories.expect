@@ -1,0 +1,97 @@
+Story: Planning a hand-launched circuit
+  As a pilot at the field
+  I want to plan a takeoff, a few waypoints and a return home
+  So that the plane flies the circuit on its own after I throw it
+
+  A circuit is the simplest useful mission. The plane takes off, flies to some waypoints
+  and comes back. The takeoff waits for your throw. The return brings the plane back to the
+  point where you armed it.
+
+  Scenario: Takeoff, three waypoints, home
+    When the operator adds a takeoff
+    Then the plan has 1 item
+    And the takeoff is planned
+    When the operator plans three waypoints
+    Then the plan has 4 items
+    When the operator adds a return home
+    Then the last plan item is RTL
+    When the operator uploads the plan
+    Then the vehicle mission is up to date
+
+Story: Fixing a misplaced waypoint
+  As a pilot
+  I want to take back a waypoint I put in the wrong place
+  So that I don't have to start the plan again
+
+  It is easy to remove a waypoint that you put in the wrong place. A right-click removes the
+  last item. Then you can click the correct place.
+
+  Scenario: Two clicks and a right-click
+    When the operator plans two waypoints
+    Then the plan has 2 items
+    When the operator right-clicks the map
+    Then the plan has 1 item
+
+Story: Clearing the ridge
+  As a pilot planning over the hills
+  I want to plan higher and check the plan against the terrain
+  So that no waypoint flies the plane into the ground
+
+  The ridges of the valley are higher than the default [[plan altitude]]. Before you put
+  waypoints near the ridges, increase the plan altitude. Then compare the plan with the
+  terrain. The planner raises each waypoint that is too low.
+
+  Scenario: Raise the plan, add a waypoint, check it
+    When the operator raises the plan altitude
+    When the operator raises the plan altitude
+    Then the plan altitude is 60 m
+    When the operator clicks the map
+    Then the newest waypoint is at the plan altitude
+    When the operator checks the heights against the terrain
+    Then the waypoints are clear of the terrain
+
+Story: Keeping a mission for the field
+  As a pilot
+  I want to save a mission and load it again later
+  So that I can fly the same circuit next time
+
+  Save a plan that you want to use again. If you change the plan after that, load the file
+  to get the saved plan back.
+
+  Scenario: Save, change, load
+    When the operator plans two waypoints
+    When the operator saves the plan to a file
+    Then the mission file is up to date
+    When the operator clicks the map
+    Then the mission file is out of date
+    When the operator loads the plan from the file
+    Then the mission file is up to date
+
+Story: Surveying a field
+  As a pilot mapping a field
+  I want the planner to lay out the survey lines for me
+  So that the photos cover the whole field
+
+  To make a map of a field, draw a line around the field. The planner fills the area with
+  survey lines. Then write the plan to the plane, as with all other plans.
+
+  Scenario: Draw a grid and upload it
+    When the operator draws a survey grid
+    Then the plan has at least 4 items
+    When the operator uploads the plan
+    Then the vehicle mission is up to date
+
+Story: Planning at the altitude limit
+  As a pilot planning over the mountains
+  I want the plan altitude to stop at its limit
+  So that I can't plan the plane higher than it should fly
+
+  The plan altitude cannot go higher than 300 m above home. At 300 m, ALT+ does nothing, if
+  you press it one time or many times.
+
+  Scenario: ALT+ from 290 m
+    Given the plan altitude is 290 m
+    When the operator raises the plan altitude
+    Then the plan altitude is 300 m
+    When the operator raises the plan altitude
+    Then the plan altitude is 300 m

@@ -1,0 +1,28 @@
+Feature: Takeoff and return
+  +TKOF puts a takeoff at home at the start of the plan. Its altitude is the plan altitude,
+  but not more than 40 m. With a [[hand launch]], the takeoff waits for the throw. +RTL adds
+  a return to launch at the end of the plan. Then the plane comes back to the point where
+  you armed it.
+
+  Expectation: +TKOF puts a takeoff first
+    Given the takeoff is not planned
+    When the operator adds a takeoff
+    Then the plan goes up by 1
+    And the takeoff is planned
+
+  Expectation: The plan has only one takeoff
+    Given the takeoff is planned
+    When the operator adds a takeoff
+    Then the plan stays the same
+
+  Expectation: On an empty plan the takeoff is also the last item
+    Given the takeoff is not planned
+    And the plan has 0 items
+    When the operator adds a takeoff
+    Then the plan has 1 item
+    And the last plan item is TAKEOFF
+
+  Expectation: +RTL ends the plan with a return
+    When the operator adds a return home
+    Then the plan goes up by 1
+    And the last plan item is RTL

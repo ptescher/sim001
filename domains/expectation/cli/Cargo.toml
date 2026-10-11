@@ -1,0 +1,16 @@
+[package]
+name = "expectation_cli"
+version = "0.1.0"
+edition = "2024"
+description = "Expectation domain: the expectation command (check, graph, plan, docs)"
+
+[dependencies]
+expectation_model = { path = "../model" }
+expectation_language = { path = "../language" }
+expectation_graph = { path = "../graph" }
+expectation_story = { path = "../story" }
+expectation_docs = { path = "../docs" }
+
+[[bin]]
+name = "expectation"
+path = "src/main.rs"

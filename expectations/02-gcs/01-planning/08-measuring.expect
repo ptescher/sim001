@@ -1,0 +1,7 @@
+Feature: Measuring distance
+  The cursor readout always shows the range and bearing from home. To find the distance
+  between two points, measure from one point to the other. The map shows the distance.
+
+  Expectation: Measuring between two points shows the distance
+    When the operator measures between two points
+    Then the measured distance is shown

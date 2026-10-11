@@ -1,0 +1,22 @@
+Feature: Help and battery
+  H (or F1) shows the keys on the view. Press H again or Esc to hide them. If a gamepad is
+  connected, H shows a diagram of the gamepad. V installs a new 4S 1800 mAh battery, and the
+  BAT reading on the HUD goes back to approximately 100 %.
+
+  Expectation: H shows the help screen
+    Given the help screen is hidden
+    When the pilot toggles the help
+    Then the help screen is shown
+
+  Expectation: H again hides it
+    Given the help screen is shown
+    When the pilot toggles the help
+    Then the help screen is hidden
+
+  Expectation: Esc hides the help screen
+    When the pilot closes the help
+    Then the help screen is hidden
+
+  Expectation: V fits a fresh battery
+    When the pilot fits a fresh battery
+    Then the battery is at least 99 %

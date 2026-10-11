@@ -1,0 +1,118 @@
+# The glossary: what the words the manual uses mean. Link to a term from any text with
+# [[its name]].
+
+Term: ACRO
+  The rate mode of the sim. The sticks set the rate of roll and pitch. When you centre the
+  sticks, the plane holds its attitude. Use it for aerobatics.
+
+Term: ANGLE
+  The self-levelling mode of the sim. The sticks set the angle of bank and pitch. When you
+  release the sticks, the plane becomes level. Use it when you learn to fly.
+
+Term: ArduPilot
+  The open-source autopilot. ArduPlane is its version for planes. Here, it runs as
+  [[SITL]] and flies the plane of the sim. The [[Ground control station]] talks to it.
+
+Term: Annunciator
+  A lamp on the CAUTION / WARNING screen of the ground station. ARMED lights when the plane
+  is armed. Other lamps show the link, GPS, the battery, a stall and the fence.
+
+Term: AUTO
+  The mode of ArduPilot that flies the [[mission]] on the vehicle, one item after the other.
+
+Term: Chase
+  The view from just behind the plane, following it.
+
+Term: Current item
+  The [[mission]] item that the plane flies to in AUTO. The map shows it in magenta. WP1
+  sends the plane back to the first item.
+
+Term: Differential thrust
+  When you use the rudder, one motor turns faster and the other turns more slowly. Thus the
+  plane turns more quickly in yaw than with the rudder only. X turns it on and off.
+
+Term: FBWA
+  Fly By Wire A, a mode of ArduPilot. The sticks set the angle of bank and pitch, and the
+  autopilot holds them. It is like ANGLE in the sim.
+
+Term: FPV
+  First-person view: the picture from a camera in the nose of the plane. The camera points
+  20° up.
+
+Term: GUIDED
+  The mode of ArduPilot that flies the plane to one point. GOTO on the map puts the plane in
+  GUIDED.
+
+Term: Hand launch
+  A launch where you throw the plane into the air. The plane does not use a runway. You
+  launch the T1-S in this way, and also the plane in the sim.
+
+Term: HUD
+  The text on the view of the sim. The top line shows the flight mode, the rates and
+  differential thrust. The
+  lines below it show the controller, the view, the throttle, the speeds, the height, the
+  attitude, the battery and the wind. Messages such as CRASHED and PAUSED (P) appear in the
+  middle.
+
+Term: Home
+  The point where you armed the plane. RTL brings the plane back to it. The map shows it.
+
+Term: Line of sight
+  The view from the [[pilot box]]. You look at the plane as you do at the field. The HUD
+  calls it LINE OF SIGHT, and the help screen calls it LOS.
+
+Term: LOITER
+  A mode of ArduPilot, and a mission item, that circles a point.
+
+Term: MANUAL
+  In the sim, the mode where the sticks move the control surfaces directly. Nothing helps
+  you. In ArduPilot, the mode where the autopilot sends the sticks directly to the plane.
+
+Term: MAVLink
+  The protocol that ArduPilot and ground stations use to talk to each other.
+
+Term: Mission
+  The list of items that the autopilot flies in AUTO: waypoints, loiters, a takeoff, a
+  landing or a return home. The map shows the mission on the vehicle as a solid line.
+
+Term: Pilot box
+  The place where you stand at the field to fly. The sim starts there, with the plane in
+  your hand.
+
+Term: Pitch stick
+  The stick that moves the nose up and down. On the keyboard, W pushes it forward (nose down)
+  and S pulls it back (nose up).
+
+Term: Plan
+  The mission that you edit in the ground station. The map shows it as a dashed line. When
+  you upload it, it becomes the mission on the vehicle.
+
+Term: Plan altitude
+  The height above home for new waypoints. It shows between ALT- and ALT+.
+
+Term: Roll stick
+  The stick that banks the plane. On the keyboard, A rolls the plane to the left and D rolls
+  it to the right.
+
+Term: Rates
+  How far the control surfaces move for a movement of the stick. High rates give tight
+  turns. Low rates give gentle turns. L changes between them.
+
+Term: RTL
+  Return to launch: ArduPilot flies the plane back to [[home]]. RTL is also a mission item
+  that does the same.
+
+Term: Sensor feed
+  The window that shows the picture from the camera below the nose of the plane, with the
+  sensor symbols on it. The ground station can point the camera.
+
+Term: SITL
+  Software in the loop. ArduPilot runs on your computer, not on a flight controller. The sim
+  gives it the physics and the sensors of the plane.
+
+Term: Tactical map
+  The map of the valley in the ground station, on the screen with the title TACTICAL
+  SITUATION. It shows the plane, home, the plan and the mission on the vehicle.
+
+Term: Waypoint
+  A point that the plane flies to, at a set height. Most items in a mission are waypoints.

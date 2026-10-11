@@ -1,0 +1,37 @@
+Feature: Views
+  C selects the next of three views: [[line of sight]] from the pilot box, [[chase]] from
+  behind the plane, and [[FPV]] through its nose camera. The CAM line on the HUD shows the
+  view. In line of sight, auto-zoom keeps the plane at a good size on the screen when it
+  flies away. Z turns auto-zoom off and on.
+
+  Expectation: Chase follows the plane
+    The view moves behind the plane and follows it. You see the area in front of the plane,
+    and you also see the plane.
+    Given the view is line of sight
+    When the pilot changes the view
+    Then the view is chase
+
+  Expectation: FPV looks out of the nose
+    You see the picture from the camera in the nose of the plane. The camera points 20° up,
+    as on a plane for FPV flight.
+    Given the view is chase
+    When the pilot changes the view
+    Then the view is FPV
+
+  Expectation: Line of sight is the view from the pilot box
+    You see the plane from the point where you stand, as at the field. The sim starts in this
+    view.
+    Given the view is FPV
+    When the pilot changes the view
+    Then the view is line of sight
+
+  Expectation: Auto-zoom off
+    The zoom stays the same, as with your eyes. The plane becomes small when it flies away.
+    Given auto-zoom is on
+    When the pilot toggles auto-zoom
+    Then auto-zoom is off
+
+  Expectation: Auto-zoom on
+    Given auto-zoom is off
+    When the pilot toggles auto-zoom
+    Then auto-zoom is on

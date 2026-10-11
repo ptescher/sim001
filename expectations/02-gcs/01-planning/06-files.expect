@@ -1,0 +1,24 @@
+Feature: Mission files
+  Save the plan to a file to keep it. Load the file later, for example to fly the same
+  circuit again at the field. In Mission Planner, these are Save WP File and Load WP File.
+
+  Expectation: Saving keeps the plan in a file
+    Given the plan has at least 1 item
+    When the operator saves the plan to a file
+    Then the mission file is up to date
+
+  Expectation: Changing the plan after saving
+    Given the mission file is up to date
+    And the map tool is PLAN
+    When the operator clicks the map
+    Then the mission file is out of date
+
+  Expectation: Loading brings the saved plan back
+    Given the mission file is out of date
+    When the operator loads the plan from the file
+    Then the mission file is up to date
+
+  Expectation: Before a save, there is nothing to load
+    Given the mission file is missing
+    When the operator loads the plan from the file
+    Then the plan stays the same

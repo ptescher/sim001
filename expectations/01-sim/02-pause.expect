@@ -1,0 +1,31 @@
+Feature: Pause
+  P stops the flight. Press P again to continue from the point where it stopped. During the
+  pause, the HUD says PAUSED (P). The views, the help and the other keys continue to work.
+
+  Expectation: P pauses the sim
+    Given the sim is running
+    When the pilot toggles pause
+    Then the sim is paused
+
+  Expectation: P again resumes
+    Given the sim is paused
+    When the pilot toggles pause
+    Then the sim is running
+
+  Expectation: A pause holds the plane in your hand
+    The throttle cannot throw the plane while time is stopped. Nothing happens: the plane
+    stays in your hand, and the HUD still says PAUSED (P).
+    Overrides: Throttle up throws the plane
+    Overrides: A throw with the nose down crashes the plane
+    Given the plane is in hand
+    And the sim is paused
+    When the throttle is above 55 %
+    Then the plane is in hand
+
+  Expectation: A throw during a pause waits for the pause to end
+    Space starts the throw, but nothing moves until you press P again. Then the plane leaves
+    your hand.
+    Given the plane is in hand
+    And the sim is paused
+    When the pilot throws the plane
+    Then the plane is launching

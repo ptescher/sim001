@@ -1,0 +1,69 @@
+Feature: Flight modes and handling
+  The sim has three flight modes. M selects the next one: MANUAL, then [[ANGLE]], then
+  [[ACRO]], then MANUAL again. L changes between high and low [[rates]]. X turns
+  [[differential thrust]] on and off. The top line of the HUD shows all three, for example
+  "ANGLE | high rates | diff thrust on". The sim starts in MANUAL, with high rates and
+  differential thrust on.
+
+  Expectation: ANGLE levels the plane for you
+    In ANGLE, the sticks set the angle of bank and pitch. When you release the sticks, the
+    plane levels its wings and nose. Use this mode when you learn to fly.
+    Given the flight mode is MANUAL
+    When the pilot changes flight mode
+    Then the flight mode is ANGLE
+
+  Expectation: In ANGLE, the stick sets the bank
+    Hold A or D, and the plane banks to an angle of 55° or less. It does not roll over.
+    Given the flight mode is ANGLE
+    And the plane is flying
+    When the pilot rolls the plane to the left
+    Then the wings are banked
+
+  Expectation: In ANGLE, the wings become level again
+    Release the stick, and the plane levels its wings by itself.
+    Given the flight mode is ANGLE
+    And the plane is flying
+    And the wings are banked
+    When the pilot releases the roll stick
+    Then the wings are level
+
+  Expectation: ACRO holds the attitude
+    In ACRO, the sticks set the rate of roll and pitch. When you centre the sticks, the plane
+    holds its attitude, also when it is upside down. Use this mode for aerobatics.
+    Given the flight mode is ANGLE
+    When the pilot changes flight mode
+    Then the flight mode is ACRO
+
+  Expectation: MANUAL gives you the control surfaces
+    In MANUAL, the sticks move the ailerons, the elevator and the rudder directly. Nothing
+    helps you. The plane flies as the real plane does.
+    Given the flight mode is ACRO
+    When the pilot changes flight mode
+    Then the flight mode is MANUAL
+
+  Expectation: Low rates for gentle flying
+    The control surfaces move less for the same movement of the stick, so the plane turns
+    more gently. Use low rates for smooth flight and for a landing.
+    Given the rates are high
+    When the pilot changes rates
+    Then the rates are low
+
+  Expectation: High rates for tight turns
+    The control surfaces move through their full range. Use high rates for tight turns and
+    rolls.
+    Given the rates are low
+    When the pilot changes rates
+    Then the rates are high
+
+  Expectation: Differential thrust off
+    Only the rudder turns the plane in yaw, as on a plane with one motor.
+    Given differential thrust is on
+    When the pilot toggles differential thrust
+    Then differential thrust is off
+
+  Expectation: Differential thrust on
+    The motors help the rudder. The outer motor turns faster and the inner motor turns more
+    slowly, so the plane turns more quickly in yaw.
+    Given differential thrust is off
+    When the pilot toggles differential thrust
+    Then differential thrust is on

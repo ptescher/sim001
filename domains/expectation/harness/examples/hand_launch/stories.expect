@@ -1,0 +1,38 @@
+Story: First throw
+  As a new pilot
+  I want to throw the plane by opening the throttle, like at the field
+  So that launching in the sim feels like the real thing
+
+  Scenario: Throttle up, then pick it back up
+    When the throttle is 80 %
+    Then the aircraft is flying
+    When the throttle is 0 %
+    And the pilot presses reset
+    Then the aircraft is in hand
+
+Story: Calibrating a new radio
+  As a pilot with a new radio
+  I want to calibrate it with the plane in my hand
+  So that sweeping the sticks during setup doesn't throw the plane
+
+  Scenario: Sweep the throttle in the wizard, then fly
+    When the pilot presses calibrate
+    Then the calibration wizard is open
+    When the throttle is 100 %
+    Then the aircraft is in hand
+    When the throttle is 0 %
+    And the pilot presses calibrate
+    Then the calibration wizard is closed
+    When the throttle is 80 %
+    Then the aircraft is flying
+
+Story: Picking a flight mode
+  As a pilot learning to fly
+  I want to choose how much the plane helps me before I throw it
+  So that I can start out in self-levelling ANGLE mode
+
+  Scenario: Step to ANGLE and throw
+    When the pilot presses flight mode
+    Then the flight mode is ANGLE
+    When the pilot presses launch
+    Then the aircraft is flying

@@ -1,0 +1,12 @@
+[package]
+name = "expectation_story"
+version = "0.1.0"
+edition = "2024"
+description = "Expectation domain: user stories compiled into acceptance-test plans, and their results"
+
+[dependencies]
+expectation_model = { path = "../model" }
+expectation_graph = { path = "../graph" }
+
+[dev-dependencies]
+expectation_language = { path = "../language" }

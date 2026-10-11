@@ -1,0 +1,46 @@
+Feature: Altitude
+  New waypoints go at the [[plan altitude]], which shows between ALT- and ALT+. These buttons
+  change it in steps of 10 m, from 10 m to 300 m. All altitudes are relative to [[home]]. A
+  change to the plan altitude does not move the waypoints that are already in the plan.
+
+  Over hills, compare the plan with the terrain. The planner compares each waypoint with the
+  ground below it, in the height map of the sim. It raises each waypoint that is too low.
+  Mission Planner calls this Verify height.
+
+  Expectation: ALT+ raises the plan altitude
+    Given the plan altitude is below 300 m
+    When the operator raises the plan altitude
+    Then the plan altitude goes up by 10 m
+
+  Expectation: ALT+ stops at 300 m
+    Given the plan altitude is 300 m
+    When the operator raises the plan altitude
+    Then the plan altitude stays the same
+
+  Expectation: ALT- lowers the plan altitude
+    Given the plan altitude is above 10 m
+    When the operator lowers the plan altitude
+    Then the plan altitude goes down by 10 m
+
+  Expectation: ALT- stops at 10 m
+    Given the plan altitude is 10 m
+    When the operator lowers the plan altitude
+    Then the plan altitude stays the same
+
+  Expectation: Waypoints already planned keep their altitude
+    Given the plan has at least 1 item
+    And the newest waypoint is at the plan altitude
+    And the plan altitude is below 300 m
+    When the operator raises the plan altitude
+    Then the newest waypoint is at another altitude
+
+  Expectation: A height check raises waypoints above the terrain
+    Given the plan has at least 1 item
+    When the operator checks the heights against the terrain
+    Then the waypoints are clear of the terrain
+
+  Expectation: A new waypoint needs a new height check
+    Given the waypoints are clear of the terrain
+    And the map tool is PLAN
+    When the operator clicks the map
+    Then the waypoints are unchecked

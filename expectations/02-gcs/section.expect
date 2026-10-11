@@ -1,0 +1,145 @@
+# The ground control station (gcs/) flying ArduPlane SITL on the sim's physics, as the
+# operator sees it. Modelled on Mission Planner's planning docs (ardupilot.org/planner):
+# where the console does something already, these say what it does; elsewhere they say what
+# it should do. The console's driver (gcs/src/expect.rs, `--station --expect`) clicks the real
+# console; tests that need the mission file, the terrain check, the survey grid, measuring or
+# the sim's window aren't supported yet.
+
+Section: Ground control station
+  The ground station flies the plane of the sim through [[ArduPilot]]. You plan a
+  [[mission]] on a map of the valley, and you write the mission to the plane. Then you arm
+  the plane, and you throw it. The ground station talks to ArduPlane with [[MAVLink]], as
+  Mission Planner and QGroundControl do.
+
+  The console is one window with a set of screens. The [[tactical map]] (TACTICAL SITUATION)
+  is in the middle. Its buttons are along the top: FOLLOW, GOTO, PLAN, ALT-, the plan
+  altitude, ALT+, +TKOF, +RTL, CLEAR, UPLOAD, DOWNLOAD, EDIT and WP1. The vehicle command
+  screen has ARM, DISARM and a button for each flight mode. Start with
+  [[From plan to flight]].
+
+Vocabulary:
+  State: the link is connected | lost
+  State: the vehicle is disarmed | armed
+    Shows: armed: the ARMED annunciator lights up
+    Shows: disarmed: the ARMED annunciator goes out
+  State: the autopilot mode is MANUAL | FBWA | FBWB | CRUISE | AUTO | RTL | LOITER | CIRCLE | GUIDED | TAKEOFF
+    Set: press {value} on the vehicle command screen
+    Shows: the {value} button lights up
+    Shows: stays the same: the mode does not change, and the AUTO button shows AUTO: NO MISSION?
+  State: the map tool is pan | PLAN | GOTO
+    Shows: pan: the map is back to panning
+    Shows: PLAN: the PLAN button lights up
+    Shows: GOTO: the GOTO button lights up
+  State: the plan has 0..650 items
+    Shows: the UPLOAD button reads UPLOAD {value}
+    Shows: goes up by 1: a new marker appears at the end of the dashed plan, and the count on UPLOAD goes up by 1
+    Shows: goes down by 1: the last marker goes away from the dashed plan, and the count on UPLOAD goes down by 1
+    Shows: stays the same: the dashed plan and the count on UPLOAD do not change
+  State: the plan altitude is 10..300 m
+    Set: set the plan altitude to {value} with ALT- and ALT+
+    Shows: the plan altitude between ALT- and ALT+ reads {value} m
+    Shows: goes up by 10 m: the plan altitude between ALT- and ALT+ goes up by 10 m
+    Shows: goes down by 10 m: the plan altitude between ALT- and ALT+ goes down by 10 m
+    Shows: stays the same: the plan altitude between ALT- and ALT+ does not change
+  State: the last plan item is none | TAKEOFF | WAYPOINT | LOITER_UNLIM | LOITER_TURNS | LAND | RTL
+    Set: change the last item's command to {value}
+    Shows: the last item of the dashed plan is {value}
+  State: the takeoff is planned | not planned
+    Shows: planned: the first item of the plan is a takeoff at home
+    Shows: not planned: the plan has no takeoff
+  State: the newest waypoint is at the plan altitude | at another altitude
+    Shows: at the plan altitude: the new waypoint goes at the altitude between ALT- and ALT+
+    Shows: at another altitude: the waypoints that are already in the plan keep their altitude
+  State: the vehicle mission is empty | up to date | out of date
+    Shows: up to date: the solid line of the mission on the vehicle is the same as the dashed plan
+    Shows: out of date: the dashed plan and the solid line of the mission on the vehicle are different
+    Shows: stays the same: the solid line of the mission on the vehicle does not change
+  State: the home position is set | not set
+    Shows: set: the map marks home where the plane was armed
+  State: the waypoints are unchecked | clear of the terrain | too low somewhere
+    Shows: clear of the terrain: each waypoint is above the ground below it
+  State: the mission file is missing | up to date | out of date
+    Shows: up to date: the file has the plan as it is now
+    Shows: out of date: the plan is different from the file
+  State: the measured distance is hidden | shown
+    Shows: shown: the distance between the two points is shown on the map
+  State: the vehicle's current item is 0..650
+    Shows: item {value} is the current item, which is magenta on the map
+    Shows: goes up by 1: the next item becomes the current item, which is magenta on the map
+    Shows: stays the same: the current item does not change
+
+  Event: the operator toggles the planning tool
+    Say: press PLAN
+  Event: the operator toggles the fly-to tool
+    Say: press GOTO
+  Event: the operator clicks the map
+    Say: click the map
+  Event: the operator right-clicks the map
+    Say: right-click the map
+  Event: the operator raises the plan altitude
+    Say: press ALT+
+  Event: the operator lowers the plan altitude
+    Say: press ALT-
+  Event: the operator adds a takeoff
+    Say: press +TKOF
+  Event: the operator adds a return home
+    Say: press +RTL
+  Event: the operator clears the plan
+    Say: press CLEAR
+  Event: the operator uploads the plan
+    Say: press UPLOAD
+  Event: the operator downloads the vehicle's mission
+    Say: press DOWNLOAD
+  Event: the operator edits the vehicle's mission
+    Say: press EDIT
+  Event: the operator restarts the mission
+    Say: press WP1
+  Event: the operator arms the vehicle
+    Say: press ARM. Then press CONFIRM ARM in three seconds or less
+  Event: the operator disarms the vehicle
+    Say: press DISARM
+  Event: the operator switches to AUTO
+    Say: press AUTO
+  Event: the operator switches to AUTO anyway
+    Say: press AUTO. The button shows AUTO: NO MISSION? for four seconds. In that time, press it again
+  Event: the operator saves the plan to a file
+  Event: the operator loads the plan from the file
+  Event: the operator checks the heights against the terrain
+  Event: the operator draws a survey grid
+  Event: the operator measures between two points
+  Event: the pilot throws the plane in the sim
+    Say: click the sim window. Then press Space to throw the plane
+  Event: the plane reaches a waypoint
+  Event: the plane reaches the last item
+
+  Phrase: the console is connected to a plane on the ground
+    Say: install Rust and Docker Desktop. Then run `cd gcs && cargo run --release -- --station`. The first time, it builds ArduPlane [[SITL]], which takes approximately 15 minutes. After that, it starts in a few seconds. Three windows open: the console, the [[sensor feed]] and the sim. The console connects to the plane. The plane is on the ground and disarmed, in MANUAL, with home set and no plan. Wait until the ARM button shows ARM, not ARM: NOT READY
+    Given the link is connected
+    And the vehicle is disarmed
+    And the autopilot mode is MANUAL
+    And the map tool is pan
+    And the plan has 0 items
+    And the plan altitude is 40 m
+    And the last plan item is none
+    And the takeoff is not planned
+    And the vehicle mission is empty
+    And the home position is set
+    And the waypoints are unchecked
+    And the mission file is missing
+    And the measured distance is hidden
+    And the plane is on the ground
+    And the vehicle's current item is 0
+
+  Phrase: the operator plans two waypoints
+    Say: click the map at two points over the valley floor near home
+    When the operator clicks the map
+    When the operator clicks the map
+
+  Phrase: the operator plans three waypoints
+    Say: click the map at three points over the valley floor near home
+    When the operator clicks the map
+    When the operator clicks the map
+    When the operator clicks the map
+
+Background:
+  Given the console is connected to a plane on the ground

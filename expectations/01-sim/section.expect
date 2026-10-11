@@ -1,0 +1,117 @@
+# The sim's behaviour as a keyboard pilot sees it, standalone (no ArduPilot). Each event is
+# a key press and each state is read from the live sim: see src/acceptance.rs. Events and
+# phrases say what the pilot means ("throws the plane"); their Say: lines give the keys.
+
+Section: The simulator
+  Fly the T1-S Ranger from the [[pilot box]] at the field. Throw it, fly it from the
+  keyboard, and pick it up again. Start with [[Your first throw]].
+
+  On the keyboard, W and S move the nose down and up. A and D roll the plane, and Q and E
+  move the rudder. Shift opens the throttle and Ctrl closes it. The keys 1 to 5 set the
+  throttle to 20, 40, 60, 80 or 100 %, and 0 closes it. Press H at any time to see all the
+  keys. The [[HUD]] on the view shows the flight mode, the view and all the readings.
+
+Vocabulary:
+  State: the throttle is 0..100 %
+    Set: set the throttle to {value} with Shift, or with the number keys
+    Shows: the THR reading on the HUD is {value}%
+  State: the pitch stick is forward | centred | back
+    Set: hold the pitch stick {value}
+  State: the roll stick is left | centred | right
+  State: the wings are level | banked
+    Shows: banked: the plane banks, and the roll reading on the ATT line of the HUD moves away from 0
+    Shows: level: the wings become level, and the roll reading on the ATT line of the HUD goes back to near 0
+  State: the flight mode is MANUAL | ANGLE | ACRO
+    Set: press M until the flight mode is {value}
+    Shows: the top line of the HUD starts with {value}
+  State: the rates are low | high
+    Set: press L for {value} rates
+    Shows: the top line of the HUD says {value} rates
+  State: differential thrust is on | off
+    Set: press X to turn differential thrust {value}
+    Shows: the top line of the HUD says diff thrust {value}
+  State: the view is line of sight | chase | FPV
+    Set: press C until the view is {value}
+    Shows: line of sight: you see the plane from the pilot box again, and the HUD says CAM LINE OF SIGHT
+    Shows: chase: the view follows the plane from behind, and the HUD says CAM CHASE
+    Shows: FPV: you see the picture from the nose camera of the plane, and the HUD says CAM FPV
+  State: auto-zoom is on | off
+    Set: press Z to turn auto-zoom {value}
+    Shows: on: the CAM line on the HUD says (auto-zoom) again, and the view zooms to keep the plane in sight
+    Shows: off: (auto-zoom) goes away from the CAM line on the HUD, and the zoom stays the same
+  State: the help screen is shown | hidden
+    Shows: shown: the help screen appears on the view
+    Shows: hidden: the help screen goes away
+  State: the sim is running | paused
+    Shows: paused: everything stops, and the HUD says PAUSED (P)
+    Shows: running: PAUSED (P) goes away, and the flight continues from the point where it stopped
+  State: the battery is 0..100 %
+    Shows: at least 99 %: the BAT reading on the HUD is approximately 100 % again
+
+  Event: the pilot throws the plane
+    Say: press Space to throw the plane
+  Event: the pilot resets the plane
+    Say: press R
+  Event: the pilot changes flight mode
+    Say: press M
+  Event: the pilot changes rates
+    Say: press L
+  Event: the pilot toggles differential thrust
+    Say: press X
+  Event: the pilot changes the view
+    Say: press C
+  Event: the pilot toggles auto-zoom
+    Say: press Z
+  Event: the pilot toggles the help
+    Say: press H
+  Event: the pilot closes the help
+    Say: press Esc
+  Event: the pilot toggles pause
+    Say: press P
+  Event: the pilot fits a fresh battery
+    Say: press V
+
+  Phrase: the sim has just started
+    Say: install Rust. Then run `cargo run --release` in the repository. The sim opens at the pilot box. The plane is in your hand, the throttle is closed and the flight mode is MANUAL
+    Given the plane is in hand
+    And the throttle is 0 %
+    And the pitch stick is centred
+    And the roll stick is centred
+    And the wings are level
+    And the flight mode is MANUAL
+    And the rates are high
+    And differential thrust is on
+    And the view is line of sight
+    And auto-zoom is on
+    And the help screen is hidden
+    And the sim is running
+    And the battery is at least 99 %
+
+  Phrase: the pilot throws the plane with the throttle
+    Say: press 4 to set the throttle to 80 %
+    When the throttle is 80 %
+
+  Phrase: the pilot closes the throttle
+    Say: press 0 to close the throttle
+    When the throttle is 0 %
+
+  Phrase: the pilot throws the plane nose-down
+    Say: hold W to push the nose down, and at the same time press 5 for full throttle
+    When the pitch stick is forward
+    And the throttle is 100 %
+
+  Phrase: the pilot lets go and closes the throttle
+    Say: release W. Then press 0 to close the throttle
+    When the pitch stick is centred
+    And the throttle is 0 %
+
+  Phrase: the pilot rolls the plane to the left
+    Say: hold A to roll the plane to the left
+    When the roll stick is left
+
+  Phrase: the pilot releases the roll stick
+    Say: release A
+    When the roll stick is centred
+
+Background:
+  Given the sim has just started

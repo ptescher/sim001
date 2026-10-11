@@ -1,0 +1,29 @@
+# The whole project's behaviour, written as expectations. Each directory is a section of the
+# docs (a leading 01- only orders it), and a section's Background is the setup everything in
+# it starts from, on top of its parent's. See .claude/skills/writing-specs for how to write them.
+#
+#   cargo run -p expectation_cli -- check expectations              check it (no window)
+#   cargo run --release -- --expect --docs docs                     run the sim's tests, write docs/
+#   cargo run -p expectation_cli -- docs expectations docs          rewrite docs/ from saved results
+
+Suite: T1-S Ranger
+  This is a flight simulator for the HEEWING T1-S Ranger, a small plane with two motors that
+  you throw by hand. It also has a ground control station that flies the plane with
+  ArduPilot.
+
+  Start with [[The simulator]]. There, you throw the plane and fly it from the keyboard.
+  Then use the [[Ground control station]] to plan missions and fly them. The ground control
+  station runs ArduPlane on the physics of the sim.
+
+# Both systems fly the same plane, so they share its state.
+Vocabulary:
+  State: the plane is in hand | being carried back | launching | flying | on the ground | crashed | flying the mission | flying home | loitering
+    Shows: in hand: the plane is in your hand at the pilot box
+    Shows: being carried back: the HUD says "Bringing it back to your hand..."
+    Shows: launching: the throw starts, and the plane leaves your hand when time runs again
+    Shows: flying: the plane leaves your hand and climbs away
+    Shows: on the ground: the plane lands and stops on the ground
+    Shows: crashed: the plane hits the ground, and the HUD says CRASHED with the reason and "Press R to reset"
+    Shows: flying the mission: the plane climbs and flies to the first waypoint
+    Shows: flying home: the plane turns for home
+    Shows: loitering: the plane circles the last item

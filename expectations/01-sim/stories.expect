@@ -1,0 +1,111 @@
+# Tutorials. Each story is one tutorial in the docs and one acceptance test: its
+# introduction is the text under the narrative, and each When is a numbered step.
+
+Story: Your first throw
+  As a new pilot
+  I want to throw the plane by opening the throttle, like at the field
+  So that launching in the sim feels like the real thing
+
+  You launch the T1-S by hand. At the field, you hold it up, open the throttle and let it
+  go. The sim works in the same way. In this tutorial, you throw the plane one time. Then
+  you bring it back to your hand, so that you can throw it again.
+
+  Scenario: Throttle up, then pick it back up
+    When the pilot throws the plane with the throttle
+    Then the plane is flying
+    When the pilot closes the throttle
+    Then the throttle is 0 %
+    When the pilot resets the plane
+    Then the plane is in hand
+
+Story: Watching from every view
+  As a pilot
+  I want to see the plane from the pilot box, from behind it and from its nose camera
+  So that I can fly the way I like and watch it the way I want
+
+  You can see the plane in three views. [[Line of sight]] is from the pilot box, as you fly
+  at the field. [[Chase]] is from behind the plane, and [[FPV]] is through its nose camera.
+  Throw the plane, then look at it in each view.
+
+  Scenario: Throw it, then step through the views
+    When the pilot throws the plane with the throttle
+    Then the plane is flying
+    When the pilot changes the view
+    Then the view is chase
+    When the pilot changes the view
+    Then the view is FPV
+    When the pilot changes the view
+    Then the view is line of sight
+
+Story: Learning with self-levelling
+  As a pilot learning to fly
+  I want the plane to level itself when I let go of the sticks
+  So that I can learn the controls without it getting away from me
+
+  In [[ANGLE]], the plane levels its wings when you release the sticks. Thus the plane stays
+  under control while you learn. In this tutorial, you select ANGLE, throw the plane and roll
+  it. Then you release the stick, and the wings become level again.
+
+  Scenario: Pick ANGLE mode and throw
+    When the pilot changes flight mode
+    Then the flight mode is ANGLE
+    When the pilot throws the plane with the throttle
+    Then the plane is flying
+    When the pilot rolls the plane to the left
+    Then the wings are banked
+    When the pilot releases the roll stick
+    Then the wings are level
+    When the pilot closes the throttle
+    Then the throttle is 0 %
+    When the pilot resets the plane
+    Then the plane is in hand
+
+Story: Crashing and starting again
+  As a pilot
+  I want to pick the plane up again straight after a crash
+  So that a mistake costs seconds, not a repair
+
+  A crash in the sim costs nothing. In this tutorial, you throw the plane with the nose
+  down, so that it crashes. Then you pick it up again.
+
+  Scenario: Nose it in, then reset
+    When the pilot throws the plane nose-down
+    Then the plane is crashed
+    When the pilot lets go and closes the throttle
+    Then the throttle is 0 %
+    When the pilot resets the plane
+    Then the plane is in hand
+
+Story: Taking a break
+  As a pilot
+  I want to stop time mid-flight
+  So that I can look around or read the help without losing the plane
+
+  You can stop time during a flight. Then you can look around, read the help or rest. The
+  plane stays where it is until you continue.
+
+  Scenario: Pause, read the help, carry on
+    When the pilot throws the plane with the throttle
+    Then the plane is flying
+    When the pilot toggles pause
+    Then the sim is paused
+    When the pilot toggles the help
+    Then the help screen is shown
+    When the pilot closes the help
+    Then the help screen is hidden
+    When the pilot toggles pause
+    Then the sim is running
+
+Story: Checking the controls before a flight
+  As a new pilot
+  I want to look up the keys before I throw
+  So that I know how to fly before the plane is in the air
+
+  The help screen shows all the keys and what they do. Open it before your first throw. Open
+  it again when you forget a key.
+
+  Scenario: Open the help and close it again
+    When the pilot toggles the help
+    Then the help screen is shown
+    When the pilot toggles the help
+    Then the help screen is hidden

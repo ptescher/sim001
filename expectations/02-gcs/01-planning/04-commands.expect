@@ -1,0 +1,17 @@
+Feature: Mission commands
+  Each item in the plan is a [[MAVLink]] mission command. The plan shows its short name, for
+  example WAYPOINT for MAV_CMD_NAV_WAYPOINT. These commands fly the plane to a point:
+  WAYPOINT, LOITER_UNLIM, LOITER_TURNS, LAND and RTL. LOITER_UNLIM circles until you give a
+  new command, and LOITER_TURNS circles a set number of times. When you change the command
+  of an item, the item stays in its place in the plan.
+
+  Expectation: Changing a command keeps the item in its place
+    Given the plan has at least 1 item
+    When the last plan item is LOITER_TURNS
+    Then the plan stays the same
+
+  Expectation: Changing a command makes the vehicle's copy out of date
+    Given the plan has at least 1 item
+    And the vehicle mission is up to date
+    When the last plan item is LAND
+    Then the vehicle mission is out of date
