@@ -8,7 +8,11 @@
 //!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
+//!   --map NAME                                  fly a real place from maps/NAME (see tools/mapbuild)
+//!   --direct                                    with --ardupilot: start with the sticks flying (J toggles)
+//!   --expect [suite] [--docs dir]               run the acceptance tests in expectations/ (and write the docs)
 
+mod acceptance;
 mod ardupilot;
 mod camera;
 mod gc_pad;
@@ -21,6 +25,7 @@ mod input;
 mod loading;
 mod mapgen;
 mod placement;
+mod realsite;
 mod mesh_util;
 mod model;
 mod pad_overlay;
@@ -33,6 +38,7 @@ mod sim;
 mod switch_hid;
 mod terrain;
 mod terrain_render;
+mod theme;
 mod treegen;
 mod vegetation;
 mod world;
@@ -75,6 +81,24 @@ fn main() {
         mapgen::export(dir);
         return;
     }
+    // A real place, from a map pack: must be loaded before anything asks about the ground.
+    if let Some(name) = args.iter().position(|a| a == "--map").and_then(|i| args.get(i + 1)) {
+        let maps = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("maps");
+        if let Err(e) = terrain::load_site(&maps, name) {
+            eprintln!("--map {name}: {e}\nBuild it with: cargo run --release --manifest-path tools/mapbuild/Cargo.toml -- {name}");
+            std::process::exit(1);
+        }
+        let r = terrain::real().unwrap();
+        println!(
+            "map: {} (home {:.6}, {:.6}, {:.1} m AMSL, {} trees, {} buildings)",
+            r.meta.title,
+            r.meta.home_lat,
+            r.meta.home_lon,
+            r.meta.home_alt,
+            r.trees.len(),
+            r.buildings.len()
+        );
+    }
     let ap_port: u16 = args
         .iter()
         .position(|a| a == "--ap-port")
@@ -82,11 +106,13 @@ fn main() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(9002);
     let ap_enabled = flag("--ardupilot");
+    let direct = flag("--direct");
     let raytracing = !flag("--raster");
 
     // Trees/obstacles are generated with the rest of the world on the loading screen.
     let core = Arc::new(Mutex::new(SimCore::new(physics::t1s_params(), vec![], ap_enabled, ap_port)));
     if ap_enabled {
+        core.lock().unwrap().direct = direct;
         ardupilot::spawn_bridge(core.clone(), ap_port);
     }
 
@@ -96,7 +122,7 @@ fn main() {
         size: arg("--feed-size")
             .and_then(|s| s.split_once('x'))
             .and_then(|(w, h)| Some(UVec2::new(w.parse().ok()?, h.parse().ok()?)))
-            .unwrap_or(UVec2::new(1280, 720)),
+            .unwrap_or(UVec2::new(320, 240)),
     });
     let window_rect = arg("--window-rect").and_then(|s| t1s_station::layout::Rect::parse(s));
     let frameless = flag("--frameless");
@@ -106,14 +132,20 @@ fn main() {
         placement::exit_with_parent();
     }
 
-    let shots = flag("--shots");
+    // `--expect [suite]` runs the suite (default expectations/); `--docs [dir]` writes the docs.
+    let value = |name: &str| arg(name).filter(|v| !v.starts_with("--")).cloned();
+    let expect = flag("--expect").then(|| {
+        value("--expect").map_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations"), Into::into)
+    });
+    let docs = flag("--docs").then(|| value("--docs").unwrap_or_else(|| "docs".into()).into());
+    let shots = flag("--shots") || expect.is_some();
     let mut app = App::new();
     app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             // Keep the window visible during scripted captures (occluded windows aren't presented).
             window_level: if shots { WindowLevel::AlwaysOnTop } else { WindowLevel::Normal },
-            title: "HEEWING T1-S Ranger Sim".into(),
+            title: format!("HEEWING T1-S Ranger Sim - {}", terrain::site_title()),
             resolution: WindowResolution::new(1600, 900),
             present_mode: PresentMode::AutoVsync,
             // --frameless (set by the ground station): the view runs under a transparent title
@@ -129,7 +161,7 @@ fn main() {
     if raytracing {
         app.add_plugins(SolariPlugins);
     }
-    app.insert_resource(SharedSim(core))
+    app.insert_resource(SharedSim(core.clone()))
         .insert_resource(RenderSettings { raytracing })
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(GlobalAmbientLight::NONE)
@@ -138,6 +170,7 @@ fn main() {
         .insert_resource(gc_pad::GcPads::new(flag("--debug-input")))
         .configure_sets(Update, (SimSet::Input, SimSet::Logic, SimSet::Visual).chain())
         .add_plugins(input::InputPlugin)
+        .add_systems(Update, quit_on_cmd_q)
         .add_systems(Startup, (setup, grass::setup_grass))
         .add_systems(Update, sim_update.in_set(SimSet::Logic).run_if(in_state(loading::AppState::Running)))
         .add_systems(
@@ -148,7 +181,7 @@ fn main() {
         );
     camera::camera_plugin(&mut app);
     if let Some(cfg) = feed {
-        feed::feed_plugin(&mut app, cfg);
+        feed::feed_plugin(&mut app, cfg, core.clone());
     }
     if let Some(r) = window_rect {
         app.insert_resource(placement::WindowRect(r, title_bar)).add_systems(Update, placement::place_window);
@@ -164,7 +197,12 @@ fn main() {
             .add_systems(Update, script::log_state.after(SimSet::Visual))
             .add_systems(Update, script::shot_loading.run_if(in_state(loading::AppState::Loading)));
     }
-    app.run();
+    if let Some(suite) = expect {
+        acceptance::plugin(&mut app, suite, docs);
+    }
+    if matches!(app.run(), AppExit::Error(_)) {
+        std::process::exit(1);
+    }
 }
 
 fn setup(
@@ -182,6 +220,14 @@ fn setup(
     pad_overlay::spawn_pad_overlay(&mut commands);
 }
 
+/// Cmd-Q (macOS) / Ctrl-Q elsewhere ends the sim.
+fn quit_on_cmd_q(keys: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppExit>) {
+    let modifier = keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight, KeyCode::ControlLeft, KeyCode::ControlRight]);
+    if modifier && keys.just_pressed(KeyCode::KeyQ) {
+        exit.write(AppExit::Success);
+    }
+}
+
 fn sim_update(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -196,7 +242,15 @@ fn sim_update(
         match a {
             Action::Launch => c.state.launch(),
             Action::Reset => c.reset(),
-            Action::Mode if !c.ap.enabled => c.mode = c.mode.next(),
+            Action::Mode if !c.ap.enabled || c.direct => c.mode = c.mode.next(),
+            Action::ControlSource if c.ap.enabled => {
+                c.direct = !c.direct;
+                input.notice = if c.direct {
+                    format!("DIRECT: sticks fly the plane ({}); ArduPilot only watches", c.mode.label())
+                } else {
+                    "ARDUPILOT flies the plane".into()
+                };
+            }
             Action::Rates => c.high_rates = !c.high_rates,
             Action::Pause => c.paused = !c.paused,
             Action::DiffThrust => c.diff_thrust = !c.diff_thrust,

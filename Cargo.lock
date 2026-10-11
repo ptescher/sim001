@@ -2506,6 +2506,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "design_theme"
+version = "0.1.0"
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2673,6 +2677,67 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
+]
+
+[[package]]
+name = "expectation_cli"
+version = "0.1.0"
+dependencies = [
+ "expectation_docs",
+ "expectation_graph",
+ "expectation_language",
+ "expectation_model",
+ "expectation_story",
+]
+
+[[package]]
+name = "expectation_docs"
+version = "0.1.0"
+dependencies = [
+ "design_theme",
+ "expectation_graph",
+ "expectation_model",
+ "expectation_story",
+]
+
+[[package]]
+name = "expectation_graph"
+version = "0.1.0"
+dependencies = [
+ "design_theme",
+ "expectation_language",
+ "expectation_model",
+]
+
+[[package]]
+name = "expectation_harness"
+version = "0.1.0"
+dependencies = [
+ "expectation_docs",
+ "expectation_graph",
+ "expectation_language",
+ "expectation_model",
+ "expectation_story",
+]
+
+[[package]]
+name = "expectation_language"
+version = "0.1.0"
+dependencies = [
+ "expectation_model",
+]
+
+[[package]]
+name = "expectation_model"
+version = "0.1.0"
+
+[[package]]
+name = "expectation_story"
+version = "0.1.0"
+dependencies = [
+ "expectation_graph",
+ "expectation_language",
+ "expectation_model",
 ]
 
 [[package]]
@@ -3275,6 +3340,8 @@ dependencies = [
  "moxcms",
  "num-traits",
  "png",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -5238,7 +5305,12 @@ name = "t1s_sim"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "design_theme",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
  "hidapi",
+ "image",
  "libc",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
@@ -6747,3 +6819,18 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zune-core"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
+
+[[package]]
+name = "zune-jpeg"
+version = "0.5.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
+dependencies = [
+ "zune-core",
+]
