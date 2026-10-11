@@ -2,6 +2,7 @@
 //! responsive, then handed to the main thread in stages (assets, then trees in batches),
 //! and the ray-traced camera warms up behind the overlay before it fades out.
 
+use crate::theme::{P, color};
 use crate::camera::RenderScale;
 use crate::physics::Obstacle;
 use crate::terrain::{self, Tree};
@@ -71,7 +72,7 @@ const TIPS: &[&str] = &[
     "Watch the windsock by the pilot box: land into the wind.",
     "ANGLE mode self-levels; switch to MANUAL (M) when you're ready.",
     "Stalls drop a wing: keep your airspeed up in turns near the ground.",
-    "F5 / F6 trade ray-traced resolution for frame rate.",
+    "Resolution adapts to hold 60 fps. F5 / F6 set it by hand, F7 goes back to automatic.",
     "HOME on the Pro Controller shows the controller layout.",
     "Fly with ArduPilot: run with --ardupilot and start ardupilot/run_sitl.sh.",
 ];
@@ -94,7 +95,7 @@ fn start_loading(mut commands: Commands) {
                 g.fraction = f;
                 g.stage = s.to_string();
             };
-            set(0.01, "Surveying the valley");
+            set(0.01, &format!("Surveying {}", terrain::site_title()));
             let trees = terrain::trees();
             let obstacles = terrain::obstacles(&trees, &terrain::buildings());
             set(0.06, "Baking terrain");
@@ -219,15 +220,17 @@ fn spawn_loading_ui(commands: &mut Commands) {
             row_gap: px(14.0),
             ..default()
         },
+        // The attitude indicator's sky and ground either side of the console, in the shared
+        // theme's colours (see crate::theme).
         BackgroundGradient::from(LinearGradient::to_bottom(vec![
-            Color::srgb(0.20, 0.36, 0.62).into(),
-            Color::srgb(0.48, 0.64, 0.82).into(),
-            Color::srgb(0.16, 0.28, 0.14).into(),
+            color(P.sky).into(),
+            color(P.canvas).into(),
+            color(P.ground).into(),
         ])),
         GlobalZIndex(i32::MAX - 1),
         children![
-            (Text::new("HEEWING T1-S Ranger"), text(44.0), TextColor(Color::WHITE)),
-            (Text::new("alpine flying field"), text(18.0), TextColor(Color::srgba(1.0, 1.0, 1.0, 0.75))),
+            (Text::new("HEEWING T1-S Ranger"), text(44.0), TextColor(color(P.text))),
+            (Text::new(terrain::site_title().to_lowercase()), text(18.0), TextColor(color(P.muted))),
             (
                 Node {
                     width: px(520.0),
@@ -236,19 +239,19 @@ fn spawn_loading_ui(commands: &mut Commands) {
                     border_radius: BorderRadius::all(px(5.0)),
                     ..default()
                 },
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.35)),
+                BackgroundColor(color(P.screen)),
                 children![(
                     LoadingBar,
                     Node { width: percent(0.0), height: percent(100.0), border_radius: BorderRadius::all(px(5.0)), ..default() },
-                    BackgroundColor(Color::srgb(1.0, 0.45, 0.1)),
+                    BackgroundColor(color(P.ok)),
                 )],
             ),
-            (LoadingStage, Text::new(""), text(15.0), TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9))),
+            (LoadingStage, Text::new(""), text(15.0), TextColor(color(P.text))),
             (
                 LoadingTip,
                 Text::new(""),
                 text(14.0),
-                TextColor(Color::srgba(1.0, 1.0, 1.0, 0.7)),
+                TextColor(color(P.muted)),
                 Node { margin: UiRect::top(px(40.0)), max_width: px(640.0), ..default() },
             ),
         ],

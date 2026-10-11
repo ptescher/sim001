@@ -4,6 +4,7 @@
 //! Shown automatically when a gamepad becomes the active controller, hidden on launch,
 //! toggled with HOME (or H / F1).
 
+use crate::theme::{P, alpha, color};
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
 use crate::physics::Phase;
@@ -17,11 +18,12 @@ const H: f32 = 400.0;
 const LEFT_COL: f32 = 235.0; // right edge of the left label column
 const RIGHT_COL: f32 = 665.0; // left edge of the right label column
 
-const BODY: Color = Color::srgba(0.16, 0.17, 0.19, 0.95);
-const PART: Color = Color::srgba(0.30, 0.31, 0.34, 1.0);
-const LIT: Color = Color::srgb(1.0, 0.45, 0.1);
-const LINE: Color = Color::srgba(1.0, 1.0, 1.0, 0.35);
-const TEXT: Color = Color::srgb(0.92, 0.95, 1.0);
+// The console's colours (see crate::theme): the pad as a bezel, pressed buttons lit amber.
+const BODY: Color = alpha(P.bezel, 0.95);
+const PART: Color = color(P.bezel_edge);
+const LIT: Color = color(P.caution);
+const LINE: Color = alpha(P.muted, 0.5);
+const TEXT: Color = color(P.text);
 
 #[derive(Component)]
 pub struct PadOverlay;
@@ -96,7 +98,7 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
                 border_radius: round(14.0),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.55)),
+            BackgroundColor(alpha(P.screen, 0.6)),
             Visibility::Hidden,
         ))
         .id();
@@ -132,7 +134,7 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
             .spawn((
                 StickKnob(i as u8),
                 Node { border_radius: round(14.0), ..abs_node(20.0, 20.0, 28.0, 28.0) },
-                BackgroundColor(Color::srgb(0.75, 0.77, 0.8)),
+                BackgroundColor(color(P.muted)),
             ))
             .id();
         commands.entity(well).add_child(knob);
@@ -212,7 +214,7 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
                 Label::Home,
                 Text::default(),
                 small,
-                TextColor(Color::srgb(1.0, 0.85, 0.3)),
+                TextColor(color(P.caution)),
                 Node { position_type: PositionType::Absolute, left: px(380.0), top: px(8.0), ..default() },
             ))
             .id(),
@@ -224,7 +226,7 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
         PadHint,
         Text::new("HOME: controller layout"),
         TextFont { font_size: FontSize::Px(12.0), ..default() },
-        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.6)),
+        TextColor(color(P.muted)),
         Node { position_type: PositionType::Absolute, bottom: px(12.0), right: px(12.0), ..default() },
         Visibility::Hidden,
     ));
@@ -243,9 +245,9 @@ pub fn update_pad_overlay(
     mut labels: Query<(&Label, &mut Text)>,
 ) {
     let is_gamepad = input.profile == Some(Profile::Gamepad) && input.pad_view.is_some();
-    let (phase, mode, high_rates, ap_enabled, ap_arm, ap_mode, diff) = {
+    let (phase, mode, high_rates, ap_enabled, ap_arm, ap_mode, diff, direct) = {
         let c = sim.0.lock().unwrap();
-        (c.state.phase, c.mode, c.high_rates, c.ap.enabled, c.ap.arm_switch, c.ap.mode_index, c.diff_thrust)
+        (c.state.phase, c.mode, c.high_rates, c.ap.enabled, c.ap.arm_switch, c.ap.mode_index, c.diff_thrust, c.direct)
     };
 
     // Auto-show when a gamepad takes over; auto-hide when the plane is thrown.
@@ -296,9 +298,15 @@ pub fn update_pad_overlay(
             Label::RightStick => {
                 if mode1 { "Throttle (up/down), roll (left/right)".into() } else { "Pitch (up/down), roll (left/right)".into() }
             }
-            Label::DpadUp => "D-pad up: line-of-sight auto-zoom".to_string(),
+            Label::DpadUp => {
+                if ap_enabled {
+                    format!("D-pad up: auto-zoom   down: control {}", if direct { "DIRECT" } else { "ARDUPILOT" })
+                } else {
+                    "D-pad up: line-of-sight auto-zoom".to_string()
+                }
+            }
             Label::X => {
-                if ap_enabled { format!("Next ArduPilot mode ({})", AP_MODES[ap_mode].0) } else { format!("Flight mode: {}", mode.label()) }
+                if ap_enabled && !direct { format!("Next ArduPilot mode ({})", AP_MODES[ap_mode].0) } else { format!("Flight mode: {}", mode.label()) }
             }
             Label::A => format!("Camera: {cam_label}"),
             Label::B => {

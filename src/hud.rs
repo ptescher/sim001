@@ -1,5 +1,6 @@
 //! On-screen display: telemetry, warnings, stick gauges, help and controller debug.
 
+use crate::theme::{P, alpha, color, geometry};
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
 use crate::physics::{self, Phase};
@@ -39,10 +40,11 @@ CONTROLS (keyboard)
   L                low/high rates       X  differential thrust
   C                camera (LOS / chase / FPV)   Z  LOS auto-zoom
   [ ]  wind speed   , .  wind direction   /  turbulence
-  F5 / F6 render resolution down / up
+  F5 / F6 render resolution down / up (F7: automatic)
   P pause   F2 radio calibration   F3 raw controller axes   F4 radio/gamepad profile
 ARDUPILOT MODE
   B  arm switch (RC7)   N  next mode on RC8 (MANUAL FBWA CRUISE AUTO RTL LOITER)
+  J  control: ArduPilot / direct (sticks + sim modes, M cycles them)
 SWITCH PRO CONTROLLER (mode 2)
   Left stick: rudder + throttle up/down   Right stick: roll + pitch
   ZL cut  ZR throttle up  B launch  + reset  A camera  X mode  Y rates
@@ -51,7 +53,9 @@ Esc closes help / overlays / calibration. H / F1 toggles this help";
 
 pub fn spawn_hud(commands: &mut Commands) {
     let font = |s: f32| TextFont { font_size: FontSize::Px(s), ..default() };
-    let panel = BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.45));
+    // Screens over the 3D view, in the console's colours (see crate::theme).
+    let panel = BackgroundColor(alpha(P.screen, 0.62));
+    let edge = BorderColor::all(alpha(P.bezel_edge, 0.9));
 
     commands.spawn((
         Node {
@@ -59,17 +63,19 @@ pub fn spawn_hud(commands: &mut Commands) {
             top: px(10.0),
             left: px(10.0),
             padding: px(8.0).all(),
-            border_radius: BorderRadius::all(px(6.0)),
+            border: px(1.0).all(),
+            border_radius: BorderRadius::all(px(geometry::SCREEN_RADIUS)),
             ..default()
         },
         panel,
-        children![(OsdText, Text::default(), font(14.0), TextColor(Color::srgb(0.85, 1.0, 0.85)))],
+        edge,
+        children![(OsdText, Text::default(), font(14.0), TextColor(color(P.text)))],
     ));
     commands.spawn((
         CenterText,
         Text::default(),
         font(26.0),
-        TextColor(Color::srgb(1.0, 0.85, 0.3)),
+        TextColor(color(P.caution)),
         TextLayout::justify(Justify::Center),
         Node {
             position_type: PositionType::Absolute,
@@ -84,7 +90,7 @@ pub fn spawn_hud(commands: &mut Commands) {
         NoticeText,
         Text::default(),
         font(16.0),
-        TextColor(Color::srgb(0.6, 0.9, 1.0)),
+        TextColor(color(P.info)),
         Node { position_type: PositionType::Absolute, bottom: px(12.0), left: px(12.0), ..default() },
     ));
     commands.spawn((
@@ -93,20 +99,22 @@ pub fn spawn_hud(commands: &mut Commands) {
             bottom: px(40.0),
             right: px(10.0),
             padding: px(8.0).all(),
-            border_radius: BorderRadius::all(px(6.0)),
+            border: px(1.0).all(),
+            border_radius: BorderRadius::all(px(geometry::SCREEN_RADIUS)),
             ..default()
         },
         panel,
+        edge,
         HelpText,
         Visibility::Hidden,
-        children![(Text::new(HELP), font(12.0), TextColor(Color::WHITE))],
+        children![(Text::new(HELP), font(12.0), TextColor(color(P.text)))],
     ));
     commands.spawn((
         RawText,
         Text::default(),
         font(13.0),
-        TextColor(Color::srgb(1.0, 1.0, 0.7)),
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.5)),
+        TextColor(color(P.text)),
+        panel,
         Node { position_type: PositionType::Absolute, top: px(150.0), right: px(10.0), padding: px(6.0).all(), ..default() },
         Visibility::Hidden,
     ));
@@ -124,7 +132,7 @@ pub fn spawn_hud(commands: &mut Commands) {
                 border_radius: BorderRadius::all(px(8.0)),
                 ..default()
             },
-            BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.6)),
+            BorderColor::all(color(P.bezel_edge)),
             panel,
             children![(
                 StickDot(i),
@@ -137,7 +145,7 @@ pub fn spawn_hud(commands: &mut Commands) {
                     border_radius: BorderRadius::all(px(6.0)),
                     ..default()
                 },
-                BackgroundColor(Color::srgb(1.0, 0.4, 0.1)),
+                BackgroundColor(color(P.caution)),
             )],
         ));
     }
@@ -177,14 +185,27 @@ pub fn update_hud(
     let agl = s.pos.y - ground;
     let (roll, pitch, heading) = physics::euler(s.rot);
     let gs = Vec3::new(s.vel.x, 0.0, s.vel.z).length();
-    let dist = Vec3::new(s.pos.x - terrain::PILOT_POS.x, 0.0, s.pos.z - terrain::PILOT_POS.z).length();
+    let dist = Vec3::new(s.pos.x - terrain::pilot_pos().x, 0.0, s.pos.z - terrain::pilot_pos().z).length();
     let soc = (1.0 - s.used_mah / c.params.battery_capacity_mah).max(0.0);
     let cell = s.voltage / c.params.battery_cells;
     let thr = if c.ap.enabled { 0.5 * (c.last_cmd.throttle[0] + c.last_cmd.throttle[1]) } else { c.sticks.throttle };
 
-    let mode_line = if c.ap.enabled {
+    let mode_line = if c.ap.enabled && c.direct {
         format!(
-            "ARDUPILOT {} | mode switch (RC8): {} | {}",
+            "DIRECT (J) | {} | {} rates | ArduPilot {} (watching only)",
+            c.mode.label(),
+            if c.high_rates { "high" } else { "low" },
+            if c.ap.connected { "linked" } else { "waiting" }
+        )
+    } else if c.ap.enabled {
+        // The real armed state and mode come from the ground station when it's connected;
+        // the switches only say what the sticks are asking for.
+        let actual = match c.ap.vehicle() {
+            Some((armed, mode)) => format!("{mode} {} | ", if armed { "ARMED" } else { "disarmed" }),
+            None => String::new(),
+        };
+        format!(
+            "ARDUPILOT {} | {actual}mode sw (RC8): {} | {}",
             if c.ap.connected { "LINKED" } else { "WAITING" },
             AP_MODES[c.ap.mode_index].0,
             if c.ap.arm_switch { "ARM SW ON" } else { "arm sw off" }
@@ -212,9 +233,10 @@ WIND {:.1} m/s from {:03.0} deg  turb {:.0}%{}",
         cam.mode.label(),
         if cam.auto_zoom && cam.mode == crate::camera::CamMode::LineOfSight { " (auto-zoom)" } else { "" },
         format!(
-            "{} {:.0}% | {:.0} fps",
+            "{} {:.0}%{} | {:.0} fps",
             if settings.raytracing { "RAY TRACED (Solari)" } else { "raster" },
             render_scale.scale * 100.0,
+            if render_scale.auto { " auto" } else { "" },
             diagnostics
                 .get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS)
                 .and_then(|d| d.smoothed())
@@ -258,16 +280,25 @@ WIND {:.1} m/s from {:03.0} deg  turb {:.0}%{}",
                     // it won't arm with the throttle up.
                     let motor = 0.5 * (c.last_cmd.throttle[0] + c.last_cmd.throttle[1]);
                     let stick_up = c.sticks.throttle > 0.1;
-                    if prog > 0.0 {
+                    if s.carry.is_some() {
+                        "Bringing it back to your hand...".into()
+                    } else if prog > 0.0 {
                         format!("Launching... {}", "#".repeat((prog * 10.0) as usize))
-                    } else if c.ap.enabled && motor < 0.15 && !c.ap.arm_switch {
-                        if stick_up {
-                            "ArduPilot is DISARMED: throttle to zero, then L (or B) to arm".into()
-                        } else {
+                    } else if c.ap.enabled && !c.direct && motor < 0.15 {
+                        // Armed comes from the ground station if it's reporting, else the switch.
+                        let (armed, mode) = c.ap.vehicle().map_or((c.ap.arm_switch, None), |(a, m)| (a, Some(m)));
+                        let waits_for_throw = matches!(mode, Some("AUTO" | "TAKEOFF"));
+                        if !armed && stick_up {
+                            "ArduPilot is DISARMED: throttle to zero, then L (or B, or ARM in the GCS)".into()
+                        } else if !armed {
                             "Arm ArduPilot: L (or B, or ARM in the GCS), then throttle up to launch".into()
+                        } else if waits_for_throw {
+                            format!("{} takeoff: throw it (SPACE or B), the motors start after the throw", mode.unwrap_or("AUTO"))
+                        } else if stick_up && mode.is_none() {
+                            "No motor from ArduPilot. Arming is refused with throttle up:\nthrottle to zero, flip L off and on. (AUTO / TAKEOFF wait for a throw: SPACE)".into()
+                        } else {
+                            "Hold throttle above 55% (or press SPACE) to hand-launch".into()
                         }
-                    } else if c.ap.enabled && motor < 0.15 && stick_up {
-                        "No motor from ArduPilot. Arming is refused with throttle up:\nthrottle to zero, flip L off and on. (AUTO / TAKEOFF wait for a throw: SPACE)".into()
                     } else {
                         "Hold throttle above 55% (or press SPACE) to hand-launch".into()
                     }

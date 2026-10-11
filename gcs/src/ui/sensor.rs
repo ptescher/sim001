@@ -355,7 +355,7 @@ fn sensor_symbology(window: &mut Window, cx: &mut App, r: (f32, f32, f32, f32), 
 }
 
 fn sbutton(id: &'static str, label: &'static str, active: bool) -> Stateful<Div> {
-    let (bg, fg, border) = if active { (0x14361f, GREEN, GREEN_DIM) } else { (0x161a16, WHITE, BEZEL_EDGE) };
+    let (bg, fg, border) = if active { (ACTIVE_FILL, GREEN, GREEN_DIM) } else { (CONTROL, WHITE, BEZEL_EDGE) };
     div()
         .id(SharedString::from(id))
         .px_2()
@@ -366,7 +366,7 @@ fn sbutton(id: &'static str, label: &'static str, active: bool) -> Stateful<Div>
         .border_color(c(border))
         .rounded(px(CONTROL_RADIUS))
         .cursor_pointer()
-        .hover(|s| s.bg(c(0x2a302a)))
+        .hover(|s| s.bg(c(CONTROL_HOVER)))
         .active(|s| s.opacity(0.7))
         .child(label)
 }

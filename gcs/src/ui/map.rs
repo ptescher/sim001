@@ -142,7 +142,7 @@ fn paint_inner(
     let fs = 11.5;
 
     // Base layer.
-    fill_rect(window, x, y, w, h, c(0x0b100c));
+    fill_rect(window, x, y, w, h, c(MAP_BG));
     match (terrain, image) {
         (Some(t), Some(img)) => {
             let half = t.size_m * 0.5;
@@ -251,9 +251,9 @@ fn paint_inner(
     if let (Some(a), Some(p)) = (d.aircraft, d.spi) {
         let (ax, ay) = to_s(a.0, a.1);
         let (px0, py0) = to_s(p.0, p.1);
-        dashed(window, &[(ax, ay), (px0, py0)], 1.5, 6.0, ca(0xffe14d, 0.85));
-        fill_poly(window, &[(px0, py0 - 8.0), (px0 + 8.0, py0), (px0, py0 + 8.0), (px0 - 8.0, py0)], ca(0xffe14d, 0.9));
-        text(window, cx, "SPI", px0 + 12.0, py0, fs * 0.85, c(0xffe14d), Align::Left);
+        dashed(window, &[(ax, ay), (px0, py0)], 1.5, 6.0, ca(SPI, 0.85));
+        fill_poly(window, &[(px0, py0 - 8.0), (px0 + 8.0, py0), (px0, py0 + 8.0), (px0 - 8.0, py0)], ca(SPI, 0.9));
+        text(window, cx, "SPI", px0 + 12.0, py0, fs * 0.85, c(SPI), Align::Left);
     }
     if let Some(t) = d.track {
         let (tx, ty) = to_s(t.0, t.1);
@@ -336,7 +336,7 @@ fn paint_inner(
         Tool::Pan => None,
         Tool::Goto => Some(("GOTO: click to fly there (GUIDED)".to_string(), MAGENTA)),
         Tool::Plan => Some((format!("PLAN: click adds waypoint at {:.0} m, right-click removes last", st.plan_alt), AMBER)),
-        Tool::Look => Some(("LOOK: click a point to keep the camera on it".to_string(), 0xffe14d)),
+        Tool::Look => Some(("LOOK: click a point to keep the camera on it".to_string(), SPI)),
     };
     if let Some((s, col)) = hint {
         let tw = s.len() as f32 * fs * 0.62 + 16.0;
