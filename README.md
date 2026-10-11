@@ -17,6 +17,8 @@ cargo run --release -- --selftest   # headless flight-model numbers
 
 `rust-toolchain.toml` pins Rust 1.99, which Bevy 0.20 needs. rustup installs it automatically.
 
+**Sleep and gaming mode.** While the sim runs it keeps the computer awake (no display or system sleep): a power assertion on macOS (check with `pmset -g assertions`), `SetThreadExecutionState` on Windows, and `systemd-inhibit` on Linux, where it also asks Feral's GameMode (`gamemoded`) to tune the process if it is installed. The Windows and Linux paths are untested. `--fullscreen` starts borderless full screen, and F11 toggles it. macOS Game Mode can't be switched on from code: macOS turns it on for a full-screen app that its bundle marks as a game, so run `cargo build --release && tools/macos-app.sh && open "target/release/T1-S Sim.app" --args --fullscreen`. On Windows, Game Mode applies to a full-screen game by itself.
+
 ## Real places
 
 Besides the Alpine Valley, the sim flies real places built from USGS lidar elevation, NAIP aerial photos and OpenStreetMap. Trees and water are derived from the photos. The two built so far are **Cypress Island Airfield, WA** (`cypress`) and the **Park at the Berkeley Waterfront, CA** (`berkeley`):

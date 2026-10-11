@@ -8,6 +8,7 @@
 //!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
+//!   --fullscreen                                start borderless full-screen (F11 toggles); macOS Game Mode needs it
 //!   --map NAME                                  fly a real place from maps/NAME (see tools/mapbuild)
 //!   --direct                                    with --ardupilot: start with the sticks flying (J toggles)
 //!   --expect [suite] [--docs dir]               run the acceptance tests in expectations/ (and write the docs)
@@ -25,6 +26,7 @@ mod input;
 mod loading;
 mod mapgen;
 mod placement;
+mod power;
 mod realsite;
 mod mesh_util;
 mod model;
@@ -139,6 +141,8 @@ fn main() {
     });
     let docs = flag("--docs").then(|| value("--docs").unwrap_or_else(|| "docs".into()).into());
     let shots = flag("--shots") || expect.is_some();
+    // No sleep while the sim runs (and the OS's gaming mode, where it can be asked for).
+    let _awake = power::keep_awake("T1-S sim is running");
     let mut app = App::new();
     app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -148,6 +152,11 @@ fn main() {
             title: format!("HEEWING T1-S Ranger Sim - {}", terrain::site_title()),
             resolution: WindowResolution::new(1600, 900),
             present_mode: PresentMode::AutoVsync,
+            mode: if flag("--fullscreen") {
+                bevy::window::WindowMode::BorderlessFullscreen(bevy::window::MonitorSelection::Current)
+            } else {
+                bevy::window::WindowMode::Windowed
+            },
             // --frameless (set by the ground station): the view runs under a transparent title
             // bar with no title or buttons, like the station's other panes.
             titlebar_transparent: frameless,
@@ -170,7 +179,7 @@ fn main() {
         .insert_resource(gc_pad::GcPads::new(flag("--debug-input")))
         .configure_sets(Update, (SimSet::Input, SimSet::Logic, SimSet::Visual).chain())
         .add_plugins(input::InputPlugin)
-        .add_systems(Update, quit_on_cmd_q)
+        .add_systems(Update, (quit_on_cmd_q, toggle_fullscreen))
         .add_systems(Startup, (setup, grass::setup_grass))
         .add_systems(Update, sim_update.in_set(SimSet::Logic).run_if(in_state(loading::AppState::Running)))
         .add_systems(
@@ -221,6 +230,20 @@ fn setup(
 }
 
 /// Cmd-Q (macOS) / Ctrl-Q elsewhere ends the sim.
+/// F11 switches between a window and borderless full screen.
+fn toggle_fullscreen(keys: Res<ButtonInput<KeyCode>>, mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>) {
+    use bevy::window::{MonitorSelection, WindowMode};
+    if !keys.just_pressed(KeyCode::F11) {
+        return;
+    }
+    for mut w in &mut windows {
+        w.mode = match w.mode {
+            WindowMode::Windowed => WindowMode::BorderlessFullscreen(MonitorSelection::Current),
+            _ => WindowMode::Windowed,
+        };
+    }
+}
+
 fn quit_on_cmd_q(keys: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppExit>) {
     let modifier = keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight, KeyCode::ControlLeft, KeyCode::ControlRight]);
     if modifier && keys.just_pressed(KeyCode::KeyQ) {
