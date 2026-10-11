@@ -31,16 +31,20 @@ pub enum Action {
     Recharge,
     Zoom,
     ToggleProfile,
+    /// ArduPilot mode: switch between ArduPilot flying the plane and the sticks flying it
+    /// directly through the sim's own flight modes.
+    ControlSource,
     /// Close overlays / help / the calibration wizard.
     Dismiss,
 }
 
-const RADIO_ACTIONS: [(Action, &str); 5] = [
+const RADIO_ACTIONS: [(Action, &str); 6] = [
     (Action::Launch, "LAUNCH"),
     (Action::Reset, "RESET"),
     (Action::Camera, "CAMERA"),
     (Action::ApArm, "ARDUPILOT ARM"),
     (Action::ApMode, "ARDUPILOT MODE"),
+    (Action::ControlSource, "CONTROL: ARDUPILOT / DIRECT"),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -155,6 +159,8 @@ pub struct PilotInput {
     pub notice: String,
     /// Live gamepad state this frame (for the controller overlay).
     pub pad_view: Option<PadSnapshot>,
+    /// Ignore every controller and fly with the keyboard, whatever is plugged in (`--expect`).
+    pub keyboard_only: bool,
 }
 
 impl PilotInput {
@@ -175,6 +181,7 @@ impl PilotInput {
             kb_throttle_used: false,
             notice: String::new(),
             pad_view: None,
+            keyboard_only: false,
         };
         if let Ok(text) = std::fs::read_to_string(CONFIG_PATH) {
             parse_config(&text, &mut s.radio, &mut s.gamepad);
@@ -256,6 +263,7 @@ fn action_key(a: Action) -> &'static str {
         Action::Camera => "camera",
         Action::ApArm => "ap_arm",
         Action::ApMode => "ap_mode",
+        Action::ControlSource => "control_source",
         _ => "",
     }
 }
@@ -380,6 +388,7 @@ pub fn read_input(
         (KeyCode::F4, Action::ToggleProfile),
         (KeyCode::KeyB, Action::ApArm),
         (KeyCode::KeyN, Action::ApMode),
+        (KeyCode::KeyJ, Action::ControlSource),
         (KeyCode::KeyV, Action::Recharge),
         (KeyCode::KeyZ, Action::Zoom),
         (KeyCode::Escape, Action::Dismiss),
@@ -419,9 +428,9 @@ pub fn read_input(
     // Pick a controller: prefer a radio, else the first gamepad. When the GameController
     // framework sees a gamepad, raw-HID (gilrs) gamepads are ignored: they are the same
     // physical device, and gilrs misreads some of them (Switch Pro on macOS).
-    let gc_pad = gc.pad.clone();
+    let gc_pad = gc.pad.clone().filter(|_| !input.keyboard_only);
     let mut chosen: Option<(Entity, &Gamepad, String, Profile)> = None;
-    for (e, pad, name) in &pads {
+    for (e, pad, name) in pads.iter().filter(|_| !input.keyboard_only) {
         let name = name.map(|n| n.as_str().to_string()).unwrap_or_else(|| "controller".into());
         let profile = input
             .profile_override
@@ -748,6 +757,7 @@ fn apply_gamepad(input: &mut PilotInput, pad: &PadSnapshot, dt: f32, sticks: &mu
         (GamepadButton::LeftTrigger, Action::ApArm),
         (GamepadButton::RightTrigger, Action::ApMode),
         (GamepadButton::DPadUp, Action::Zoom),
+        (GamepadButton::DPadDown, Action::ControlSource),
         (GamepadButton::Mode, Action::Help),
     ];
     for (b, a) in map {

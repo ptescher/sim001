@@ -155,6 +155,54 @@ pub struct FlightState {
     /// Specific force (accelerometer reading) in body frame, m/s^2.
     pub specific_force: Vec3,
     pub prop_angle: [f32; 2],
+    /// Attitude the pilot's hand turns the plane to while it's held.
+    pub hand_rot: Quat,
+    /// After a reset, the plane is carried back to the hand along a smooth path rather than
+    /// teleported, so an autopilot's IMU dead-reckons the same trip its GPS reports.
+    pub carry: Option<Carry>,
+}
+
+/// A minimum-jerk trip from where a reset found the plane back to the pilot's hand, with a hop
+/// over the trees. Gentle (about 2.5 g peak) so an autopilot's attitude estimators, which lean
+/// on GPS-derived acceleration, keep up.
+#[derive(Clone, Copy, Debug)]
+pub struct Carry {
+    pub from: Vec3,
+    pub to: Vec3,
+    pub dur: f32,
+    pub t: f32,
+    hop: f32,
+}
+
+impl Carry {
+    const PEAK_ACCEL: f32 = 25.0;
+
+    fn new(from: Vec3, to: Vec3) -> Option<Carry> {
+        let d = from.distance(to);
+        if d < 0.05 {
+            return None;
+        }
+        let hop = (d * 0.15).min(30.0);
+        // Peak of the min-jerk profile is 5.77 d / T^2; the hop adds a little.
+        let dur = (5.77 * (d + hop) / Self::PEAK_ACCEL).sqrt().clamp(1.0, 25.0);
+        Some(Carry { from, to, dur, t: 0.0, hop })
+    }
+
+    /// Position, velocity and acceleration at time `t`.
+    pub fn at(&self, t: f32) -> (Vec3, Vec3, Vec3) {
+        let u = (t / self.dur).clamp(0.0, 1.0);
+        let (u2, u3, u4, u5) = (u * u, u * u * u, u * u * u * u, u * u * u * u * u);
+        let d = self.to - self.from;
+        let (t1, t2) = (self.dur, self.dur * self.dur);
+        let s = 10.0 * u3 - 15.0 * u4 + 6.0 * u5;
+        let ds = (30.0 * u2 - 60.0 * u3 + 30.0 * u4) / t1;
+        let dds = (60.0 * u - 180.0 * u2 + 120.0 * u3) / t2;
+        // Hop: 16 h u^2 (1-u)^2, zero height and climb rate at both ends.
+        let h = 16.0 * self.hop * (u2 - 2.0 * u3 + u4);
+        let dh = 16.0 * self.hop * (2.0 * u - 6.0 * u2 + 4.0 * u3) / t1;
+        let ddh = 16.0 * self.hop * (2.0 - 12.0 * u + 12.0 * u2) / t2;
+        (self.from + d * s + Vec3::Y * h, d * ds + Vec3::Y * dh, d * dds + Vec3::Y * ddh)
+    }
 }
 
 pub fn t1s_params() -> AircraftParams {
@@ -373,16 +421,34 @@ impl FlightState {
             on_ground: false,
             specific_force: Vec3::Y * GRAVITY,
             prop_angle: [0.0, 1.3],
+            hand_rot: Quat::IDENTITY,
+            carry: None,
         };
         s.reset_to_hand();
+        // Start already in the hand; later resets carry it there (see `step`).
+        s.rot = s.hand_rot;
+        if let Some(c) = s.carry.take() {
+            s.pos = c.to;
+        }
+        s.specific_force = s.rot.inverse() * Vec3::Y * GRAVITY;
         s
     }
 
     /// Pilot holds the plane at shoulder height, pointing down the runway, slightly nose up.
     pub fn reset_to_hand(&mut self) {
-        let p = terrain::PILOT_POS;
-        self.pos = Vec3::new(p.x - 0.5, terrain::ground_height(p.x, p.z) + 1.6, p.z - 0.6);
-        self.rot = Quat::from_rotation_y(terrain::LAUNCH_HEADING) * Quat::from_rotation_x(8.0 * DEG);
+        let p = terrain::pilot_pos();
+        let hand = Vec3::new(p.x - 0.5, terrain::ground_height(p.x, p.z) + 1.6, p.z - 0.6);
+        // Like the attitude below, the position isn't snapped either: an instant jump reads as a
+        // GPS glitch to ArduPilot ("GPS and AHRS differ by ...").
+        self.carry = Carry::new(self.pos, hand);
+        if self.carry.is_none() {
+            self.pos = hand;
+        }
+        // The attitude isn't snapped: while held the plane turns into `hand_rot` at a finite rate
+        // with matching body rates. An instant jump never shows on ArduPilot's gyros, which
+        // leaves its DCM and EKF attitudes disagreeing ("DCM Roll/Pitch inconsistent ... Wait or
+        // reboot") and fails the compass check against the wrong attitude.
+        self.hand_rot = Quat::from_rotation_y(terrain::launch_heading()) * Quat::from_rotation_x(8.0 * DEG);
         self.vel = Vec3::ZERO;
         self.omega = Vec3::ZERO;
         self.phase = Phase::Held;
@@ -393,12 +459,24 @@ impl FlightState {
         self.specific_force = self.rot.inverse() * Vec3::Y * GRAVITY;
     }
 
+    /// Finish a reset instantly (no carry back, no turning into the hand).
+    pub fn snap_to_hand(&mut self) {
+        if let Some(c) = self.carry.take() {
+            self.pos = c.to;
+        }
+        self.rot = self.hand_rot;
+        self.vel = Vec3::ZERO;
+        self.omega = Vec3::ZERO;
+        self.specific_force = self.rot.inverse() * Vec3::Y * GRAVITY;
+    }
+
     pub fn recharge(&mut self) {
         self.used_mah = 0.0;
     }
 
     pub fn launch(&mut self) {
-        if self.phase == Phase::Held {
+        // Not while still being carried back to the hand.
+        if self.phase == Phase::Held && self.carry.is_none() {
             self.phase = Phase::Launching;
             self.launch_timer = 0.22;
         }
@@ -625,9 +703,39 @@ pub fn step(
     }
 
     if s.phase == Phase::Held {
+        // Carried back to the hand (after a reset), or held still.
+        let mut accel = Vec3::ZERO;
         s.vel = Vec3::ZERO;
-        s.omega = Vec3::ZERO;
-        s.specific_force = inv_rot * (Vec3::Y * GRAVITY);
+        if let Some(c) = &mut s.carry {
+            c.t = (c.t + dt).min(c.dur);
+            let (p, v, a) = c.at(c.t);
+            s.pos = p;
+            s.vel = v;
+            accel = a;
+            if c.t >= c.dur {
+                s.pos = c.to;
+                s.vel = Vec3::ZERO;
+                accel = Vec3::ZERO;
+                s.carry = None;
+            }
+        }
+        // Turn into the hand attitude like a pilot picking the plane up (about 1 s from upside
+        // down), reporting the body rates so an autopilot's gyros integrate the same motion.
+        let mut delta = s.rot.inverse() * s.hand_rot;
+        if delta.w < 0.0 {
+            delta = -delta;
+        }
+        let (axis, angle) = delta.to_axis_angle();
+        const PICKUP_RATE: f32 = 3.0; // rad/s
+        if angle > 1e-4 {
+            let step = angle.min(PICKUP_RATE * dt);
+            s.omega = axis * (step / dt);
+            s.rot = (s.rot * Quat::from_axis_angle(axis, step)).normalize();
+        } else {
+            s.omega = Vec3::ZERO;
+            s.rot = s.hand_rot;
+        }
+        s.specific_force = s.rot.inverse() * (accel + Vec3::Y * GRAVITY);
         return;
     }
 
@@ -675,4 +783,63 @@ pub fn euler(rot: Quat) -> (f32, f32, f32) {
 /// Body rates: (roll rate right +, pitch rate up +, yaw rate right +).
 pub fn body_rates(omega: Vec3) -> (f32, f32, f32) {
     (-omega.z, omega.x, -omega.y)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// After a crash, reset turns the plane into the hand with body rates that integrate to the
+    /// same attitude, as an autopilot's gyros would see it.
+    #[test]
+    fn reset_to_hand_is_gyro_consistent() {
+        let p = t1s_params();
+        let mut s = FlightState::new(&p);
+        // Upside down and yawed, as after a crash.
+        s.rot = Quat::from_rotation_z(3.0) * Quat::from_rotation_y(1.0);
+        s.phase = Phase::Crashed;
+        s.reset_to_hand();
+        let cmd = ActuatorCommands { aileron: 0.0, vtail_left: 0.0, vtail_right: 0.0, throttle: [0.0; 2] };
+        let env = Environment { wind: Vec3::ZERO };
+        let dt = 1.0 / 1200.0;
+        let mut gyro_att = s.rot;
+        for _ in 0..(2.0 / dt) as usize {
+            step(&p, &mut s, &cmd, &env, &[], dt);
+            gyro_att = (gyro_att * Quat::from_scaled_axis(s.omega * dt)).normalize();
+        }
+        assert!(s.rot.angle_between(s.hand_rot) < 1e-3, "settled in the hand");
+        assert!(gyro_att.angle_between(s.rot) < 0.01, "gyros track the motion: off by {:.3} rad", gyro_att.angle_between(s.rot));
+        assert_eq!(s.omega, Vec3::ZERO);
+    }
+
+    /// After a flight, reset carries the plane back with accelerations that dead-reckon to the
+    /// same place (an IMU and GPS agree), within the IMU's range, and blocks launch until then.
+    #[test]
+    fn reset_to_hand_is_imu_consistent() {
+        let p = t1s_params();
+        let mut s = FlightState::new(&p);
+        let hand = s.pos;
+        s.pos = hand + Vec3::new(600.0, 80.0, -900.0);
+        s.phase = Phase::Crashed;
+        s.reset_to_hand();
+        assert!(s.carry.is_some());
+        s.launch();
+        assert_eq!(s.phase, Phase::Held, "no launch mid-carry");
+        let cmd = ActuatorCommands { aileron: 0.0, vtail_left: 0.0, vtail_right: 0.0, throttle: [0.0; 2] };
+        let env = Environment { wind: Vec3::ZERO };
+        let dt = 1.0 / 1200.0;
+        let (mut ins_pos, mut ins_vel) = (s.pos, Vec3::ZERO);
+        let mut peak = 0.0f32;
+        for _ in 0..(30.0 / dt) as usize {
+            step(&p, &mut s, &cmd, &env, &[], dt);
+            // What an INS integrates: specific force rotated to world, plus gravity.
+            let a = s.rot * s.specific_force - Vec3::Y * GRAVITY;
+            peak = peak.max(s.specific_force.length());
+            ins_vel += a * dt;
+            ins_pos += ins_vel * dt;
+        }
+        assert!(s.carry.is_none() && s.pos.distance(hand) < 1e-3, "arrived in the hand");
+        assert!(ins_pos.distance(hand) < 2.0, "dead reckoning ends {:.2} m off", ins_pos.distance(hand));
+        assert!(peak < 4.0 * GRAVITY, "peak specific force {:.0} m/s^2", peak);
+    }
 }

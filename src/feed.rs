@@ -7,6 +7,7 @@
 //! real sensor ball. With no viewer the camera renders a tiny frame and nothing is read back.
 
 use crate::camera::{RenderScale, add_raytracing, scene_look};
+use crate::sim::SimCore;
 use crate::{RenderSettings, SharedSim};
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
@@ -17,7 +18,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
-use t1s_station::feed::{FORMAT_BGRA8, FrameHeader, Gimbal, GimbalCmd, write_frame};
+use t1s_station::feed::{ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, Gimbal, write_frame};
 
 /// Camera position in the airframe (Bevy body axes: +X right, +Y up, -Z forward): a small
 /// sensor ball just ahead of and below the nose tip, clear of the fuselage so it never looks
@@ -63,13 +64,13 @@ struct FeedState {
     last_sent: Option<Instant>,
 }
 
-pub fn feed_plugin(app: &mut App, cfg: FeedConfig) {
+pub fn feed_plugin(app: &mut App, cfg: FeedConfig, core: Arc<Mutex<SimCore>>) {
     let shared = Arc::new(Shared::default());
     let server = shared.clone();
     let port = cfg.port;
     std::thread::Builder::new()
         .name("sensor-feed".into())
-        .spawn(move || serve(server, port))
+        .spawn(move || serve(server, core, port))
         .expect("spawn feed server");
     let size = cfg.size;
     app.insert_resource(FeedLink(shared))
@@ -95,6 +96,9 @@ fn spawn_feed_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>, 
     ));
     if settings.raytracing {
         add_raytracing(&mut cam);
+        // Solari lights the whole scene with one sky cubemap, taken from the main camera, so
+        // a second generated one would be pure cost (re-rendered and filtered every frame).
+        cam.insert(crate::camera::feed_solari_settings()).remove::<bevy::light::AtmosphereEnvironmentMapLight>();
     }
     commands.insert_resource(FeedState {
         image,
@@ -186,20 +190,26 @@ fn on_readback(ev: On<ReadbackComplete>, link: Res<FeedLink>, sim: Res<SharedSim
     }
     st.last_sent = Some(Instant::now());
     st.frame = st.frame.wrapping_add(1);
+    let (sim_time, resets, flags) = {
+        let c = sim.0.lock().unwrap();
+        (c.state.time as f32, c.resets, if c.ap.enabled && c.direct { FLAG_DIRECT } else { 0 })
+    };
     let header = FrameHeader {
         format: FORMAT_BGRA8,
         width: w as u16,
         height: h as u16,
+        resets,
         stride,
         frame: st.frame,
-        sim_time: sim.0.lock().unwrap().state.time as f32,
+        sim_time,
         gimbal: st.gimbal,
+        flags,
     };
     *link.0.latest.lock().unwrap() = Some(Frame { header, pixels: Arc::new(ev.data.clone()) });
     link.0.new_frame.notify_all();
 }
 
-fn serve(shared: Arc<Shared>, port: u16) {
+fn serve(shared: Arc<Shared>, core: Arc<Mutex<SimCore>>, port: u16) {
     let listener = match TcpListener::bind(("127.0.0.1", port)) {
         Ok(l) => l,
         Err(e) => {
@@ -210,27 +220,30 @@ fn serve(shared: Arc<Shared>, port: u16) {
     println!("sensor feed on tcp://127.0.0.1:{port}");
     for stream in listener.incoming().flatten() {
         let shared = shared.clone();
+        let core = core.clone();
         std::thread::spawn(move || {
             let peer = stream.peer_addr().map(|a| a.to_string()).unwrap_or_default();
             println!("sensor feed: viewer {peer} connected");
             shared.clients.fetch_add(1, Ordering::Relaxed);
-            let err = viewer(&shared, stream);
+            let err = viewer(&shared, core, stream);
             shared.clients.fetch_sub(1, Ordering::Relaxed);
             println!("sensor feed: viewer {peer} left ({err})");
         });
     }
 }
 
-fn viewer(shared: &Arc<Shared>, mut stream: TcpStream) -> String {
+fn viewer(shared: &Arc<Shared>, core: Arc<Mutex<SimCore>>, mut stream: TcpStream) -> String {
     stream.set_nodelay(true).ok();
-    // Gimbal commands arrive on the same socket.
+    // Gimbal commands and the autopilot's status arrive on the same socket.
     if let Ok(mut rd) = stream.try_clone() {
         let shared = shared.clone();
         std::thread::spawn(move || {
-            let mut b = [0u8; GimbalCmd::SIZE];
+            let mut b = [0u8; ClientMsg::SIZE];
             while rd.read_exact(&mut b).is_ok() {
-                if let Ok(cmd) = GimbalCmd::decode(&b) {
-                    *shared.commanded.lock().unwrap() = Some(cmd.0);
+                match ClientMsg::decode(&b) {
+                    Ok(ClientMsg::Gimbal(g)) => *shared.commanded.lock().unwrap() = Some(g),
+                    Ok(ClientMsg::Status(st)) => core.lock().unwrap().ap.gcs = Some((Instant::now(), st.armed, st.mode)),
+                    Err(_) => {}
                 }
             }
         });

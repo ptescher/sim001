@@ -2,15 +2,16 @@
 //! ground-point tracking (the GCS re-aims the body-fixed gimbal from live attitude, ~30 Hz).
 
 use crate::geo::{Origin, TerrainMap, ground_hit, look_angles, view_ray};
-use crate::link::Shared;
+use crate::link::{Cmd, Shared};
 use crate::vehicle::Vehicle;
 use gpui::RenderImage;
 use std::io::Write;
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use t1s_station::feed::{FrameHeader, Gimbal, GimbalCmd, read_frame};
+use t1s_station::feed::{FLAG_DIRECT, FrameHeader, Gimbal, GimbalCmd, VehicleStatus, read_frame};
 
 pub struct VideoFrame {
     pub header: FrameHeader,
@@ -40,11 +41,18 @@ pub struct Sensor {
     pub track: Mutex<Option<(f32, f32, f32)>>,
     writer: Mutex<Option<TcpStream>>,
     vehicle: Shared,
+    /// MAVLink commands: a sim reset restarts the autopilot.
+    tx: Mutex<Sender<Cmd>>,
     origin: Origin,
     terrain: Option<Arc<TerrainMap>>,
 }
 
 impl Sensor {
+    /// The sim's sticks are flying the aircraft (ArduPilot only watching), per the newest frame.
+    pub fn direct(&self) -> bool {
+        self.frame.lock().unwrap().as_ref().is_some_and(|f| f.header.flags & FLAG_DIRECT != 0 && f.at.elapsed().as_secs_f32() < 2.0)
+    }
+
     /// Gimbal state of the newest frame (what the picture actually shows).
     pub fn gimbal(&self) -> Option<Gimbal> {
         self.frame.lock().unwrap().as_ref().map(|f| f.header.gimbal)
@@ -99,7 +107,7 @@ impl Sensor {
     }
 }
 
-pub fn spawn(address: String, vehicle: Shared, origin: Origin, terrain: Option<Arc<TerrainMap>>) -> Arc<Sensor> {
+pub fn spawn(address: String, vehicle: Shared, tx: Sender<Cmd>, origin: Origin, terrain: Option<Arc<TerrainMap>>) -> Arc<Sensor> {
     let sensor = Arc::new(Sensor {
         address: address.clone(),
         frame: Mutex::new(None),
@@ -110,6 +118,7 @@ pub fn spawn(address: String, vehicle: Shared, origin: Origin, terrain: Option<A
         track: Mutex::new(None),
         writer: Mutex::new(None),
         vehicle,
+        tx: Mutex::new(tx),
         origin,
         terrain,
     });
@@ -140,11 +149,21 @@ fn receive(s: Arc<Sensor>) {
 
         let mut buf = Vec::new();
         let mut last = Instant::now();
+        let mut resets: Option<u16> = None;
         let err = loop {
             let h = match read_frame(&mut stream, &mut buf) {
                 Ok(h) => h,
                 Err(e) => break e,
             };
+            // The sim reset the aircraft (teleported it to the hand). Do what you'd do at the
+            // field: disarm and power-cycle the autopilot, so its estimators start clean.
+            if resets.is_some_and(|r| r != h.resets) {
+                s.vehicle.lock().unwrap().push_log("GCS", 4, "Sim reset: restarting the autopilot for a clean start (~30 s)");
+                let tx = s.tx.lock().unwrap();
+                let _ = tx.send(Cmd::ForceDisarm);
+                let _ = tx.send(Cmd::Reboot);
+            }
+            resets = Some(h.resets);
             let (w, ht) = (h.width as u32, h.height as u32);
             let row = w as usize * 4;
             // GPUI takes tightly packed BGRA, which is what the sim sends (minus row padding).
@@ -171,8 +190,21 @@ fn receive(s: Arc<Sensor>) {
 }
 
 fn track(s: Arc<Sensor>) {
+    let mut last_status = Instant::now();
     loop {
         std::thread::sleep(Duration::from_millis(33));
+        // Tell the sim the autopilot's real armed state and mode (~2 Hz): JSON SITL doesn't,
+        // and its launch prompt depends on them.
+        if last_status.elapsed() > Duration::from_millis(500) {
+            last_status = Instant::now();
+            let status = {
+                let v = s.vehicle.lock().unwrap();
+                (v.link.alive() && v.have_heartbeat).then(|| VehicleStatus { armed: v.armed, mode: v.mode().to_string() })
+            };
+            if let (Some(st), Some(w)) = (status, s.writer.lock().unwrap().as_mut()) {
+                let _ = w.write_all(&st.encode());
+            }
+        }
         let Some(target) = *s.track.lock().unwrap() else { continue };
         let aim = {
             let v = s.vehicle.lock().unwrap();

@@ -42,11 +42,13 @@ pub struct CamState {
 pub struct MainCamera;
 
 /// The 3D view renders into an offscreen image at `scale` x window resolution, which is
-/// shown full-screen behind the HUD. Ray tracing cost scales with pixel count, so on a
-/// Retina display this is the main performance knob (F5 / F6).
+/// shown full-screen behind the HUD. Ray tracing cost scales with pixel count, so this is
+/// the main performance knob. With `auto` (the default when ray tracing) the scale follows
+/// the frame time to hold [`TARGET_FPS`]; F5 / F6 switch to manual, F7 back to auto.
 #[derive(Resource)]
 pub struct RenderScale {
     pub scale: f32,
+    pub auto: bool,
     pub image: Handle<Image>,
     /// While loading: render a tiny frame so the GPU is free (deactivating the camera
     /// trips Bevy's atmosphere probe, which needs a live view).
@@ -64,7 +66,7 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
     let mut target = Image::new_target_texture(1920, 1080, TextureFormat::Bgra8UnormSrgb, None);
     target.sampler = ImageSampler::linear();
     let image = images.add(target);
-    commands.insert_resource(RenderScale { scale: if settings.raytracing { 0.0 } else { 1.0 }, image: image.clone(), suspended: true });
+    commands.insert_resource(RenderScale { scale: if settings.raytracing { 0.0 } else { 1.0 }, auto: settings.raytracing, image: image.clone(), suspended: true });
 
     // Window camera: draws the upscaled scene image and the HUD at full resolution.
     commands.spawn((Camera2d, Camera { order: 1, ..default() }, bevy::ui::IsDefaultUiCamera));
@@ -75,7 +77,7 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
         GlobalZIndex(i32::MIN),
     ));
 
-    let p = terrain::PILOT_POS;
+    let p = terrain::pilot_pos();
     let mut cam = commands.spawn((
         MainCamera,
         Camera3d::default(),
@@ -109,6 +111,11 @@ pub fn scene_look() -> impl Bundle {
     )
 }
 
+/// Lighter ray tracing for the 720p sensor feed: one light sample and one bounce.
+pub fn feed_solari_settings() -> SolariLighting {
+    SolariLighting { primary_di_samples: 1, secondary_di_samples: 1, max_bounces: 1, ..solari_settings() }
+}
+
 /// Solari needs storage access to the main texture and MSAA off.
 pub fn add_raytracing(cam: &mut EntityCommands) {
     cam.insert((solari_settings(), CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING)));
@@ -119,12 +126,33 @@ pub fn camera_plugin(app: &mut App) {
         .add_systems(Update, update_render_scale);
 }
 
+/// Frame rate the automatic render scale aims for.
+pub const TARGET_FPS: f32 = 60.0;
+const MIN_SCALE: f32 = 0.35;
+
+/// Dynamic-resolution state: frame times are averaged over short windows, the scale drops at
+/// once when a window misses the target and creeps back up after a while at the target.
+#[derive(Default)]
+struct AutoScale {
+    sum: f32,
+    frames: u32,
+    /// Windows to ignore after a resize (reallocating the ray-tracing buffers hitches).
+    settle: u32,
+    /// Seconds spent holding the target since the last change.
+    holding: f32,
+    /// Scale a probe upwards started from; if the probe misses, go back and wait longer.
+    probe_from: Option<f32>,
+    hold_off: f32,
+}
+
 /// Keeps the offscreen scene image at `scale` x the window's physical size.
 fn update_render_scale(
     keys: Res<ButtonInput<KeyCode>>,
+    time: Res<Time<Real>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut rs: ResMut<RenderScale>,
     mut images: ResMut<Assets<Image>>,
+    mut auto: Local<AutoScale>,
 ) {
     let Ok(window) = windows.single() else { return };
     let phys = UVec2::new(window.physical_width(), window.physical_height());
@@ -132,14 +160,25 @@ fn update_render_scale(
         return;
     }
     if rs.scale <= 0.0 {
-        // Default for ray tracing: about 1920 pixels across.
-        rs.scale = (1920.0 / phys.x as f32).clamp(0.3, 1.0);
+        // Starting point for ray tracing: about 1600 pixels across.
+        rs.scale = (1600.0 / phys.x as f32).clamp(MIN_SCALE, 1.0);
     }
     if keys.just_pressed(KeyCode::F5) {
+        rs.auto = false;
         rs.scale = (rs.scale - 0.1).max(0.3);
     }
     if keys.just_pressed(KeyCode::F6) {
+        rs.auto = false;
         rs.scale = (rs.scale + 0.1).min(1.0);
+    }
+    if keys.just_pressed(KeyCode::F7) {
+        rs.auto = true;
+        *auto = AutoScale::default();
+    }
+    if rs.auto && !rs.suspended {
+        if let Some(scale) = auto_scale(&mut auto, rs.scale, time.delta_secs()) {
+            rs.scale = scale;
+        }
     }
     let want = if rs.suspended { UVec2::new(64, 36) } else { (phys.as_vec2() * rs.scale).round().as_uvec2().max(UVec2::splat(64)) };
     let handle = rs.image.clone();
@@ -148,9 +187,52 @@ fn update_render_scale(
         if let Some(mut img) = images.get_mut(&handle) {
             img.resize(bevy::render::render_resource::Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 });
         }
+        auto.settle = 2;
     }
 }
 
+/// One step of the dynamic-resolution controller; returns a new scale when it changes.
+/// Ray-tracing cost goes with pixel count, i.e. with scale squared.
+fn auto_scale(a: &mut AutoScale, scale: f32, dt: f32) -> Option<f32> {
+    const WINDOW: f32 = 0.5;
+    let target = 1.0 / TARGET_FPS;
+    a.sum += dt;
+    a.frames += 1;
+    a.hold_off = (a.hold_off - dt).max(0.0);
+    if a.sum < WINDOW {
+        return None;
+    }
+    let mean = a.sum / a.frames as f32;
+    (a.sum, a.frames) = (0.0, 0);
+    if a.settle > 0 {
+        a.settle -= 1;
+        return None;
+    }
+    if mean > target * 1.1 {
+        a.holding = 0.0;
+        if let Some(from) = a.probe_from.take() {
+            // The last step up was too much: go back and leave it there for a while.
+            a.hold_off = 30.0;
+            return Some(from);
+        }
+        let next = (scale * (target / mean).sqrt() * 0.97).clamp(MIN_SCALE, 1.0).max(scale * 0.75);
+        return (next < scale - 0.005).then_some(next);
+    }
+    a.probe_from = None;
+    // Well under the target (a faster display, or load went away): step up straight away.
+    if mean < target * 0.8 {
+        let next = (scale * (target / mean).sqrt() * 0.95).min(scale * 1.15).min(1.0);
+        return (next > scale + 0.005).then_some(next);
+    }
+    // At the target (vsync hides any headroom): probe upwards now and then.
+    a.holding += WINDOW;
+    if a.holding >= 4.0 && a.hold_off <= 0.0 && scale < 1.0 {
+        a.holding = 0.0;
+        a.probe_from = Some(scale);
+        return Some((scale * 1.06).min(1.0));
+    }
+    None
+}
 pub fn update_camera(
     time: Res<Time>,
     input: Res<PilotInput>,
@@ -177,7 +259,7 @@ pub fn update_camera(
 
     let target_fov = match cs.mode {
         CamMode::LineOfSight => {
-            let p = terrain::PILOT_POS;
+            let p = terrain::pilot_pos();
             let eye = Vec3::new(p.x, terrain::ground_height(p.x, p.z) + 1.7, p.z);
             t.translation = eye;
             let look = pos - eye;

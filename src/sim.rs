@@ -82,6 +82,16 @@ pub struct ArduPilotLink {
     pub arm_switch: bool,
     pub port: u16,
     pub status: String,
+    /// Armed state and mode as the ground station sees them over MAVLink (sent on the sensor
+    /// feed link), with when they arrived. JSON SITL doesn't tell the sim either.
+    pub gcs: Option<(Instant, bool, String)>,
+}
+
+impl ArduPilotLink {
+    /// Armed and mode from the ground station, if it reported in the last 3 s.
+    pub fn vehicle(&self) -> Option<(bool, &str)> {
+        self.gcs.as_ref().filter(|g| g.0.elapsed().as_secs_f32() < 3.0).map(|g| (g.1, g.2.as_str()))
+    }
 }
 
 pub struct SimCore {
@@ -99,6 +109,12 @@ pub struct SimCore {
     pub ap: ArduPilotLink,
     pid: PidState,
     launch_hold: f32,
+    /// Times the aircraft has been reset (sent to the ground station with each video frame).
+    pub resets: u16,
+    /// With ArduPilot: fly with the sticks through the sim's own modes instead. Physics still
+    /// runs in lockstep with SITL, so ArduPilot keeps estimating (and the ground station keeps
+    /// its telemetry); its servo outputs are just ignored.
+    pub direct: bool,
 }
 
 fn expo(x: f32, e: f32) -> f32 {
@@ -132,14 +148,24 @@ impl SimCore {
                 arm_switch: false,
                 port: ap_port,
                 status: String::from("waiting for SITL"),
+                gcs: None,
             },
             pid: PidState::default(),
             launch_hold: 0.0,
+            resets: 0,
+            direct: false,
         }
     }
 
     pub fn reset(&mut self) {
         self.state.reset_to_hand();
+        // With a ground station attached it restarts ArduPilot on a reset (see the feed), so
+        // snap straight back to the hand. Otherwise the plane is carried back, which keeps
+        // ArduPilot's estimators consistent without a restart.
+        if self.ap.enabled && self.ap.vehicle().is_some() {
+            self.state.snap_to_hand();
+        }
+        self.resets = self.resets.wrapping_add(1);
         self.pid = PidState::default();
         self.launch_hold = 0.0;
     }
@@ -235,6 +261,10 @@ impl SimCore {
 
     /// Lockstep step driven by ArduPilot servo outputs.
     pub fn step_ardupilot(&mut self, pwm: &[u16; 16], dt: f32) {
+        if self.direct {
+            self.step_standalone(dt);
+            return;
+        }
         let ang = |v: u16| if v == 0 { 0.0 } else { ((v as f32 - 1500.0) / 500.0).clamp(-1.0, 1.0) };
         let rng = |v: u16| if v == 0 { 0.0 } else { ((v as f32 - 1000.0) / 1000.0).clamp(0.0, 1.0) };
         // SERVO1 aileron (4), SERVO2 V-tail left (79), SERVO3 throttle left (73),
@@ -279,10 +309,10 @@ impl SimCore {
     /// Build the JSON sensor packet for ArduPilot's JSON SITL backend.
     pub fn sitl_json(&self) -> String {
         let s = &self.state;
-        let home_ground = terrain::ground_height(terrain::PILOT_POS.x, terrain::PILOT_POS.z);
+        let home_ground = terrain::ground_height(terrain::pilot_pos().x, terrain::pilot_pos().z);
         // World (+X east, +Y up, -Z north) -> NED.
         let ned = |v: Vec3| [-v.z, v.x, -v.y];
-        let rel = s.pos - Vec3::new(terrain::PILOT_POS.x, home_ground, terrain::PILOT_POS.z);
+        let rel = s.pos - Vec3::new(terrain::pilot_pos().x, home_ground, terrain::pilot_pos().z);
         let pos = ned(rel);
         let vel = ned(s.vel);
         let wind = ned(self.last_wind);

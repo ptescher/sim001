@@ -1,15 +1,18 @@
 //! Sensor video feed: the sim streams its gimballed camera to the ground station over TCP.
 //!
 //! Server (sim) → client (GCS): a [`FrameHeader`] followed by `stride * height` bytes of BGRA8
-//! (sRGB) pixels, one message per frame. Client → server: [`GimbalCmd`] messages, any time.
+//! (sRGB) pixels, one message per frame. Client → server: 16-byte [`ClientMsg`]s, any time:
+//! gimbal commands, and the autopilot's armed state and mode, which the sim can't see itself
+//! (JSON SITL only sends it servo outputs).
 //! Everything is little-endian. Raw frames keep it simple and latency-free on localhost
-//! (1280×720 at 30 fps is ~110 MB/s, nothing for loopback).
+//! (even 1280×720 at 30 fps is ~110 MB/s, nothing for loopback; the sim sends 320×240 by default).
 
 use std::io::{self, Read, Write};
 
 pub const DEFAULT_PORT: u16 = 5600;
 const FRAME_MAGIC: [u8; 4] = *b"T1SF";
 const CMD_MAGIC: [u8; 4] = *b"T1SC";
+const STATUS_MAGIC: [u8; 4] = *b"T1SS";
 pub const FORMAT_BGRA8: u16 = 1;
 
 /// Gimbal limits (degrees). Pan is body-relative, + right; tilt + up; hfov is the zoom.
@@ -53,6 +56,9 @@ pub struct FrameHeader {
     pub format: u16,
     pub width: u16,
     pub height: u16,
+    /// How many times the sim has reset the aircraft (wraps). A change tells the ground station
+    /// to restart the autopilot: a teleported aircraft leaves its estimators inconsistent.
+    pub resets: u16,
     /// Bytes per row (rows may be padded).
     pub stride: u32,
     pub frame: u32,
@@ -60,10 +66,15 @@ pub struct FrameHeader {
     pub sim_time: f32,
     /// Gimbal state the frame was rendered with.
     pub gimbal: Gimbal,
+    /// [`FLAG_DIRECT`] etc.
+    pub flags: u32,
 }
 
+/// The sticks are flying the aircraft through the sim's own modes; ArduPilot only watches.
+pub const FLAG_DIRECT: u32 = 1;
+
 impl FrameHeader {
-    pub const SIZE: usize = 36;
+    pub const SIZE: usize = 40;
 
     pub fn payload_len(&self) -> usize {
         self.stride as usize * self.height as usize
@@ -75,13 +86,14 @@ impl FrameHeader {
         b[4..6].copy_from_slice(&self.format.to_le_bytes());
         b[6..8].copy_from_slice(&self.width.to_le_bytes());
         b[8..10].copy_from_slice(&self.height.to_le_bytes());
-        // 10..12 reserved
+        b[10..12].copy_from_slice(&self.resets.to_le_bytes());
         b[12..16].copy_from_slice(&self.stride.to_le_bytes());
         b[16..20].copy_from_slice(&self.frame.to_le_bytes());
         b[20..24].copy_from_slice(&self.sim_time.to_le_bytes());
         b[24..28].copy_from_slice(&self.gimbal.pan.to_le_bytes());
         b[28..32].copy_from_slice(&self.gimbal.tilt.to_le_bytes());
         b[32..36].copy_from_slice(&self.gimbal.hfov.to_le_bytes());
+        b[36..40].copy_from_slice(&self.flags.to_le_bytes());
         b
     }
 
@@ -96,10 +108,12 @@ impl FrameHeader {
             format: u16_at(4),
             width: u16_at(6),
             height: u16_at(8),
+            resets: u16_at(10),
             stride: u32_at(12),
             frame: u32_at(16),
             sim_time: f32_at(20),
             gimbal: Gimbal { pan: f32_at(24), tilt: f32_at(28), hfov: f32_at(32) },
+            flags: u32_at(36),
         };
         if h.format != FORMAT_BGRA8 || (h.stride as usize) < h.width as usize * 4 || h.payload_len() > 64 << 20 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "unsupported feed frame"));
@@ -154,6 +168,47 @@ impl GimbalCmd {
     }
 }
 
+/// The autopilot's state as the ground station sees it over MAVLink.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VehicleStatus {
+    pub armed: bool,
+    /// Flight mode name, e.g. "AUTO" (up to 10 bytes).
+    pub mode: String,
+}
+
+impl VehicleStatus {
+    pub fn encode(&self) -> [u8; 16] {
+        let mut b = [0u8; 16];
+        b[0..4].copy_from_slice(&STATUS_MAGIC);
+        b[4] = self.armed as u8;
+        let name = self.mode.as_bytes();
+        let n = name.len().min(10);
+        b[5] = n as u8;
+        b[6..6 + n].copy_from_slice(&name[..n]);
+        b
+    }
+}
+
+/// A message from the ground station to the sim.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ClientMsg {
+    Gimbal(Gimbal),
+    Status(VehicleStatus),
+}
+
+impl ClientMsg {
+    pub const SIZE: usize = 16;
+
+    pub fn decode(b: &[u8; Self::SIZE]) -> io::Result<ClientMsg> {
+        if b[0..4] == STATUS_MAGIC {
+            let n = (b[5] as usize).min(10);
+            let mode = String::from_utf8_lossy(&b[6..6 + n]).into_owned();
+            return Ok(ClientMsg::Status(VehicleStatus { armed: b[4] != 0, mode }));
+        }
+        GimbalCmd::decode(b).map(|c| ClientMsg::Gimbal(c.0))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,10 +219,12 @@ mod tests {
             format: FORMAT_BGRA8,
             width: 4,
             height: 2,
+            resets: 3,
             stride: 16,
             frame: 7,
             sim_time: 12.5,
             gimbal: Gimbal { pan: -30.0, tilt: -10.0, hfov: 20.0 },
+            flags: FLAG_DIRECT,
         };
         let px: Vec<u8> = (0..32).collect();
         let mut wire = Vec::new();
@@ -176,6 +233,16 @@ mod tests {
         let got = read_frame(&mut wire.as_slice(), &mut buf).unwrap();
         assert_eq!(got, h);
         assert_eq!(buf, px);
+    }
+
+    #[test]
+    fn client_messages() {
+        let st = VehicleStatus { armed: true, mode: "TAKEOFF".into() };
+        assert_eq!(ClientMsg::decode(&st.encode()).unwrap(), ClientMsg::Status(st));
+        let g = Gimbal { pan: 10.0, tilt: -20.0, hfov: 30.0 };
+        assert_eq!(ClientMsg::decode(&GimbalCmd(g).encode()).unwrap(), ClientMsg::Gimbal(g));
+        let long = VehicleStatus { armed: false, mode: "QSTABILIZE_X".into() };
+        assert!(matches!(ClientMsg::decode(&long.encode()).unwrap(), ClientMsg::Status(s) if s.mode == "QSTABILIZE"));
     }
 
     #[test]

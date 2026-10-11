@@ -18,6 +18,15 @@ pub struct Options {
     pub feed_port: u16,
     /// Skip `cargo build` of the sim (use the existing binary).
     pub no_build: bool,
+    /// Start the sim with the sticks flying (ArduPilot watching); J / D-pad down toggles.
+    pub direct: bool,
+    /// A real place from `maps/<name>` (None: the procedural Alpine Valley).
+    pub map: Option<String>,
+}
+
+/// The map pack's metadata (home position etc.), if `name` has been built.
+pub fn pack_meta(name: &str) -> Option<t1s_station::mappack::PackMeta> {
+    t1s_station::mappack::PackMeta::read(&repo_root().join("maps").join(name).join("build")).ok()
 }
 
 /// Repository root (the sim's crate), next to this crate.
@@ -57,33 +66,58 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         return Err(format!("{} missing after the build", sim_binary().display()));
     }
 
-    step(2, total, "terrain map for the tactical display");
-    if assets.join("terrain_map.png").exists() && assets.join("terrain_map.txt").exists() {
-        println!("  {} (present)", assets.display());
+    if let Some(name) = &opts.map {
+        step(2, total, &format!("map pack for {name}"));
+        if pack_meta(name).is_some() && assets.join("terrain_map.txt").exists() {
+            println!("  maps/{name}/build (present)");
+        } else {
+            // Downloads USGS lidar + NAIP photos + OSM (a few minutes the first time).
+            println!("  building maps/{name} (USGS 3DEP lidar, NAIP photos, OpenStreetMap): a few minutes the first time");
+            let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+            run(
+                Command::new(cargo).args(["run", "--release", "--manifest-path", "tools/mapbuild/Cargo.toml", "--", name]).current_dir(&root),
+                "building the map pack",
+            )?;
+        }
     } else {
-        run(Command::new(sim_binary()).arg("--export-map").arg(assets).current_dir(&root), "exporting the terrain map")?;
+        step(2, total, "terrain map for the tactical display");
+        if assets.join("terrain_map.png").exists() && assets.join("terrain_map.txt").exists() {
+            println!("  {} (present)", assets.display());
+        } else {
+            run(Command::new(sim_binary()).arg("--export-map").arg(assets).current_dir(&root), "exporting the terrain map")?;
+        }
     }
 
     step(3, total, "Docker");
     ensure_docker()?;
 
     step(4, total, "ArduPlane SITL image");
-    let have_image = Command::new("docker")
-        .args(["image", "inspect", SITL_IMAGE])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success());
+    let have_image = image_id().is_some();
     if have_image {
-        println!("  {SITL_IMAGE} (present)");
+        // Cached layers make this a few seconds; it picks up changes to t1s.parm / start.sh.
+        run(Command::new("docker").args(["build", "-q", "-t", SITL_IMAGE, "ardupilot"]).current_dir(&root).stdout(Stdio::null()), "updating the SITL image")?;
+        println!("  {SITL_IMAGE} (up to date)");
     } else {
         println!("  building {SITL_IMAGE} from ardupilot/Dockerfile: first time only, about 15 minutes");
         run(Command::new("docker").args(["build", "-t", SITL_IMAGE, "ardupilot"]).current_dir(&root), "building the SITL image")?;
     }
 
     step(5, total, "ArduPlane SITL container");
-    println!("  {}", start_sitl()?);
+    // ArduPilot's home must be the sim's pilot box: the map's home, else start.sh's default.
+    let home = opts.map.as_deref().and_then(pack_meta).map(|m| {
+        (format!("{:.7},{:.7},{:.1},{:.0}", m.home_lat, m.home_lon, m.home_alt, m.launch_heading), m.title)
+    });
+    println!("  {}", start_sitl(opts.map.as_deref().unwrap_or("alpine"), home.as_ref().map(|h| h.0.as_str()))?);
+    if let Some((loc, title)) = home {
+        println!("  home {loc} ({title})");
+    }
     Ok(())
+}
+
+fn image_id() -> Option<String> {
+    let out = Command::new("docker").args(["image", "inspect", "-f", "{{.Id}}", SITL_IMAGE]).output().ok()?;
+    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !id.is_empty()).then_some(id)
 }
 
 fn docker_up() -> bool {
@@ -117,24 +151,45 @@ fn ensure_docker() -> Result<(), String> {
 }
 
 /// Starts the SITL container, or reboots it if it's already running: it was flying a previous
-/// sim's aircraft, and ArduPilot's EKF would see the new one jump back to the pilot box.
-fn start_sitl() -> Result<String, String> {
+/// sim's aircraft, and ArduPilot's EKF would see the new one jump back to the pilot box. A
+/// container from an older image is replaced, so parameter changes take effect.
+fn start_sitl(map: &str, home_loc: Option<&str>) -> Result<String, String> {
     let running = Command::new("docker")
-        .args(["ps", "--filter", &format!("name=^{SITL_CONTAINER}$"), "--format", "{{.Status}}"])
+        .args(["ps", "--filter", &format!("name=^{SITL_CONTAINER}$"), "--format", "{{.Image}}"])
         .output()
         .map_err(|e| format!("docker ps: {e}"))?;
     if !String::from_utf8_lossy(&running.stdout).trim().is_empty() {
-        run(Command::new("docker").args(["restart", "-t", "1", SITL_CONTAINER]).stdout(Stdio::null()), "restarting SITL")?;
-        return Ok(format!("restarted {SITL_CONTAINER}"));
+        let inspect = |fmt: &str| {
+            Command::new("docker")
+                .args(["inspect", "-f", fmt, SITL_CONTAINER])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .unwrap_or_default()
+        };
+        let same_image = image_id().is_some_and(|id| id == inspect("{{.Image}}"));
+        // Its home position belongs to the map it was started for.
+        let same_map = inspect("{{index .Config.Labels \"t1s.map\"}}") == map;
+        if same_image && same_map {
+            run(Command::new("docker").args(["restart", "-t", "1", SITL_CONTAINER]).stdout(Stdio::null()), "restarting SITL")?;
+            return Ok(format!("restarted {SITL_CONTAINER}"));
+        }
+        println!("  {}: replacing the container", if same_image { "different map" } else { "the SITL image changed" });
     }
-    // A stopped leftover with the same name would block `docker run --name`.
+    // Gone, stopped, or from an older image.
     let _ = Command::new("docker").args(["rm", "-f", SITL_CONTAINER]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    // ArduPilot's flight logs (.BIN) land in logs/sitl/ in the repo, so they outlive the container.
+    let logs = repo_root().join("logs/sitl");
+    std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
     let out = Command::new("docker")
-        .args(["run", "-d", "--rm", "--name", SITL_CONTAINER, "-p", "5760:5760", SITL_IMAGE])
+        .args(["run", "-d", "--rm", "--name", SITL_CONTAINER, "-p", "5760:5760", "--label", &format!("t1s.map={map}")])
+        .args(home_loc.map(|h| vec!["-e".to_string(), format!("HOME_LOC={h}")]).unwrap_or_default())
+        .arg("-v")
+        .arg(format!("{}:/sitl/logs", logs.display()))
+        .arg(SITL_IMAGE)
         .output()
         .map_err(|e| format!("docker run: {e}"))?;
     if out.status.success() {
-        Ok(format!("started {SITL_CONTAINER} (MAVLink on tcp:5760)"))
+        Ok(format!("started {SITL_CONTAINER} (MAVLink on tcp:5760, flight logs in {})", logs.display()))
     } else {
         Err(format!("docker run failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
     }
@@ -148,6 +203,12 @@ pub fn start_sim(opts: &Options, rect: Option<Rect>) -> Result<Child, String> {
     cmd.current_dir(&root).args(["--ardupilot", "--feed", &opts.feed_port.to_string(), "--exit-with-parent"]);
     if opts.raster {
         cmd.arg("--raster");
+    }
+    if opts.direct {
+        cmd.arg("--direct");
+    }
+    if let Some(m) = &opts.map {
+        cmd.args(["--map", m]);
     }
     if let Some(r) = rect {
         cmd.args(["--window-rect", &r.to_arg(), "--frameless"]);

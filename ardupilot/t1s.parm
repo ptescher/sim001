@@ -29,9 +29,12 @@ FLTMODE5 11
 FLTMODE6 12
 
 # Airframe
-ARSPD_FBW_MIN 11
-ARSPD_FBW_MAX 22
+# (AIRSPEED_MIN/MAX replaced ARSPD_FBW_MIN/MAX in ArduPilot 4.5; the old names are ignored.)
+AIRSPEED_MIN 11
+AIRSPEED_MAX 22
 AIRSPEED_CRUISE 15
+# Note: in AUTO, holding the throttle stick above half raises the target airspeed toward
+# AIRSPEED_MAX (THROTTLE_NUDGE). Set THROTTLE_NUDGE 0 to have AUTO ignore the stick.
 TRIM_THROTTLE 50
 THR_MAX 100
 ROLL_LIMIT_DEG 50
@@ -49,3 +52,16 @@ TKOFF_ALT 30
 # Sim provides airspeed directly; no RC failsafe needed when RC comes from JSON.
 ARSPD_TYPE 100
 THR_FAILSAFE 0
+
+# 4S 1800 mAh pack (the sim's). Low: RTL; critical: land (RTL without a landing sequence).
+BATT_CAPACITY 1800
+BATT_LOW_VOLT 13.6
+BATT_LOW_MAH 450
+BATT_CRT_VOLT 13.2
+BATT_CRT_MAH 180
+BATT_FS_LOW_ACT 1
+BATT_FS_CRT_ACT 2
+
+# RTL: climb straight ahead to 30 m before turning for home, so an RTL from low altitude
+# (e.g. AUTO with no mission right after a hand launch) doesn't circle into trees.
+RTL_CLIMB_MIN 30
