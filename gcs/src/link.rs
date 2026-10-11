@@ -21,12 +21,18 @@ const MSG_HOME_POSITION: f32 = 242.0;
 
 pub enum Cmd {
     Arm(bool),
+    /// Disarm even if ArduPilot thinks it's flying (it refuses a normal disarm then).
+    ForceDisarm,
+    /// Restart ArduPilot (forced, so it works armed too): clears confused estimators.
+    Reboot,
     SetMode(u32),
     /// Fly to and loiter at a point (GUIDED), altitude relative to home.
     Goto { lat: f64, lon: f64, alt: f32 },
     /// Replace the vehicle's mission (home is inserted as item 0).
     Upload(Vec<Waypoint>),
     Download,
+    /// Erase the vehicle's mission (MISSION_CLEAR_ALL). Download afterwards to see it empty.
+    ClearMission,
     SetCurrentWp(u16),
     /// RC_CHANNELS_OVERRIDE for channels 1-8 (0 releases a channel). Used by --autotest only.
     RcOverride([u16; 8]),
@@ -58,6 +64,9 @@ struct Session {
     home_requested: Option<Instant>,
     downloaded_once: bool,
     rate_window: (Instant, u64),
+    /// STATUSTEXT longer than one message arrives in chunks sharing an id: (id, next chunk,
+    /// severity, text so far).
+    text_chunks: Option<(u16, u8, u8, String)>,
 }
 
 fn run(address: String, vehicle: Shared, rx: Receiver<Cmd>) {
@@ -93,6 +102,7 @@ fn run(address: String, vehicle: Shared, rx: Receiver<Cmd>) {
             home_requested: None,
             downloaded_once: false,
             rate_window: (Instant::now(), 0),
+            text_chunks: None,
         };
         let err = s.run(&vehicle, &rx);
         let mut v = vehicle.lock().unwrap();
@@ -219,6 +229,16 @@ impl Session {
                 log(6, format!("Command: {}", if arm { "ARM" } else { "DISARM" }));
                 self.command_long(MavCmd::MAV_CMD_COMPONENT_ARM_DISARM, [arm as u8 as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
             }
+            Cmd::ForceDisarm => {
+                log(4, "Command: FORCE DISARM".into());
+                // param2 21196: ArduPilot's magic value to disarm regardless of state.
+                self.command_long(MavCmd::MAV_CMD_COMPONENT_ARM_DISARM, [0.0, 21196.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+            }
+            Cmd::Reboot => {
+                log(4, "Command: REBOOT autopilot".into());
+                // param1 1 = reboot; param6 20190226 = ArduPilot's magic value to allow it armed.
+                self.command_long(MavCmd::MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN, [1.0, 0.0, 0.0, 0.0, 0.0, 20190226.0, 0.0]);
+            }
             Cmd::SetMode(m) => {
                 log(6, format!("Command: mode {}", mode_name(m)));
                 // param1 = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, param2 = custom mode.
@@ -245,6 +265,14 @@ impl Session {
             }
             Cmd::Upload(plan) => self.start_upload(vehicle, plan),
             Cmd::Download => self.start_download(vehicle),
+            Cmd::ClearMission => {
+                vehicle.lock().unwrap().push_log("GCS", 6, "Command: clear the vehicle's mission");
+                self.send(MavMessage::MISSION_CLEAR_ALL(MISSION_CLEAR_ALL_DATA {
+                    target_system: self.target.0,
+                    target_component: self.target.1,
+                    ..Default::default()
+                }));
+            }
             Cmd::RcOverride(ch) => {
                 self.send(MavMessage::RC_CHANNELS_OVERRIDE(RC_CHANNELS_OVERRIDE_DATA {
                     chan1_raw: ch[0],
@@ -257,6 +285,7 @@ impl Session {
                     chan8_raw: ch[7],
                     target_system: self.target.0,
                     target_component: self.target.1,
+                    ..Default::default()
                 }));
             }
             Cmd::SetCurrentWp(seq) => {
@@ -293,6 +322,7 @@ impl Session {
             count,
             target_system: self.target.0,
             target_component: self.target.1,
+            ..Default::default()
         }));
     }
 
@@ -301,6 +331,7 @@ impl Session {
         self.send(MavMessage::MISSION_REQUEST_LIST(MISSION_REQUEST_LIST_DATA {
             target_system: self.target.0,
             target_component: self.target.1,
+            ..Default::default()
         }));
         self.xfer = Xfer::Download { items: vec![], next: 0, last: Instant::now(), tries: 0 };
     }
@@ -310,6 +341,7 @@ impl Session {
             seq,
             target_system: self.target.0,
             target_component: self.target.1,
+            ..Default::default()
         }));
     }
 
@@ -341,6 +373,7 @@ impl Session {
                         self.send(MavMessage::MISSION_REQUEST_LIST(MISSION_REQUEST_LIST_DATA {
                             target_system: self.target.0,
                             target_component: self.target.1,
+                            ..Default::default()
                         }));
                     } else {
                         let seq = *next;
@@ -487,11 +520,36 @@ impl Session {
                 v.servo = [s.servo1_raw, s.servo2_raw, s.servo3_raw, s.servo4_raw, s.servo5_raw, s.servo6_raw, s.servo7_raw, s.servo8_raw];
             }
             MavMessage::STATUSTEXT(t) => {
-                let text = String::from_utf8_lossy(&t.text[..]).trim_end_matches('\0').trim().to_string();
-                if text.starts_with("PreArm") {
-                    v.prearm = Some((Instant::now(), text.clone()));
+                let raw = &t.text[..];
+                // A chunk that fills all 50 bytes (no NUL) continues in the next one.
+                let last_chunk = raw.contains(&0);
+                let piece = String::from_utf8_lossy(raw).trim_end_matches('\0').to_string();
+                let severity = t.severity as u8;
+                let full = if t.id == 0 {
+                    Some((severity, piece))
+                } else {
+                    // Reassemble ArduPilot's chunked text (same id, chunk_seq 0, 1, ...).
+                    let mut buf = match self.text_chunks.take() {
+                        Some((id, next, sev, text)) if id == t.id && next == t.chunk_seq => (id, next, sev, text),
+                        Some((_, _, sev, text)) => {
+                            // A different message started: flush what we had.
+                            log_text(&mut v, sev, text);
+                            (t.id, 0, severity, String::new())
+                        }
+                        None => (t.id, 0, severity, String::new()),
+                    };
+                    buf.3.push_str(&piece);
+                    if last_chunk {
+                        Some((buf.2, buf.3))
+                    } else {
+                        buf.1 = t.chunk_seq.wrapping_add(1);
+                        self.text_chunks = Some(buf);
+                        None
+                    }
+                };
+                if let Some((sev, text)) = full {
+                    log_text(&mut v, sev, text);
                 }
-                v.push_log("FC", t.severity as u8, text);
             }
             MavMessage::COMMAND_ACK(a) => {
                 let ok = a.result == MavResult::MAV_RESULT_ACCEPTED;
@@ -578,8 +636,17 @@ impl Session {
             target_system: self.target.0,
             target_component: self.target.1,
             mavtype: MavMissionResult::MAV_MISSION_ACCEPTED,
+            ..Default::default()
         }));
     }
+}
+
+fn log_text(v: &mut Vehicle, severity: u8, text: String) {
+    let text = text.trim().to_string();
+    if text.starts_with("PreArm") || text.starts_with("Arm:") {
+        v.prearm = Some((Instant::now(), text.clone()));
+    }
+    v.push_log("FC", severity, text);
 }
 
 fn mission_item(seq: u16, wp: &Waypoint, target: (u8, u8)) -> MISSION_ITEM_INT_DATA {
@@ -607,6 +674,7 @@ fn mission_item(seq: u16, wp: &Waypoint, target: (u8, u8)) -> MISSION_ITEM_INT_D
         frame: MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT,
         current: 0,
         autocontinue: 1,
+        ..Default::default()
     }
 }
 

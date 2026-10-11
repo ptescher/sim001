@@ -55,3 +55,20 @@ pub fn hide_window_buttons(window: &gpui::Window) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn hide_window_buttons(_window: &gpui::Window) {}
+
+/// The system's number for the window, for `screencapture -l`.
+#[cfg(target_os = "macos")]
+pub fn window_number(window: &gpui::Window) -> Option<isize> {
+    use objc2_app_kit::NSView;
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let handle = HasWindowHandle::window_handle(window).ok()?;
+    let RawWindowHandle::AppKit(h) = handle.as_raw() else { return None };
+    // SAFETY: GPUI's AppKit handle points at its live NSView, and we're on the main thread.
+    let view: &NSView = unsafe { h.ns_view.cast::<NSView>().as_ref() };
+    view.window().map(|w| w.windowNumber())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn window_number(_window: &gpui::Window) -> Option<isize> {
+    None
+}

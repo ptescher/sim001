@@ -12,23 +12,40 @@ use gpui::{
     AnyElement, Bounds, Context, Div, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
     Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful, Window, canvas, div, prelude::*, px,
 };
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+thread_local! {
+    /// Where each button was last painted, by id, so `--expect` can click it the way a
+    /// person would. Written while painting, read between frames; both on the UI thread.
+    static BUTTONS: RefCell<HashMap<SharedString, Bounds<Pixels>>> = RefCell::new(HashMap::new());
+}
+
+/// Where the button with this id is on screen now, if it is.
+pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
+    BUTTONS.with(|b| b.borrow().get(id).copied())
+}
+
 const MODE_BUTTONS: [&str; 10] = ["MANUAL", "FBWA", "FBWB", "CRUISE", "AUTO", "RTL", "LOITER", "CIRCLE", "GUIDED", "TAKEOFF"];
 
 pub struct Gcs {
-    vehicle: Shared,
-    tx: Sender<Cmd>,
-    origin: Origin,
+    pub(crate) vehicle: Shared,
+    pub(crate) tx: Sender<Cmd>,
+    pub(crate) origin: Origin,
     terrain: Option<Arc<TerrainMap>>,
     map_image: Option<Arc<RenderImage>>,
-    map: MapState,
-    map_bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub(crate) map: MapState,
+    pub(crate) map_bounds: Rc<Cell<Bounds<Pixels>>>,
     arm_confirm: Option<Instant>,
+    /// When DISARM was last clicked: clicking again while still armed forces it.
+    disarm_at: Option<Instant>,
+    reboot_confirm: Option<Instant>,
+    /// AUTO clicked with no mission on the vehicle: a second click goes ahead.
+    auto_confirm: Option<Instant>,
     /// The aircraft camera, when the sensor feed is in use (`--station` / `--sensor`).
     sensor: Option<Arc<Sensor>>,
 }
@@ -69,6 +86,9 @@ impl Gcs {
             map: MapState::new(),
             map_bounds: Rc::new(Cell::new(Bounds::default())),
             arm_confirm: None,
+            disarm_at: None,
+            reboot_confirm: None,
+            auto_confirm: None,
             sensor,
         }
     }
@@ -205,24 +225,78 @@ impl Gcs {
             self.arm_confirm = None;
         }
         let alive = v.link.alive();
+        // ArduPilot reports whether its pre-arm checks pass; until then (e.g. the first ~30 s
+        // while the EKF initialises) say so, with the latest reason. Arming is still allowed.
+        const PREARM_CHECK: u32 = 0x1000_0000;
+        let ready = v.armed || v.sensor_ok(PREARM_CHECK).unwrap_or(true);
+        let not_ready_reason = (!ready && alive).then(|| {
+            v.prearm
+                .as_ref()
+                .filter(|p| p.0.elapsed() < Duration::from_secs(40))
+                .map(|p| p.1.trim_start_matches("PreArm: ").trim_start_matches("Arm: ").to_string())
+                .unwrap_or_else(|| "waiting for pre-arm checks".into())
+        });
+        // A disarm ArduPilot refused (it thinks it's flying) can be forced with a second click.
+        let force = v.armed && self.disarm_at.is_some_and(|t| (1..8).contains(&t.elapsed().as_secs()));
         let arm = if v.armed {
-            button("disarm", "DISARM", Style::Danger).on_click(cx.listener(|this, _, _, _| this.send(Cmd::Arm(false))))
+            button("disarm", if force { "FORCE DISARM" } else { "DISARM" }, Style::Danger).on_click(cx.listener(move |this, _, _, _| {
+                if force {
+                    this.disarm_at = None;
+                    this.send(Cmd::ForceDisarm);
+                } else {
+                    this.disarm_at = Some(Instant::now());
+                    this.send(Cmd::Arm(false));
+                }
+            }))
         } else if confirming {
             button("arm", "CONFIRM ARM", Style::Danger).on_click(cx.listener(|this, _, _, _| {
                 this.arm_confirm = None;
                 this.send(Cmd::Arm(true));
             }))
         } else {
-            button("arm", "ARM", Style::Caution).on_click(cx.listener(|this, _, _, _| this.arm_confirm = Some(Instant::now())))
+            let (text, style) = if not_ready_reason.is_some() { ("ARM: NOT READY", Style::Normal) } else { ("ARM", Style::Caution) };
+            button("arm", text, style).on_click(cx.listener(|this, _, _, _| this.arm_confirm = Some(Instant::now())))
         };
+        let rebooting = self.reboot_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(3));
+        let reboot = button("reboot", if rebooting { "CONFIRM REBOOT" } else { "REBOOT FC" }, if rebooting { Style::Danger } else { Style::Normal })
+            .on_click(cx.listener(move |this, _, _, _| {
+                if rebooting {
+                    this.reboot_confirm = None;
+                    this.send(Cmd::Reboot);
+                } else {
+                    this.reboot_confirm = Some(Instant::now());
+                }
+            }));
+        let hint = if confirming || rebooting {
+            div().text_color(c(GREY)).child("click again within 3 s")
+        } else if let Some(reason) = not_ready_reason {
+            div().text_color(c(AMBER)).min_w(px(0.0)).flex_1().child(reason)
+        } else {
+            div()
+        };
+        // When the sim's sticks are flying, ArduPilot's mode buttons don't steer the plane.
+        let direct = self.sensor.as_ref().is_some_and(|s| s.direct());
+        // AUTO with nothing uploaded just RTLs (low, right after a launch): ask first.
+        let no_mission = v.mission.len() <= 1;
+        let auto_pending = self.auto_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(4));
         let modes = MODE_BUTTONS.iter().map(|&m| {
             let active = alive && v.mode() == m;
-            button(SharedString::from(format!("mode-{m}")), m, if active { Style::Active } else { Style::Normal })
-                .on_click(cx.listener(move |this, _, _, _| {
-                    if let Some(n) = mode_number(m) {
-                        this.send(Cmd::SetMode(n));
-                    }
-                }))
+            let (label, style) = if m == "AUTO" && auto_pending && no_mission {
+                ("AUTO: NO MISSION?", Style::Caution)
+            } else {
+                (m, if active { Style::Active } else { Style::Normal })
+            };
+            button(SharedString::from(format!("mode-{m}")), label, style).on_click(cx.listener(move |this, _, _, _| {
+                if m == "AUTO" && no_mission && !this.auto_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(4)) {
+                    this.auto_confirm = Some(Instant::now());
+                    this.log(4, "No mission on the vehicle: AUTO would go straight to RTL. Plan one (PLAN, +TKOF, UPLOAD), or click AUTO again to do it anyway");
+                    return;
+                }
+                this.auto_confirm = None;
+                if let Some(n) = mode_number(m) {
+                    this.send(Cmd::SetMode(n));
+                }
+            }))
         });
         div()
             .flex()
@@ -237,9 +311,15 @@ impl Gcs {
                     .items_center()
                     .child(label("VEHICLE"))
                     .child(arm)
-                    .child(div().text_color(c(GREY)).child(if confirming { "click again within 3 s" } else { "" })),
+                    .child(reboot)
+                    .child(hint),
             )
             .child(div().flex().flex_wrap().gap_1().items_center().child(label("MODE")).children(modes))
+            .children(direct.then(|| {
+                div()
+                    .text_color(c(CYAN))
+                    .child("DIRECT: the sim's sticks are flying (J / D-pad down in the sim). ArduPilot is only watching.")
+            }))
     }
 
     fn map_toolbar(&self, cx: &mut Context<Self>) -> Div {
@@ -285,7 +365,7 @@ impl Gcs {
             .child(button("restart", "WP1", Style::Normal).on_click(cx.listener(|this, _, _, _| this.send(Cmd::SetCurrentWp(1)))))
     }
 
-    fn add_takeoff(&mut self) {
+    pub(crate) fn add_takeoff(&mut self) {
         if self.map.plan.first().is_some_and(|w| w.kind == WpKind::Takeoff) {
             return;
         }
@@ -421,10 +501,10 @@ impl Gcs {
             div()
                 .flex()
                 .gap_2()
-                .whitespace_nowrap()
-                .child(div().flex_none().text_color(c(DARK)).child(format!("T+{:02}:{:02}:{:02}", age / 3600, (age / 60) % 60, age % 60)))
+                .child(div().flex_none().whitespace_nowrap().text_color(c(DARK)).child(format!("T+{:02}:{:02}:{:02}", age / 3600, (age / 60) % 60, age % 60)))
                 .child(div().flex_none().w(px(26.0)).text_color(c(if l.source == "GCS" { CYAN } else { GREY })).child(l.source))
-                .child(div().min_w(px(0.0)).overflow_hidden().text_color(c(severity(l.severity))).child(l.text.clone()))
+                // Long messages (e.g. ArduPilot's pre-arm reasons) wrap rather than clip.
+                .child(div().flex_1().min_w(px(0.0)).text_color(c(severity(l.severity))).child(l.text.clone()))
         });
         div().flex().flex_col().p_2().gap(px(1.0)).overflow_hidden().children(lines)
     }
@@ -620,13 +700,16 @@ enum Style {
 
 fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, style: Style) -> Stateful<Div> {
     let (bg, fg, border) = match style {
-        Style::Normal => (0x161a16, WHITE, BEZEL_EDGE),
-        Style::Active => (0x14361f, GREEN, GREEN_DIM),
-        Style::Caution => (0x3a2c08, AMBER, AMBER),
-        Style::Danger => (0x4a0f0c, 0xffd0cc, RED),
+        Style::Normal => (CONTROL, WHITE, BEZEL_EDGE),
+        Style::Active => (ACTIVE_FILL, GREEN, GREEN_DIM),
+        Style::Caution => (CAUTION_FILL, AMBER, AMBER),
+        Style::Danger => (DANGER_FILL, ON_DANGER, RED),
     };
+    let id: SharedString = id.into();
+    let recorded = id.clone();
     div()
-        .id(id.into())
+        .id(id)
+        .relative()
         .px_2()
         .py(px(3.0))
         .bg(c(bg))
@@ -635,9 +718,17 @@ fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, style: Sty
         .border_color(c(border))
         .rounded(px(CONTROL_RADIUS))
         .cursor_pointer()
-        .hover(|s| s.bg(c(0x2a302a)))
+        .hover(|s| s.bg(c(CONTROL_HOVER)))
         .active(|s| s.opacity(0.7))
         .child(text.into())
+        .child(
+            canvas(
+                move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(recorded, b)),
+                |_, _, _, _| {},
+            )
+            .absolute()
+            .inset_0(),
+        )
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -650,11 +741,11 @@ enum Ann {
 
 fn annunciator(name: &'static str, a: Ann, flash: bool, w: f32) -> Div {
     let (bg, fg, border) = match a {
-        Ann::Off => (0x0c0f0c, DARK, 0x1e221e),
-        Ann::Ok => (0x0c1f12, GREEN, GREEN_DIM),
+        Ann::Off => (LAMP_OFF, DARK, LAMP_OFF_EDGE),
+        Ann::Ok => (LAMP_OK, GREEN, GREEN_DIM),
         Ann::Caution => (AMBER, 0x000000, AMBER),
         Ann::Warn if flash => (RED, 0xffffff, RED),
-        Ann::Warn => (0x5a0d0a, 0xffffff, RED),
+        Ann::Warn => (LAMP_WARN, 0xffffff, RED),
     };
     div()
         .w(px(w))

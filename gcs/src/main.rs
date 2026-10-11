@@ -6,6 +6,7 @@
 //!   cargo run --release -- --connect udpin:0.0.0.0:14550  any rust-mavlink address
 
 mod autotest;
+mod expect;
 mod feed;
 mod geo;
 mod link;
@@ -15,12 +16,14 @@ mod ui;
 mod vehicle;
 
 use geo::{Origin, TerrainMap};
-use gpui::{App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, px, size};
+use gpui::{actions, App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds, WindowOptions, point, px, size};
 use std::path::PathBuf;
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 use t1s_station::layout::{self, Mode, Pane, Rect};
 use vehicle::Vehicle;
+
+actions!(t1s_gcs, [Quit]);
 
 const HELP: &str = "\
 t1s_gcs [options]
@@ -28,6 +31,10 @@ t1s_gcs [options]
                      Desktop, builds the SITL image if missing, starts SITL and the sim with the
                      sensor feed, and lays out sim view, sensor feed and console over your displays
   --no-build         with --station: don't rebuild the sim first
+  --map NAME         fly a real place from maps/NAME (cypress, berkeley): with --station it builds
+                     the map pack if needed and starts SITL at that place's home
+  --direct           with --station: start with the sticks flying through the sim's own modes
+                     (ArduPilot keeps running and reporting, its outputs ignored; J toggles)
   --layout single    with --station: tile all three on the main display even with several
   --raster           with --station: run the sim without ray tracing
   --sensor           open the sensor feed window (sim already running with --feed)
@@ -35,6 +42,9 @@ t1s_gcs [options]
   --connect ADDR     MAVLink, any rust-mavlink address (default tcpout:127.0.0.1:5760)
   --origin LAT,LON[,ALT]  SITL --home = the sim's pilot box (default matches ardupilot/start.sh)
   --assets DIR       output of `t1s_sim --export-map` (default gcs/assets)
+  --expect [SUITE]   run the acceptance tests in SUITE (default ../expectations) against this console
+                     by clicking it, and exit; needs a vehicle, so use it with --station
+  --docs DIR         with --expect: write the manual and screenshots to DIR (merged with the sim's)
   --autotest         SITL only: upload a circuit, arm, fly AUTO, GUIDED goto, RTL";
 
 fn main() {
@@ -47,14 +57,21 @@ fn main() {
     }
     let station_mode = flag("--station");
     let address = arg("--connect").unwrap_or_else(|| "tcpout:127.0.0.1:5760".into());
-    let origin = arg("--origin").and_then(|s| Origin::parse(&s)).unwrap_or(Origin::SITL_DEFAULT);
-    let assets = arg("--assets").map(PathBuf::from).unwrap_or_else(default_assets);
+    let map = arg("--map");
+    let mut origin = arg("--origin").and_then(|s| Origin::parse(&s)).unwrap_or(Origin::SITL_DEFAULT);
+    // A real place's map lives in gcs/assets/<name>; the Alpine Valley's in gcs/assets.
+    let assets = arg("--assets").map(PathBuf::from).unwrap_or_else(|| match &map {
+        Some(m) => default_assets().join(m),
+        None => default_assets(),
+    });
     let layout_mode = if arg("--layout").as_deref() == Some("single") { Mode::Single } else { Mode::Auto };
     let feed_addr = arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", t1s_station::feed::DEFAULT_PORT));
     let opts = station::Options {
         raster: flag("--raster"),
         feed_port: feed_addr.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(t1s_station::feed::DEFAULT_PORT),
         no_build: flag("--no-build"),
+        direct: flag("--direct"),
+        map: map.clone(),
     };
     if station_mode {
         if let Err(e) = station::prepare(&opts, &assets) {
@@ -63,6 +80,13 @@ fn main() {
         }
     }
 
+    // The map's home is ArduPilot's home and the sim's pilot box: everything is relative to it.
+    if let Some(m) = &map {
+        match station::pack_meta(m) {
+            Some(meta) => origin = Origin { lat: meta.home_lat, lon: meta.home_lon, alt: meta.home_alt },
+            None => eprintln!("map {m} isn't built yet (run with --station, or tools/mapbuild)"),
+        }
+    }
     let terrain = TerrainMap::load(&assets).map(Arc::new);
     match &terrain {
         Some(t) => println!("terrain map {} ({:.0} m square)", t.png.display(), t.size_m),
@@ -74,10 +98,20 @@ fn main() {
     if flag("--autotest") {
         autotest::spawn(vehicle.clone(), tx.clone(), origin);
     }
-    let sensor = (station_mode || flag("--sensor")).then(|| feed::spawn(feed_addr, vehicle.clone(), origin, terrain.clone()));
+    let sensor = (station_mode || flag("--sensor")).then(|| feed::spawn(feed_addr, vehicle.clone(), tx.clone(), origin, terrain.clone()));
     let sim: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
 
+    let expect = flag("--expect").then(|| {
+        let suite = args.iter().position(|a| a == "--expect").and_then(|i| args.get(i + 1)).filter(|a| !a.starts_with("--"));
+        expect::Config {
+            suite: suite.map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../expectations")),
+            docs: arg("--docs").map(PathBuf::from),
+        }
+    });
     Application::new().run(move |cx: &mut App| {
+        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+        cx.set_menus(vec![Menu { name: "T1-S Ground Control".into(), items: vec![MenuItem::action("Quit", Quit)] }]);
         let displays = screens::displays(cx);
         // The windows are frameless (content under a transparent title bar), so a layout
         // rectangle is the content rectangle.
@@ -122,6 +156,10 @@ fn main() {
                 .expect("open sensor window");
         }
 
+        if let Some(config) = expect {
+            expect::start(cx, console, config);
+        }
+
         // Closing the console ends the session (and the sim it started).
         let console_id = console.window_id();
         cx.on_window_closed(move |cx| {
@@ -141,6 +179,7 @@ fn main() {
         .detach();
         cx.activate(true);
     });
+    std::process::exit(expect::EXIT.load(std::sync::atomic::Ordering::SeqCst));
 }
 
 fn window_options(title: &'static str, bounds: Bounds<gpui::Pixels>) -> WindowOptions {
