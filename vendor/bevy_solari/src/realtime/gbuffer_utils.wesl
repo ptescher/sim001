@@ -10,8 +10,11 @@ struct ResolvedGPixel {
     material: ResolvedMaterial,
 }
 
-/// t1s_sim patch: shading-point lift per metre of camera distance (see gpixel_resolve).
+/// t1s_sim patch: shading-point lift per metre of camera distance (see gpixel_resolve),
+/// faded in between these distances (m) so nearby objects are shaded exactly as stock.
 const SHADING_LIFT: f32 = 0.0015;
+const SHADING_LIFT_START: f32 = 150.0;
+const SHADING_LIFT_FULL: f32 = 500.0;
 
 fn gpixel_resolve(gpixel: vec4<u32>, depth: f32, pixel_id: vec2<u32>, view_size: vec2<f32>, world_from_clip: mat4x4<f32>) -> ResolvedGPixel {
     let surface_position = reconstruct_world_position(pixel_id, depth, view_size, world_from_clip);
@@ -29,8 +32,11 @@ fn gpixel_resolve(gpixel: vec4<u32>, depth: f32, pixel_id: vec2<u32>, view_size:
     // Distant terrain is coarse (metres per triangle) under smooth normals, so rays leaving
     // the flat triangle clip its neighbours and every small facet shadows itself into a dark
     // triangle (the "shadow terminator" problem). The lift grows with the triangle size the
-    // terrain LODs use, and stays at millimetres to centimetres close up.
-    let world_position = surface_position + world_normal * (distance(surface_position, near_position) * SHADING_LIFT);
+    // terrain LODs use. Close up it is zero: even centimetres push points through thin parts
+    // (the aircraft's wings) or into concave corners, which then shade black.
+    let camera_distance = distance(surface_position, near_position);
+    let lift = camera_distance * SHADING_LIFT * smoothstep(SHADING_LIFT_START, SHADING_LIFT_FULL, camera_distance);
+    let world_position = surface_position + world_normal * lift;
 
     let base_rough = unpack4x8unorm(gpixel.r);
     let base_color = pow(base_rough.rgb, vec3(2.2));
