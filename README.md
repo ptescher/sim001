@@ -17,6 +17,17 @@ cargo run --release -- --selftest   # headless flight-model numbers
 
 `rust-toolchain.toml` pins Rust 1.99, which Bevy 0.20 needs. rustup installs it automatically.
 
+## Real places
+
+Besides the Alpine Valley, the sim flies real places built from USGS lidar elevation, NAIP aerial photos and OpenStreetMap. Trees and water are derived from the photos. The two built so far are **Cypress Island Airfield, WA** (`cypress`) and the **Park at the Berkeley Waterfront, CA** (`berkeley`):
+
+```bash
+cd gcs && cargo run --release -- --station --map cypress   # builds the map pack the first time
+cargo run --release -- --map berkeley                     # the sim alone
+```
+
+See [maps/README.md](maps/README.md) for the data, licenses and how to add a place.
+
 ## Scenery and rendering
 
 The setting is an alpine valley modelled on Rocky Mountain lakes:
@@ -116,7 +127,11 @@ cd gcs && cargo run --release -- --station
 
 That's the whole setup. `--station` builds the sim, exports the terrain map if missing, starts Docker Desktop, builds the SITL image if missing (first time only, about 15 minutes), starts SITL and the sim, and lays out three panes: the sim's view, the aircraft's camera feed and the console. They're tiled on one display or spread across several. Sim flags it uses: `--feed [port]` streams the gimballed sensor camera over TCP (default 5600, `--feed-size WxH`), `--window-rect x,y,w,h --title-bar N` places the window, and `--exit-with-parent` quits the sim with the ground station.
 
-Your sticks go to ArduPilot as RC1–4 (AETR). `B` toggles the RC7 arm switch (`RC7_OPTION 153`), and `N` steps RC8 through MANUAL, FBWA, CRUISE, AUTO, RTL and LOITER. Hand-launch works as usual: throttle up, or press Space. That also works for AUTO takeoff, because the throw produces a real acceleration pulse.
+Your sticks go to ArduPilot as RC1–4 (AETR). Press `J` (D-pad down on the Pro Controller, or an optional radio switch from the F2 wizard) to switch the **control source**:
+- **ArduPilot:** ArduPilot flies the plane.
+- **Direct:** your sticks fly it through the sim's own MANUAL / ANGLE / ACRO modes, and `M` cycles them.
+
+In Direct the physics still runs in lockstep with SITL. ArduPilot keeps estimating and the ground station keeps its telemetry; ArduPilot's outputs are simply ignored. `--direct` starts in Direct. `B` toggles the RC7 arm switch (`RC7_OPTION 153`), and `N` steps RC8 through MANUAL, FBWA, CRUISE, AUTO, RTL and LOITER. Hand-launch works as usual: throttle up, or press Space. That also works for AUTO takeoff, because the throw produces a real acceleration pulse.
 
 `ardupilot/t1s.parm` sets up the airframe. `SERVO1` is the aileron, `SERVO2`/`SERVO4` are the V-tail left/right (functions 79/80), and `SERVO3`/`SERVO5` are the left/right throttles (73/74) with `RUDD_DT_GAIN`. The sim reads servo outputs with ArduPilot's own conventions. For aileron, positive means roll right. For the V-tail outputs, positive means trailing edge up, which is how ArduPilot's mixer drives non-reversed servos. So no reversals are needed.
 
@@ -136,3 +151,19 @@ The published specs are 790 mm span, 715 mm length, 2× 1406-3150 KV motors, 383
 - about 4.9 N static thrust per motor
 
 From `--selftest`, that gives hands-off trim at about 13 m/s, a stall at about 9.5 m/s, roll rate around 330°/s and pitch rate around 190°/s, and about 15 minutes of endurance at half throttle.
+
+## Behaviour, acceptance tests and docs
+
+**[docs/site/index.html](docs/site/index.html) is the project's manual**: what the sim and the ground station do, section by section, with screenshots. [docs/README.md](docs/README.md) has the same in Markdown. Both are generated, not committed (`docs/` is ignored except for the hand-made pictures): the sim's and the console's acceptance tests in [`expectations/`](expectations) run against the live programs, and their results and screenshots are written to `docs/`. The console's tests that need the mission file, terrain check, survey grid, measuring or the sim window show "not supported yet" placeholders.
+
+Each feature is written there as Given/When/Then expectations in a shared vocabulary. Conflicting expectations are detected, and exceptions are declared with `Overrides:` (pausing holds the plane even with the throttle up, for example). User stories walk through the expectations, and each one becomes an acceptance test. Running the tests presses the real keys, reads the sim's state and takes a screenshot at every step:
+
+```bash
+cargo run -p expectation_cli -- check expectations        # conflicts, coverage, story problems (no window)
+cargo run --release -- --expect                           # run the tests in the sim window
+cargo run --release -- --expect --docs docs               # ...and rewrite docs/ from the results
+(cd gcs && cargo run --release -- --station --expect --docs ../docs)   # the same for the console (needs Docker)
+cargo run -p expectation_cli -- docs expectations docs    # rewrite docs/ from the saved results
+```
+
+The run takes a few minutes and keeps the window on top, because screenshots need it visible. Connected controllers are ignored, so the keys behave the same every time. `cargo test` checks the suite without a window. The system behind this is the [expectation](domains/expectation/README.md) domain. The repo is one Cargo workspace laid out as workspace → domain → module (see [domains/README.md](domains/README.md)).
