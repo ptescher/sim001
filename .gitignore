@@ -24,3 +24,6 @@ mav.tlog.raw
 
 # Claude Code per-user settings (shared project settings in .claude/ stay tracked)
 .claude/settings.local.json
+
+# Map packs built by tools/mapbuild (downloaded data; map.txt configs are tracked)
+maps/*/build/

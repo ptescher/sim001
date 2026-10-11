@@ -7,7 +7,7 @@
 //! home) and `terrain_map.txt` (georeference). Map coordinates are metres north/east of home,
 //! which is the pilot box: the same origin ArduPilot SITL uses for its home position.
 
-use crate::terrain::{self, PILOT_POS};
+use crate::terrain;
 use crate::terrain_render::surface_color;
 use crate::world::sun_dir;
 use bevy::asset::RenderAssetUsages;
@@ -164,7 +164,7 @@ pub fn export(dir: &str) {
     image.try_into_dynamic().expect("convert map").save(&png).expect("write terrain_map.png");
 
     // Height grid (row 0 north), relative to the ground at home.
-    let home_h = terrain::ground_height(PILOT_POS.x, PILOT_POS.z);
+    let home_h = terrain::ground_height(terrain::pilot_pos().x, terrain::pilot_pos().z);
     let mut hb = Vec::with_capacity(HEIGHT_N * HEIGHT_N * 4);
     let step = 2.0 * HALF / (HEIGHT_N - 1) as f32;
     for j in 0..HEIGHT_N {
@@ -177,7 +177,7 @@ pub fn export(dir: &str) {
     std::fs::write(dir.join("terrain_height.bin"), hb).expect("write terrain_height.bin");
 
     // Georeference: world (+X east, -Z north) relative to home.
-    let centre = Vec3::ZERO - Vec3::new(PILOT_POS.x, 0.0, PILOT_POS.z);
+    let centre = Vec3::ZERO - Vec3::new(terrain::pilot_pos().x, 0.0, terrain::pilot_pos().z);
     let meta = format!(
         "# t1s_sim map export. Map centre is given in metres north/east of home (the pilot box).\n\
 size_m={size}\nmap_px={n}\ncentre_north={cn}\ncentre_east={ce}\nheight_n={hn}\n\
@@ -186,8 +186,8 @@ runway_north={rn}\nrunway_east={re}\nrunway_length={rl}\nrunway_width={rw}\nrunw
         cn = -centre.z,
         ce = centre.x,
         hn = HEIGHT_N,
-        rn = -(terrain::RUNWAY_CENTER.y - PILOT_POS.z),
-        re = terrain::RUNWAY_CENTER.x - PILOT_POS.x,
+        rn = -(terrain::RUNWAY_CENTER.y - terrain::pilot_pos().z),
+        re = terrain::RUNWAY_CENTER.x - terrain::pilot_pos().x,
         rl = 2.0 * terrain::RUNWAY_HALF_LENGTH,
         rw = 2.0 * terrain::RUNWAY_HALF_WIDTH,
     );

@@ -113,6 +113,26 @@ fn spruce_proxy() -> Mesh {
     b.build()
 }
 
+/// Distant spruce (beyond ~900 m, a few pixels tall): a plain 7-sided cone.
+fn spruce_distant() -> Mesh {
+    let mut b = GeoBuilder::default();
+    let segs = 7;
+    let tip = b.vert(Vec3::new(0.0, 1.0, 0.0), Vec2::new(0.5, 1.0));
+    let ring: Vec<u32> = (0..=segs)
+        .map(|k| {
+            let a = k as f32 / segs as f32 * TAU;
+            b.vert(Vec3::new(a.cos() * 0.19, 0.08, a.sin() * 0.19), Vec2::new(k as f32 / segs as f32, 0.0))
+        })
+        .collect();
+    let centre = b.vert(Vec3::new(0.0, 0.08, 0.0), Vec2::ZERO);
+    for k in 0..segs {
+        let mid = (b.pos[ring[k] as usize] + b.pos[ring[k + 1] as usize]) * 0.5;
+        b.tri(tip, ring[k], ring[k + 1], Vec3::new(mid.x, 0.2, mid.z));
+        b.tri(centre, ring[k + 1], ring[k], Vec3::NEG_Y);
+    }
+    b.build()
+}
+
 fn trunk(radius: f32, height: f32, taper: f32) -> Mesh {
     let mut b = GeoBuilder::default();
     let segs = 8;
@@ -134,9 +154,10 @@ fn trunk(radius: f32, height: f32, taper: f32) -> Mesh {
     b.build()
 }
 
-/// Lumpy blob cluster (aspen canopy or boulder): displaced icospheres merged.
-pub fn lumpy(seed: u32, blobs: usize, spread: Vec3, blob_r: f32, bump: f32, flat_bottom: Option<f32>) -> Mesh {
-    let ico = Sphere::new(1.0).mesh().ico(3).unwrap();
+/// Lumpy blob cluster (aspen canopy or boulder): displaced icospheres (subdivision `detail`)
+/// merged.
+pub fn lumpy(seed: u32, blobs: usize, spread: Vec3, blob_r: f32, bump: f32, flat_bottom: Option<f32>, detail: u32) -> Mesh {
+    let ico = Sphere::new(1.0).mesh().ico(detail).unwrap();
     let base_pos: Vec<Vec3> = match ico.attribute(Mesh::ATTRIBUTE_POSITION) {
         Some(bevy::mesh::VertexAttributeValues::Float32x3(v)) => v.iter().map(|p| Vec3::from_array(*p)).collect(),
         _ => unreachable!(),
@@ -171,6 +192,9 @@ pub fn lumpy(seed: u32, blobs: usize, spread: Vec3, blob_r: f32, bump: f32, flat
     b.build()
 }
 
+/// Trees within this distance of the field (m) cast ray-traced branch shadows.
+const RT_WOOD_RADIUS: f32 = 400.0;
+
 /// Generated trees are built at these heights and instanced with a scale factor.
 const SPRUCE_REF: f32 = 20.0;
 const ASPEN_REF: f32 = 14.0;
@@ -188,6 +212,8 @@ pub struct VegetationBuild {
     aspen_solid: Vec<Mesh>,
     aspen_trunk: Mesh,
     spruce_proxy: Mesh,
+    spruce_distant: Mesh,
+    aspen_distant: Mesh,
     boulder_meshes: Vec<Mesh>,
     /// (variant index, transform)
     boulders: Vec<(usize, Transform)>,
@@ -202,6 +228,8 @@ pub struct VegetationHandles {
     aspen_solid: Vec<Handle<Mesh>>,
     aspen_trunk: Handle<Mesh>,
     spruce_proxy: Handle<Mesh>,
+    spruce_distant: Handle<Mesh>,
+    aspen_distant: Handle<Mesh>,
     spruce_solid_mats: Vec<Handle<StandardMaterial>>,
     aspen_solid_mats: Vec<Handle<StandardMaterial>>,
     spray_mats: Vec<Handle<StandardMaterial>>,
@@ -226,7 +254,10 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
     let spruce_gen: Vec<_> = (0..4).map(|s| grow(crate::treegen::Species::Spruce, 11 + s, SPRUCE_REF)).collect();
     let aspen_gen: Vec<_> = (0..4).map(|s| grow(crate::treegen::Species::Aspen, 51 + s, ASPEN_REF)).collect();
     let spruce_solid: Vec<_> = (0..5).map(spruce_foliage).collect();
-    let aspen_solid: Vec<_> = (0..4).map(|s| lumpy(100 + s, 6, Vec3::new(0.45, 0.9, 0.45), 0.42, 0.25, None)).collect();
+    // Far crowns are seen from 200 m out: a coarse icosphere per blob is plenty.
+    let aspen_solid: Vec<_> = (0..4).map(|s| lumpy(100 + s, 6, Vec3::new(0.45, 0.9, 0.45), 0.42, 0.25, None, 1)).collect();
+    let aspen_distant = lumpy(150, 1, Vec3::ZERO, 0.55, 0.2, None, 0);
+    let spruce_distant = spruce_distant();
     let spruce_proxy = spruce_proxy();
     let aspen_trunk = trunk(0.02, 0.85, 0.35);
 
@@ -245,7 +276,7 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         ]
     });
     let boulder_meshes: Vec<_> =
-        (0..6).map(|s| lumpy(300 + s, 1 + (s as usize % 3), Vec3::new(0.9, 0.3, 0.9), 0.75, 0.22, Some(-0.35))).collect();
+        (0..6).map(|s| lumpy(300 + s, 1 + (s as usize % 3), Vec3::new(0.9, 0.3, 0.9), 0.75, 0.22, Some(-0.35), 3)).collect();
     let mut boulders = Vec::new();
     let mut place = |x: f32, z: f32, size: f32, sink: f32, k: u32| {
         let h = terrain::ground_height(x, z);
@@ -254,9 +285,10 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         let s = Vec3::new(size * (0.8 + 0.4 * rnd(k, 2)), size * (0.55 + 0.35 * rnd(k, 3)), size * (0.8 + 0.4 * rnd(k, 4)));
         boulders.push((k as usize, Transform::from_xyz(x, h - sink * s.y, z).with_rotation(rot).with_scale(s)));
     };
-    // Lake shore boulders, some standing in the water.
+    // Lake shore boulders, some standing in the water (the Alpine Valley only).
+    let alpine = terrain::real().is_none();
     let lc = terrain::LAKE_CENTER;
-    for k in 0..70u32 {
+    for k in 0..if alpine { 70u32 } else { 0 } {
         let a = rnd(k, 20) * TAU;
         // Walk out from the centre to the shoreline, then scatter around it.
         let dir = Vec2::new(a.cos(), a.sin());
@@ -270,7 +302,7 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
     }
     // Outcrops on steep hillsides, and scattered erratics in the meadows.
     let spacing = 34.0;
-    let n = (1700.0 / spacing) as i32;
+    let n = if alpine { (1700.0 / spacing) as i32 } else { -1 };
     for iz in -n..=n {
         for ix in -n..=n {
             let k = ((ix + 500) * 2003 + iz + 500) as u32;
@@ -300,6 +332,8 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         aspen_solid,
         aspen_trunk,
         spruce_proxy,
+        spruce_distant,
+        aspen_distant,
         boulder_meshes,
         boulders,
     }
@@ -385,6 +419,8 @@ pub fn upload_vegetation(
         aspen_solid: b.aspen_solid.into_iter().map(|m| meshes.add(m)).collect(),
         aspen_trunk: meshes.add(b.aspen_trunk),
         spruce_proxy: meshes.add(b.spruce_proxy),
+        spruce_distant: meshes.add(b.spruce_distant),
+        aspen_distant: meshes.add(b.aspen_distant),
         spruce_solid_mats,
         aspen_solid_mats,
         spray_mats,
@@ -398,9 +434,14 @@ pub fn upload_vegetation(
 pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &terrain::Tree) {
     use bevy::camera::visibility::VisibilityRange;
     use bevy::solari::prelude::RaytracingMesh3d;
-    // LOD switch distance (metres), with a dithered cross-fade band.
-    let near = VisibilityRange { start_margin: 0.0..0.0, end_margin: 260.0..340.0, use_aabb: false };
-    let far = VisibilityRange { start_margin: 260.0..340.0, end_margin: 1.0e7..1.0e7, use_aabb: false };
+    // LOD switch distances (metres), each with a dithered cross-fade band. The full trees
+    // are 6-20k triangles each and every camera draws them, so they stop at ~200 m.
+    let near = VisibilityRange { start_margin: 0.0..0.0, end_margin: 160.0..220.0, use_aabb: false };
+    let far = VisibilityRange { start_margin: 160.0..220.0, end_margin: 850.0..1000.0, use_aabb: false };
+    let distant = VisibilityRange { start_margin: 850.0..1000.0, end_margin: 1.0e7..1.0e7, use_aabb: false };
+    // Branch shadows only matter close to where the aircraft flies; the proxies carry the
+    // crowns' shadows everywhere.
+    let rt_wood = Vec2::new(t.pos.x, t.pos.z).length() < RT_WOOD_RADIUS;
 
     let keep = std::env::var("T1S_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
     if rnd(i as u32, 99) > keep {
@@ -416,13 +457,16 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         let (wood, cards) = &v.spruce_gen[i % v.spruce_gen.len()];
         let k = h / SPRUCE_REF;
         let gen_tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::new(k * w / h, k, k * w / h));
-        commands.spawn((RaytracingMesh3d(wood.clone()), MeshMaterial3d(v.bark.clone()), gen_tf));
+        if rt_wood {
+            commands.spawn((RaytracingMesh3d(wood.clone()), MeshMaterial3d(v.bark.clone()), gen_tf));
+        }
         commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(v.bark.clone()), gen_tf, near.clone()));
         commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(v.spray_mats[shade % 4].clone()), gen_tf, near));
         let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::new(w, h, w));
         let solid = v.spruce_solid[i % v.spruce_solid.len()].clone();
         let solid_mat = v.spruce_solid_mats[shade % 4].clone();
         commands.spawn((Mesh3d(solid), MeshMaterial3d(solid_mat.clone()), tf, far));
+        commands.spawn((Mesh3d(v.spruce_distant.clone()), MeshMaterial3d(solid_mat.clone()), tf, distant));
         // Ray-tracing proxy for the needle mass: a smooth cone a bit inside the visible crown.
         let proxy = tf.with_scale(Vec3::new(w * 0.8, h * 0.96, w * 0.8));
         commands.spawn((RaytracingMesh3d(v.spruce_proxy.clone()), MeshMaterial3d(solid_mat), proxy));
@@ -430,7 +474,9 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         let h = h * 0.8;
         let (wood, cards) = &v.aspen_gen[i % v.aspen_gen.len()];
         let gen_tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(h / ASPEN_REF));
-        commands.spawn((RaytracingMesh3d(wood.clone()), MeshMaterial3d(v.aspen_bark.clone()), gen_tf));
+        if rt_wood {
+            commands.spawn((RaytracingMesh3d(wood.clone()), MeshMaterial3d(v.aspen_bark.clone()), gen_tf));
+        }
         commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(v.aspen_bark.clone()), gen_tf, near.clone()));
         commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(v.leaf_mats[shade % 3].clone()), gen_tf, near));
         let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(h));
@@ -441,6 +487,7 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         let solid = v.aspen_solid[i % v.aspen_solid.len()].clone();
         let solid_mat = v.aspen_solid_mats[shade % 3].clone();
         commands.spawn((Mesh3d(solid.clone()), MeshMaterial3d(solid_mat.clone()), canopy, far));
+        commands.spawn((Mesh3d(v.aspen_distant.clone()), MeshMaterial3d(solid_mat.clone()), canopy, distant));
         let proxy = canopy.with_scale(canopy.scale * 0.75);
         commands.spawn((RaytracingMesh3d(solid), MeshMaterial3d(solid_mat), proxy));
     }

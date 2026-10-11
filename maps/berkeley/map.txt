@@ -1,0 +1,16 @@
+# Park at the Berkeley Waterfront (formerly Cesar Chavez Park), 11 Spinnaker Way, Berkeley, CA.
+# 90 acres of open fields on a peninsula in the bay: a kite-flying spot with steady bay breezes.
+# Build the map pack with: cargo run --release --manifest-path tools/mapbuild/Cargo.toml -- berkeley
+title=Berkeley Waterfront Park
+center_lat=37.8718
+center_lon=-122.3189
+size_m=5000
+# Pilot box / ArduPilot home: the big north meadow.
+home_lat=37.8722
+home_lon=-122.3195
+# Into the prevailing westerly off the bay.
+launch_heading=250
+# Monterey pine / cypress, eucalyptus and street trees.
+tree_min_m=6
+tree_max_m=14
+conifer_fraction=0.4

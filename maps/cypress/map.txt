@@ -1,0 +1,16 @@
+# Cypress Island Airfield, Cypress Island, WA (private gravel strip, ~670 m, 16/34).
+# Build the map pack with: cargo run --release --manifest-path tools/mapbuild/Cargo.toml -- cypress
+title=Cypress Island Airfield
+# Area fetched: a square of size_m metres centred here (runway midpoint).
+center_lat=48.57197
+center_lon=-122.69020
+size_m=6000
+# Pilot box / ArduPilot home: the clearing on the west side of the strip near its north end.
+home_lat=48.57249
+home_lon=-122.69085
+# Launch heading (degrees true): down the strip to the SSE.
+launch_heading=165
+# Trees grown where the aerial photo shows canopy: Douglas fir / western red cedar forest.
+tree_min_m=20
+tree_max_m=40
+conifer_fraction=0.95

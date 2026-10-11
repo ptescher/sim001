@@ -1,12 +1,52 @@
-//! Procedural flying field: flat mown field + runway in the middle, a lake, rolling hills
-//! further out and mountains on the horizon. World frame: +X east, +Y up, -Z north.
+//! The ground: either the procedural Alpine Valley (flat mown field + runway in the middle, a
+//! lake, rolling hills further out and mountains on the horizon) or a real place loaded from a
+//! map pack (`--map cypress`, see `realsite`). World frame: +X east, +Y up, -Z north.
 
 use crate::physics::Obstacle;
+use crate::realsite::RealSite;
 use bevy::math::{Vec2, Vec3};
+use std::sync::OnceLock;
 
-pub const PILOT_POS: Vec3 = Vec3::new(10.0, 0.0, 20.0);
+static SITE: OnceLock<Option<RealSite>> = OnceLock::new();
+
+/// Loads a real place from `maps/<name>/build`. Call once, before anything asks about the
+/// ground; without it the sim flies the Alpine Valley.
+pub fn load_site(maps_dir: &std::path::Path, name: &str) -> Result<(), String> {
+    let site = RealSite::load(&maps_dir.join(name).join("build"))?;
+    SITE.set(Some(site)).map_err(|_| "a site is already loaded".to_string())
+}
+
+/// The real place being flown, if any.
+pub fn real() -> Option<&'static RealSite> {
+    SITE.get_or_init(|| None).as_ref()
+}
+
+/// Display name of the place.
+pub fn site_title() -> String {
+    real().map_or_else(|| "Alpine Valley".to_string(), |r| r.meta.title.clone())
+}
+
+const ALPINE_PILOT_POS: Vec3 = Vec3::new(10.0, 0.0, 20.0);
+
+/// The pilot box (ArduPilot's home).
+pub fn pilot_pos() -> Vec3 {
+    if real().is_some() { Vec3::ZERO } else { ALPINE_PILOT_POS }
+}
+
 /// Launch heading as a rotation about +Y (0 = facing north / -Z).
-pub const LAUNCH_HEADING: f32 = 0.0;
+pub fn launch_heading() -> f32 {
+    real().map_or(0.0, |r| -r.meta.launch_heading.to_radians())
+}
+
+/// Half-width of the square of terrain, around the world origin.
+pub fn half_size() -> f32 {
+    real().map_or(TERRAIN_HALF_SIZE, |r| r.half_size)
+}
+
+/// Height of open water (the lake, or the sea at a real place).
+pub fn water_level() -> f32 {
+    real().map_or(WATER_LEVEL, |r| r.water_level)
+}
 
 pub const RUNWAY_HALF_WIDTH: f32 = 6.0;
 pub const RUNWAY_HALF_LENGTH: f32 = 70.0;
@@ -98,6 +138,9 @@ fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
 /// Distance from the lake centre in units of the (noise-shaped) shoreline radius:
 /// < 1 is lake, 1 is the shore. Gives the lake an irregular natural outline.
 pub fn lake_factor(x: f32, z: f32) -> f32 {
+    if real().is_some() {
+        return 9.0;
+    }
     let d = Vec2::new(x, z) - LAKE_CENTER;
     let a = d.y.atan2(d.x);
     let wobble = 1.0 + 0.22 * gradient_noise(a.cos() * 1.6 + 4.0, a.sin() * 1.6 - 2.0)
@@ -106,6 +149,9 @@ pub fn lake_factor(x: f32, z: f32) -> f32 {
 }
 
 pub fn ground_height(x: f32, z: f32) -> f32 {
+    if let Some(r) = real() {
+        return r.height(x, z);
+    }
     let r = (x * x + z * z).sqrt();
     let hills = (fbm(x / 380.0 + 11.0, z / 380.0 - 7.0, 5) - 0.35) * 45.0
         + gradient_noise(x / 140.0 + 3.0, z / 140.0 - 9.0) * 4.0;
@@ -136,10 +182,16 @@ pub fn ground_normal(x: f32, z: f32) -> Vec3 {
 }
 
 pub fn is_water(x: f32, z: f32) -> bool {
+    if let Some(r) = real() {
+        return r.is_water(x, z);
+    }
     ground_height(x, z) < WATER_LEVEL && lake_factor(x, z) < 1.6
 }
 
 pub fn is_runway(x: f32, z: f32) -> bool {
+    if let Some(r) = real() {
+        return r.on_runway(x, z);
+    }
     (x - RUNWAY_CENTER.x).abs() < RUNWAY_HALF_WIDTH && (z - RUNWAY_CENTER.y).abs() < RUNWAY_HALF_LENGTH
 }
 
@@ -154,6 +206,9 @@ pub struct Tree {
 /// Deterministic tree scatter. Keeps the field, runway approaches and lake clear.
 /// Probability of a tree at a spot: patchy woods plus a ring around the field edge.
 pub fn forest_density(x: f32, z: f32) -> f32 {
+    if real().is_some() {
+        return -1.0;
+    }
     let r = (x * x + z * z).sqrt();
     let density = fbm(x / 160.0 + 40.0, z / 160.0 - 20.0, 3);
     let ring = (-(r - 230.0).powi(2) / 900.0).exp() * 0.5;
@@ -161,6 +216,9 @@ pub fn forest_density(x: f32, z: f32) -> f32 {
 }
 
 pub fn trees() -> Vec<Tree> {
+    if let Some(r) = real() {
+        return r.trees.clone();
+    }
     let mut out = Vec::new();
     let spacing = 13.0;
     let max_r = 1750.0;
@@ -209,15 +267,21 @@ pub fn trees() -> Vec<Tree> {
     out
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Building {
     pub center: Vec3,
     pub size: Vec3,
+    /// Rotation about +Y.
+    pub yaw: f32,
 }
 
 pub fn buildings() -> Vec<Building> {
+    if let Some(r) = real() {
+        return r.buildings.clone();
+    }
     let b = |x: f32, z: f32, sx: f32, sy: f32, sz: f32| {
         let h = ground_height(x, z);
-        Building { center: Vec3::new(x, h + sy * 0.5, z), size: Vec3::new(sx, sy, sz) }
+        Building { center: Vec3::new(x, h + sy * 0.5, z), size: Vec3::new(sx, sy, sz), yaw: 0.0 }
     };
     vec![
         b(38.0, 40.0, 14.0, 6.0, 10.0), // club hangar

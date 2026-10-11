@@ -149,13 +149,13 @@ fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
     // Worn dirt (pilot box, path to the hangar, runway shoulders) and the lake shore:
     // only evaluated where they can appear.
     let p = Vec2::new(x, z);
-    let near_field = p.distance(Vec2::new(terrain::PILOT_POS.x, terrain::PILOT_POS.z)) < 60.0
+    let near_field = p.distance(Vec2::new(terrain::pilot_pos().x, terrain::pilot_pos().z)) < 60.0
         || ((x - terrain::RUNWAY_CENTER.x).abs() < terrain::RUNWAY_HALF_WIDTH + 3.0
             && (z - terrain::RUNWAY_CENTER.y).abs() < terrain::RUNWAY_HALF_LENGTH + 3.0);
     if near_field || f[F_LAKE] < 1.4 {
         let wobble = gradient_noise(x * 0.9, z * 0.9) * 0.4;
         if near_field {
-            let pilot = Vec2::new(terrain::PILOT_POS.x, terrain::PILOT_POS.z);
+            let pilot = Vec2::new(terrain::pilot_pos().x, terrain::pilot_pos().z);
             let path = 1.0 - smoothstep(0.6, 1.1, seg_dist(p, pilot, Vec2::new(34.0, 36.0)) + wobble);
             let pad = 1.0 - smoothstep(2.5, 4.5, p.distance(pilot) + wobble * 2.0);
             let rx = (x - terrain::RUNWAY_CENTER.x).abs() - terrain::RUNWAY_HALF_WIDTH;
@@ -188,9 +188,35 @@ pub fn surface_color(x: f32, z: f32, h: f32, n: Vec3) -> [f32; 3] {
     fine_color(x, z, &coarse_fields(x, z, h, n))
 }
 
+/// A real place: the aerial photo, with fine noise so it doesn't look smeared up close.
+fn bake_real(site: &crate::realsite::RealSite, x0: f32, z0: f32, size: f32, res: u32) -> Vec<[f32; 3]> {
+    let res = res as usize;
+    let mut out = vec![[0.0f32; 3]; res * res];
+    let rows_per = res.div_ceil(worker_threads());
+    std::thread::scope(|s| {
+        for (t, chunk) in out.chunks_mut(rows_per * res).enumerate() {
+            s.spawn(move || {
+                background_priority();
+                for (k, px) in chunk.iter_mut().enumerate() {
+                    let (row, col) = (t * rows_per + k / res, k % res);
+                    let x = x0 + (col as f32 + 0.5) / res as f32 * size;
+                    let z = z0 + (row as f32 + 0.5) / res as f32 * size;
+                    let c = site.color(x, z);
+                    let grain = 0.92 + 0.10 * gradient_noise(x * 2.3, z * 2.3) + 0.05 * gradient_noise(x * 7.9, z * 7.9);
+                    *px = c.map(|v| v * grain);
+                }
+            });
+        }
+    });
+    out
+}
+
 /// Bakes one chunk's texture. Slow-varying fields are evaluated on a coarse grid (in
 /// parallel) and interpolated; only the cheap detail runs per texel. Rows are baked in parallel.
 fn bake_chunk(x0: f32, z0: f32, size: f32, res: u32) -> Vec<[f32; 3]> {
+    if let Some(site) = terrain::real() {
+        return bake_real(site, x0, z0, size, res);
+    }
     let g = (res / 8).max(16) as usize; // coarse grid cells
     let threads = worker_threads();
     let gw = g + 1;
@@ -366,7 +392,7 @@ fn chunk_mesh(x0: f32, z0: f32, size: f32, cells: usize, neighbours: [usize; 4])
 /// `progress(done, total)` is called after each chunk.
 pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<(Mesh, Image)> {
     let t0 = std::time::Instant::now();
-    let size = 2.0 * terrain::TERRAIN_HALF_SIZE / CHUNKS as f32;
+    let size = 2.0 * terrain::half_size() / CHUNKS as f32;
     let half = CHUNKS / 2;
     let mut specs = Vec::new();
     for cj in -half..=half {
@@ -441,6 +467,22 @@ pub struct Cover {
 
 pub fn ground_cover(x: f32, z: f32) -> Cover {
     let none = Cover { density: 0.0, height: 0.0, flowers: 0.0, flower_kind: 0, dry: 0.0 };
+    if let Some(site) = terrain::real() {
+        // Grass where the photo shows open ground: greener or drier like the photo.
+        return match site.grass(x, z) {
+            Some((amount, dry)) => {
+                let kind = fbm(x / 40.0 - 2.0, z / 40.0 + 5.0, 2);
+                Cover {
+                    density: 10.0 * amount,
+                    height: 0.12 + 0.18 * fbm(x / 9.0, z / 9.0, 2),
+                    flowers: 0.05 * (1.0 - dry),
+                    flower_kind: if kind < 0.5 { 0 } else { 1 },
+                    dry,
+                }
+            }
+            None => none,
+        };
+    }
     if terrain::is_runway(x, z) || terrain::is_water(x, z) || terrain::lake_factor(x, z) < 1.08 {
         return none;
     }
@@ -452,7 +494,7 @@ pub fn ground_cover(x: f32, z: f32) -> Cover {
     let field = 1.0 - smoothstep(field_edge - 6.0, field_edge, r);
     let forest = smoothstep(0.1, 0.6, terrain::forest_density(x, z)) * smoothstep(140.0, 180.0, r);
     let p = Vec2::new(x, z);
-    let pilot = Vec2::new(terrain::PILOT_POS.x, terrain::PILOT_POS.z);
+    let pilot = Vec2::new(terrain::pilot_pos().x, terrain::pilot_pos().z);
     let wobble = gradient_noise(x * 0.9, z * 0.9) * 0.4;
     let path = 1.0 - smoothstep(0.6, 1.1, seg_dist(p, pilot, Vec2::new(34.0, 36.0)) + wobble);
     let pad = 1.0 - smoothstep(2.5, 4.5, p.distance(pilot) + wobble * 2.0);

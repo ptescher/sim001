@@ -3,3 +3,4 @@
 
 pub mod feed;
 pub mod layout;
+pub mod mappack;

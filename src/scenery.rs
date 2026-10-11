@@ -55,17 +55,31 @@ pub fn spawn_scenery(
         normal_map_texture: Some(ripples),
         ..default()
     });
-    let radius = terrain::LAKE_RADIUS * 2.0;
-    let water = meshes.add(finish(Circle::new(radius).mesh().resolution(96).build()));
-    commands.spawn((
-        Water(water_mat.clone()),
-        rt(
-            water,
-            water_mat,
-            Transform::from_xyz(terrain::LAKE_CENTER.x, terrain::WATER_LEVEL, terrain::LAKE_CENTER.y)
-                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-        ),
-    ));
+    if terrain::real().is_some() {
+        // The sea / bay: one big plane at sea level (the terrain under it was pushed down),
+        // with ripples tiled every 25 m. Extends well past the terrain to the horizon.
+        let half = terrain::half_size() * 4.0;
+        let tiles = half * 2.0 / 25.0;
+        let mut sea = crate::mesh_util::GeoBuilder::default();
+        let ids: Vec<u32> = [(-half, -half), (half, -half), (half, half), (-half, half)]
+            .iter()
+            .map(|&(x, z)| sea.vert(Vec3::new(x, 0.0, z), Vec2::new((x / half * 0.5 + 0.5) * tiles, (z / half * 0.5 + 0.5) * tiles)))
+            .collect();
+        sea.quad(ids[0], ids[1], ids[2], ids[3], Vec3::Y);
+        commands.spawn((Water(water_mat.clone()), rt(meshes.add(sea.build()), water_mat, Transform::from_xyz(0.0, terrain::water_level(), 0.0))));
+    } else {
+        let radius = terrain::LAKE_RADIUS * 2.0;
+        let water = meshes.add(finish(Circle::new(radius).mesh().resolution(96).build()));
+        commands.spawn((
+            Water(water_mat.clone()),
+            rt(
+                water,
+                water_mat,
+                Transform::from_xyz(terrain::LAKE_CENTER.x, terrain::WATER_LEVEL, terrain::LAKE_CENTER.y)
+                    .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            ),
+        ));
+    }
 
     // Cumulus: each cloud is one mesh of camera-facing puffs, re-sorted back-to-front every
     // frame on the CPU. (Separate entities would pop in front of each other as the camera
