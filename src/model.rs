@@ -1,8 +1,8 @@
 //! Procedural 3D model of the HEEWING T1-S Ranger, with moving control surfaces and props.
 
-use crate::geom::*;
+use simulation_aircraft::t1s_ranger::geom::*;
 use crate::mesh_util::{airfoil_panel, cuboid, loft, PanelSpec};
-use crate::physics::Phase;
+use simulation_physics::Phase;
 use crate::SharedSim;
 use bevy::prelude::*;
 use bevy::solari::prelude::RaytracingMesh3d;

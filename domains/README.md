@@ -18,6 +18,7 @@ the compiler enforce that.
 | Domain | What it is |
 | --- | --- |
 | [design](design/README.md) | The look shared by the ground station, the sim's HUD and the docs: palettes, type and corners. |
+| [simulation](simulation/README.md) | The flight model and the planes it flies: aircraft descriptions and the physics, headless and independent of any renderer. |
 | [expectation](expectation/README.md) | Behaviour written as expectations, checked for conflicts, run as acceptance tests from user stories, and turned into documentation. |
 
 The sim (`src/`), `station/`, `gcs/` and `tools/mapbuild` predate the layout and will move

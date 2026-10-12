@@ -1,6 +1,7 @@
 //! Simulation core shared between the render thread and the ArduPilot bridge thread.
 
-use crate::physics::{self, ActuatorCommands, AircraftParams, Environment, FlightState, Obstacle, Phase};
+use simulation_aircraft::AircraftParams;
+use simulation_physics::{self as physics, ActuatorCommands, Environment, FlightState, Obstacle, Phase};
 use crate::terrain;
 use bevy::math::Vec3;
 use std::f32::consts::PI;
@@ -123,7 +124,7 @@ fn expo(x: f32, e: f32) -> f32 {
 
 impl SimCore {
     pub fn new(params: AircraftParams, obstacles: Vec<Obstacle>, ap_enabled: bool, ap_port: u16) -> Self {
-        let state = FlightState::new(&params);
+        let state = FlightState::new(&params, &terrain::hand());
         Self {
             params,
             state,
@@ -158,7 +159,7 @@ impl SimCore {
     }
 
     pub fn reset(&mut self) {
-        self.state.reset_to_hand();
+        self.state.reset_to_hand(&terrain::hand());
         // With a ground station attached it restarts ArduPilot on a reset (see the feed), so
         // snap straight back to the hand. Otherwise the plane is carried back, which keeps
         // ArduPilot's estimators consistent without a restart.
@@ -284,7 +285,7 @@ impl SimCore {
         let wind = self.wind_at(self.state.pos, self.state.time);
         self.last_wind = wind;
         let env = Environment { wind };
-        physics::step(&self.params, &mut self.state, cmd, &env, &self.obstacles, dt);
+        physics::step(&self.params, &mut self.state, cmd, &env, &terrain::WorldTerrain, &self.obstacles, dt);
         self.last_cmd = *cmd;
     }
 

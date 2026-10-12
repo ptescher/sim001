@@ -1,0 +1,9 @@
+[package]
+name = "simulation_physics"
+version = "0.1.0"
+edition = "2024"
+description = "Simulation domain: the 6-DOF flight model (aerodynamics, propulsion, battery, ground contact), headless and independent of any renderer"
+
+[dependencies]
+simulation_aircraft = { path = "../aircraft" }
+glam = "0.33"

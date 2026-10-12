@@ -9,6 +9,7 @@
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --fullscreen                                start borderless full-screen (F11 toggles); macOS Game Mode needs it
+//!   --aircraft ID                               which plane to fly (default t1s-ranger)
 //!   --map NAME                                  fly a real place from maps/NAME (see tools/mapbuild)
 //!   --direct                                    with --ardupilot: start with the sticks flying (J toggles)
 //!   --expect [suite] [--docs dir]               run the acceptance tests in expectations/ (and write the docs)
@@ -18,7 +19,6 @@ mod ardupilot;
 mod camera;
 mod gc_pad;
 mod foliage;
-mod geom;
 mod grass;
 mod hud;
 mod feed;
@@ -31,7 +31,6 @@ mod realsite;
 mod mesh_util;
 mod model;
 mod pad_overlay;
-mod physics;
 mod scenery;
 mod script;
 mod selftest;
@@ -101,6 +100,16 @@ fn main() {
             r.buildings.len()
         );
     }
+    // Which plane to fly: `--aircraft ID` (see simulation_aircraft).
+    let aircraft = match args.iter().position(|a| a == "--aircraft").and_then(|i| args.get(i + 1)) {
+        None => simulation_aircraft::default(),
+        Some(id) => simulation_aircraft::find(id.as_str()).unwrap_or_else(|| {
+            eprintln!("--aircraft {id}: no such plane. Available: {}", simulation_aircraft::ids().join(", "));
+            std::process::exit(1);
+        }),
+    };
+    println!("aircraft: {}", aircraft.title);
+    let params = (aircraft.params)();
     let ap_port: u16 = args
         .iter()
         .position(|a| a == "--ap-port")
@@ -112,7 +121,7 @@ fn main() {
     let raytracing = !flag("--raster");
 
     // Trees/obstacles are generated with the rest of the world on the loading screen.
-    let core = Arc::new(Mutex::new(SimCore::new(physics::t1s_params(), vec![], ap_enabled, ap_port)));
+    let core = Arc::new(Mutex::new(SimCore::new(params.clone(), vec![], ap_enabled, ap_port)));
     if ap_enabled {
         core.lock().unwrap().direct = direct;
         ardupilot::spawn_bridge(core.clone(), ap_port);

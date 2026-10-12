@@ -11,7 +11,7 @@ use crate::camera::{CamMode, CamState};
 use crate::hud::HudState;
 use crate::input::PilotInput;
 use crate::loading::AppState;
-use crate::physics::Phase;
+use simulation_physics::Phase;
 use crate::sim::{FlightMode, SimCore, Sticks};
 use crate::{SharedSim, SimSet};
 use bevy::app::AppExit;
@@ -423,7 +423,7 @@ impl Driver for SimDriver {
                     _ => "centred",
                 }),
                 "wings" => {
-                    let roll = crate::physics::euler(s.rot).0.to_degrees();
+                    let roll = simulation_physics::euler(s.rot).0.to_degrees();
                     Value::from(if roll.abs() < LEVEL { "level" } else { "banked" })
                 }
                 "flight mode" => Value::from(c.mode.label()),

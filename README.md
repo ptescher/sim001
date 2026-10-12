@@ -145,7 +145,7 @@ docker exec t1s-sitl python3 /check_link.py
 
 ## Airframe numbers
 
-The published specs are 790 mm span, 715 mm length, 2× 1406-3150 KV motors, 3830 props, 4S, and 600–950 g takeoff weight. These values are estimates, all in `src/geom.rs` and `physics::t1s_params()`:
+The published specs are 790 mm span, 715 mm length, 2× 1406-3150 KV motors, 3830 props, 4S, and 600–950 g takeoff weight. These values are estimates, all in `domains/simulation/aircraft/src/t1s_ranger/` (`geom.rs` and `params()`):
 
 - 800 g with a 4S 1800 mAh pack
 - 0.115 m² wing area (≈70 g/dm²)

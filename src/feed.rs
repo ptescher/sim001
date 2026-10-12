@@ -23,7 +23,7 @@ use t1s_station::feed::{ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, Gimba
 /// Camera position in the airframe (Bevy body axes: +X right, +Y up, -Z forward): a small
 /// sensor ball just ahead of and below the nose tip, clear of the fuselage so it never looks
 /// out through the hull.
-const MOUNT: Vec3 = Vec3::new(0.0, -0.008, crate::geom::NOSE_Z - 0.02);
+const MOUNT: Vec3 = Vec3::new(0.0, -0.008, simulation_aircraft::t1s_ranger::geom::NOSE_Z - 0.02);
 const IDLE_SIZE: UVec2 = UVec2::new(64, 36);
 const MAX_FPS: f64 = 30.0;
 /// Gimbal slew rate, degrees per second.

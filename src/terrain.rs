@@ -2,7 +2,7 @@
 //! lake, rolling hills further out and mountains on the horizon) or a real place loaded from a
 //! map pack (`--map cypress`, see `realsite`). World frame: +X east, +Y up, -Z north.
 
-use crate::physics::Obstacle;
+use simulation_physics::Obstacle;
 use crate::realsite::RealSite;
 use bevy::math::{Vec2, Vec3};
 use std::sync::OnceLock;
@@ -312,3 +312,27 @@ pub fn obstacles(trees: &[Tree], buildings: &[Building]) -> Vec<Obstacle> {
     o
 }
 
+
+/// The world's ground, as the physics sees it.
+pub struct WorldTerrain;
+
+impl simulation_physics::Terrain for WorldTerrain {
+    fn height(&self, x: f32, z: f32) -> f32 {
+        ground_height(x, z)
+    }
+    fn normal(&self, x: f32, z: f32) -> Vec3 {
+        ground_normal(x, z)
+    }
+    fn is_water(&self, x: f32, z: f32) -> bool {
+        is_water(x, z)
+    }
+    fn is_runway(&self, x: f32, z: f32) -> bool {
+        is_runway(x, z)
+    }
+}
+
+/// Where the pilot holds the plane: shoulder height at the pilot box, pointing down the runway.
+pub fn hand() -> simulation_physics::Hand {
+    let p = pilot_pos();
+    simulation_physics::Hand { pos: Vec3::new(p.x - 0.5, ground_height(p.x, p.z) + 1.6, p.z - 0.6), heading: launch_heading() }
+}

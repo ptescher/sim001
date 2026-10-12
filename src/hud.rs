@@ -3,7 +3,7 @@
 use crate::theme::{P, alpha, color, geometry};
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
-use crate::physics::{self, Phase};
+use simulation_physics::{self as physics, Phase};
 use crate::sim::{wrap_deg, AP_MODES};
 use crate::terrain;
 use crate::{RenderSettings, SharedSim};

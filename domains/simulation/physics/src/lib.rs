@@ -1,86 +1,56 @@
-//! 6-DOF rigid-body flight model for the T1-S.
+//! 6-DOF rigid-body flight model.
 //!
 //! Aerodynamics are computed per lifting surface (strip theory): each wing section and each
 //! V-tail panel sees its own local airflow (including rotation, prop wash and wing downwash),
 //! so stability, damping, adverse yaw, tip stalls and spins emerge from geometry rather than
 //! from canned stability derivatives.
+//!
+//! Nothing here knows about a renderer or a particular world: the ground comes in through
+//! [`Terrain`], and the plane through `simulation_aircraft`.
 
-use crate::geom::*;
-use crate::terrain;
-use bevy::math::{Quat, Vec3};
+use glam::{Quat, Vec3};
+use simulation_aircraft::{AeroSurface, AircraftParams, SurfaceControl};
 use std::f32::consts::PI;
 
 pub const RHO: f32 = 1.225;
 pub const GRAVITY: f32 = 9.81;
+pub const DEG: f32 = PI / 180.0;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum SurfaceControl {
-    None,
-    /// Aileron on the given side (-1 left, +1 right).
-    Aileron(i8),
-    /// V-tail ruddervator on the given side (-1 left, +1 right).
-    Ruddervator(i8),
+/// The ground the plane flies over.
+pub trait Terrain {
+    /// Ground height (world Y) at a point.
+    fn height(&self, x: f32, z: f32) -> f32;
+    /// Unit surface normal at a point.
+    fn normal(&self, x: f32, z: f32) -> Vec3;
+    fn is_water(&self, x: f32, z: f32) -> bool;
+    /// The smooth, low-friction strip.
+    fn is_runway(&self, x: f32, z: f32) -> bool;
 }
 
-#[derive(Clone, Debug)]
-pub struct AeroSurface {
-    pub name: &'static str,
-    /// Aerodynamic centre (quarter chord) in body frame.
-    pub pos: Vec3,
-    pub forward: Vec3,
-    pub normal: Vec3,
-    pub span_dir: Vec3,
-    pub area: f32,
-    pub chord: f32,
-    pub aspect_ratio: f32,
-    pub flap_fraction: f32,
-    pub control: SurfaceControl,
-    pub cl0: f32,
-    pub cm0: f32,
-    pub cd0: f32,
-    pub stall_pos: f32,
-    pub stall_neg: f32,
-    /// (motor index, fraction of the surface immersed in that prop's slipstream)
-    pub prop_wash: Option<(usize, f32)>,
-    pub is_tail: bool,
+/// Level ground at Y = 0, no water or runway.
+pub struct Flat;
+
+impl Terrain for Flat {
+    fn height(&self, _: f32, _: f32) -> f32 {
+        0.0
+    }
+    fn normal(&self, _: f32, _: f32) -> Vec3 {
+        Vec3::Y
+    }
+    fn is_water(&self, _: f32, _: f32) -> bool {
+        false
+    }
+    fn is_runway(&self, _: f32, _: f32) -> bool {
+        false
+    }
 }
 
-#[derive(Clone, Debug)]
-pub struct MotorSpec {
-    pub pos: Vec3,
-    pub dir: Vec3,
-    /// Static thrust at full throttle on a fresh pack (N).
-    pub static_thrust: f32,
-    /// Prop pitch speed at full throttle (m/s).
-    pub pitch_speed: f32,
-    /// Current at full throttle, static (A).
-    pub max_current: f32,
-    pub spool_tau: f32,
-    pub disk_area: f32,
-}
-
+/// Where the pilot holds the plane before a throw.
 #[derive(Clone, Copy, Debug)]
-pub struct ContactPoint {
+pub struct Hand {
     pub pos: Vec3,
-    pub fragile: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct AircraftParams {
-    pub mass: f32,
-    /// Principal moments of inertia about body X (pitch), Y (yaw), Z (roll).
-    pub inertia: Vec3,
-    pub surfaces: Vec<AeroSurface>,
-    pub motors: [MotorSpec; 2],
-    /// Fuselage drag area (Cd*A) for flow along body X, Y, Z.
-    pub fuselage_cda: Vec3,
-    pub contacts: Vec<ContactPoint>,
-    pub max_aileron: f32,
-    pub max_ruddervator: f32,
-    pub servo_rate: f32,
-    pub battery_cells: f32,
-    pub battery_capacity_mah: f32,
-    pub battery_resistance: f32,
+    /// Heading the plane points (radians about +Y).
+    pub heading: f32,
 }
 
 /// Normalized actuator commands, after any mixing / flight controller.
@@ -205,159 +175,6 @@ impl Carry {
     }
 }
 
-pub fn t1s_params() -> AircraftParams {
-    let mut surfaces = Vec::new();
-    let wing_area = WING_HALF_SPAN * (WING_ROOT_CHORD + WING_TIP_CHORD);
-    let wing_ar = (2.0 * WING_HALF_SPAN).powi(2) / wing_area;
-    let tail_ar = (2.0 * TAIL_SPAN).powi(2) / (TAIL_SPAN * (TAIL_ROOT_CHORD + TAIL_TIP_CHORD));
-
-    for side in [-1.0f32, 1.0] {
-        let sidei = side as i8;
-        let span_out = Vec3::new(side * WING_DIHEDRAL.cos(), WING_DIHEDRAL.sin(), 0.0);
-        let normal = Vec3::new(-side * WING_DIHEDRAL.sin(), WING_DIHEDRAL.cos(), 0.0);
-        // Inner (prop-washed) and outer (aileron) wing sections.
-        for (s0, s1, control, wash) in [
-            (0.0, AILERON_START, SurfaceControl::None, Some((if side < 0.0 { 0 } else { 1 }, 0.45))),
-            (AILERON_START, WING_HALF_SPAN, SurfaceControl::Aileron(sidei), None),
-        ] {
-            let sm = 0.5 * (s0 + s1);
-            let c = wing_chord(sm);
-            let area = (s1 - s0) * 0.5 * (wing_chord(s0) + wing_chord(s1));
-            let pos = Vec3::new(0.0, WING_Y, wing_le_z(sm) + 0.25 * c) + span_out * sm;
-            surfaces.push(make_surface(
-                if side < 0.0 { "wing_l" } else { "wing_r" },
-                pos,
-                normal,
-                WING_INCIDENCE,
-                area,
-                c,
-                wing_ar,
-                if matches!(control, SurfaceControl::None) { 0.0 } else { AILERON_CHORD_FRAC },
-                control,
-                0.22,
-                -0.045,
-                0.022,
-                14.0 * DEG,
-                -11.0 * DEG,
-                wash,
-                false,
-            ));
-        }
-    }
-
-    for side in [-1.0f32, 1.0] {
-        let span_out = Vec3::new(side * TAIL_DIHEDRAL.cos(), TAIL_DIHEDRAL.sin(), 0.0);
-        let normal = Vec3::new(-side * TAIL_DIHEDRAL.sin(), TAIL_DIHEDRAL.cos(), 0.0);
-        let sm = 0.5 * TAIL_SPAN;
-        let c = tail_chord(sm);
-        let area = TAIL_SPAN * 0.5 * (TAIL_ROOT_CHORD + TAIL_TIP_CHORD);
-        let pos = Vec3::new(side * TAIL_ROOT_X, TAIL_Y, tail_le_z(sm) + 0.25 * c) + span_out * sm;
-        surfaces.push(make_surface(
-            if side < 0.0 { "vtail_l" } else { "vtail_r" },
-            pos,
-            normal,
-            TAIL_INCIDENCE,
-            area,
-            c,
-            tail_ar,
-            RUDDERVATOR_CHORD_FRAC,
-            SurfaceControl::Ruddervator(side as i8),
-            0.0,
-            0.0,
-            0.025,
-            15.0 * DEG,
-            -15.0 * DEG,
-            None,
-            true,
-        ));
-    }
-
-    let prop_disk = PI * PROP_RADIUS * PROP_RADIUS;
-    let motor = |x: f32| MotorSpec {
-        pos: Vec3::new(x, MOTOR_Y, MOTOR_Z),
-        dir: Vec3::NEG_Z,
-        // FX1406-3150KV on 4S with 3830 props: roughly 480-520 g static each.
-        static_thrust: 4.9,
-        // 3150 KV * 14.8 V * ~0.8 loaded * 3.0 in pitch.
-        pitch_speed: 47.0,
-        max_current: 17.0,
-        spool_tau: 0.07,
-        disk_area: prop_disk,
-    };
-
-    let contacts = vec![
-        ContactPoint { pos: Vec3::new(0.0, -0.035, NOSE_Z + 0.01), fragile: false },
-        ContactPoint { pos: Vec3::new(0.0, -0.048, -0.12), fragile: false },
-        ContactPoint { pos: Vec3::new(0.0, -0.045, 0.06), fragile: false },
-        ContactPoint { pos: Vec3::new(0.0, -0.005, TAIL_END_Z), fragile: false },
-        ContactPoint { pos: Vec3::new(-WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), fragile: false },
-        ContactPoint { pos: Vec3::new(WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), fragile: false },
-        ContactPoint { pos: Vec3::new(-0.15, 0.135, 0.40), fragile: false },
-        ContactPoint { pos: Vec3::new(0.15, 0.135, 0.40), fragile: false },
-        ContactPoint { pos: Vec3::new(-MOTOR_X, MOTOR_Y - PROP_RADIUS, MOTOR_Z - 0.01), fragile: true },
-        ContactPoint { pos: Vec3::new(MOTOR_X, MOTOR_Y - PROP_RADIUS, MOTOR_Z - 0.01), fragile: true },
-        ContactPoint { pos: Vec3::new(0.0, 0.05, -0.10), fragile: false },
-    ];
-
-    AircraftParams {
-        mass: 0.80,
-        inertia: Vec3::new(0.016, 0.030, 0.014),
-        surfaces,
-        motors: [motor(-MOTOR_X), motor(MOTOR_X)],
-        fuselage_cda: Vec3::new(0.018, 0.026, 0.0042),
-        contacts,
-        max_aileron: 16.0 * DEG,
-        max_ruddervator: 25.0 * DEG,
-        servo_rate: 600.0 * DEG,
-        battery_cells: 4.0,
-        battery_capacity_mah: 1800.0,
-        battery_resistance: 0.055,
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn make_surface(
-    name: &'static str,
-    pos: Vec3,
-    normal: Vec3,
-    incidence: f32,
-    area: f32,
-    chord: f32,
-    aspect_ratio: f32,
-    flap_fraction: f32,
-    control: SurfaceControl,
-    cl0: f32,
-    cm0: f32,
-    cd0: f32,
-    stall_pos: f32,
-    stall_neg: f32,
-    prop_wash: Option<(usize, f32)>,
-    is_tail: bool,
-) -> AeroSurface {
-    let forward = Vec3::NEG_Z;
-    let span_dir = forward.cross(normal).normalize();
-    // Positive incidence pitches the surface nose-up about its span axis.
-    let inc = Quat::from_axis_angle(span_dir, incidence);
-    AeroSurface {
-        name,
-        pos,
-        forward: inc * forward,
-        normal: inc * normal,
-        span_dir,
-        area,
-        chord,
-        aspect_ratio,
-        flap_fraction,
-        control,
-        cl0,
-        cm0,
-        cd0,
-        stall_pos,
-        stall_neg,
-        prop_wash,
-        is_tail,
-    }
-}
 
 fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
     let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
@@ -397,7 +214,7 @@ pub fn section_coefficients(s: &AeroSurface, alpha: f32, flap: f32) -> (f32, f32
 }
 
 impl FlightState {
-    pub fn new(params: &AircraftParams) -> Self {
+    pub fn new(params: &AircraftParams, hand: &Hand) -> Self {
         let n = params.surfaces.len();
         let mut s = Self {
             pos: Vec3::ZERO,
@@ -424,7 +241,7 @@ impl FlightState {
             hand_rot: Quat::IDENTITY,
             carry: None,
         };
-        s.reset_to_hand();
+        s.reset_to_hand(hand);
         // Start already in the hand; later resets carry it there (see `step`).
         s.rot = s.hand_rot;
         if let Some(c) = s.carry.take() {
@@ -435,20 +252,19 @@ impl FlightState {
     }
 
     /// Pilot holds the plane at shoulder height, pointing down the runway, slightly nose up.
-    pub fn reset_to_hand(&mut self) {
-        let p = terrain::pilot_pos();
-        let hand = Vec3::new(p.x - 0.5, terrain::ground_height(p.x, p.z) + 1.6, p.z - 0.6);
+    pub fn reset_to_hand(&mut self, hand: &Hand) {
+        let hand_pos = hand.pos;
         // Like the attitude below, the position isn't snapped either: an instant jump reads as a
         // GPS glitch to ArduPilot ("GPS and AHRS differ by ...").
-        self.carry = Carry::new(self.pos, hand);
+        self.carry = Carry::new(self.pos, hand_pos);
         if self.carry.is_none() {
-            self.pos = hand;
+            self.pos = hand_pos;
         }
         // The attitude isn't snapped: while held the plane turns into `hand_rot` at a finite rate
         // with matching body rates. An instant jump never shows on ArduPilot's gyros, which
         // leaves its DCM and EKF attitudes disagreeing ("DCM Roll/Pitch inconsistent ... Wait or
         // reboot") and fails the compass check against the wrong attitude.
-        self.hand_rot = Quat::from_rotation_y(terrain::launch_heading()) * Quat::from_rotation_x(8.0 * DEG);
+        self.hand_rot = Quat::from_rotation_y(hand.heading) * Quat::from_rotation_x(8.0 * DEG);
         self.vel = Vec3::ZERO;
         self.omega = Vec3::ZERO;
         self.phase = Phase::Held;
@@ -509,6 +325,7 @@ pub fn step(
     s: &mut FlightState,
     cmd: &ActuatorCommands,
     env: &Environment,
+    ground: &dyn Terrain,
     obstacles: &[Obstacle],
     dt: f32,
 ) {
@@ -641,22 +458,22 @@ pub fn step(
     let mut world_torque_extra = Vec3::ZERO;
     s.on_ground = false;
     if s.phase != Phase::Held {
-        let ground_clearance = s.pos.y - terrain::ground_height(s.pos.x, s.pos.z);
+        let ground_clearance = s.pos.y - ground.height(s.pos.x, s.pos.z);
         if ground_clearance < 1.5 {
             for c in &p.contacts {
                 let r = s.rot * c.pos;
                 let wp = s.pos + r;
-                let h = terrain::ground_height(wp.x, wp.z);
+                let h = ground.height(wp.x, wp.z);
                 let pen = h - wp.y;
                 if pen <= 0.0 {
                     continue;
                 }
                 s.on_ground = true;
-                let n = terrain::ground_normal(wp.x, wp.z);
+                let n = ground.normal(wp.x, wp.z);
                 let v = s.vel + (s.rot * s.omega).cross(r);
                 let vn = v.dot(n);
                 let speed = v.length();
-                if terrain::is_water(wp.x, wp.z) {
+                if ground.is_water(wp.x, wp.z) {
                     crash(s, "Splashdown in the lake");
                     return;
                 }
@@ -671,7 +488,7 @@ pub fn step(
                 }
                 let fn_mag = (2500.0 * pen - 45.0 * vn).max(0.0);
                 let vt = v - n * vn;
-                let mu = if terrain::is_runway(wp.x, wp.z) { 0.30 } else { 0.55 };
+                let mu = if ground.is_runway(wp.x, wp.z) { 0.30 } else { 0.55 };
                 let ft = -vt / vt.length().max(0.3) * mu * fn_mag;
                 let fc = n * fn_mag + ft;
                 world_force += fc;
@@ -788,23 +605,29 @@ pub fn body_rates(omega: Vec3) -> (f32, f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use simulation_aircraft::t1s_ranger;
+
+    /// A pilot standing at the origin, facing north.
+    fn pilot() -> Hand {
+        Hand { pos: Vec3::new(-0.5, 1.6, -0.6), heading: 0.0 }
+    }
 
     /// After a crash, reset turns the plane into the hand with body rates that integrate to the
     /// same attitude, as an autopilot's gyros would see it.
     #[test]
     fn reset_to_hand_is_gyro_consistent() {
-        let p = t1s_params();
-        let mut s = FlightState::new(&p);
+        let p = t1s_ranger::params();
+        let mut s = FlightState::new(&p, &pilot());
         // Upside down and yawed, as after a crash.
         s.rot = Quat::from_rotation_z(3.0) * Quat::from_rotation_y(1.0);
         s.phase = Phase::Crashed;
-        s.reset_to_hand();
+        s.reset_to_hand(&pilot());
         let cmd = ActuatorCommands { aileron: 0.0, vtail_left: 0.0, vtail_right: 0.0, throttle: [0.0; 2] };
         let env = Environment { wind: Vec3::ZERO };
         let dt = 1.0 / 1200.0;
         let mut gyro_att = s.rot;
         for _ in 0..(2.0 / dt) as usize {
-            step(&p, &mut s, &cmd, &env, &[], dt);
+            step(&p, &mut s, &cmd, &env, &Flat, &[], dt);
             gyro_att = (gyro_att * Quat::from_scaled_axis(s.omega * dt)).normalize();
         }
         assert!(s.rot.angle_between(s.hand_rot) < 1e-3, "settled in the hand");
@@ -816,12 +639,12 @@ mod tests {
     /// same place (an IMU and GPS agree), within the IMU's range, and blocks launch until then.
     #[test]
     fn reset_to_hand_is_imu_consistent() {
-        let p = t1s_params();
-        let mut s = FlightState::new(&p);
-        let hand = s.pos;
-        s.pos = hand + Vec3::new(600.0, 80.0, -900.0);
+        let p = t1s_ranger::params();
+        let mut s = FlightState::new(&p, &pilot());
+        let held = s.pos;
+        s.pos = held + Vec3::new(600.0, 80.0, -900.0);
         s.phase = Phase::Crashed;
-        s.reset_to_hand();
+        s.reset_to_hand(&pilot());
         assert!(s.carry.is_some());
         s.launch();
         assert_eq!(s.phase, Phase::Held, "no launch mid-carry");
@@ -831,15 +654,16 @@ mod tests {
         let (mut ins_pos, mut ins_vel) = (s.pos, Vec3::ZERO);
         let mut peak = 0.0f32;
         for _ in 0..(30.0 / dt) as usize {
-            step(&p, &mut s, &cmd, &env, &[], dt);
+            step(&p, &mut s, &cmd, &env, &Flat, &[], dt);
             // What an INS integrates: specific force rotated to world, plus gravity.
             let a = s.rot * s.specific_force - Vec3::Y * GRAVITY;
             peak = peak.max(s.specific_force.length());
             ins_vel += a * dt;
             ins_pos += ins_vel * dt;
         }
-        assert!(s.carry.is_none() && s.pos.distance(hand) < 1e-3, "arrived in the hand");
-        assert!(ins_pos.distance(hand) < 2.0, "dead reckoning ends {:.2} m off", ins_pos.distance(hand));
+        assert!(s.carry.is_none() && s.pos.distance(held) < 1e-3, "arrived in the hand");
+        assert!(ins_pos.distance(held) < 2.0, "dead reckoning ends {:.2} m off", ins_pos.distance(held));
         assert!(peak < 4.0 * GRAVITY, "peak specific force {:.0} m/s^2", peak);
     }
 }
+

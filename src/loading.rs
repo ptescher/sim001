@@ -4,7 +4,7 @@
 
 use crate::theme::{P, color};
 use crate::camera::RenderScale;
-use crate::physics::Obstacle;
+use simulation_physics::Obstacle;
 use crate::terrain::{self, Tree};
 use crate::terrain_render;
 use crate::vegetation::{self, VegetationBuild, VegetationHandles};

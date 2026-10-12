@@ -1,6 +1,6 @@
 //! Headless flight-model checks: `cargo run --release -- --selftest`.
 
-use crate::physics::{self, Phase};
+use simulation_physics::{self as physics, Phase};
 use crate::sim::{FlightMode, SimCore};
 use crate::terrain;
 use bevy::math::{Quat, Vec3};
@@ -8,7 +8,7 @@ use bevy::math::{Quat, Vec3};
 const DT: f32 = 1.0 / 600.0;
 
 fn core() -> SimCore {
-    let mut c = SimCore::new(physics::t1s_params(), vec![], false, 9002);
+    let mut c = SimCore::new((simulation_aircraft::default().params)(), vec![], false, 9002);
     c.wind.speed = 0.0;
     c.wind.turbulence = 0.0;
     c
@@ -29,7 +29,7 @@ fn run(c: &mut SimCore, secs: f32) {
 }
 
 pub fn run_all() {
-    let p = physics::t1s_params();
+    let p = (simulation_aircraft::default().params)();
     let wing_area: f32 = p.surfaces.iter().filter(|s| !s.is_tail).map(|s| s.area).sum();
     println!("T1-S model: mass {:.2} kg, wing area {:.4} m^2, wing loading {:.1} g/dm^2",
         p.mass, wing_area, p.mass * 1000.0 / (wing_area * 100.0));

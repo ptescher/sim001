@@ -5124,6 +5124,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "simulation_aircraft"
+version = "0.1.0"
+dependencies = [
+ "glam",
+]
+
+[[package]]
+name = "simulation_physics"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "simulation_aircraft",
+]
+
+[[package]]
 name = "skrifa"
 version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5316,6 +5331,8 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-game-controller",
+ "simulation_aircraft",
+ "simulation_physics",
  "t1s_station",
 ]
 

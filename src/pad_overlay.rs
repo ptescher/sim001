@@ -7,7 +7,7 @@
 use crate::theme::{P, alpha, color};
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
-use crate::physics::Phase;
+use simulation_physics::Phase;
 use crate::sim::AP_MODES;
 use crate::SharedSim;
 use bevy::input::gamepad::GamepadButton;
