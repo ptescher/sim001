@@ -116,3 +116,15 @@ Term: Tactical map
 
 Term: Waypoint
   A point that the plane flies to, at a set height. Most items in a mission are waypoints.
+
+Term: VTOL
+  An aircraft that takes off and lands vertically (Vertical Take-Off and Landing), like a
+  copter, and flies forward on its wing, like a plane. The T1-S VTOL is one.
+
+Term: tilt-rotor
+  A motor that can turn between pointing up and pointing forward. In a hover it lifts the
+  plane like a copter rotor. In forward flight it pushes the plane like the motor of a plane.
+
+Term: transition
+  The change between a hover and forward flight. The plane does it while it flies: the wing
+  motors tilt, and the wing takes the weight from the rotors, or gives it back.

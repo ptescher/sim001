@@ -1,0 +1,19 @@
+Feature: Transition
+  The transition changes a hover into forward flight, and back. In the first one, the wing
+  motors tilt forward while the plane speeds up, and the wing takes the weight. In the
+  second one, the wing motors tilt up while the plane slows down, and the rotors take the
+  weight. The plane keeps its height through both.
+
+  Expectation: CRUISE changes a hover into forward flight
+    Given the flight is hovering
+    When the operator switches to forward flight
+    Then the flight is cruising
+    And the autopilot mode is CRUISE
+    And the height above home is at least 10 m
+
+  Expectation: QLOITER changes forward flight back into a hover
+    Given the flight is cruising
+    When the operator switches to hover
+    Then the flight is hovering
+    And the autopilot mode is QLOITER
+    And the height above home is at least 10 m

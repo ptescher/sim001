@@ -9,11 +9,23 @@ A Bevy 0.20 flight simulator for practising with the HEEWING T1-S Ranger twin-mo
 
 ## Run
 
-```bash
-cargo run --release                 # ray traced
-cargo run --release -- --raster     # rasterized, with shadow maps
-cargo run --release -- --selftest   # headless flight-model numbers
-```
+There are two planes (`--aircraft`):
+
+- **`t1s-vtol`, the default:** the T1-S VTOL, with two tilt-rotors and a rear rotor, and a flight controller. ArduPilot flies it, so start the whole station, which starts the sim, the ground control console and ArduPilot together:
+
+  ```bash
+  cd gcs && cargo run --release -- --station
+  ```
+
+- **`t1s-ranger`:** the plain T1-S. It has only a receiver and two ESCs, no flight controller, so it has no ArduPilot, no console and one flight mode (MANUAL). Fly it from the keyboard or a radio:
+
+  ```bash
+  cargo run --release -- --aircraft t1s-ranger              # ray traced
+  cargo run --release -- --aircraft t1s-ranger --raster     # rasterized, with shadow maps
+  cargo run --release -- --selftest                         # headless flight-model numbers
+  ```
+
+Starting the sim alone with the VTOL tells you this and exits.
 
 `rust-toolchain.toml` pins Rust 1.99, which Bevy 0.20 needs. rustup installs it automatically.
 
@@ -68,10 +80,12 @@ Line-of-sight view with auto-zoom is the closest match to flying at the field. T
 ### RadioMaster TX15 (EdgeTX)
 
 1. Plug the radio in over USB and choose **USB Joystick (HID)** when EdgeTX asks.
-2. Start the sim and press **F2**. Then follow the prompts: centre the sticks with throttle low, press Enter, and move each stick when asked. You can optionally assign switches to launch, reset, camera, ArduPilot arm and ArduPilot mode.
+2. Start the station (see Run). In the sim window, press **F2**. Then follow the prompts: centre the sticks with the throttle all the way down, press Enter, and move each stick when asked. The arm switch and the mode channel are ordinary channels: **CH5** is the arm switch (SE: in is armed), and **CH8** is the mode channel, which ArduPilot divides into six modes. Build CH8 in the EdgeTX mixer as SB 52% + SA 13% with an offset of -2%: SA down gives the first three modes (SB down, middle, up) and SA up the last three. `controls.cfg.example` has the whole file, with the axis names those channels have in the sim (F3 shows them if yours differ).
 3. The mapping is saved to `controls.cfg`. Run F2 again at any time to redo it.
 
 Throttle is absolute, as on the real radio. Rates and expo come from the sim (L toggles rates). Set the model on your radio up as a plain AETR plane with no mixing, because the sim does the V-tail mixing.
+
+**Taking off with the VTOL.** Wait until the console's ARM button reads ARM, not ARM: NOT READY (ArduPilot needs a minute or two after the start). With the throttle stick all the way down, press SE in to arm. Put SA down and SB in the middle to pick **QLOITER**, the hover mode that holds the plane in place. Push the throttle stick up: in the hover modes the stick sets the climb rate, so above the middle the plane climbs straight up, the middle holds the height, and below the middle the plane goes down. The six mode positions, from lowest to highest, are QHOVER, QLOITER, FBWA, CRUISE (forward flight: the wing motors tilt forward), AUTO and QRTL.
 
 ### Switch Pro Controller
 

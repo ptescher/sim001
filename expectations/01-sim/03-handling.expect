@@ -1,43 +1,16 @@
-Feature: Flight modes and handling
-  The sim has three flight modes. M selects the next one: MANUAL, then [[ANGLE]], then
-  [[ACRO]], then MANUAL again. L changes between high and low [[rates]]. X turns
-  [[differential thrust]] on and off. The top line of the HUD shows all three, for example
-  "ANGLE | high rates | diff thrust on". The sim starts in MANUAL, with high rates and
+Feature: Handling
+  The plain T1-S has no flight controller: only a receiver and two ESCs. The sticks move the
+  ailerons, the elevator and the rudder directly, and nothing helps you. The plane flies as
+  the real plane does. The top line of the HUD says MANUAL. L changes between high and low
+  [[rates]]. X turns [[differential thrust]] on and off. The top line of the HUD shows both,
+  for example "MANUAL | high rates | diff thrust on". The sim starts with high rates and
   differential thrust on.
 
-  Expectation: ANGLE levels the plane for you
-    In ANGLE, the sticks set the angle of bank and pitch. When you release the sticks, the
-    plane levels its wings and nose. Use this mode when you learn to fly.
-    Given the flight mode is MANUAL
-    When the pilot changes flight mode
-    Then the flight mode is ANGLE
-
-  Expectation: In ANGLE, the stick sets the bank
-    Hold A or D, and the plane banks to an angle of 55° or less. It does not roll over.
-    Given the flight mode is ANGLE
-    And the plane is flying
-    When the pilot rolls the plane to the left
-    Then the wings are banked
-
-  Expectation: In ANGLE, the wings become level again
-    Release the stick, and the plane levels its wings by itself.
-    Given the flight mode is ANGLE
-    And the plane is flying
-    And the wings are banked
-    When the pilot releases the roll stick
-    Then the wings are level
-
-  Expectation: ACRO holds the attitude
-    In ACRO, the sticks set the rate of roll and pitch. When you centre the sticks, the plane
-    holds its attitude, also when it is upside down. Use this mode for aerobatics.
-    Given the flight mode is ANGLE
-    When the pilot changes flight mode
-    Then the flight mode is ACRO
-
-  Expectation: MANUAL gives you the control surfaces
-    In MANUAL, the sticks move the ailerons, the elevator and the rudder directly. Nothing
-    helps you. The plane flies as the real plane does.
-    Given the flight mode is ACRO
+  Expectation: Without a flight controller there is only one mode
+    Self-levelling and rate hold are jobs for a flight controller, and the plain T1-S does
+    not have one. M does nothing, and the plane stays in MANUAL.
+    Given the flight controller is missing
+    And the flight mode is MANUAL
     When the pilot changes flight mode
     Then the flight mode is MANUAL
 

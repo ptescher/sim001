@@ -1,0 +1,34 @@
+Feature: Setting up the TX15
+  There are two parts: the radio, and the sim.
+
+  In the radio, put the radio in USB joystick mode: plug it in with the USB cable, and choose
+  USB Joystick (HID) when EdgeTX asks. The sim sees every channel of the radio as an axis. A
+  switch is a channel too, so the arm and mode switches need no special setting if your model sends them: they are
+  channels that go from low, through the middle, to high. If your model does not send
+  a switch, add a channel for it in the mixer, after the channels of the sticks. Set the model up
+  as a plain plane with the channel order aileron, elevator, throttle and rudder, and no
+  mixing, because the autopilot does the mixing.
+
+  In the sim, press F2, and do the steps on the screen. The sim asks for the sticks first. Then
+  it asks for the switches, one at a time, and you flip the one you want. Each one is optional,
+  and Enter skips it. These are our suggestions for the TX15:
+
+  Channel 5 is ARDUPILOT ARM, on SE. When SE is pressed in, the autopilot arms the plane; out,
+  it disarms the plane. Channel 8 is ARDUPILOT MODE, a mix of SA and SB. The sim sends it to
+  the autopilot as it is, and the autopilot divides it into six positions. Each position is a
+  flight mode. The six modes, from the lowest position to the highest, are QHOVER, QLOITER,
+  FBWA, CRUISE, AUTO and QRTL. In the mixer, give channel 8 the weight 52% of SB plus 13% of
+  SA, with an offset of -2%: SA down and SB down, middle and up give the first three modes,
+  and SA up gives the last three.
+
+  The keys of the keyboard and the buttons of a gamepad work too: they step through the six
+  modes one at a time, and they change the arm signal one press at a time. The other three
+  functions, LAUNCH, RESET and CAMERA, matter only when you fly the plain T1-S from the radio.
+  Give them buttons of your choice, or skip them.
+
+  Expectation: F2 calibrates the radio
+    The calibration needs the radio. If you do not have a radio, the sim tells you to connect
+    one. The sim saves the calibration when it ends, and you can do it again at any time.
+    Given the radio is not calibrated
+    When the pilot calibrates the radio
+    Then the radio is calibrated

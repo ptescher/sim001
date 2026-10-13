@@ -1,0 +1,22 @@
+Story: Flying a VTOL
+  As a pilot
+  I want to take off straight up, fly forward on the wing, hover again and land straight down
+  So that I can fly a long way from a small place
+
+  This tutorial shows a full VTOL flight. You take off straight up, and the plane hovers
+  over the field. You switch to forward flight, and the plane tilts its wing motors forward
+  and flies on its wing. Then you switch back to a hover, and you land straight down. The
+  plane keeps its height through both transitions.
+
+  Scenario: Take off, fly forward, hover, land
+    When the operator arms the vehicle
+    Then the vehicle is armed
+    When the operator takes off vertically
+    Then the flight is hovering
+    When the operator switches to forward flight
+    Then the flight is cruising
+    When the operator switches to hover
+    Then the flight is hovering
+    When the operator lands vertically
+    Then the plane is on the ground
+    And the vehicle is disarmed

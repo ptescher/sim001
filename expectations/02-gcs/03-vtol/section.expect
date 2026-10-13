@@ -1,0 +1,11 @@
+Section: Flying a VTOL
+  A [[VTOL]] takes off and lands straight up, like a copter, and flies forward on its wing,
+  like a plane. The T1-S VTOL has two [[tilt-rotor]] motors on the wing and a third rotor in
+  the tail. In a hover the two wing motors point up, and the three rotors hold the plane in
+  the air. In forward flight the wing motors point forward and the wing lifts the plane. The
+  change from one to the other is the [[transition]]. ArduPilot does it, and the console
+  gives it the modes: the Q modes (QLOITER, QLAND) hover, and the normal modes (CRUISE) fly
+  forward.
+
+Background:
+  Given the console is connected to a VTOL on the ground

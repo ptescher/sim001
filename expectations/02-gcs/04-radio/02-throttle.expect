@@ -1,0 +1,28 @@
+Feature: The throttle stick in a hover
+  In a hover mode, the throttle stick does not set the power. It sets how fast the plane
+  climbs or descends. In the middle, the plane keeps its height. Push the stick above the
+  middle and the plane climbs straight up. Pull it below the middle and the plane goes
+  down.
+
+  Expectation: A raised throttle stick lifts the plane
+    Given the vehicle is armed
+    And the autopilot mode is QLOITER
+    And the plane is on the ground
+    When the throttle stick is high
+    Then the flight is hovering
+    And the height above home is at least 5 m
+
+  Expectation: A centred throttle stick holds the height
+    Given the flight is hovering
+    And the plane is flying
+    And the height above home is at least 5 m
+    When the throttle stick is middle
+    Then the flight is hovering
+    And the height above home is at least 5 m
+
+  Expectation: A lowered throttle stick brings the plane down
+    Given the flight is hovering
+    And the plane is flying
+    And the height above home is at least 5 m
+    When the throttle stick is low
+    Then the plane is on the ground

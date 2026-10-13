@@ -1,0 +1,17 @@
+Feature: Vertical take-off and landing
+  A VTOL needs no runway and no throw. You arm it, and VTOL TKOF lifts it straight up to the
+  plan altitude. It stays there until you tell it to do something else. QLAND brings it
+  straight down, and ArduPilot disarms it when it is on the ground.
+
+  Expectation: VTOL TKOF lifts the plane straight up
+    Given the vehicle is armed
+    And the plane is on the ground
+    When the operator takes off vertically
+    Then the flight is hovering
+    And the height above home is at least 15 m
+
+  Expectation: QLAND brings the plane straight down
+    Given the flight is hovering
+    When the operator lands vertically
+    Then the plane is on the ground
+    And the vehicle is disarmed

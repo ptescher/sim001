@@ -1,0 +1,23 @@
+Story: Taking off with the TX15
+  As a pilot with a radio
+  I want to arm the VTOL, pick a hover mode and lift off with the throttle stick
+  So that I can fly the plane the way I fly it in the field
+
+  This tutorial starts with the station and ends with a landing. The station opens three
+  windows: the console, the sensor feed and the sim. The plane is on the ground at the pilot
+  box. You arm the plane with SE and pick QLOITER with SA and SB. Push the
+  throttle stick up, and the plane climbs straight up. Put the stick in the middle, and the
+  plane keeps its height. Pull the stick down, and the plane lands.
+
+  Scenario: Arm, pick QLOITER, lift off and land
+    When the arm switch is on
+    Then the vehicle is armed
+    When the mode switch is QLOITER
+    Then the autopilot mode is QLOITER
+    When the throttle stick is high
+    Then the flight is hovering
+    And the height above home is at least 5 m
+    When the throttle stick is middle
+    Then the flight is hovering
+    When the throttle stick is low
+    Then the plane is on the ground

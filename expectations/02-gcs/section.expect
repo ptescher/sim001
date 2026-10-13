@@ -22,7 +22,7 @@ Vocabulary:
   State: the vehicle is disarmed | armed
     Shows: armed: the ARMED annunciator lights up
     Shows: disarmed: the ARMED annunciator goes out
-  State: the autopilot mode is MANUAL | FBWA | FBWB | CRUISE | AUTO | RTL | LOITER | CIRCLE | GUIDED | TAKEOFF
+  State: the autopilot mode is MANUAL | FBWA | FBWB | CRUISE | AUTO | RTL | LOITER | CIRCLE | GUIDED | TAKEOFF | QSTABILIZE | QHOVER | QLOITER | QLAND | QRTL
     Set: press {value} on the vehicle command screen
     Shows: the {value} button lights up
     Shows: stays the same: the mode does not change, and the AUTO button shows AUTO: NO MISSION?
@@ -140,6 +140,61 @@ Vocabulary:
     When the operator clicks the map
     When the operator clicks the map
     When the operator clicks the map
+
+
+  # A radio (see Flying with a radio)
+  State: the radio is calibrated | not calibrated
+    Shows: calibrated: the sim says Radio calibrated and saved to controls.cfg, and the sticks and switches of the radio work
+    Shows: not calibrated: the sim has not seen this radio's sticks, and its switches do nothing
+  Event: the pilot calibrates the radio
+    Say: press F2 in the sim window, and follow the prompts on the screen. Do each step in order: put the sticks in the middle with the throttle all the way down, and press Enter. Push the aileron stick right, the elevator stick up and the rudder stick right, one at a time, and hold each one until the prompt changes. Push the throttle stick all the way up. Then the sim asks for six switches or buttons, one at a time: flip SE for ARDUPILOT ARM and move the mode channel (SA and SB mixed into CH8), and press Enter to skip the other four
+  State: the throttle stick is low | middle | high
+    Set: move the throttle stick to the {value} position: all the way down is low, the middle is middle, and three quarters up is high
+    Shows: low: the third number of the RC 1-4 line on the SYSTEMS screen is near 1000
+    Shows: middle: the third number of the RC 1-4 line on the SYSTEMS screen is near 1500
+    Shows: high: the third number of the RC 1-4 line on the SYSTEMS screen is near 1750
+  State: the arm switch is off | on
+    Set: put SE {value}: up (or pressed in) is on, and down (or out) is off
+    Shows: on: the first number after the slash in the RC 1-4 line on the SYSTEMS screen is near 1900
+    Shows: off: the first number after the slash in the RC 1-4 line on the SYSTEMS screen is near 1100
+  State: the mode switch is QHOVER | QLOITER | FBWA | CRUISE | AUTO | QRTL
+    Set: set SA and SB to the pair for {value}: SB down, middle and up with SA down gives QHOVER, QLOITER and FBWA, and with SA up gives CRUISE, AUTO and QRTL
+    Shows: the second number after the slash in the RC 1-4 line on the SYSTEMS screen is the one for {value}
+
+  Phrase: the TX15 is ready
+    Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: calibrate it in the sim with F2, and give SE to ARDUPILOT ARM and the mixed SA and SB channel to ARDUPILOT MODE. Then put the throttle stick all the way down and SE out
+    Given the throttle stick is low
+    And the arm switch is off
+    And the mode switch is QHOVER
+
+  # A VTOL (see Flying a VTOL)
+  State: the airframe is conventional | VTOL
+  State: the flight is grounded | hovering | in transition | cruising
+    Shows: grounded: the plane is on the ground, and the speed in the PFD is 0
+    Shows: hovering: the plane stays at one place in the air, and the speed in the PFD is near 0
+    Shows: in transition: the speed in the PFD goes up or down between 0 and the cruise speed
+    Shows: cruising: the speed in the PFD is above 11 m/s, and the plane flies forward
+  State: the height above home is 0..300 m
+    Shows: the ALT REL line on the SYSTEMS screen reads {value} m
+  Event: the operator takes off vertically
+    Say: press VTOL TKOF. The plane climbs straight up to the plan altitude
+  Event: the operator switches to forward flight
+    Say: press CRUISE. The wing motors tilt forward and the plane speeds up
+  Event: the operator switches to hover
+    Say: press QLOITER. The plane slows down and the wing motors tilt up
+  Event: the operator lands vertically
+    Say: press QLAND. The plane comes down straight and stops its motors
+
+  Phrase: the console is connected to a VTOL on the ground
+    Say: the station flies the T1-S VTOL, the default plane, with its two tilt-rotors and its rear rotor. The console shows the Q modes (QHOVER, QLOITER, QLAND and QRTL) with the other modes. Wait until the ARM button shows ARM, not ARM: NOT READY
+    Given the console is connected to a plane on the ground
+    And the airframe is VTOL
+
+  Phrase: the VTOL is hovering
+    Say: arm the plane, and press VTOL TKOF. Wait until the plane has climbed to the plan altitude and stopped
+    Given the vehicle is armed
+    And the flight is hovering
+    And the height above home is at least 15 m
 
 Background:
   Given the console is connected to a plane on the ground

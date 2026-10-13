@@ -1,0 +1,18 @@
+Story: Learning with self-levelling
+  As a pilot learning to fly
+  I want the plane to level itself when I let go of the sticks
+  So that I can learn the controls without it getting away from me
+
+  In [[ANGLE]], the plane levels its wings when you release the sticks. Thus the plane stays
+  under control while you learn. In this tutorial, you select ANGLE, throw the plane and roll
+  it. Then you release the stick, and the wings become level again.
+
+  Scenario: Pick ANGLE mode and throw
+    When the pilot changes flight mode
+    Then the flight mode is ANGLE
+    When the pilot throws the plane with the throttle
+    Then the plane is flying
+    When the pilot rolls the plane to the left
+    Then the wings are banked
+    When the pilot releases the roll stick
+    Then the wings are level
