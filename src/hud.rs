@@ -39,6 +39,7 @@ CONTROLS (keyboard)
   M                flight mode (MANUAL / ANGLE / ACRO)
   L                low/high rates       X  differential thrust
   C                camera (LOS / chase / FPV)   Z  LOS auto-zoom
+  G                pylon race   T  tag   (the same key again stops the game)
   [ ]  wind speed   , .  wind direction   /  turbulence
   F5 / F6 render resolution down / up (F7: automatic)
   P pause   F2 radio calibration   F3 raw controller axes   F4 radio/gamepad profile
@@ -264,10 +265,13 @@ WIND {:.1} m/s from {:03.0} deg  turb {:.0}%{}",
     **texts.p0() = Text::new(osd);
 
     let mut center = String::new();
+    let game_says = c.game.as_ref().and_then(|g| crate::games::centre_text(g, s.phase == Phase::Held));
     if let Some(w) = &input.wizard {
         center = w.message.clone();
     } else if c.paused {
         center = "PAUSED (P)".into();
+    } else if let Some(said) = game_says {
+        center = said;
     } else {
         match s.phase {
             Phase::Crashed => center = format!("CRASHED: {}\nPress R to reset", s.crash_reason),

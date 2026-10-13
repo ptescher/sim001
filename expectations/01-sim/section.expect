@@ -50,6 +50,16 @@ Vocabulary:
     Shows: running: PAUSED (P) goes away, and the flight continues from the point where it stopped
   State: the battery is 0..100 %
     Shows: at least 99 %: the BAT reading on the HUD is approximately 100 % again
+  # The games of the Recreation section. Without one, you fly freely.
+  State: the game is free flight | a race | tag
+    Shows: free flight: the game panel, the pylons and the other planes go away
+    Shows: a race: three tall pylons stand on the field, and the game panel says RACE
+    Shows: tag: the game panel says TAG
+  State: the game clock is off | counting down | running | stopped
+    Shows: off: the game panel goes away
+    Shows: counting down: all the planes go back to the hands of their pilots, and the game panel counts down to GO
+    Shows: running: the game panel says GO, and its clock starts
+    Shows: stopped: the clock on the game panel stops, and the game panel shows the results
 
   Event: the pilot throws the plane
     Say: press Space to throw the plane
@@ -90,6 +100,8 @@ Vocabulary:
     And the help screen is hidden
     And the sim is running
     And the battery is at least 99 %
+    And the game is free flight
+    And the game clock is off
 
   Phrase: the pilot throws the plane with the throttle
     Say: press 4 to set the throttle to 80 %

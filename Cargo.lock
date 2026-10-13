@@ -4843,6 +4843,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "recreation_games"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "recreation_pilot",
+ "recreation_racing",
+ "recreation_tag",
+ "simulation_aircraft",
+ "simulation_physics",
+]
+
+[[package]]
+name = "recreation_pilot"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "simulation_aircraft",
+ "simulation_physics",
+]
+
+[[package]]
+name = "recreation_racing"
+version = "0.1.0"
+dependencies = [
+ "glam",
+]
+
+[[package]]
+name = "recreation_tag"
+version = "0.1.0"
+dependencies = [
+ "glam",
+]
+
+[[package]]
 name = "rectangle-pack"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5331,6 +5366,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-game-controller",
+ "recreation_games",
  "simulation_aircraft",
  "simulation_physics",
  "t1s_station",

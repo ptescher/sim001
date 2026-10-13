@@ -1,5 +1,6 @@
 //! Simulation core shared between the render thread and the ArduPilot bridge thread.
 
+use recreation_games::{Field, Kind, Session, Surroundings};
 use simulation_aircraft::{ActuatorCommands, AircraftParams, t1s_ranger};
 use simulation_physics::{self as physics, Environment, FlightState, Obstacle, Phase};
 use crate::terrain;
@@ -116,6 +117,8 @@ pub struct SimCore {
     /// runs in lockstep with SITL, so ArduPilot keeps estimating (and the ground station keeps
     /// its telemetry); its servo outputs are just ignored.
     pub direct: bool,
+    /// The game being played (G: a pylon race, T: tag), with its computer pilots.
+    pub game: Option<Session>,
 }
 
 fn expo(x: f32, e: f32) -> f32 {
@@ -160,6 +163,41 @@ impl SimCore {
             launch_hold: 0.0,
             resets: 0,
             direct: false,
+            game: None,
+        }
+    }
+
+    /// Where the games are played: the pilot box, facing down the field.
+    pub fn field() -> Field {
+        let p = terrain::pilot_pos();
+        Field { pilot: Vec3::new(p.x, terrain::ground_height(p.x, p.z), p.z), heading: terrain::launch_heading() }
+    }
+
+    /// G or T: start that game, with the plane back in the hand on a fresh pack, or stop it if
+    /// it is the one being played.
+    pub fn toggle_game(&mut self, kind: Kind) {
+        if self.game.as_ref().is_some_and(|g| g.kind == kind) {
+            self.game = None;
+            return;
+        }
+        self.reset();
+        self.state.snap_to_hand();
+        self.state.recharge();
+        self.game = Some(match kind {
+            Kind::Race => Session::race(Self::field()),
+            Kind::Tag => Session::tag(Self::field()),
+        });
+    }
+
+    /// A throw is allowed now: not during a game's countdown.
+    pub fn may_launch(&self) -> bool {
+        self.game.as_ref().is_none_or(|g| g.may_launch())
+    }
+
+    /// Space: throw the plane, if a throw is allowed.
+    pub fn launch(&mut self) {
+        if self.may_launch() {
+            self.state.launch();
         }
     }
 
@@ -178,20 +216,7 @@ impl SimCore {
 
     /// Wind at a point: mean wind with a boundary-layer profile plus turbulence.
     pub fn wind_at(&self, pos: Vec3, t: f64) -> Vec3 {
-        let w = &self.wind;
-        let to_dir = -Vec3::new(w.from_dir.sin(), 0.0, -w.from_dir.cos());
-        let agl = (pos.y - terrain::ground_height(pos.x, pos.z)).max(0.3);
-        let profile = (agl / 10.0).powf(0.16).min(1.4);
-        let mean = to_dir * w.speed * profile;
-        let t = t as f32;
-        let amp = w.turbulence * (0.6 + 0.25 * w.speed);
-        let s = pos * 0.02;
-        let turb = Vec3::new(
-            (t * 0.71 + s.x * 1.3).sin() * 0.6 + (t * 1.93 + s.z * 2.1 + 1.0).sin() * 0.4,
-            ((t * 1.17 + s.z * 1.7 + 2.0).sin() * 0.6 + (t * 2.71 + s.x * 2.3).sin() * 0.4) * 0.5,
-            (t * 0.83 + s.z * 1.1 + 4.0).sin() * 0.6 + (t * 2.29 + s.x * 1.9 + 3.0).sin() * 0.4,
-        ) * amp;
-        mean + turb
+        wind_at(&self.wind, pos, t)
     }
 
     /// Compute actuator commands from the sticks via the onboard (non-ArduPilot) flight modes.
@@ -241,7 +266,7 @@ impl SimCore {
 
     /// Hand-launch automatically once throttle is held up, like a real throw.
     fn auto_launch(&mut self, throttle: f32, dt: f32) {
-        if self.state.phase == Phase::Held {
+        if self.state.phase == Phase::Held && self.may_launch() {
             if throttle > 0.55 {
                 self.launch_hold += dt;
                 if self.launch_hold > 0.6 {
@@ -284,6 +309,12 @@ impl SimCore {
         let env = Environment { wind };
         physics::step(&self.params, &mut self.state, cmd, &env, &terrain::WorldTerrain, &self.obstacles, dt);
         self.last_cmd = *cmd;
+        // The computer pilots fly in the same wind, over the same ground and trees.
+        if let Some(game) = &mut self.game {
+            let w = self.wind;
+            let world = Surroundings { ground: &terrain::WorldTerrain, obstacles: &self.obstacles, wind: &move |p, t| wind_at(&w, p, t) };
+            game.step(&self.state, &world, dt);
+        }
     }
 
     /// The name of the radio's mode switch position `i`, for the HUD.
@@ -382,6 +413,23 @@ impl SimCore {
     }
 }
 
+/// Wind at a point: mean wind with a boundary-layer profile plus turbulence.
+pub fn wind_at(w: &WindSettings, pos: Vec3, t: f64) -> Vec3 {
+    let to_dir = -Vec3::new(w.from_dir.sin(), 0.0, -w.from_dir.cos());
+    let agl = (pos.y - terrain::ground_height(pos.x, pos.z)).max(0.3);
+    let profile = (agl / 10.0).powf(0.16).min(1.4);
+    let mean = to_dir * w.speed * profile;
+    let t = t as f32;
+    let amp = w.turbulence * (0.6 + 0.25 * w.speed);
+    let s = pos * 0.02;
+    let turb = Vec3::new(
+        (t * 0.71 + s.x * 1.3).sin() * 0.6 + (t * 1.93 + s.z * 2.1 + 1.0).sin() * 0.4,
+        ((t * 1.17 + s.z * 1.7 + 2.0).sin() * 0.6 + (t * 2.71 + s.x * 2.3).sin() * 0.4) * 0.5,
+        (t * 0.83 + s.z * 1.1 + 4.0).sin() * 0.6 + (t * 2.29 + s.x * 1.9 + 3.0).sin() * 0.4,
+    ) * amp;
+    mean + turb
+}
+
 pub fn wrap_deg(rad: f32) -> f32 {
     let d = rad * 180.0 / PI;
     (d % 360.0 + 360.0) % 360.0
@@ -400,6 +448,7 @@ pub fn cannot_fly(params: &AircraftParams, title: &str, ardupilot: bool) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+    use recreation_games::Kind;
 
     #[test]
     fn a_plane_with_a_flight_controller_needs_ardupilot() {
@@ -518,6 +567,66 @@ mod tests {
         assert_eq!((c.mode_switch_name(), c.arm_switch_is_on()), ("QLOITER", true));
         c.radio_mode = Some(2000);
         assert_eq!(c.mode_switch_name(), "QRTL");
+    }
+
+    fn plain() -> SimCore {
+        SimCore::new((simulation_aircraft::find("t1s-ranger").unwrap().params)(), vec![], false, 9002)
+    }
+
+    fn run(c: &mut SimCore, seconds: f32) {
+        for _ in 0..(seconds * 600.0) as usize {
+            c.step_standalone(1.0 / 600.0);
+        }
+    }
+
+    /// G and T start a game with the plane back in the hand, on a fresh pack.
+    #[test]
+    fn a_game_starts_with_the_plane_in_hand_on_a_fresh_pack() {
+        let mut c = plain();
+        c.state.phase = Phase::Flying;
+        c.state.pos.y += 30.0;
+        c.state.used_mah = 900.0;
+        c.toggle_game(Kind::Race);
+        assert!(c.game.as_ref().is_some_and(|g| g.kind == Kind::Race));
+        assert_eq!(c.state.phase, Phase::Held);
+        assert!(c.state.carry.is_none(), "straight back in the hand");
+        assert_eq!(c.state.used_mah, 0.0);
+    }
+
+    /// Nobody throws before GO: not with the throttle, nor with Space.
+    #[test]
+    fn the_throw_waits_for_go() {
+        let mut c = plain();
+        c.toggle_game(Kind::Race);
+        c.sticks.throttle = 0.9;
+        run(&mut c, 4.0);
+        c.launch();
+        run(&mut c, 0.5);
+        assert_eq!(c.state.phase, Phase::Held, "thrown before GO");
+        run(&mut c, 1.5);
+        assert_ne!(c.state.phase, Phase::Held, "the throttle held open throws at GO");
+    }
+
+    /// The key of the game stops it; the other key switches to the other game.
+    #[test]
+    fn the_game_keys_start_switch_and_stop() {
+        let mut c = plain();
+        c.toggle_game(Kind::Race);
+        c.toggle_game(Kind::Tag);
+        assert!(c.game.as_ref().is_some_and(|g| g.kind == Kind::Tag));
+        c.toggle_game(Kind::Tag);
+        assert!(c.game.is_none());
+        assert!(c.may_launch(), "free flight throws whenever");
+    }
+
+    /// The computer pilots fly on the same physics, stepped with the plane.
+    #[test]
+    fn the_opponents_fly_while_the_sim_runs() {
+        let mut c = plain();
+        c.toggle_game(Kind::Tag);
+        run(&mut c, 10.0);
+        let g = c.game.as_ref().unwrap();
+        assert!(g.opponents.iter().all(|o| o.state.phase == Phase::Flying), "{:?}", g.opponents.iter().map(|o| o.state.phase).collect::<Vec<_>>());
     }
 
     /// The T1-S has no Q modes, whatever mode name it reports.

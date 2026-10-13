@@ -1,0 +1,13 @@
+[package]
+name = "recreation_games"
+version = "0.1.0"
+edition = "2024"
+description = "Recreation domain: a game in play, with its computer pilots flying T1-S planes on the flight model, and its referee"
+
+[dependencies]
+recreation_pilot = { path = "../pilot" }
+recreation_racing = { path = "../racing" }
+recreation_tag = { path = "../tag" }
+simulation_aircraft = { path = "../../simulation/aircraft" }
+simulation_physics = { path = "../../simulation/physics" }
+glam = "0.33"

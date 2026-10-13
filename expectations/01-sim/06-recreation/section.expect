@@ -1,0 +1,52 @@
+# Games and trials against computer pilots (domains/recreation). The opponents fly the same
+# T1-S on the same physics as the pilot's plane. In the tests, a stand-in pilot (the same
+# computer pilot) flies the pilot's sticks for the steps that need flying: a lap, a cut, a
+# tag. See src/acceptance.rs.
+
+Section: Recreation
+  Fly games against three [[computer pilots]]. Each one flies a T1-S, on the same physics as
+  your plane. Press G for a [[pylon race]]. Press T for a game of [[tag]]. Press the same key
+  again to stop the game and fly freely.
+
+  A game starts with all the planes in the hands of their pilots, at the [[pilot box]]. The
+  game panel on the right of the view counts down to GO. Then the computer pilots throw their
+  planes, and you throw yours. Labels on the view show the name of each opponent above its
+  plane.
+
+Vocabulary:
+  State: the opponents are in hand | launching | flying | down
+    Shows: in hand: the three computer pilots hold their planes beside you
+    Shows: flying: the computer pilots throw their planes, one each second, and the planes climb away
+  State: the lap count is 0..5
+    Shows: the game panel says LAP {value}/5
+  State: the cut count is 0..2
+    Shows: the game panel says CUTS {value}
+  State: the chaser is you | an opponent
+    Shows: you: the game panel says YOU ARE IT
+    Shows: an opponent: the game panel says IT and the name of the opponent, and the label above its plane turns red
+
+  Event: the pilot starts a race
+    Say: press G
+  Event: the pilot starts a game of tag
+    Say: press T
+  Event: the pilot ends the game
+    Say: press G again to stop a race, or T again to stop a game of tag
+  Event: the countdown ends
+  Event: the pilot flies a lap
+    Say: fly round the outside of pylon 1, pylon 2 and pylon 3. Then fly across the start line
+  Event: the pilot cuts a pylon
+    Say: turn inside the next pylon
+  Event: the pilot tags an opponent
+    Say: fly at an opponent until your plane touches it
+  Event: the chaser tags the plane
+  Event: the pilot leaves the arena
+    Say: fly out past the edge of the arena
+  Event: the clock runs out
+
+  Phrase: the pilot flies the race
+    Say: fly five laps of the course. Keep outside the pylons
+    When the pilot flies a lap
+    When the pilot flies a lap
+    When the pilot flies a lap
+    When the pilot flies a lap
+    When the pilot flies a lap

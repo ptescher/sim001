@@ -73,9 +73,19 @@ The plane starts in your hand. **Hold the throttle above 55% to throw it**, or p
 | `[` `]` `,` `.` `/` | wind speed, wind direction, turbulence |
 | F5 / F6 | ray-traced render resolution down / up (default ≈1920 px wide) |
 | P, H/F1, F2, F3, F4 | pause, help, radio calibration, raw controller axes, radio/gamepad profile |
+| G / T | start a pylon race / a game of tag against computer pilots (the same key again stops it) |
 | Esc | close help, the controller overlay or the calibration wizard (quit with Cmd+Q) |
 
 Line-of-sight view with auto-zoom is the closest match to flying at the field. The windsock by the pilot box shows the wind.
+
+### Games
+
+Press **G** for a pylon race and **T** for a game of tag, against three computer pilots (Kestrel, an ace; Merlin, a club pilot; Swift, a rookie). They fly the T1-S on the same physics as you, in the same wind. Each game starts with every plane back in its pilot's hand and a five-second countdown on the game panel; nobody can throw before GO. Press the same key again to stop the game.
+
+- **Pylon race:** the triangle of the pylon racing leagues (FAI F3D and F5D): three 5 m pylons, 400 m a lap, flown counterclockwise round the outside of pylon 1 (on the right), pylon 2 and pylon 3 (the twins on the left), then across the start line. Five laps. One cut (a turn inside a pylon) adds 10 % to your time, two disqualify you, and a crash or R puts you out.
+- **Tag:** you are it first. Touch another plane to tag it; it can't tag you straight back for 5 s. Stay inside the cones (90 m round the field in front of you, below 60 m), or you are it. Two minutes; the least time as it wins.
+
+See [domains/recreation](domains/recreation/README.md).
 
 ### RadioMaster TX15 (EdgeTX)
 

@@ -20,6 +20,7 @@ mod test_radio;
 mod ardupilot;
 mod camera;
 mod gc_pad;
+mod games;
 mod foliage;
 mod grass;
 mod hud;
@@ -212,6 +213,7 @@ fn main() {
                 .in_set(SimSet::Visual),
         );
     camera::camera_plugin(&mut app);
+    games::plugin(&mut app);
     if let Some(cfg) = feed {
         feed::feed_plugin(&mut app, cfg, core.clone());
     }
@@ -249,7 +251,11 @@ fn setup(
     settings: Res<RenderSettings>,
 ) {
     world::spawn_world(&mut commands, &mut meshes, &mut materials, &mut images, &mut media, &settings);
-    model::spawn_plane(&mut commands, &mut meshes, &mut materials);
+    model::spawn_plane(&mut commands, &mut meshes, &mut materials, 0, Color::srgb(1.0, 0.36, 0.05));
+    // The computer pilots' planes, in their own colours, for the games.
+    for (i, (_, _, [r, g, b])) in recreation_games::PILOTS.iter().enumerate() {
+        model::spawn_plane(&mut commands, &mut meshes, &mut materials, i + 1, Color::linear_rgb(*r, *g, *b));
+    }
     camera::spawn_camera(&mut commands, &settings, &mut images);
     hud::spawn_hud(&mut commands);
     pad_overlay::spawn_pad_overlay(&mut commands);
@@ -293,7 +299,9 @@ fn sim_update(
 
     for a in input.actions.clone() {
         match a {
-            Action::Launch => c.state.launch(),
+            Action::Launch => c.launch(),
+            Action::Race => c.toggle_game(recreation_games::Kind::Race),
+            Action::Tag => c.toggle_game(recreation_games::Kind::Tag),
             Action::Reset => c.reset(),
             // Self-levelling and rate hold are a flight controller's: a plane without one stays in MANUAL.
             Action::Mode if c.params.flight_controller && (!c.ap.enabled || c.direct) => c.mode = c.mode.next(),

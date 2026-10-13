@@ -1,0 +1,48 @@
+Feature: Pylon race
+  The course is the triangle of the pylon racing leagues (FAI F3D and F5D). Three [[pylons]],
+  5 m tall, mark a lap of 400 m. Pylon 2 and pylon 3 stand 40 m apart, on the left. Pylon 1
+  stands 180 m from them, on the right. Fly the laps counterclockwise, with left turns, and
+  keep outside each pylon. A lap is pylon 1, pylon 2, pylon 3 and then the start line. The
+  start line crosses the near leg, 30 m to the right of pylon 3.
+
+  The race is five laps, because a T1-S battery does not last for the ten laps of the
+  leagues. The game panel shows your lap, your place, the race clock and the next pylon. A
+  turn inside a pylon is a [[cut]]. As in the leagues, one cut adds 10 % to your time, and two
+  cuts disqualify you. A crash, or R, takes you out of the race. The computer pilots continue
+  until each one finishes.
+
+  Expectation: A lap is once round the outside of the pylons
+    Given the game is a race
+    And the game clock is running
+    And the plane is flying
+    And the lap count is at most 4
+    When the pilot flies a lap
+    Then the lap count goes up by 1
+
+  Expectation: The last lap finishes the race
+    The game panel shows your place and your time, with any cut added.
+    Given the game is a race
+    And the game clock is running
+    And the plane is flying
+    And the lap count is 4
+    When the pilot flies a lap
+    Then the game clock is stopped
+
+  Expectation: A turn inside a pylon is a cut
+    The cut pylon counts as passed, so the lap continues. Your time gets 10 % more.
+    Given the game is a race
+    And the game clock is running
+    And the plane is flying
+    And the cut count is 0
+    When the pilot cuts a pylon
+    Then the cut count goes up by 1
+
+  Expectation: A second cut disqualifies you
+    The game panel says DISQUALIFIED. The computer pilots continue the race.
+    Given the game is a race
+    And the game clock is running
+    And the plane is flying
+    And the cut count is 1
+    When the pilot cuts a pylon
+    Then the cut count is 2
+    And the game clock is stopped

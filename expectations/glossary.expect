@@ -128,3 +128,32 @@ Term: tilt-rotor
 Term: transition
   The change between a hover and forward flight. The plane does it while it flies: the wing
   motors tilt, and the wing takes the weight from the rotors, or gives it back.
+
+Term: Computer pilot
+  An opponent in the games that the sim flies. Each computer pilot flies a T1-S on the same
+  physics as your plane, and has its own skill. Kestrel is an ace, Merlin flies at a club
+  level and Swift is a rookie.
+
+Term: Pylon race
+  A race round a triangle of three [[pylons]], as in the pylon racing leagues. G starts one.
+  Five laps make a race. The first pilot across the start line after the last lap wins.
+
+Term: Pylon
+  A tall marker on the field. In a [[pylon race]], the three pylons mark the turns of the
+  course. Fly round the outside of each one.
+
+Term: Cut
+  A turn inside a pylon in a [[pylon race]]. One cut adds 10 % to your time. Two cuts
+  disqualify you.
+
+Term: Tag
+  A game where one plane is [[it]] and chases the others. When it touches another plane, that
+  plane is it. T starts one.
+
+Term: It
+  The plane that chases the others in a game of [[tag]]. The pilot who is it for the least
+  time wins.
+
+Term: Arena
+  The part of the sky for a game of [[tag]]: a circle of 90 m round the centre of the field,
+  below 60 m. Small cones mark its edge. If you fly out of it, you are [[it]].

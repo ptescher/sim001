@@ -7,20 +7,29 @@ use crate::SharedSim;
 use bevy::prelude::*;
 use bevy::solari::prelude::RaytracingMesh3d;
 
+/// A plane in the view: 0 is yours, and 1 to 3 are the computer pilots' in a game.
 #[derive(Component)]
-pub struct PlaneRoot;
+pub struct PlaneRoot(pub usize);
 
 #[derive(Component)]
 pub struct ControlSurfaceVis {
+    pub plane: usize,
     pub surface: usize,
     pub axis: Vec3,
 }
 
+/// A propeller: the plane and the motor.
 #[derive(Component)]
-pub struct PropVis(pub usize);
+pub struct PropVis(pub usize, pub usize);
 
 #[derive(Component)]
-pub struct PropDisc(pub usize, pub Handle<StandardMaterial>);
+pub struct PropDisc(pub usize, pub usize, pub Handle<StandardMaterial>);
+
+/// How many planes the view can show: yours and three computer pilots'.
+pub const PLANES: usize = 4;
+
+/// Where a plane that isn't in play waits, out of sight under the ground.
+const PARKED: Vec3 = Vec3::new(0.0, -500.0, 0.0);
 
 pub struct Mats {
     foam_top: Handle<StandardMaterial>,
@@ -38,11 +47,9 @@ pub fn rt(mesh: Handle<Mesh>, mat: Handle<StandardMaterial>, t: Transform) -> im
     (Mesh3d(mesh.clone()), RaytracingMesh3d(mesh), MeshMaterial3d(mat), t)
 }
 
-pub fn spawn_plane(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-) {
+/// Spawns plane `plane`, with its markings (wing tips, nose stripe, ailerons, ruddervators) in
+/// `accent`.
+pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>, plane: usize, accent: Color) {
     let mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32, metal: f32| {
         m.add(StandardMaterial {
             base_color: c,
@@ -56,7 +63,7 @@ pub fn spawn_plane(
     let m = Mats {
         foam_top: mat(materials, Color::srgb(0.92, 0.93, 0.94), 0.75, 0.0),
         foam_bottom: mat(materials, Color::srgb(0.10, 0.11, 0.13), 0.8, 0.0),
-        accent: mat(materials, Color::srgb(1.0, 0.36, 0.05), 0.6, 0.0),
+        accent: mat(materials, accent, 0.6, 0.0),
         fuselage: mat(materials, Color::srgb(0.62, 0.65, 0.68), 0.7, 0.0),
         black: mat(materials, Color::srgb(0.03, 0.03, 0.035), 0.5, 0.0),
         metal: mat(materials, Color::srgb(0.55, 0.56, 0.6), 0.3, 1.0),
@@ -64,7 +71,7 @@ pub fn spawn_plane(
         prop: mat(materials, Color::srgb(0.08, 0.08, 0.09), 0.45, 0.0),
     };
 
-    let root = commands.spawn((PlaneRoot, Transform::default(), Visibility::default())).id();
+    let root = commands.spawn((PlaneRoot(plane), Transform::from_translation(PARKED), Visibility::default())).id();
     let mut children: Vec<Entity> = Vec::new();
     let add = |children: &mut Vec<Entity>, commands: &mut Commands, b: (Handle<Mesh>, Handle<StandardMaterial>, Transform)| {
         children.push(commands.spawn(rt(b.0, b.1, b.2)).id());
@@ -190,7 +197,7 @@ pub fn spawn_plane(
         }
         let pivot = commands
             .spawn((
-                ControlSurfaceVis { surface: if side < 0.0 { 1 } else { 3 }, axis },
+                ControlSurfaceVis { plane, surface: if side < 0.0 { 1 } else { 3 }, axis },
                 Transform::from_translation(hinge_root),
                 Visibility::default(),
             ))
@@ -219,7 +226,7 @@ pub fn spawn_plane(
         add(&mut children, commands, (bell, m.metal.clone(), Transform::IDENTITY));
         let motor_index = if side < 0.0 { 0 } else { 1 };
         let prop_pivot = commands
-            .spawn((PropVis(motor_index), Transform::from_xyz(mx, my, MOTOR_Z), Visibility::default()))
+            .spawn((PropVis(plane, motor_index), Transform::from_xyz(mx, my, MOTOR_Z), Visibility::default()))
             .id();
         let blade = meshes.add(cuboid(Vec3::new(2.0 * PROP_RADIUS, 0.010, 0.0025)));
         let spinner = meshes.add(loft(&[(-0.014, 0.001, 0.001, 0.0), (-0.008, 0.007, 0.007, 0.0), (0.0, 0.0085, 0.0085, 0.0)], 0.0, 14, false));
@@ -243,7 +250,7 @@ pub fn spawn_plane(
         let disc_mesh = meshes.add(Circle::new(PROP_RADIUS).mesh().build());
         let disc = commands
             .spawn((
-                PropDisc(motor_index, disc_mat.clone()),
+                PropDisc(plane, motor_index, disc_mat.clone()),
                 Mesh3d(disc_mesh),
                 MeshMaterial3d(disc_mat),
                 Transform::from_xyz(mx, my, MOTOR_Z - 0.003),
@@ -292,7 +299,7 @@ pub fn spawn_plane(
         }
         let pivot = commands
             .spawn((
-                ControlSurfaceVis { surface: if side < 0.0 { 4 } else { 5 }, axis },
+                ControlSurfaceVis { plane, surface: if side < 0.0 { 4 } else { 5 }, axis },
                 Transform::from_translation(hinge_root),
                 Visibility::default(),
             ))
@@ -308,36 +315,50 @@ pub fn spawn_plane(
 
 pub fn sync_plane(
     sim: Res<SharedSim>,
-    mut root: Query<&mut Transform, With<PlaneRoot>>,
+    mut roots: Query<(&PlaneRoot, &mut Transform)>,
     mut surfaces: Query<(&ControlSurfaceVis, &mut Transform), Without<PlaneRoot>>,
     mut props: Query<(&PropVis, &mut Transform), (Without<PlaneRoot>, Without<ControlSurfaceVis>)>,
     discs: Query<&PropDisc>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     time: Res<Time>,
-    mut angles: Local<[f32; 2]>,
+    mut angles: Local<[[f32; 2]; PLANES]>,
 ) {
     let c = sim.0.lock().unwrap();
-    let s = &c.state;
-    if let Ok(mut t) = root.single_mut() {
-        t.translation = s.pos;
-        t.rotation = s.rot;
+    // Plane 0 is yours; the others are the computer pilots', while a game is on.
+    let state = |plane: usize| match plane {
+        0 => Some(&c.state),
+        i => c.game.as_ref().and_then(|g| g.opponents.get(i - 1)).map(|o| &o.state),
+    };
+    for (root, mut t) in &mut roots {
+        match state(root.0) {
+            Some(s) => {
+                t.translation = s.pos;
+                t.rotation = s.rot;
+            }
+            None => t.translation = PARKED,
+        }
     }
     for (cs, mut t) in &mut surfaces {
         // Surfaces are modelled "trailing edge down = positive"; rotating about an axis
         // pointing roughly +X by a positive angle moves the trailing edge (+Z) down.
-        t.rotation = Quat::from_axis_angle(cs.axis, s.deflection[cs.surface]);
+        if let Some(s) = state(cs.plane) {
+            t.rotation = Quat::from_axis_angle(cs.axis, s.deflection[cs.surface]);
+        }
     }
     for (p, mut t) in &mut props {
+        let Some(s) = state(p.0) else { continue };
         // Real rpm would alias at display rate; show a slowed-down spin and let the
         // translucent disc carry the "fast" look.
-        let dir = if p.0 == 0 { 1.0 } else { -1.0 };
-        angles[p.0] = (angles[p.0] + dir * s.spool[p.0].sqrt() * 21.0 * time.delta_secs()) % std::f32::consts::TAU;
-        t.rotation = Quat::from_rotation_z(angles[p.0]);
+        let dir = if p.1 == 0 { 1.0 } else { -1.0 };
+        let a = &mut angles[p.0][p.1];
+        *a = (*a + dir * s.spool[p.1].sqrt() * 21.0 * time.delta_secs()) % std::f32::consts::TAU;
+        t.rotation = Quat::from_rotation_z(*a);
     }
     for d in &discs {
-        if let Some(mut m) = materials.get_mut(&d.1) {
-            let a = (s.spool[d.0] * 0.55).clamp(0.0, 0.4);
-            m.base_color = Color::srgba(0.12, 0.12, 0.13, if c.state.phase == Phase::Crashed { 0.0 } else { a });
+        let Some(s) = state(d.0) else { continue };
+        if let Some(mut m) = materials.get_mut(&d.2) {
+            let a = (s.spool[d.1] * 0.55).clamp(0.0, 0.4);
+            m.base_color = Color::srgba(0.12, 0.12, 0.13, if s.phase == Phase::Crashed { 0.0 } else { a });
         }
     }
 }

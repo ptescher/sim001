@@ -1,0 +1,43 @@
+Feature: Tag
+  One plane is [[it]]: the chaser. The chaser tags another plane when it touches it, and then
+  that plane is it. The game is two minutes long. The game panel shows the time that each
+  pilot is it, and the pilot with the least time wins. A plane that has just become it cannot
+  tag back the plane that tagged it for 5 seconds.
+
+  Stay in the [[arena]]: a circle with a radius of 90 m over the field in front of the
+  [[pilot box]], below 60 m. Small cones mark its edge. If you fly out of the arena,
+  you are it. A plane that is not in the air cannot be tagged. When a computer pilot crashes,
+  it gets its plane back and throws it again.
+
+  Expectation: A touch passes it on
+    Given the game is tag
+    And the game clock is running
+    And the plane is flying
+    And the chaser is you
+    When the pilot tags an opponent
+    Then the chaser is an opponent
+
+  Expectation: The chaser comes after you
+    A computer pilot that is it chases the plane that it can catch most easily. Fly slowly
+    and straight, and it catches you.
+    Given the game is tag
+    And the game clock is running
+    And the plane is flying
+    And the chaser is an opponent
+    When the chaser tags the plane
+    Then the chaser is you
+
+  Expectation: Out of the arena, you are it
+    Given the game is tag
+    And the game clock is running
+    And the plane is flying
+    And the chaser is an opponent
+    When the pilot leaves the arena
+    Then the chaser is you
+
+  Expectation: Two minutes of tag
+    The game panel shows the results. The pilot who was it for the least time wins.
+    Given the game is tag
+    And the game clock is running
+    When the clock runs out
+    Then the game clock is stopped

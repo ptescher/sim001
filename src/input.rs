@@ -36,6 +36,10 @@ pub enum Action {
     ControlSource,
     /// Close overlays / help / the calibration wizard.
     Dismiss,
+    /// Start a pylon race, or stop the one being flown.
+    Race,
+    /// Start a game of tag, or stop the one being played.
+    Tag,
 }
 
 const RADIO_ACTIONS: [(Action, &str); 6] = [
@@ -452,6 +456,8 @@ pub fn read_input(
         (KeyCode::KeyV, Action::Recharge),
         (KeyCode::KeyZ, Action::Zoom),
         (KeyCode::Escape, Action::Dismiss),
+        (KeyCode::KeyG, Action::Race),
+        (KeyCode::KeyT, Action::Tag),
     ];
     let in_wizard = input.wizard.is_some();
     for (k, a) in key_actions {

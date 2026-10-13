@@ -20,6 +20,7 @@ use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
 use bevy::window::WindowOccluded;
 use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions};
 use expectation_model::{Event, Value, Variable};
+use recreation_games::{Clock, Errand, Kind, StandIn};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -38,6 +39,20 @@ const KEYS: &[(&str, KeyCode)] = &[
     ("pilot closes the help", KeyCode::Escape),
     ("pilot toggles pause", KeyCode::KeyP),
     ("pilot fits a fresh battery", KeyCode::KeyV),
+    ("pilot starts a race", KeyCode::KeyG),
+    ("pilot starts a game of tag", KeyCode::KeyT),
+];
+
+/// Events that aren't one key: the stand-in pilot flies them, or the test waits for them.
+const FLOWN: &[&str] = &[
+    "pilot ends the game",
+    "countdown ends",
+    "pilot flies a lap",
+    "pilot cuts a pylon",
+    "pilot tags an opponent",
+    "chaser tags the plane",
+    "pilot leaves the arena",
+    "clock runs out",
 ];
 
 /// States the driver can read (all of them), and the ones it can put in place directly.
@@ -56,6 +71,12 @@ const OBSERVED: &[&str] = &[
     "sim",
     "battery",
     "flight controller",
+    "game",
+    "game clock",
+    "opponents",
+    "lap count",
+    "cut count",
+    "chaser",
 ];
 const STICKS: &[&str] = &["throttle", "pitch stick", "roll stick"];
 /// Wings within this many degrees of level count as level.
@@ -112,6 +133,14 @@ struct Pressed(Vec<KeyCode>);
 #[derive(Resource, Default)]
 struct Held(Sticks);
 
+/// In a game, a computer pilot flies the plane for the test once it is in the air, through
+/// the sticks, as a pilot would: what it is doing now (by default racing, or loitering in tag).
+#[derive(Resource, Default)]
+struct Helper {
+    errand: Option<Errand>,
+    pilot: StandIn,
+}
+
 /// Load and check the suite before anything opens, then start the runner thread.
 pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_controller: bool) {
     let acceptance = match Acceptance::load(&suite) {
@@ -121,12 +150,18 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
             std::process::exit(1);
         }
     };
+    // T1S_EXPECT_ONLY=<text>: run only the tests whose title has it (while working on them).
+    let mut acceptance = acceptance;
+    if let Ok(only) = std::env::var("T1S_EXPECT_ONLY") {
+        acceptance.plans.retain(|p| p.title.contains(&only));
+    }
     println!("expect: {} tests from {}", acceptance.plans.len(), suite.display());
 
     let (tx, rx) = channel();
     app.insert_resource(Remote { rx: Mutex::new(rx), waiting: None, shot: None, told_hidden: false })
         .init_resource::<Pressed>()
         .init_resource::<Held>()
+        .init_resource::<Helper>()
         .init_resource::<Occluded>()
         .add_systems(Update, track_occlusion)
         .add_systems(Update, serve.before(SimSet::Input).run_if(in_state(AppState::Running)))
@@ -227,8 +262,40 @@ fn track_occlusion(mut events: MessageReader<WindowOccluded>, mut occluded: ResM
     }
 }
 
-fn hold(held: Res<Held>, mut input: ResMut<PilotInput>) {
+fn hold(held: Res<Held>, mut helper: ResMut<Helper>, sim: Res<SharedSim>, time: Res<Time>, mut input: ResMut<PilotInput>) {
     input.sticks = held.0;
+    let c = sim.0.lock().unwrap();
+    let Some(game) = &c.game else {
+        helper.errand = None;
+        return;
+    };
+    if !matches!(c.state.phase, Phase::Launching | Phase::Flying) {
+        return;
+    }
+    let errand = helper.errand.unwrap_or(match game.kind {
+        Kind::Race => Errand::Race,
+        Kind::Tag => Errand::Loiter,
+    });
+    let dt = time.delta_secs().clamp(0.001, 0.1);
+    let hands = helper.pilot.fly(game, &c.state, errand, &crate::terrain::WorldTerrain, dt);
+    // MANUAL moves the surfaces by the stick through the rates and an expo: undo both.
+    let rate = if c.high_rates { 1.0 } else { 0.65 };
+    input.sticks = Sticks {
+        roll: unexpo(hands.aileron / rate, 0.3),
+        pitch: unexpo(hands.elevator / rate, 0.3),
+        yaw: unexpo(hands.rudder / rate, 0.2),
+        throttle: hands.throttle.clamp(0.0, 1.0),
+    };
+}
+
+/// The stick that gives `y` through the sim's expo `e·x³ + (1 − e)·x`.
+fn unexpo(y: f32, e: f32) -> f32 {
+    let y = y.clamp(-1.0, 1.0);
+    let mut x = y;
+    for _ in 0..8 {
+        x -= (e * x * x * x + (1.0 - e) * x - y) / (3.0 * e * x * x + 1.0 - e);
+    }
+    x.clamp(-1.0, 1.0)
 }
 
 /// The frame, scaled down, as JPEG. All black means the window wasn't being drawn.
@@ -274,6 +341,81 @@ impl SimDriver {
         self.tx.send(Request::Wait(secs, tx)).map_err(|_| "the sim has quit".to_string())?;
         rx.recv_timeout(ANSWER).map_err(|_| "the sim stopped answering".to_string())
     }
+
+    /// Wait up to `secs` of sim time for `done`, saying what it waited for if it never came.
+    fn until(&self, secs: f32, what: &str, done: impl Fn(&SimCore) -> bool + Send + Clone + 'static) -> Result<(), String> {
+        let mut waited = 0.0;
+        while waited < secs {
+            let d = done.clone();
+            if self.sim(move |c| d(c))? {
+                return Ok(());
+            }
+            self.wait(LOOK)?;
+            waited += LOOK;
+        }
+        Err(format!("waited {secs:.0} s for {what}"))
+    }
+
+    /// Give the stand-in pilot a job.
+    fn errand(&self, errand: Errand) -> Result<(), String> {
+        self.call(move |w| w.resource_mut::<Helper>().errand = Some(errand))
+    }
+
+    /// The events the stand-in pilot flies, or the test waits for: each returns when it has
+    /// happened.
+    fn fly(&self, event: &str) -> Result<(), String> {
+        let laps = |c: &SimCore| c.game.as_ref().map_or(0, |g| g.your_laps());
+        let cuts = |c: &SimCore| c.game.as_ref().map_or(0, |g| g.your_cuts());
+        let chaser = |c: &SimCore| c.game.as_ref().and_then(|g| g.chaser());
+        match event {
+            "pilot ends the game" => {
+                let key = match self.sim(|c| c.game.as_ref().map(|g| g.kind))? {
+                    Some(Kind::Race) => KeyCode::KeyG,
+                    Some(Kind::Tag) => KeyCode::KeyT,
+                    None => return Err("there is no game to end".into()),
+                };
+                self.press(key)
+            }
+            "countdown ends" => self.until(10.0, "GO", |c| c.game.as_ref().is_some_and(|g| !matches!(g.clock, Clock::CountingDown { .. }))),
+            "pilot flies a lap" => {
+                let before = self.sim(move |c| laps(c))?;
+                self.errand(Errand::Race)?;
+                self.until(90.0, "a lap", move |c| laps(c) > before)
+            }
+            "pilot cuts a pylon" => {
+                let before = self.sim(move |c| cuts(c))?;
+                self.errand(Errand::Cut)?;
+                let r = self.until(90.0, "a cut", move |c| cuts(c) > before);
+                self.errand(Errand::Race)?;
+                r
+            }
+            "pilot tags an opponent" => {
+                self.errand(Errand::Tag)?;
+                let r = self.until(120.0, "a tag", move |c| chaser(c).is_some_and(|i| i != 0));
+                self.errand(Errand::Loiter)?;
+                r
+            }
+            "chaser tags the plane" => {
+                self.errand(Errand::Loiter)?;
+                self.until(150.0, "the chaser to tag the plane", move |c| chaser(c) == Some(0))
+            }
+            "pilot leaves the arena" => {
+                self.errand(Errand::LeaveArena)?;
+                let r = self.until(60.0, "the plane to leave the arena", move |c| chaser(c) == Some(0));
+                self.errand(Errand::Loiter)?;
+                r
+            }
+            "clock runs out" => self.until(150.0, "the end of the game", |c| c.game.as_ref().is_some_and(|g| matches!(g.clock, Clock::Stopped { .. }))),
+            other => Err(format!("no way to do `{other}`")),
+        }
+    }
+
+    fn press(&self, key: KeyCode) -> Result<(), String> {
+        self.call(move |w| {
+            w.resource_mut::<ButtonInput<KeyCode>>().press(key);
+            w.resource_mut::<Pressed>().0.push(key);
+        })
+    }
 }
 
 fn enum_value(v: &Value) -> Result<String, String> {
@@ -300,7 +442,9 @@ impl Driver for SimDriver {
                 c.high_rates = true;
                 c.diff_thrust = true;
                 c.paused = false;
+                c.game = None;
             }
+            w.resource_mut::<Helper>().errand = None;
             w.resource_mut::<Held>().0 = Sticks::default();
             let mut cam = w.resource_mut::<CamState>();
             cam.mode = CamMode::LineOfSight;
@@ -362,6 +506,23 @@ impl Driver for SimDriver {
                 let shown = name()? == "shown";
                 self.call(move |w| w.resource_mut::<HudState>().show_help = shown)
             }
+            "game" => {
+                let want = match name()?.as_str() {
+                    "a race" => Some(Kind::Race),
+                    "tag" => Some(Kind::Tag),
+                    _ => None,
+                };
+                self.sim(move |c| match want {
+                    None => c.game = None,
+                    Some(kind) if c.game.as_ref().is_none_or(|g| g.kind != kind) => c.toggle_game(kind),
+                    Some(_) => {}
+                })
+            }
+            // These follow from the game; they can only be what they already are.
+            "game clock" | "lap count" | "cut count" | "opponents" | "chaser" => {
+                let now = self.observe(var)?;
+                if now == *value { Ok(()) } else { Err(format!("{} is {now}, and only the game can make it {value}", var.subject)) }
+            }
             _ => Err(format!("can't put {} in place: {value}", var.subject)),
         }
     }
@@ -395,11 +556,11 @@ impl Driver for SimDriver {
     }
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
+        if FLOWN.contains(&event.key.as_str()) {
+            return self.fly(&event.key);
+        }
         let key = KEYS.iter().find(|(k, _)| *k == event.key).map(|(_, k)| *k).ok_or("no key for it")?;
-        self.call(move |w| {
-            w.resource_mut::<ButtonInput<KeyCode>>().press(key);
-            w.resource_mut::<Pressed>().0.push(key);
-        })
+        self.press(key)
     }
 
     fn observe(&mut self, var: &Variable) -> Result<Value, String> {
@@ -447,6 +608,37 @@ impl Driver for SimDriver {
                 "sim" => on_off(c.paused, "paused", "running"),
                 "flight controller" => Value::from(if c.params.flight_controller { "fitted" } else { "missing" }),
                 "battery" => Value::from((1.0 - s.used_mah / c.params.battery_capacity_mah).max(0.0) as f64 * 100.0),
+                "game" => Value::from(match c.game.as_ref().map(|g| g.kind) {
+                    None => "free flight",
+                    Some(Kind::Race) => "a race",
+                    Some(Kind::Tag) => "tag",
+                }),
+                "game clock" => Value::from(match c.game.as_ref().map(|g| g.clock) {
+                    None => "off",
+                    Some(Clock::CountingDown { .. }) => "counting down",
+                    Some(Clock::Running { .. }) => "running",
+                    Some(Clock::Stopped { .. }) => "stopped",
+                }),
+                "opponents" => {
+                    let Some(g) = &c.game else { return Err("there are no opponents without a game".into()) };
+                    let all = |f: &dyn Fn(&simulation_physics::FlightState) -> bool| g.opponents.iter().all(|o| f(&o.state));
+                    Value::from(if all(&|s| s.phase == Phase::Held) {
+                        "in hand"
+                    } else if g.opponents.iter().any(|o| o.state.phase == Phase::Crashed) {
+                        "down"
+                    } else if all(&|s| s.phase == Phase::Flying && !s.on_ground) {
+                        "flying"
+                    } else {
+                        "launching"
+                    })
+                }
+                "lap count" => Value::from(c.game.as_ref().map_or(0, |g| g.your_laps()) as f64),
+                "cut count" => Value::from(c.game.as_ref().map_or(0, |g| g.your_cuts()) as f64),
+                "chaser" => match c.game.as_ref().and_then(|g| g.chaser()) {
+                    Some(0) => Value::from("you"),
+                    Some(_) => Value::from("an opponent"),
+                    None => return Err("nobody is it outside a game of tag".into()),
+                },
                 other => return Err(format!("no way to observe `{other}`")),
             })
         })?
@@ -494,7 +686,7 @@ impl Driver for SimDriver {
         match need {
             Need::Observe(v) | Need::Arrange(v) => OBSERVED.contains(&v.key.as_str()),
             Need::Set(v) => STICKS.contains(&v.key.as_str()),
-            Need::Perform(e) => KEYS.iter().any(|(k, _)| *k == e.key),
+            Need::Perform(e) => KEYS.iter().any(|(k, _)| *k == e.key) || FLOWN.contains(&e.key.as_str()),
         }
     }
 }
@@ -502,6 +694,16 @@ impl Driver for SimDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The stand-in pilot's sticks give the surfaces it wants, through MANUAL's expo.
+    #[test]
+    fn unexpo_undoes_the_expo() {
+        for y in [-1.0f32, -0.6, -0.1, 0.0, 0.25, 0.8, 1.0] {
+            let x = unexpo(y, 0.3);
+            assert!((0.3 * x * x * x + 0.7 * x - y).abs() < 1e-4, "{y}: {x}");
+        }
+        assert_eq!(unexpo(3.0, 0.3), 1.0);
+    }
 
     /// The suite checks clean (no conflicts, no story relying on unspecified behaviour), and
     /// the driver can do everything its tests need. Running it needs the window: `--expect`.

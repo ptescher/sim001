@@ -1,0 +1,8 @@
+[package]
+name = "recreation_racing"
+version = "0.1.0"
+edition = "2024"
+description = "Recreation domain: the pylon race, its course (the leagues' triangle) and its referee: laps, cuts, places and times"
+
+[dependencies]
+glam = "0.33"

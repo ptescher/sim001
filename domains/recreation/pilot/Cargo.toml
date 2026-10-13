@@ -1,0 +1,10 @@
+[package]
+name = "recreation_pilot"
+version = "0.1.0"
+edition = "2024"
+description = "Recreation domain: the computer pilot, which flies a T1-S through the flight model's controls the way a pilot's hands would"
+
+[dependencies]
+simulation_aircraft = { path = "../../simulation/aircraft" }
+simulation_physics = { path = "../../simulation/physics" }
+glam = "0.33"
