@@ -154,15 +154,15 @@ Vocabulary:
     Shows: middle: the third number of the RC 1-4 line on the SYSTEMS screen is near 1500
     Shows: high: the third number of the RC 1-4 line on the SYSTEMS screen is near 1750
   State: the arm switch is off | on
-    Set: put SE {value}: up (or pressed in) is on, and down (or out) is off
+    Set: put the arm switch {value}: SE pressed in is on, and SE out is off (with a toggle fitted in place of the button, up is on and down is off)
     Shows: on: the first number after the slash in the RC 1-4 line on the SYSTEMS screen is near 1900
     Shows: off: the first number after the slash in the RC 1-4 line on the SYSTEMS screen is near 1100
   State: the mode switch is QHOVER | QLOITER | FBWA | CRUISE | AUTO | QRTL
-    Set: press button 1 to 6 on the front of the radio for {value}: 1 is QHOVER, 2 is QLOITER, 3 is FBWA, 4 is CRUISE, 5 is AUTO and 6 is QRTL
+    Set: press the button for {value} on the front of the radio: button 1 is QHOVER, 2 is QLOITER, 3 is FBWA, 4 is CRUISE, 5 is AUTO and 6 is QRTL
     Shows: the second number after the slash in the RC 1-4 line on the SYSTEMS screen is the one for {value}
 
   Phrase: the TX15 is ready
-    Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8, calibrate the sticks in the sim with F2, and copy the channels of the switches from controls.cfg.example. Then put the throttle stick all the way down, SE out and button 1 on
+    Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8, calibrate the sticks in the sim with F2, and copy the channels of the switches from controls.cfg.example. Then put the throttle stick all the way down, SE out and press button 1
     Given the throttle stick is low
     And the arm switch is off
     And the mode switch is QHOVER
