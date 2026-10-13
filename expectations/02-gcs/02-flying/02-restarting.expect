@@ -16,7 +16,8 @@ Feature: Restarting a mission
     Then the vehicle's current item is 1
 
   Expectation: Disarming in AUTO keeps the plane's place
-    Given the vehicle is armed
+    Given the vehicle mission is not empty
+    And the vehicle is armed
     And the autopilot mode is AUTO
     When the operator disarms the vehicle
     Then the vehicle's current item stays the same

@@ -424,6 +424,7 @@ impl Session {
                 }
                 if armed && !v.armed {
                     v.armed_since = Some(Instant::now());
+                    v.arms += 1;
                 } else if !armed && v.armed {
                     v.last_flight_secs = v.flight_secs();
                     v.armed_since = None;

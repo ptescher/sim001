@@ -305,10 +305,11 @@ impl SimCore {
     /// reads the stick as a climb rate with the middle holding height. A radio's stick goes as it
     /// is. The keyboard and gamepads idle with the throttle closed, so for them a closed throttle
     /// is sent as the middle and full throttle as a full climb. Everywhere else the stick is a
-    /// plain throttle, and so it is if the mode isn't known (no console).
+    /// plain throttle, and so it is if the mode isn't known (no console) or the plane is still
+    /// disarmed: ArduPilot arms only with the throttle stick at the bottom.
     fn throttle_pwm(&self, throttle: f32) -> u16 {
         let t = throttle.clamp(0.0, 1.0);
-        let q_mode = self.ap.vehicle().is_some_and(|(_, m)| m.starts_with('Q') || m == "GUIDED");
+        let q_mode = self.ap.vehicle().is_some_and(|(armed, m)| armed && (m.starts_with('Q') || m == "GUIDED"));
         if q_mode && !self.pilot_radio && self.params.motors.iter().any(|m| m.lift) {
             (1500.0 + 500.0 * t).round() as u16
         } else {
@@ -430,6 +431,21 @@ mod tests {
         c.sticks.throttle = 1.0;
         in_mode(&mut c, "QLOITER");
         assert_eq!(c.rc_channels()[2], 2000, "full throttle climbs");
+    }
+
+    /// A disarmed plane is armed with the throttle stick at the bottom (ArduPilot refuses with
+    /// "Throttle (RC3) is not neutral" otherwise), so the idle of the keyboard is a closed throttle
+    /// until the plane is armed, in a Q mode too.
+    #[test]
+    fn a_disarmed_vtol_in_a_q_mode_sends_the_throttle_closed() {
+        let mut c = vtol();
+        c.sticks.throttle = 0.0;
+        for mode in ["QHOVER", "QLOITER", "QSTABILIZE"] {
+            c.ap.gcs = Some((Instant::now(), false, mode.into()));
+            assert_eq!(c.rc_channels()[2], 1000, "{mode}, disarmed");
+            in_mode(&mut c, mode);
+            assert_eq!(c.rc_channels()[2], 1500, "{mode}, armed");
+        }
     }
 
     /// In the fixed-wing modes the throttle is a throttle: closed is closed.

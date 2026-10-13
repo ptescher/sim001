@@ -190,14 +190,18 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
         let opts = RunOptions { docs_dir: docs.clone(), patience: 480 };
         let mut report = expectation_story::Report::default();
         for plan in &acceptance.plans {
+            let began = Instant::now();
+            // 20 s, and 20 s for each step: an expectation that does one thing has about 40 s, and a
+            // story that flies has as many steps as it needs.
+            driver.budget = Duration::from_secs(20 + 20 * plan.steps.len() as u64);
             let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
             let r = r.results.into_iter().next().unwrap();
             match r.status {
-                expectation_story::Status::Passed => println!("expect: ✓ {}", plan.title),
+                expectation_story::Status::Passed => println!("expect: ✓ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32()),
                 // Another system's test (the sim's), or one for a feature the console lacks.
                 expectation_story::Status::Unsupported => {}
                 _ => {
-                    println!("expect: ✗ {}", plan.title);
+                    println!("expect: ✗ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32());
                     // What the vehicle was saying, for working out why.
                     if let Ok(lines) = driver.call(|g, _, _| {
                         let v = g.vehicle.lock().unwrap();
@@ -428,6 +432,11 @@ struct ConsoleDriver {
     rc_modes: Vec<&'static str>,
     /// What the stand-in radio is doing now.
     radio: RadioState,
+    /// How many times the vehicle had armed when the plane was last fresh.
+    arms_seen: u32,
+    /// How long the next test has, from when its plane is ready, and when it is up.
+    budget: Duration,
+    deadline: Option<Instant>,
 }
 
 impl ConsoleDriver {
@@ -442,7 +451,7 @@ impl ConsoleDriver {
             mode: 0,
             reset_presses: 0,
         };
-        ConsoleDriver { tx, vtol, rc_modes, radio }
+        ConsoleDriver { tx, vtol, rc_modes, radio, arms_seen: 0, budget: Duration::from_secs(35), deadline: None }
     }
 
     /// Move the stand-in radio and tell the sim.
@@ -477,11 +486,21 @@ impl ConsoleDriver {
             }
         })
     }
+    /// An error if the test has used up its time: for loops that try again and so don't see the
+    /// error that `call` gives them.
+    fn out_of_time(&self) -> Result<(), String> {
+        if self.deadline.is_some_and(|d| Instant::now() > d) {
+            return Err(format!("the test ran out of time ({} s)", self.budget.as_secs()));
+        }
+        Ok(())
+    }
+
     /// Run `f` on the UI thread, between frames, and return what it returns.
     fn call<T: Send + 'static>(
         &self,
         f: impl FnOnce(&mut Gcs, &mut Window, &mut Context<Gcs>) -> T + Send + 'static,
     ) -> Result<T, String> {
+        self.out_of_time()?;
         let (tx, rx) = channel();
         let job: Job = Box::new(move |cx, console| {
             let _ = console.update(cx, |g, w, cx| tx.send(f(g, w, cx)));
@@ -545,6 +564,7 @@ impl ConsoleDriver {
                     if self.read("vehicle")?.as_str() != Some("armed") {
                         for _ in 0..6 {
                             self.send(Cmd::Arm(true))?;
+                            self.out_of_time()?;
                             if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                                 break;
                             }
@@ -569,13 +589,15 @@ impl ConsoleDriver {
         }
     }
 
-    /// Is the plane up, armed, or is its autopilot unhappy (the pre-arm checks fail), so that a
-    /// test can't start from it?
+    /// Has the plane armed since it was last fresh, or is its autopilot unhappy (the pre-arm checks
+    /// fail), so that a test can't start from it? Arming leaves things behind (a landed flag, the
+    /// tilt of the motors, a changed mode) that a test must not inherit.
     fn needs_a_fresh_plane(&self) -> Result<bool, String> {
         const PREARM_CHECK: u32 = 0x1000_0000;
-        self.call(|g, _, _| {
+        let seen = self.arms_seen;
+        self.call(move |g, _, _| {
             let v = g.vehicle.lock().unwrap();
-            v.link.alive() && (v.armed || v.alt_rel.abs() > 1.0 || v.sensor_ok(PREARM_CHECK) == Some(false))
+            v.link.alive() && (v.arms > seen || v.armed || v.alt_rel.abs() > 1.0 || v.sensor_ok(PREARM_CHECK) == Some(false))
         })
     }
 
@@ -591,7 +613,24 @@ impl ConsoleDriver {
         })?;
         // The station restarts the autopilot: its link drops, and then comes back.
         let _ = self.wait_for(45, "the autopilot restarting", |g| !g.vehicle.lock().unwrap().link.alive());
-        self.wait_for(180, "the autopilot coming back", |g| g.vehicle.lock().unwrap().link.alive())
+        self.wait_for(180, "the autopilot coming back", |g| g.vehicle.lock().unwrap().link.alive())?;
+        // ArduPilot goes to the mode of its mode switch a few seconds after it is ready, and a test
+        // that sets a mode before then has it taken away; by the time it is ready to arm, that is
+        // long done.
+        self.wait_until_ready_to_arm()?;
+        self.arms_seen = self.call(|g, _, _| g.vehicle.lock().unwrap().arms)?;
+        Ok(())
+    }
+
+    /// Wait until the autopilot would take an arm: its pre-arm checks pass, and it has not
+    /// complained for a while (it says what is wrong every few seconds, and the EKF can still be
+    /// settling when the status already says the checks pass).
+    fn wait_until_ready_to_arm(&self) -> Result<(), String> {
+        const PREARM_CHECK: u32 = 0x1000_0000;
+        self.wait_for(240, "the autopilot being ready to arm (is the station running? use --station)", |g| {
+            let v = g.vehicle.lock().unwrap();
+            v.sensor_ok(PREARM_CHECK) == Some(true) && v.prearm.as_ref().is_none_or(|p| p.0.elapsed() > Duration::from_secs(10))
+        })
     }
 
     fn press(&self, id: &'static str) -> Result<(), String> {
@@ -614,6 +653,9 @@ impl Driver for ConsoleDriver {
     /// Back to the Background's UI state: panning, no plan, 40 m. The vehicle is arranged per
     /// test (disarmed, MANUAL, ...), since it can't be reset by the console.
     fn reset(&mut self) -> Result<(), String> {
+        // Getting a fresh plane (the autopilot restarts) is not the test's time: the clock starts
+        // when the plane is ready.
+        self.deadline = None;
         // A plane that has flown, or whose autopilot has lost its bearings, starts the next test
         // from a fresh plane: the sim starts again (as with R), and the station restarts ArduPilot.
         if self.vtol && self.needs_a_fresh_plane()? {
@@ -624,6 +666,9 @@ impl Driver for ConsoleDriver {
             // A test that doesn't use the radio flies without one, like a keyboard pilot.
             self.radio.connected = false;
             self.radio.throttle = STICK_LOW;
+            // And the switches are where a fresh radio has them: the arm switch out, the first mode.
+            self.radio.arm = false;
+            self.radio.mode = 0;
             let radio = self.radio;
             self.call(move |g, _, _| {
                 if let Some(s) = &g.sensor {
@@ -636,7 +681,14 @@ impl Driver for ConsoleDriver {
             g.map.plan.clear();
             g.map.plan_alt = 40.0;
             g.map.follow = true;
-        })
+        })?;
+        // Nor is the autopilot's own start, the first time: the test begins from a vehicle that is
+        // ready to arm.
+        if self.vtol {
+            self.wait_until_ready_to_arm()?;
+        }
+        self.deadline = Some(Instant::now() + self.budget);
+        Ok(())
     }
 
     fn arrange(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
@@ -663,6 +715,7 @@ impl Driver for ConsoleDriver {
                 "armed" => {
                     for _ in 0..6 {
                         self.send(Cmd::Arm(true))?;
+                        self.out_of_time()?;
                         if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                             return Ok(());
                         }
@@ -720,6 +773,7 @@ impl Driver for ConsoleDriver {
                 // and on again until it takes.
                 self.radio_move(RadioMove::ArmSwitch(true))?;
                 for _ in 0..100 {
+                    self.out_of_time()?;
                     if self.wait_for(3, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                         return self.check(key, &want, "");
                     }
@@ -854,6 +908,7 @@ impl Driver for ConsoleDriver {
                 for _ in 0..12 {
                     self.press("arm")?;
                     self.press("arm")?;
+                    self.out_of_time()?;
                     if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                         return Ok(());
                     }

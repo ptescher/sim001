@@ -205,6 +205,9 @@ pub struct Vehicle {
     pub history: VecDeque<Sample>,
     pub armed_since: Option<Instant>,
     pub last_flight_secs: f32,
+    /// How many times the vehicle has armed since the console started (for a test that needs a
+    /// plane that has not).
+    pub arms: u32,
 }
 
 impl Vehicle {
@@ -276,6 +279,7 @@ impl Vehicle {
             history: VecDeque::new(),
             armed_since: None,
             last_flight_secs: 0.0,
+            arms: 0,
         }
     }
 
