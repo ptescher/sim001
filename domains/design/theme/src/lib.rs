@@ -11,6 +11,7 @@
 //! either. Consumers convert [`Rgb`] to their own colour type.
 
 pub mod css;
+pub mod edgetx;
 
 /// A colour as 0xRRGGBB, in sRGB.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -85,6 +85,8 @@ Line-of-sight view with auto-zoom is the closest match to flying at the field. T
 
 **P1** zooms the line-of-sight camera (the automatic zoom is off while the knob is mapped), and **P2** picks the view in thirds: line of sight, chase, nose camera.
 
+**The theme.** [radio/THEMES](radio/THEMES) has the console's colours as two EdgeTX themes, **T1S Night** and **T1S Day**. Copy the folders to the `THEMES` folder of the SD card and choose one under Radio Settings, Themes. They are generated from the shared theme (`cargo run -p design_theme --example edgetx -- radio/THEMES`).
+
 Throttle is absolute, as on the real radio. Rates and expo come from the sim (L toggles rates). The model is a plain AETR plane with no mixing, because the autopilot (or, for the plain T1-S, the sim) does the V-tail mixing. A radio overlay (H) shows the sticks, the arm switch and the lit mode.
 
 **Taking off with the VTOL.** Wait until the console's ARM button reads ARM, not ARM: NOT READY (ArduPilot needs about a minute after the start). With the throttle stick all the way down, press SE in to arm. Press button 1 for **QHOVER** or 2 for **QLOITER** (which also holds the plane's position). Push the throttle stick up: in the hover modes the stick sets the climb rate, so above the middle the plane climbs straight up, the middle holds the height, and below the middle the plane goes down. Button 4 is **CRUISE** (forward flight: the wing motors tilt forward), 3 is FBWA, 5 is AUTO and 6 is QRTL.

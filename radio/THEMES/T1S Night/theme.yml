@@ -1,0 +1,19 @@
+---
+summary:
+  name: T1S Night
+  author: T1-S sim
+  info: The ground station console
+colors:
+  PRIMARY1: 0x4CFF7A
+  PRIMARY2: 0xDFE8DF
+  PRIMARY3: 0x919C91
+  SECONDARY1: 0x22241E
+  SECONDARY2: 0x161A16
+  SECONDARY3: 0x050806
+  FOCUS: 0x14361F
+  EDIT: 0x3A2C08
+  ACTIVE: 0x2A302A
+  WARNING: 0xFF5A4F
+  DISABLED: 0x3A403A
+  QM_BG: 0x2B2D26
+  QM_FG: 0xDFE8DF
