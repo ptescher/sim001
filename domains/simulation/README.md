@@ -60,7 +60,7 @@ The station starts the SITL container with `AIRCRAFT=t1s-vtol` (so `start.sh` la
 among its mode buttons. Arm the plane and press VTOL TKOF to lift it straight up, press CRUISE
 for forward flight (the transition is ArduPilot's) and QLOITER to hover again, then QLAND.
 With a radio, see the TX15 section of the main README: the arm switch, the mode channel (six
-positions: QHOVER, QLOITER, FBWA, CRUISE, AUTO, QRTL) and the throttle stick (in the hover modes, the climb rate).
+buttons on the radio: QHOVER, QLOITER, FBWA, CRUISE, AUTO, QRTL) and the throttle stick (in the hover modes, the climb rate).
 
 ArduPilot's Tri frame mixes the two wing motors and the rear one, and swings the wing motors
 apart to yaw (`Q_TILT_TYPE 2`, vectored yaw). The rear rotor sits twice as far behind the centre

@@ -79,13 +79,15 @@ Line-of-sight view with auto-zoom is the closest match to flying at the field. T
 
 ### RadioMaster TX15 (EdgeTX)
 
-1. Plug the radio in over USB and choose **USB Joystick (HID)** when EdgeTX asks.
-2. Start the station (see Run). In the sim window, press **F2**. Then follow the prompts: centre the sticks with the throttle all the way down, press Enter, and move each stick when asked. The arm switch and the mode channel are ordinary channels: **CH5** is the arm switch (SE: in is armed), and **CH8** is the mode channel, which ArduPilot divides into six modes. Build CH8 in the EdgeTX mixer as SB 52% + SA 13% with an offset of -2%: SA down gives the first three modes (SB down, middle, up) and SA up the last three. `controls.cfg.example` has the whole file, with the axis names those channels have in the sim (F3 shows them if yours differ).
-3. The mapping is saved to `controls.cfg`. Run F2 again at any time to redo it.
+1. **The model.** Plug the radio in as USB storage and copy [radio/aero-6pos.yml](radio/aero-6pos.yml) to the `MODELS` folder of its SD card, then choose that model (T1S VTOL) in the radio. Channels 1 to 4 are the sticks, **CH5 is SE** (the arm switch: in is armed), **CH8 is the mode channel** (the six buttons on the front, 1 to 6, give QHOVER, QLOITER, FBWA, CRUISE, AUTO and QRTL), and **CH11 and CH12 are the knobs P1 and P2**. Then plug the radio in over USB and choose **USB Joystick (HID)** when EdgeTX asks.
+2. **The sticks.** Start the station (see Run). In the sim window, press **F2**, centre the sticks with the throttle all the way down, press Enter, and move each stick when asked. Press Enter to skip the buttons it asks about afterwards.
+3. **The switches.** Copy [controls.cfg.example](controls.cfg.example) to `controls.cfg`. Press **F3**, move SE, press a mode button and turn each knob, and put the axis name that changes on the matching line (`radio.arm`, `radio.mode`, `radio.zoom`, `radio.view`).
 
-Throttle is absolute, as on the real radio. Rates and expo come from the sim (L toggles rates). Set the model on your radio up as a plain AETR plane with no mixing, because the sim does the V-tail mixing.
+**P1** zooms the line-of-sight camera (the automatic zoom is off while the knob is mapped), and **P2** picks the view in thirds: line of sight, chase, nose camera.
 
-**Taking off with the VTOL.** Wait until the console's ARM button reads ARM, not ARM: NOT READY (ArduPilot needs a minute or two after the start). With the throttle stick all the way down, press SE in to arm. Put SA down and SB in the middle to pick **QLOITER**, the hover mode that holds the plane in place. Push the throttle stick up: in the hover modes the stick sets the climb rate, so above the middle the plane climbs straight up, the middle holds the height, and below the middle the plane goes down. The six mode positions, from lowest to highest, are QHOVER, QLOITER, FBWA, CRUISE (forward flight: the wing motors tilt forward), AUTO and QRTL.
+Throttle is absolute, as on the real radio. Rates and expo come from the sim (L toggles rates). The model is a plain AETR plane with no mixing, because the autopilot (or, for the plain T1-S, the sim) does the V-tail mixing. A radio overlay (H) shows the sticks, the arm switch and the lit mode.
+
+**Taking off with the VTOL.** Wait until the console's ARM button reads ARM, not ARM: NOT READY (ArduPilot needs about a minute after the start). With the throttle stick all the way down, press SE in to arm. Press button 1 for **QHOVER** or 2 for **QLOITER** (which also holds the plane's position). Push the throttle stick up: in the hover modes the stick sets the climb rate, so above the middle the plane climbs straight up, the middle holds the height, and below the middle the plane goes down. Button 4 is **CRUISE** (forward flight: the wing motors tilt forward), 3 is FBWA, 5 is AUTO and 6 is QRTL.
 
 ### Switch Pro Controller
 

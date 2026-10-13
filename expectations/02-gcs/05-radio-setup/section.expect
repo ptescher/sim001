@@ -1,6 +1,6 @@
 Section: Setting up the radio
   The sim reads a radio that is in USB joystick mode as a game controller. The first time, it has
-  to learn which stick is which, and which buttons you gave to the autopilot. This is the
+  to learn which stick is which, and which channels the switches are on. This is the
   calibration. The sim saves it in the file controls.cfg, and the next start uses it. This
   section uses the RadioMaster TX15 with EdgeTX. Another EdgeTX radio works the same way.
 

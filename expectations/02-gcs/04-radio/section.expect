@@ -2,11 +2,11 @@ Section: Flying with a radio
   The T1-S VTOL flies with a radio. A RadioMaster TX15 (or another EdgeTX radio) in USB
   joystick mode gives the sim the sticks and the switches. The sim sends them to ArduPilot
   as the radio signals of a real receiver, so the plane reacts as it does with the real
-  radio. [[ArduPilot]] reads the sticks and three switches: the arm switch, the mode switch,
-  and the throttle stick. In the hover modes, the middle of the throttle stick holds the
+  radio. [[ArduPilot]] reads the sticks, the arm switch (SE) and the mode buttons (1 to 6 on the
+  front of the radio). In the hover modes, the middle of the throttle stick holds the
   height. Above the middle the plane climbs, and below the middle it goes down.
 
-  The first time, you do the calibration once (press F2 in the sim), and the sim saves it.
+  The first time, you set the radio up once (see Setting up the radio), and the sim saves it.
   After that, plug the radio in and start the station.
 
 Background:

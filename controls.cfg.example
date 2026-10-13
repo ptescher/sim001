@@ -22,13 +22,13 @@ radio.yaw = Other(65587), 0.0000, 1.0000
 radio.throttle = RightStickX, -1.0000, 1.0000
 
 # ---- The switches the autopilot reads (the VTOL, flown by ArduPilot) -----------------------
-# Channel 5 (SE) arms the plane: high arms, low disarms. These two lines are guesses: put the
-# axis that changes when you move SE, and the one that changes when you move SA or SB, from F3.
+# Channel 5 (SE) arms the plane: high arms, low disarms. These lines are guesses: put the axis
+# that changes when you move SE, and the one that changes when you press a button, from F3.
 # If a switch works the wrong way round, change its 1.0000 to -1.0000.
 radio.arm = Other(65588), 0.0000, 1.0000
-# Channel 8 (SA and SB mixed) is the mode channel. It goes to ArduPilot as it is, and ArduPilot
-# divides it into six modes, from the lowest position to the highest: QHOVER, QLOITER, FBWA,
-# CRUISE, AUTO and QRTL. In EdgeTX: CH8 = SB 52% + SA 13%, offset -2%.
+# Channel 8 is the mode channel: the six buttons on the front of the radio (see
+# radio/aero-6pos.yml). It goes to ArduPilot as it is, and ArduPilot divides it into six modes,
+# button 1 to 6: QHOVER, QLOITER, FBWA, CRUISE, AUTO and QRTL.
 radio.mode = Other(65591), 0.0000, 1.0000
 
 # ---- The two knobs (optional) ----------------------------------------------------------------

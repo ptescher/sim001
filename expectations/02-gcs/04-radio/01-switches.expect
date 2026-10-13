@@ -1,10 +1,10 @@
 Feature: Switches
   SE is the arm switch (channel 5). When you press it in, the autopilot arms the plane. When you
-  let it out, the autopilot disarms it. SA and SB together are the mode switch. The radio mixes
-  them into one channel (channel 8), and the autopilot divides the channel into six positions:
-  each position is a flight mode. From the lowest to the highest they are QHOVER, QLOITER,
-  FBWA, CRUISE, AUTO and QRTL. QLOITER is the hover mode that holds the plane at one place.
-  CRUISE is forward flight.
+  let it out, the autopilot disarms it. The six buttons on the front of the radio are the mode
+  switch. The radio mixes them into one channel (channel 8), and the autopilot divides the
+  channel into six positions: each button is a flight mode. Button 1 is QHOVER, 2 is QLOITER,
+  3 is FBWA, 4 is CRUISE, 5 is AUTO and 6 is QRTL. QLOITER is the hover mode that holds the
+  plane at one place. CRUISE is forward flight.
 
   Expectation: The arm switch arms the vehicle
     Given the arm switch is off

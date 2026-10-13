@@ -147,7 +147,7 @@ Vocabulary:
     Shows: calibrated: the sim says Radio calibrated and saved to controls.cfg, and the sticks and switches of the radio work
     Shows: not calibrated: the sim has not seen this radio's sticks, and its switches do nothing
   Event: the pilot calibrates the radio
-    Say: press F2 in the sim window, and follow the prompts on the screen. Do each step in order: put the sticks in the middle with the throttle all the way down, and press Enter. Push the aileron stick right, the elevator stick up and the rudder stick right, one at a time, and hold each one until the prompt changes. Push the throttle stick all the way up. Then the sim asks for six switches or buttons, one at a time: flip SE for ARDUPILOT ARM and move the mode channel (SA and SB mixed into CH8), and press Enter to skip the other four
+    Say: press F2 in the sim window, and follow the prompts on the screen. Do each step in order: put the sticks in the middle with the throttle all the way down, and press Enter. Push the aileron stick right, the elevator stick up and the rudder stick right, one at a time, and hold each one until the prompt changes. Push the throttle stick all the way up. Then the sim asks for buttons for its other functions, one at a time: press Enter to skip all of them, because the arm switch, the mode buttons and the camera knobs are channels, and [[Setting up the TX15]] shows how the sim reads them
   State: the throttle stick is low | middle | high
     Set: move the throttle stick to the {value} position: all the way down is low, the middle is middle, and three quarters up is high
     Shows: low: the third number of the RC 1-4 line on the SYSTEMS screen is near 1000
@@ -158,11 +158,11 @@ Vocabulary:
     Shows: on: the first number after the slash in the RC 1-4 line on the SYSTEMS screen is near 1900
     Shows: off: the first number after the slash in the RC 1-4 line on the SYSTEMS screen is near 1100
   State: the mode switch is QHOVER | QLOITER | FBWA | CRUISE | AUTO | QRTL
-    Set: set SA and SB to the pair for {value}: SB down, middle and up with SA down gives QHOVER, QLOITER and FBWA, and with SA up gives CRUISE, AUTO and QRTL
+    Set: press button 1 to 6 on the front of the radio for {value}: 1 is QHOVER, 2 is QLOITER, 3 is FBWA, 4 is CRUISE, 5 is AUTO and 6 is QRTL
     Shows: the second number after the slash in the RC 1-4 line on the SYSTEMS screen is the one for {value}
 
   Phrase: the TX15 is ready
-    Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: calibrate it in the sim with F2, and give SE to ARDUPILOT ARM and the mixed SA and SB channel to ARDUPILOT MODE. Then put the throttle stick all the way down and SE out
+    Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8, calibrate the sticks in the sim with F2, and copy the channels of the switches from controls.cfg.example. Then put the throttle stick all the way down, SE out and button 1 on
     Given the throttle stick is low
     And the arm switch is off
     And the mode switch is QHOVER

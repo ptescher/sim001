@@ -1,25 +1,35 @@
 Feature: Setting up the TX15
   There are two parts: the radio, and the sim.
 
-  In the radio, put the radio in USB joystick mode: plug it in with the USB cable, and choose
-  USB Joystick (HID) when EdgeTX asks. The sim sees every channel of the radio as an axis. A
-  switch is a channel too, so the arm and mode switches need no special setting if your model sends them: they are
-  channels that go from low, through the middle, to high. If your model does not send
-  a switch, add a channel for it in the mixer, after the channels of the sticks. Set the model up
-  as a plain plane with the channel order aileron, elevator, throttle and rudder, and no
-  mixing, because the autopilot does the mixing.
+  In the radio, put it in USB joystick mode: plug it in with the USB cable, and choose
+  USB Joystick (HID) when EdgeTX asks. The sim sees every channel that the model mixes as an
+  axis. A switch is not a channel until the model mixes it into one. The repository has a model
+  that does this, radio/aero-6pos.yml: copy it to the MODELS folder of the radio's SD card
+  (plug the radio in as USB storage), and choose it in the radio. Its channels are:
 
-  In the sim, press F2, and do the steps on the screen. The sim asks for the sticks first. Then
-  it asks for the switches, one at a time, and you flip the one you want. Each one is optional,
-  and Enter skips it. These are our suggestions for the TX15:
+  Channels 1 to 4 are the sticks (aileron, elevator, throttle, rudder). Channel 5 is SE,
+  the arm switch. Channel 8 is the mode channel: each of the six buttons on the front of the
+  radio (the custom switches SW1 to SW6) sets it to a different value, and the autopilot
+  divides it into six flight modes. Channels 11 and 12 are the two knobs, P1 and P2. The
+  other channels (SA to SD, SF) go to the sim too, but the sim does not use them.
 
-  Channel 5 is ARDUPILOT ARM, on SE. When SE is pressed in, the autopilot arms the plane; out,
-  it disarms the plane. Channel 8 is ARDUPILOT MODE, a mix of SA and SB. The sim sends it to
-  the autopilot as it is, and the autopilot divides it into six positions. Each position is a
-  flight mode. The six modes, from the lowest position to the highest, are QHOVER, QLOITER,
-  FBWA, CRUISE, AUTO and QRTL. In the mixer, give channel 8 the weight 52% of SB plus 13% of
-  SA, with an offset of -2%: SA down and SB down, middle and up give the first three modes,
-  and SA up gives the last three.
+  The six buttons, from 1 to 6, are QHOVER, QLOITER, FBWA, CRUISE, AUTO and QRTL. QHOVER and
+  QLOITER hover (QLOITER also holds the position), FBWA and CRUISE fly forward, AUTO flies a
+  mission and QRTL brings the plane home. In the mixer, each button is a line on channel 8
+  with the source MAX and the weights -65, -39, -13, 13, 39 and 65 percent, and the switch
+  SWn down (SW12, SW22 and so on).
+
+  In the sim, press F2 and do the steps on the screen. The sim learns the sticks. It also
+  asks for buttons for its other functions: press Enter to skip them. Then copy
+  controls.cfg.example to controls.cfg in the directory where you run the sim, and check the
+  axis of each channel: press F3, move a switch or a knob, and read the name of the axis that
+  changes. Put that name on the matching line: radio.arm for SE, radio.mode for the buttons,
+  radio.zoom for P1 and radio.view for P2. If a switch works the wrong way round, change its
+  1.0 to -1.0.
+
+  P1 zooms the camera that watches the plane from the pilot box: all the way down is the
+  widest view, all the way up the narrowest, and the automatic zoom is off. P2 picks the
+  view in thirds: the pilot box, the chase camera and the nose camera.
 
   The keys of the keyboard and the buttons of a gamepad work too: they step through the six
   modes one at a time, and they change the arm signal one press at a time. The other three
