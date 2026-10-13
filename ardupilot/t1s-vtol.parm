@@ -1,0 +1,63 @@
+# HEEWING T1-S VTOL (t1s_sim --aircraft t1s-vtol), layered over t1s.parm: a tilt-rotor tri.
+# Two wing motors on tilt servos and a fixed rear rotor. ArduPilot's Tri frame has Motor 1 front
+# right, Motor 2 front left and Motor 4 at the rear; the wing motors also tilt (Q_TILT_MASK 3).
+Q_ENABLE 1
+Q_FRAME_CLASS 7
+Q_TILT_ENABLE 1
+Q_TILT_MASK 3
+# Vectored yaw: in a hover the two wing motors swing apart to yaw the plane.
+Q_TILT_TYPE 2
+Q_TILT_YAW_ANGLE 15
+Q_TILT_MAX 90
+Q_TILT_RATE_UP 90
+Q_TILT_RATE_DN 90
+
+# The radio's mode channel (channel 8) has six positions, from the lowest PWM to the highest:
+# QHOVER, QLOITER, FBWA, CRUISE, AUTO and QRTL. The same list is in the aircraft description
+# (rc_modes). The arm switch is on channel 5 (RC5_OPTION 153, ARMDISARM), as ExpressLRS needs.
+FLTMODE1 18
+FLTMODE2 19
+FLTMODE3 5
+FLTMODE4 7
+FLTMODE5 10
+FLTMODE6 21
+RC5_OPTION 153
+RC7_OPTION 0
+
+# Outputs: SERVO1 aileron, SERVO2 and SERVO4 V-tail, SERVO3 left wing motor (Motor 2), SERVO5
+# right wing motor (Motor 1), SERVO6 rear motor (Motor 4), SERVO7 and SERVO8 the tilt servos.
+SERVO3_FUNCTION 34
+SERVO5_FUNCTION 33
+SERVO6_FUNCTION 36
+SERVO7_FUNCTION 75
+SERVO8_FUNCTION 76
+SERVO7_MIN 1000
+SERVO7_MAX 2000
+SERVO8_MIN 1000
+SERVO8_MAX 2000
+
+# Motors. The sim's thrust goes with the square of the throttle (THST_EXPO 1).
+Q_M_PWM_MIN 1000
+Q_M_PWM_MAX 2000
+Q_M_THST_EXPO 1.0
+Q_M_THST_HOVER 0.48
+Q_M_HOVER_LEARN 2
+Q_M_SPIN_ARM 0.05
+Q_M_SPIN_MIN 0.10
+
+# Flying. Below Q_ASSIST_SPEED (just under the stall speed) the rotors help in forward flight.
+Q_ASSIST_SPEED 9
+# GUIDED hovers (QGUIDED) instead of flying forward, so VTOL TKOF leaves the plane hovering.
+Q_GUIDED_MODE 1
+Q_ANGLE_MAX 3000
+Q_VELZ_MAX 250
+Q_PILOT_SPD_UP 200
+Q_PILOT_SPD_DN 120
+
+# 4S 2200 mAh pack. The voltage failsafes are off: under a hard climb the pack sags below the
+# T1-S's 13.6 V for a moment, which isn't an empty battery. The capacity ones stay.
+BATT_CAPACITY 2200
+BATT_LOW_MAH 550
+BATT_CRT_MAH 220
+BATT_LOW_VOLT 0
+BATT_CRT_VOLT 0

@@ -9,12 +9,16 @@
 //! [`Terrain`], and the plane through `simulation_aircraft`.
 
 use glam::{Quat, Vec3};
-use simulation_aircraft::{AeroSurface, AircraftParams, SurfaceControl};
+use simulation_aircraft::{ActuatorCommands, AeroSurface, AircraftParams, MAX_MOTORS, StartStyle, SurfaceControl};
 use std::f32::consts::PI;
 
 pub const RHO: f32 = 1.225;
 pub const GRAVITY: f32 = 9.81;
 pub const DEG: f32 = PI / 180.0;
+
+/// A lift rotor in sideways flow pushes back along the flow with this fraction of its thrust at
+/// a flow speed equal to its tip speed (the rotor's H-force).
+const ROTOR_H_FORCE: f32 = 0.25;
 
 /// The ground the plane flies over.
 pub trait Terrain {
@@ -45,39 +49,17 @@ impl Terrain for Flat {
     }
 }
 
-/// Where the pilot holds the plane before a throw.
+/// Where the plane starts: the spot on the ground at the pilot box, and the way it faces.
 #[derive(Clone, Copy, Debug)]
-pub struct Hand {
+pub struct Start {
+    /// On the ground.
     pub pos: Vec3,
     /// Heading the plane points (radians about +Y).
     pub heading: f32,
 }
 
-/// Normalized actuator commands, after any mixing / flight controller.
-/// Surfaces use "trailing edge down is positive" per surface; throttles are 0..1.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ActuatorCommands {
-    /// Roll right positive.
-    pub aileron: f32,
-    /// Ruddervator trailing-edge-down commands, -1..1, (left, right).
-    pub vtail_left: f32,
-    pub vtail_right: f32,
-    pub throttle: [f32; 2],
-}
-
-impl ActuatorCommands {
-    /// Mix conventional elevator (nose up +) and rudder (nose right +) into V-tail panels.
-    pub fn from_controls(aileron: f32, elevator: f32, rudder: f32, throttle: [f32; 2]) -> Self {
-        // Nose up: both trailing edges up. Yaw right: the right panel pushes the tail left
-        // (TE down), the left panel trails up. Same handedness as ArduPilot's V-tail mixer.
-        Self {
-            aileron: aileron.clamp(-1.0, 1.0),
-            vtail_left: (-elevator - rudder).clamp(-1.0, 1.0),
-            vtail_right: (-elevator + rudder).clamp(-1.0, 1.0),
-            throttle,
-        }
-    }
-}
+/// How high the pilot holds a plane above the ground (m).
+const HAND_HEIGHT: f32 = 1.6;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Obstacle {
@@ -107,8 +89,9 @@ pub struct FlightState {
     pub rot: Quat,
     /// Angular velocity in body frame (rad/s).
     pub omega: Vec3,
-    pub spool: [f32; 2],
-    pub thrust: [f32; 2],
+    /// Per motor: how spun up it is (0..1), its thrust (N), and the propeller's angle.
+    pub spool: Vec<f32>,
+    pub thrust: Vec<f32>,
     pub deflection: Vec<f32>,
     pub alpha: Vec<f32>,
     pub stalled: Vec<bool>,
@@ -124,7 +107,9 @@ pub struct FlightState {
     pub on_ground: bool,
     /// Specific force (accelerometer reading) in body frame, m/s^2.
     pub specific_force: Vec3,
-    pub prop_angle: [f32; 2],
+    pub prop_angle: Vec<f32>,
+    /// Per motor: how far it is tilted from pointing forward (rad); 0 for a motor that doesn't tilt.
+    pub tilt: Vec<f32>,
     /// Attitude the pilot's hand turns the plane to while it's held.
     pub hand_rot: Quat,
     /// After a reset, the plane is carried back to the hand along a smooth path rather than
@@ -214,15 +199,15 @@ pub fn section_coefficients(s: &AeroSurface, alpha: f32, flap: f32) -> (f32, f32
 }
 
 impl FlightState {
-    pub fn new(params: &AircraftParams, hand: &Hand) -> Self {
+    pub fn new(params: &AircraftParams, start: &Start) -> Self {
         let n = params.surfaces.len();
         let mut s = Self {
             pos: Vec3::ZERO,
             vel: Vec3::ZERO,
             rot: Quat::IDENTITY,
             omega: Vec3::ZERO,
-            spool: [0.0; 2],
-            thrust: [0.0; 2],
+            spool: vec![0.0; params.motors.len()],
+            thrust: vec![0.0; params.motors.len()],
             deflection: vec![0.0; n],
             alpha: vec![0.0; n],
             stalled: vec![false; n],
@@ -237,11 +222,12 @@ impl FlightState {
             current: 0.0,
             on_ground: false,
             specific_force: Vec3::Y * GRAVITY,
-            prop_angle: [0.0, 1.3],
+            tilt: params.motors.iter().map(|m| m.tilt.map_or(0.0, |t| t.rest)).collect(),
+            prop_angle: (0..params.motors.len()).map(|m| if m == 1 { 1.3 } else { 0.0 }).collect(),
             hand_rot: Quat::IDENTITY,
             carry: None,
         };
-        s.reset_to_hand(hand);
+        s.reset_to_hand(params, start);
         // Start already in the hand; later resets carry it there (see `step`).
         s.rot = s.hand_rot;
         if let Some(c) = s.carry.take() {
@@ -252,8 +238,11 @@ impl FlightState {
     }
 
     /// Pilot holds the plane at shoulder height, pointing down the runway, slightly nose up.
-    pub fn reset_to_hand(&mut self, hand: &Hand) {
-        let hand_pos = hand.pos;
+    pub fn reset_to_hand(&mut self, params: &AircraftParams, start: &Start) {
+        let (hand_pos, tilt) = match params.start {
+            StartStyle::Hand => (start.pos + Vec3::Y * HAND_HEIGHT, 8.0 * DEG),
+            StartStyle::Ground { rest_height } => (start.pos + Vec3::Y * rest_height, 0.0),
+        };
         // Like the attitude below, the position isn't snapped either: an instant jump reads as a
         // GPS glitch to ArduPilot ("GPS and AHRS differ by ...").
         self.carry = Carry::new(self.pos, hand_pos);
@@ -264,14 +253,14 @@ impl FlightState {
         // with matching body rates. An instant jump never shows on ArduPilot's gyros, which
         // leaves its DCM and EKF attitudes disagreeing ("DCM Roll/Pitch inconsistent ... Wait or
         // reboot") and fails the compass check against the wrong attitude.
-        self.hand_rot = Quat::from_rotation_y(hand.heading) * Quat::from_rotation_x(8.0 * DEG);
+        self.hand_rot = Quat::from_rotation_y(start.heading) * Quat::from_rotation_x(tilt);
         self.vel = Vec3::ZERO;
         self.omega = Vec3::ZERO;
         self.phase = Phase::Held;
         self.crash_reason.clear();
         self.launch_timer = 0.0;
         self.on_ground = false;
-        self.spool = [0.0; 2];
+        self.spool.fill(0.0);
         self.specific_force = self.rot.inverse() * Vec3::Y * GRAVITY;
     }
 
@@ -319,6 +308,15 @@ pub struct Environment {
     pub wind: Vec3,
 }
 
+/// Which way motor `m` pushes, in the body frame, at its current tilt.
+pub fn motor_dir(p: &AircraftParams, s: &FlightState, m: usize) -> Vec3 {
+    let spec = &p.motors[m];
+    match spec.tilt {
+        Some(t) => Quat::from_axis_angle(t.axis, s.tilt[m]) * spec.dir,
+        None => spec.dir,
+    }
+}
+
 /// Advance the simulation by `dt` seconds.
 pub fn step(
     p: &AircraftParams,
@@ -335,27 +333,28 @@ pub fn step(
     for (i, surf) in p.surfaces.iter().enumerate() {
         let target = match surf.control {
             SurfaceControl::None => 0.0,
-            // Roll right: right aileron trailing edge up, left down.
-            SurfaceControl::Aileron(side) => -(side as f32) * cmd.aileron * p.max_aileron,
-            SurfaceControl::Ruddervator(side) => {
-                if side < 0 {
-                    cmd.vtail_left * p.max_ruddervator
-                } else {
-                    cmd.vtail_right * p.max_ruddervator
-                }
-            }
+            SurfaceControl::Output { channel, gain } => cmd.out[channel] * gain,
         };
         let d = target - s.deflection[i];
         let max = p.servo_rate * dt;
         s.deflection[i] += d.clamp(-max, max);
     }
 
+    // Tilt servos (rate limited): output -1 is fully back, +1 fully forward.
+    for (m, spec) in p.motors.iter().enumerate() {
+        if let Some(t) = spec.tilt {
+            let target = t.range * (1.0 - 0.5 * (cmd.out[t.channel].clamp(-1.0, 1.0) + 1.0));
+            let max = t.rate * dt;
+            s.tilt[m] += (target - s.tilt[m]).clamp(-max, max);
+        }
+    }
+
     // Battery.
     let soc = 1.0 - s.used_mah / p.battery_capacity_mah;
     let ocv = cell_ocv(soc) * p.battery_cells;
     let mut current = 0.25; // electronics, VTX, camera
-    for m in 0..2 {
-        let target = if soc > 0.0 { cmd.throttle[m].clamp(0.0, 1.0) } else { 0.0 };
+    for m in 0..p.motors.len() {
+        let target = if soc > 0.0 { cmd.out[p.motors[m].channel].clamp(0.0, 1.0) } else { 0.0 };
         s.spool[m] += (target - s.spool[m]) * (dt / p.motors[m].spool_tau).min(1.0);
         current += p.motors[m].max_current * s.spool[m].powf(2.6);
     }
@@ -367,9 +366,7 @@ pub fn step(
 
     if s.phase == Phase::Crashed {
         s.specific_force = Vec3::ZERO;
-        for m in 0..2 {
-            s.spool[m] = 0.0;
-        }
+        s.spool.fill(0.0);
         return;
     }
 
@@ -383,9 +380,13 @@ pub fn step(
     let mut torque = Vec3::ZERO;
 
     // Motors and slipstream.
-    let mut slipstream = [0.0f32; 2];
+    let mut slipstream = [0.0f32; MAX_MOTORS];
+    let mut dirs = [Vec3::ZERO; MAX_MOTORS];
     for (m, spec) in p.motors.iter().enumerate() {
-        let va = air_body.dot(spec.dir).max(0.0);
+        let dir = motor_dir(p, s, m);
+        dirs[m] = dir;
+        let va_raw = air_body.dot(dir);
+        let va = va_raw.max(0.0);
         let f = s.spool[m];
         let mut t = if f > 0.001 {
             spec.static_thrust * volt_scale * f * f * (1.0 - va / (spec.pitch_speed * f.max(0.05)))
@@ -394,9 +395,32 @@ pub fn step(
         };
         // Windmilling drag when the prop is overrun.
         t = t.max(-0.08 * spec.static_thrust * (va / spec.pitch_speed).powi(2));
+        if spec.lift && t > 0.0 {
+            let radius = (spec.disk_area / PI).sqrt();
+            let axis = s.rot * dir;
+            // Ground effect: a rotor close to the ground that blows towards it makes more thrust
+            // (Cheeseman and Bennett: 1 / (1 - (R / 4z)^2)).
+            if axis.y > 0.5 {
+                let rotor = s.pos + s.rot * spec.pos;
+                let z = (rotor.y - ground.height(rotor.x, rotor.z)).max(0.5 * radius);
+                t /= 1.0 - (radius / (4.0 * z)).powi(2);
+            }
+            // Vortex ring: descending through its own wash, at about the speed the rotor blows
+            // the air down, a rotor loses a good part of its thrust.
+            let descent = (-va_raw).max(0.0);
+            let hover_wash = (t / (2.0 * RHO * spec.disk_area)).sqrt();
+            t *= 1.0 - 0.35 * (-((descent / hover_wash - 1.0) / 0.45).powi(2)).exp();
+            // Sideways flow: the rotor drags back along the flow, and the airframe feels it at the rotor.
+            let sideways = air_body - dir * va_raw;
+            let h_force = -sideways * (ROTOR_H_FORCE * t / spec.tip_speed);
+            force += h_force;
+            torque += spec.pos.cross(h_force);
+        }
         s.thrust[m] = t;
-        force += spec.dir * t;
-        torque += spec.pos.cross(spec.dir * t);
+        force += dir * t;
+        torque += spec.pos.cross(dir * t);
+        // A rotor turning one way pushes the airframe round the other.
+        torque += dir * (spec.reaction * t);
         if t > 0.0 {
             let vi = 0.5 * (-va + (va * va + 2.0 * t / (RHO * spec.disk_area)).sqrt());
             slipstream[m] = 2.0 * vi;
@@ -415,7 +439,9 @@ pub fn step(
         // Velocity of the air relative to the surface.
         let mut air = -v_point;
         if let Some((m, frac)) = surf.prop_wash {
-            air += -p.motors[m].dir * slipstream[m] * frac;
+            // A tilted motor blows less of its wash over the wing.
+            let along = dirs[m].dot(p.motors[m].dir).max(0.0);
+            air += -dirs[m] * slipstream[m] * frac * along;
         }
         if surf.is_tail {
             air += Vec3::NEG_Y * air.length() * downwash;
@@ -481,7 +507,7 @@ pub fn step(
                     crash(s, &format!("Hard impact at {:.1} m/s", speed));
                     return;
                 }
-                if c.fragile && s.spool[if c.pos.x < 0.0 { 0 } else { 1 }] > 0.25 && speed > 4.0 {
+                if c.prop.is_some_and(|m| s.spool[m] > 0.25) && speed > 4.0 {
                     // Prop strike: kills the motors, like the real thing would.
                     crash(s, "Prop strike");
                     return;
@@ -551,6 +577,10 @@ pub fn step(
         } else {
             s.omega = Vec3::ZERO;
             s.rot = s.hand_rot;
+            // A plane that starts on the ground is let go once it is set down level.
+            if s.carry.is_none() && matches!(p.start, StartStyle::Ground { .. }) {
+                s.phase = Phase::Flying;
+            }
         }
         s.specific_force = s.rot.inverse() * (accel + Vec3::Y * GRAVITY);
         return;
@@ -572,7 +602,7 @@ pub fn step(
     s.rot = (s.rot * Quat::from_scaled_axis(s.omega * dt)).normalize();
 
     // Settle when resting on the ground to avoid jitter.
-    if s.on_ground && s.vel.length() < 0.05 && s.omega.length() < 0.05 && cmd.throttle[0] + cmd.throttle[1] < 0.05 {
+    if s.on_ground && s.vel.length() < 0.05 && s.omega.length() < 0.05 && p.motors.iter().map(|m| cmd.out[m.channel]).sum::<f32>() < 0.05 {
         s.vel = Vec3::ZERO;
         s.omega = Vec3::ZERO;
     }
@@ -583,7 +613,7 @@ fn crash(s: &mut FlightState, reason: &str) {
     s.crash_reason = reason.to_string();
     s.vel = Vec3::ZERO;
     s.omega = Vec3::ZERO;
-    s.spool = [0.0; 2];
+    s.spool.fill(0.0);
 }
 
 /// Roll (right wing down +), pitch (nose up +) and heading (clockwise from north, i.e. -Z).
@@ -608,8 +638,8 @@ mod tests {
     use simulation_aircraft::t1s_ranger;
 
     /// A pilot standing at the origin, facing north.
-    fn pilot() -> Hand {
-        Hand { pos: Vec3::new(-0.5, 1.6, -0.6), heading: 0.0 }
+    fn pilot() -> Start {
+        Start { pos: Vec3::new(-0.5, 0.0, -0.6), heading: 0.0 }
     }
 
     /// After a crash, reset turns the plane into the hand with body rates that integrate to the
@@ -621,8 +651,8 @@ mod tests {
         // Upside down and yawed, as after a crash.
         s.rot = Quat::from_rotation_z(3.0) * Quat::from_rotation_y(1.0);
         s.phase = Phase::Crashed;
-        s.reset_to_hand(&pilot());
-        let cmd = ActuatorCommands { aileron: 0.0, vtail_left: 0.0, vtail_right: 0.0, throttle: [0.0; 2] };
+        s.reset_to_hand(&p, &pilot());
+        let cmd = ActuatorCommands::default();
         let env = Environment { wind: Vec3::ZERO };
         let dt = 1.0 / 1200.0;
         let mut gyro_att = s.rot;
@@ -644,11 +674,11 @@ mod tests {
         let held = s.pos;
         s.pos = held + Vec3::new(600.0, 80.0, -900.0);
         s.phase = Phase::Crashed;
-        s.reset_to_hand(&pilot());
+        s.reset_to_hand(&p, &pilot());
         assert!(s.carry.is_some());
         s.launch();
         assert_eq!(s.phase, Phase::Held, "no launch mid-carry");
-        let cmd = ActuatorCommands { aileron: 0.0, vtail_left: 0.0, vtail_right: 0.0, throttle: [0.0; 2] };
+        let cmd = ActuatorCommands::default();
         let env = Environment { wind: Vec3::ZERO };
         let dt = 1.0 / 1200.0;
         let (mut ins_pos, mut ins_vel) = (s.pos, Vec3::ZERO);
@@ -667,3 +697,294 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod rotor_tests {
+    use super::*;
+    use simulation_aircraft::t1s_vtol;
+
+    /// The thrust of the first lift rotor after one step, with the lift motors at a steady
+    /// throttle, the plane at `height` (m, the CG) moving at `vel`.
+    fn lift_thrust(height: f32, vel: Vec3) -> f32 {
+        let p = t1s_vtol::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        s.carry = None;
+        s.phase = Phase::Flying;
+        s.pos = Vec3::new(0.0, height, 0.0);
+        s.rot = Quat::IDENTITY;
+        s.vel = vel;
+        let mut c = ActuatorCommands::default();
+        for (i, m) in p.motors.iter().enumerate() {
+            if m.lift {
+                c.out[m.channel] = 0.6;
+                s.spool[i] = 0.6;
+            }
+        }
+        step(&p, &mut s, &c, &Environment::default(), &Flat, &[], 1.0 / 600.0);
+        s.thrust[2]
+    }
+
+    #[test]
+    fn a_rotor_near_the_ground_makes_more_thrust() {
+        // The rear rotor, one radius off the ground.
+        let low = lift_thrust(0.015, Vec3::ZERO);
+        let high = lift_thrust(30.0, Vec3::ZERO);
+        assert!(low > high * 1.04, "{low:.2} N near the ground against {high:.2} N");
+        assert!(low < high * 1.4, "ground effect is bounded: {low:.2} N against {high:.2} N");
+    }
+
+    #[test]
+    fn descending_through_its_own_wash_costs_thrust() {
+        let hover = lift_thrust(30.0, Vec3::ZERO);
+        // About the speed the rotor blows the air down at: the vortex ring state.
+        let in_the_ring = lift_thrust(30.0, Vec3::new(0.0, -7.0, 0.0));
+        // Much faster, the rotor is clear of its wash again.
+        let fast = lift_thrust(30.0, Vec3::new(0.0, -25.0, 0.0));
+        assert!(in_the_ring < hover * 0.85, "{in_the_ring:.2} N in the ring against {hover:.2} N in the hover");
+        assert!(fast > hover * 0.9, "{fast:.2} N falling fast against {hover:.2} N");
+    }
+
+    #[test]
+    fn rotors_in_sideways_flow_drag_the_airframe_back() {
+        let p = t1s_vtol::params();
+        // Flying forward at 15 m/s with the lift rotors on, and off.
+        let accel = |lift_throttle: f32| {
+            let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+            s.carry = None;
+            s.phase = Phase::Flying;
+            s.pos = Vec3::new(0.0, 50.0, 0.0);
+            s.vel = Vec3::new(0.0, 0.0, -15.0);
+            let mut c = ActuatorCommands::default();
+            for (i, m) in p.motors.iter().enumerate() {
+                if m.lift {
+                    c.out[m.channel] = lift_throttle;
+                    s.spool[i] = lift_throttle;
+                }
+            }
+            step(&p, &mut s, &c, &Environment::default(), &Flat, &[], 1.0 / 600.0);
+            s.vel.z
+        };
+        // Moving along -Z, drag shows as a velocity change towards +Z.
+        assert!(accel(0.6) > accel(0.0), "{:.5} with rotors on against {:.5} off", accel(0.6), accel(0.0));
+    }
+}
+
+#[cfg(test)]
+mod tilt_tests {
+    use super::*;
+    use simulation_aircraft::t1s_vtol::{self, TILT_LEFT, TILT_RIGHT, UP};
+
+    /// The VTOL in the air at 50 m, flying, motors off.
+    fn airborne() -> (AircraftParams, FlightState) {
+        let p = t1s_vtol::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        s.carry = None;
+        s.phase = Phase::Flying;
+        s.pos = Vec3::new(0.0, 50.0, 0.0);
+        s.rot = Quat::IDENTITY;
+        (p, s)
+    }
+
+    fn run(p: &AircraftParams, s: &mut FlightState, c: &ActuatorCommands, seconds: f32) {
+        let dt = 1.0 / 600.0;
+        for _ in 0..(seconds / dt) as usize {
+            step(p, s, c, &Environment::default(), &Flat, &[], dt);
+        }
+    }
+
+    fn tilted(out: f32) -> ActuatorCommands {
+        let mut c = ActuatorCommands::default();
+        c.out[TILT_LEFT] = out;
+        c.out[TILT_RIGHT] = out;
+        c
+    }
+
+    #[test]
+    fn the_tilt_servos_point_the_wing_motors_up_or_forward() {
+        let (p, mut s) = airborne();
+        // Full output is forward: the thrust goes along the nose.
+        run(&p, &mut s, &tilted(1.0), 1.5);
+        assert!((motor_dir(&p, &s, 0) - Vec3::NEG_Z).length() < 0.01, "forward: {:?}", motor_dir(&p, &s, 0));
+        assert!((motor_dir(&p, &s, 1) - Vec3::NEG_Z).length() < 0.01);
+        // At the output that holds the motors vertical, the thrust goes straight up.
+        run(&p, &mut s, &tilted(UP), 1.5);
+        assert!((motor_dir(&p, &s, 0) - Vec3::Y).length() < 0.01, "up: {:?}", motor_dir(&p, &s, 0));
+        // The rear rotor never moves.
+        assert_eq!(motor_dir(&p, &s, 2), Vec3::Y);
+    }
+
+    #[test]
+    fn the_tilt_servos_have_a_speed_limit() {
+        let (p, mut s) = airborne();
+        run(&p, &mut s, &tilted(1.0), 1.5);
+        // Told to go up, the motors haven't got there after 0.1 s, and have after 1 s.
+        run(&p, &mut s, &tilted(UP), 0.1);
+        let early = motor_dir(&p, &s, 0).y;
+        assert!(early > 0.05 && early < 0.9, "after 0.1 s the motors point {early:.2} up");
+        run(&p, &mut s, &tilted(UP), 0.9);
+        assert!(motor_dir(&p, &s, 0).y > 0.999);
+    }
+
+    #[test]
+    fn tilted_up_the_motors_lift_and_tilted_forward_they_push() {
+        // The motors' thrust together, in the body frame.
+        let push = |out: f32| {
+            let (p, mut s) = airborne();
+            let mut c = tilted(out);
+            for m in &p.motors {
+                c.out[m.channel] = 0.6;
+            }
+            run(&p, &mut s, &c, 1.5);
+            (0..p.motors.len()).map(|m| motor_dir(&p, &s, m) * s.thrust[m]).sum::<Vec3>()
+        };
+        let up = push(UP);
+        let forward = push(1.0);
+        assert!(up.y > 5.0 && up.z.abs() < 0.5, "up: {up:?}");
+        assert!(forward.z < -3.0 && forward.y < 3.0, "forward: {forward:?}");
+    }
+
+    #[test]
+    fn it_has_two_tilt_rotors_and_a_fixed_one_in_the_tail() {
+        let p = t1s_vtol::params();
+        assert_eq!(p.motors.len(), 3);
+        assert_eq!(p.motors.iter().filter(|m| m.tilt.is_some()).count(), 2);
+        assert!(p.flight_controller);
+        // Enough thrust to hover and climb: about twice the weight.
+        let thrust: f32 = p.motors.iter().map(|m| m.static_thrust).sum();
+        assert!(thrust / (p.mass * GRAVITY) > 1.6, "thrust to weight {:.2}", thrust / (p.mass * GRAVITY));
+    }
+}
+
+#[cfg(test)]
+mod hover_tests {
+    use super::*;
+    use simulation_aircraft::t1s_vtol::{self, MOTOR_LEFT, MOTOR_REAR, MOTOR_RIGHT, TILT_LEFT, TILT_RIGHT, UP};
+
+    /// A plain hover controller for the tilt-rotor tri: altitude from the collective, roll from
+    /// the two wing motors, pitch from the wing motors against the rear one, and yaw by swinging
+    /// the wing motors apart.
+    struct Hover {
+        target: f32,
+        height_i: f32,
+        yaw_i: f32,
+        roll_i: f32,
+        pitch_i: f32,
+    }
+
+    impl Hover {
+        fn command(&mut self, s: &FlightState, dt: f32) -> ActuatorCommands {
+            let (roll, pitch, _) = euler(s.rot);
+            let (p, q, r) = body_rates(s.omega);
+            let err = self.target - s.pos.y;
+            self.height_i = (self.height_i + 0.02 * err * dt).clamp(-0.15, 0.15);
+            let collective = (0.68 + self.height_i + 0.06 * err - 0.12 * s.vel.y).clamp(0.3, 1.0);
+            // Positive: roll right, nose up, yaw right.
+            self.roll_i = (self.roll_i - 0.6 * roll * dt).clamp(-0.2, 0.2);
+            self.pitch_i = (self.pitch_i - 0.6 * pitch * dt).clamp(-0.2, 0.2);
+            let roll_u = -0.9 * roll - 0.16 * p + self.roll_i;
+            let pitch_u = -0.9 * pitch - 0.16 * q + self.pitch_i;
+            self.yaw_i = (self.yaw_i - 0.05 * r * dt).clamp(-0.5, 0.5);
+            let yaw_u = -0.25 * r + self.yaw_i;
+            let mut c = ActuatorCommands::default();
+            // The wing motors are ahead of the CG and the rear one behind it, so a nose-up push
+            // lifts the wing motors and drops the rear one, by about half as much again.
+            // Rolling right needs more lift on the left.
+            c.out[MOTOR_LEFT] = (collective + roll_u + 0.5 * pitch_u).clamp(0.0, 1.0);
+            c.out[MOTOR_RIGHT] = (collective - roll_u + 0.5 * pitch_u).clamp(0.0, 1.0);
+            c.out[MOTOR_REAR] = (collective * 1.11 - 0.8 * pitch_u).clamp(0.0, 1.0);
+            // Yaw right: the left motor tips forward and the right one back.
+            c.out[TILT_LEFT] = (UP + yaw_u).clamp(-1.0, 1.0);
+            c.out[TILT_RIGHT] = (UP - yaw_u).clamp(-1.0, 1.0);
+            c
+        }
+    }
+
+    fn fly(wind: Vec3, seconds: f32, mut inspect: impl FnMut(&FlightState)) -> (AircraftParams, FlightState) {
+        let p = t1s_vtol::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        s.carry = None;
+        s.phase = Phase::Flying;
+        s.pos = Vec3::new(0.0, 0.07, 0.0);
+        s.rot = Quat::IDENTITY;
+        let mut hover = Hover { target: 10.0, height_i: 0.0, yaw_i: 0.0, roll_i: 0.0, pitch_i: 0.0 };
+        let env = Environment { wind };
+        let dt = 1.0 / 600.0;
+        for _ in 0..(seconds / dt) as usize {
+            let cmd = hover.command(&s, dt);
+            step(&p, &mut s, &cmd, &env, &Flat, &[], dt);
+            inspect(&s);
+        }
+        (p, s)
+    }
+
+    #[test]
+    fn it_lifts_off_and_hovers_on_three_rotors() {
+        let mut worst_tilt = 0.0f32;
+        let (p, s) = fly(Vec3::ZERO, 25.0, |s| {
+            let (roll, pitch, _) = euler(s.rot);
+            worst_tilt = worst_tilt.max(roll.abs()).max(pitch.abs());
+        });
+        let (_, _, yaw_rate) = body_rates(s.omega);
+        assert_eq!(s.phase, Phase::Flying);
+        assert!((s.pos.y - 10.0).abs() < 1.0, "altitude {:.2} m", s.pos.y);
+        assert!(s.vel.length() < 1.5, "speed {:.2} m/s", s.vel.length());
+        assert!(worst_tilt < 20.0 * DEG, "worst tilt {:.1} deg", worst_tilt / DEG);
+        assert!(yaw_rate.abs() < 0.3, "yaw rate {yaw_rate:.2} rad/s");
+        let minutes = p.battery_capacity_mah / 1000.0 / s.current * 60.0;
+        println!("hover: {:.1} A, {:.1} V, about {:.1} min", s.current, s.voltage, minutes);
+        assert!(s.current > 8.0 && s.current < 60.0, "hover current {:.1} A", s.current);
+    }
+
+    #[test]
+    fn it_holds_attitude_in_a_steady_wind() {
+        let mut worst_tilt = 0.0f32;
+        let (_, s) = fly(Vec3::new(5.0, 0.0, 0.0), 25.0, |s| {
+            let (roll, pitch, _) = euler(s.rot);
+            worst_tilt = worst_tilt.max(roll.abs()).max(pitch.abs());
+        });
+        assert!((s.pos.y - 10.0).abs() < 1.5, "altitude {:.2} m", s.pos.y);
+        assert!(worst_tilt < 30.0 * DEG, "worst tilt {:.1} deg", worst_tilt / DEG);
+    }
+}
+
+#[cfg(test)]
+mod rest_tests {
+    use super::*;
+    use simulation_aircraft::{t1s_ranger, t1s_vtol};
+
+    /// What an accelerometer on the plane feels while it sits on the ground, after it has settled:
+    /// the mean and the biggest swing from it (m/s²), over 5 s.
+    fn at_rest(p: &AircraftParams) -> (Vec3, f32) {
+        let mut s = FlightState::new(p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        s.carry = None;
+        s.phase = Phase::Flying;
+        let rest = match p.start {
+            simulation_aircraft::StartStyle::Ground { rest_height } => rest_height,
+            _ => 0.05,
+        };
+        s.pos = Vec3::new(0.0, rest, 0.0);
+        let c = ActuatorCommands::default();
+        let dt = 1.0 / 1200.0;
+        for _ in 0..(3.0 / dt) as usize {
+            step(p, &mut s, &c, &Environment::default(), &Flat, &[], dt);
+        }
+        let mut samples = vec![];
+        for _ in 0..(5.0 / dt) as usize {
+            step(p, &mut s, &c, &Environment::default(), &Flat, &[], dt);
+            samples.push(s.specific_force);
+        }
+        let mean = samples.iter().copied().sum::<Vec3>() / samples.len() as f32;
+        let swing = samples.iter().map(|f| (*f - mean).length()).fold(0.0, f32::max);
+        (mean, swing)
+    }
+
+    #[test]
+    fn a_plane_on_the_ground_feels_a_steady_one_g() {
+        for (name, p) in [("T1-S VTOL", t1s_vtol::params()), ("T1-S", t1s_ranger::params())] {
+            let (mean, swing) = at_rest(&p);
+            println!("{name}: feels {mean:?}, swings {swing:.3} m/s²");
+            assert!((mean.length() - GRAVITY).abs() < 0.3, "{name}: mean {:.2} m/s²", mean.length());
+            assert!(swing < 0.05, "{name}: the accelerometer swings {swing:.3} m/s² at rest");
+        }
+    }
+}

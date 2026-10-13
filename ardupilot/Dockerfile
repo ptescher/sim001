@@ -20,7 +20,7 @@ RUN git clone --depth 1 --branch ${AP_REF} --recurse-submodules --shallow-submod
 WORKDIR /ardupilot
 RUN ./waf configure --board sitl && ./waf plane
 
-COPY t1s.parm /t1s.parm
+COPY t1s.parm t1s-vtol.parm /
 COPY start.sh /start.sh
 COPY check_link.py /check_link.py
 RUN chmod +x /start.sh

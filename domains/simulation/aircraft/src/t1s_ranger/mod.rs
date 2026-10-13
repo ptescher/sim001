@@ -2,7 +2,31 @@
 
 pub mod geom;
 
-use crate::{AeroSurface, AircraftParams, ContactPoint, MotorSpec, SurfaceControl};
+/// Servo outputs, as ArduPilot has them wired for this plane (SERVO1 to SERVO5).
+pub const AILERON: usize = 0;
+pub const VTAIL_LEFT: usize = 1;
+pub const THROTTLE_LEFT: usize = 2;
+pub const VTAIL_RIGHT: usize = 3;
+pub const THROTTLE_RIGHT: usize = 4;
+
+const MAX_AILERON: f32 = 16.0 * DEG;
+const MAX_RUDDERVATOR: f32 = 25.0 * DEG;
+
+/// Mix a conventional aileron, elevator (nose up +), rudder (nose right +) and a throttle per
+/// motor into this plane's outputs: the V-tail's two ruddervators mix elevator and rudder.
+pub fn mix(aileron: f32, elevator: f32, rudder: f32, throttle: [f32; 2]) -> ActuatorCommands {
+    // Nose up: both trailing edges up. Yaw right: the right panel pushes the tail left
+    // (TE down), the left panel trails up. Same handedness as ArduPilot's V-tail mixer.
+    let mut c = ActuatorCommands::default();
+    c.out[AILERON] = aileron.clamp(-1.0, 1.0);
+    c.out[VTAIL_LEFT] = (-elevator - rudder).clamp(-1.0, 1.0);
+    c.out[VTAIL_RIGHT] = (-elevator + rudder).clamp(-1.0, 1.0);
+    c.out[THROTTLE_LEFT] = throttle[0];
+    c.out[THROTTLE_RIGHT] = throttle[1];
+    c
+}
+
+use crate::{ActuatorCommands, AeroSurface, AircraftParams, ContactPoint, MotorSpec, Output, OutputKind, SurfaceControl};
 use geom::*;
 use glam::{Quat, Vec3};
 use std::f32::consts::PI;
@@ -20,7 +44,7 @@ pub fn params() -> AircraftParams {
         // Inner (prop-washed) and outer (aileron) wing sections.
         for (s0, s1, control, wash) in [
             (0.0, AILERON_START, SurfaceControl::None, Some((if side < 0.0 { 0 } else { 1 }, 0.45))),
-            (AILERON_START, WING_HALF_SPAN, SurfaceControl::Aileron(sidei), None),
+            (AILERON_START, WING_HALF_SPAN, SurfaceControl::Output { channel: AILERON, gain: -(sidei as f32) * MAX_AILERON }, None),
         ] {
             let sm = 0.5 * (s0 + s1);
             let c = wing_chord(sm);
@@ -63,7 +87,7 @@ pub fn params() -> AircraftParams {
             c,
             tail_ar,
             RUDDERVATOR_CHORD_FRAC,
-            SurfaceControl::Ruddervator(side as i8),
+            SurfaceControl::Output { channel: if side < 0.0 { VTAIL_LEFT } else { VTAIL_RIGHT }, gain: MAX_RUDDERVATOR },
             0.0,
             0.0,
             0.025,
@@ -75,7 +99,7 @@ pub fn params() -> AircraftParams {
     }
 
     let prop_disk = PI * PROP_RADIUS * PROP_RADIUS;
-    let motor = |x: f32| MotorSpec {
+    let motor = |x: f32, channel: usize| MotorSpec {
         pos: Vec3::new(x, MOTOR_Y, MOTOR_Z),
         dir: Vec3::NEG_Z,
         // FX1406-3150KV on 4S with 3830 props: roughly 480-520 g static each.
@@ -85,35 +109,53 @@ pub fn params() -> AircraftParams {
         max_current: 17.0,
         spool_tau: 0.07,
         disk_area: prop_disk,
+        channel,
+        forward: true,
+        tilt: None,
+        lift: false,
+        // The two props turn opposite ways, so their reaction torques cancel: not modelled.
+        reaction: 0.0,
+        // ~33,600 rpm on a 3.8 inch prop.
+        tip_speed: 170.0,
     };
 
     let contacts = vec![
-        ContactPoint { pos: Vec3::new(0.0, -0.035, NOSE_Z + 0.01), fragile: false },
-        ContactPoint { pos: Vec3::new(0.0, -0.048, -0.12), fragile: false },
-        ContactPoint { pos: Vec3::new(0.0, -0.045, 0.06), fragile: false },
-        ContactPoint { pos: Vec3::new(0.0, -0.005, TAIL_END_Z), fragile: false },
-        ContactPoint { pos: Vec3::new(-WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), fragile: false },
-        ContactPoint { pos: Vec3::new(WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), fragile: false },
-        ContactPoint { pos: Vec3::new(-0.15, 0.135, 0.40), fragile: false },
-        ContactPoint { pos: Vec3::new(0.15, 0.135, 0.40), fragile: false },
-        ContactPoint { pos: Vec3::new(-MOTOR_X, MOTOR_Y - PROP_RADIUS, MOTOR_Z - 0.01), fragile: true },
-        ContactPoint { pos: Vec3::new(MOTOR_X, MOTOR_Y - PROP_RADIUS, MOTOR_Z - 0.01), fragile: true },
-        ContactPoint { pos: Vec3::new(0.0, 0.05, -0.10), fragile: false },
+        ContactPoint { pos: Vec3::new(0.0, -0.035, NOSE_Z + 0.01), prop: None },
+        ContactPoint { pos: Vec3::new(0.0, -0.048, -0.12), prop: None },
+        ContactPoint { pos: Vec3::new(0.0, -0.045, 0.06), prop: None },
+        ContactPoint { pos: Vec3::new(0.0, -0.005, TAIL_END_Z), prop: None },
+        ContactPoint { pos: Vec3::new(-WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), prop: None },
+        ContactPoint { pos: Vec3::new(WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), prop: None },
+        ContactPoint { pos: Vec3::new(-0.15, 0.135, 0.40), prop: None },
+        ContactPoint { pos: Vec3::new(0.15, 0.135, 0.40), prop: None },
+        ContactPoint { pos: Vec3::new(-MOTOR_X, MOTOR_Y - PROP_RADIUS, MOTOR_Z - 0.01), prop: Some(0) },
+        ContactPoint { pos: Vec3::new(MOTOR_X, MOTOR_Y - PROP_RADIUS, MOTOR_Z - 0.01), prop: Some(1) },
+        ContactPoint { pos: Vec3::new(0.0, 0.05, -0.10), prop: None },
     ];
 
     AircraftParams {
         mass: 0.80,
         inertia: Vec3::new(0.016, 0.030, 0.014),
         surfaces,
-        motors: [motor(-MOTOR_X), motor(MOTOR_X)],
+        motors: vec![motor(-MOTOR_X, THROTTLE_LEFT), motor(MOTOR_X, THROTTLE_RIGHT)],
+        outputs: vec![
+            Output { kind: OutputKind::Servo, invert: false },
+            // ArduPilot's V-tail mixer drives non-reversed servos "trailing edge up" for positive output.
+            Output { kind: OutputKind::Servo, invert: true },
+            Output { kind: OutputKind::Motor, invert: false },
+            Output { kind: OutputKind::Servo, invert: true },
+            Output { kind: OutputKind::Motor, invert: false },
+        ],
         fuselage_cda: Vec3::new(0.018, 0.026, 0.0042),
         contacts,
-        max_aileron: 16.0 * DEG,
-        max_ruddervator: 25.0 * DEG,
         servo_rate: 600.0 * DEG,
         battery_cells: 4.0,
         battery_capacity_mah: 1800.0,
         battery_resistance: 0.055,
+        start: crate::StartStyle::Hand,
+        // The plain PNP plane has a receiver and two ESCs.
+        flight_controller: false,
+        rc_modes: vec![],
     }
 }
 
