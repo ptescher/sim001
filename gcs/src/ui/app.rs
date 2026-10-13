@@ -30,6 +30,9 @@ pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
     BUTTONS.with(|b| b.borrow().get(id).copied())
 }
 
+/// A VTOL's own modes (ArduPlane QuadPlane), shown when the plane has lift rotors.
+const Q_MODE_BUTTONS: [&str; 5] = ["QSTABILIZE", "QHOVER", "QLOITER", "QLAND", "QRTL"];
+
 const MODE_BUTTONS: [&str; 10] = ["MANUAL", "FBWA", "FBWB", "CRUISE", "AUTO", "RTL", "LOITER", "CIRCLE", "GUIDED", "TAKEOFF"];
 
 pub struct Gcs {
@@ -47,7 +50,9 @@ pub struct Gcs {
     /// AUTO clicked with no mission on the vehicle: a second click goes ahead.
     auto_confirm: Option<Instant>,
     /// The aircraft camera, when the sensor feed is in use (`--station` / `--sensor`).
-    sensor: Option<Arc<Sensor>>,
+    pub(crate) sensor: Option<Arc<Sensor>>,
+    /// The plane is a VTOL: show its Q modes.
+    vtol: bool,
 }
 
 /// Below this window width the console drops to two columns; with a sensor window open the
@@ -61,6 +66,7 @@ impl Gcs {
         origin: Origin,
         terrain: Option<Arc<TerrainMap>>,
         sensor: Option<Arc<Sensor>>,
+        vtol: bool,
         cx: &mut Context<Self>,
     ) -> Self {
         let map_image = terrain.as_deref().and_then(map::load_image);
@@ -90,6 +96,7 @@ impl Gcs {
             reboot_confirm: None,
             auto_confirm: None,
             sensor,
+            vtol,
         }
     }
 
@@ -225,6 +232,7 @@ impl Gcs {
             self.arm_confirm = None;
         }
         let alive = v.link.alive();
+        let armed = v.armed;
         // ArduPilot reports whether its pre-arm checks pass; until then (e.g. the first ~30 s
         // while the EKF initialises) say so, with the latest reason. Arming is still allowed.
         const PREARM_CHECK: u32 = 0x1000_0000;
@@ -257,6 +265,16 @@ impl Gcs {
             let (text, style) = if not_ready_reason.is_some() { ("ARM: NOT READY", Style::Normal) } else { ("ARM", Style::Caution) };
             button("arm", text, style).on_click(cx.listener(|this, _, _, _| this.arm_confirm = Some(Instant::now())))
         };
+        // A VTOL takes off straight up, to the plan altitude.
+        let takeoff = self.vtol.then(|| {
+            button("vtol-tkof", "VTOL TKOF", Style::Normal).on_click(cx.listener(move |this, _, _, _| {
+                if armed {
+                    this.send(Cmd::Takeoff { alt: this.map.plan_alt });
+                } else {
+                    this.log(4, "Arm the vehicle first: VTOL TKOF lifts an armed VTOL straight up");
+                }
+            }))
+        });
         let rebooting = self.reboot_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(3));
         let reboot = button("reboot", if rebooting { "CONFIRM REBOOT" } else { "REBOOT FC" }, if rebooting { Style::Danger } else { Style::Normal })
             .on_click(cx.listener(move |this, _, _, _| {
@@ -270,16 +288,16 @@ impl Gcs {
         let hint = if confirming || rebooting {
             div().text_color(c(GREY)).child("click again within 3 s")
         } else if let Some(reason) = not_ready_reason {
-            div().text_color(c(AMBER)).min_w(px(0.0)).flex_1().child(reason)
+            div().text_color(c(AMBER)).child(reason)
         } else {
-            div()
+            div().child(" ")
         };
         // When the sim's sticks are flying, ArduPilot's mode buttons don't steer the plane.
         let direct = self.sensor.as_ref().is_some_and(|s| s.direct());
         // AUTO with nothing uploaded just RTLs (low, right after a launch): ask first.
         let no_mission = v.mission.len() <= 1;
         let auto_pending = self.auto_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(4));
-        let modes = MODE_BUTTONS.iter().map(|&m| {
+        let mode_button = |m: &'static str, cx: &mut Context<Self>| {
             let active = alive && v.mode() == m;
             let (label, style) = if m == "AUTO" && auto_pending && no_mission {
                 ("AUTO: NO MISSION?", Style::Caution)
@@ -297,7 +315,9 @@ impl Gcs {
                     this.send(Cmd::SetMode(n));
                 }
             }))
-        });
+        };
+        let modes: Vec<_> = MODE_BUTTONS.iter().map(|&m| mode_button(m, cx)).collect();
+        let q_modes: Vec<_> = if self.vtol { Q_MODE_BUTTONS.iter().map(|&m| mode_button(m, cx)).collect() } else { vec![] };
         div()
             .flex()
             .flex_col()
@@ -312,9 +332,13 @@ impl Gcs {
                     .child(label("VEHICLE"))
                     .child(arm)
                     .child(reboot)
-                    .child(hint),
+                    .children(takeoff),
             )
+            // The reason the vehicle isn't ready (or a confirmation) has a line of its own, so
+            // the buttons keep their places.
+            .child(hint)
             .child(div().flex().flex_wrap().gap_1().items_center().child(label("MODE")).children(modes))
+            .children((!q_modes.is_empty()).then(|| div().flex().flex_wrap().gap_1().items_center().child(label("VTOL")).children(q_modes)))
             .children(direct.then(|| {
                 div()
                     .text_color(c(CYAN))
@@ -491,7 +515,7 @@ impl Gcs {
             .child(row("XTRACK / ALT ERR", if v.nav_valid { format!("{:+.1} / {:+.1} m", v.xtrack, v.alt_error) } else { "--".into() }, MAGENTA))
             .child(row("MISSION", if v.mission_status.is_empty() { "--".into() } else { v.mission_status.clone() }, CYAN))
             .child(row("EKF VEL/POS/HGT/MAG", format!("{:.2} {:.2} {:.2} {:.2}", v.ekf_vel_var, v.ekf_pos_var, v.ekf_hgt_var, v.ekf_mag_var), GREEN))
-            .child(row("RC 1-4  7/8", format!("{} {} {} {}  {}/{}", v.rc[0], v.rc[1], v.rc[2], v.rc[3], v.rc[6], v.rc[7]), GREY))
+            .child(row("RC 1-4  5/8", format!("{} {} {} {}  {}/{}", v.rc[0], v.rc[1], v.rc[2], v.rc[3], v.rc[4], v.rc[7]), GREY))
             .child(row("SERVO 1-5", format!("{} {} {} {} {}", v.servo[0], v.servo[1], v.servo[2], v.servo[3], v.servo[4]), GREY))
     }
 
@@ -597,7 +621,7 @@ impl Render for Gcs {
                 .min_w(px(0.0))
                 .children(self.sensor.is_none().then(|| pfd.h(relative(0.42))))
                 .child(map_screen)
-                .child(div().flex().gap(px(6.0)).h(px(170.0)).child(command.w(relative(0.5))).child(trends.flex_1().min_w(px(0.0))));
+                .child(div().flex().gap(px(6.0)).h(px(if self.vtol { 230.0 } else { 170.0 })).child(command.w(relative(0.5))).child(trends.flex_1().min_w(px(0.0))));
             div().flex().flex_1().min_h(px(0.0)).gap(px(6.0)).child(main).child(right)
         } else {
             div()

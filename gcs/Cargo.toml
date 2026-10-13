@@ -9,6 +9,8 @@ gpui = "0.2.2"
 mavlink = { version = "0.19", default-features = false, features = ["std", "transport-tcp", "transport-udp", "dialect-ardupilotmega", "dialect-common", "mav2-message-extensions"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 t1s_station = { path = "../station" }
+# Which planes there are, and whether one is a VTOL (the console then shows the Q modes).
+simulation_aircraft = { path = "../domains/simulation/aircraft" }
 # The shared look (the docs and the sim's HUD use it too).
 design_theme = { path = "../domains/design/theme" }
 raw-window-handle = "0.6"

@@ -22,6 +22,10 @@ pub struct Options {
     pub direct: bool,
     /// A real place from `maps/<name>` (None: the procedural Alpine Valley).
     pub map: Option<String>,
+    /// The plane to fly (`t1s_sim --aircraft`); None is the sim's default.
+    pub aircraft: Option<String>,
+    /// The sim takes its radio from the console (`--test-radio`), for acceptance tests.
+    pub test_radio: bool,
 }
 
 /// The map pack's metadata (home position etc.), if `name` has been built.
@@ -107,7 +111,12 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
     let home = opts.map.as_deref().and_then(pack_meta).map(|m| {
         (format!("{:.7},{:.7},{:.1},{:.0}", m.home_lat, m.home_lon, m.home_alt, m.launch_heading), m.title)
     });
-    println!("  {}", start_sitl(opts.map.as_deref().unwrap_or("alpine"), home.as_ref().map(|h| h.0.as_str()))?);
+    println!("  {}", start_sitl(
+            opts.map.as_deref().unwrap_or("alpine"),
+            opts.aircraft.as_deref().unwrap_or(simulation_aircraft::default().id),
+            home.as_ref().map(|h| h.0.as_str()),
+        )?
+    );
     if let Some((loc, title)) = home {
         println!("  home {loc} ({title})");
     }
@@ -153,7 +162,7 @@ fn ensure_docker() -> Result<(), String> {
 /// Starts the SITL container, or reboots it if it's already running: it was flying a previous
 /// sim's aircraft, and ArduPilot's EKF would see the new one jump back to the pilot box. A
 /// container from an older image is replaced, so parameter changes take effect.
-fn start_sitl(map: &str, home_loc: Option<&str>) -> Result<String, String> {
+fn start_sitl(map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
     let running = Command::new("docker")
         .args(["ps", "--filter", &format!("name=^{SITL_CONTAINER}$"), "--format", "{{.Image}}"])
         .output()
@@ -169,11 +178,16 @@ fn start_sitl(map: &str, home_loc: Option<&str>) -> Result<String, String> {
         let same_image = image_id().is_some_and(|id| id == inspect("{{.Image}}"));
         // Its home position belongs to the map it was started for.
         let same_map = inspect("{{index .Config.Labels \"t1s.map\"}}") == map;
-        if same_image && same_map {
+        // Its parameters belong to the plane it was started for.
+        let same_aircraft = inspect("{{index .Config.Labels \"t1s.aircraft\"}}") == aircraft;
+        if same_image && same_map && same_aircraft {
             run(Command::new("docker").args(["restart", "-t", "1", SITL_CONTAINER]).stdout(Stdio::null()), "restarting SITL")?;
             return Ok(format!("restarted {SITL_CONTAINER}"));
         }
-        println!("  {}: replacing the container", if same_image { "different map" } else { "the SITL image changed" });
+        println!(
+            "  {}: replacing the container",
+            if !same_image { "the SITL image changed" } else if !same_map { "different map" } else { "different aircraft" }
+        );
     }
     // Gone, stopped, or from an older image.
     let _ = Command::new("docker").args(["rm", "-f", SITL_CONTAINER]).stdout(Stdio::null()).stderr(Stdio::null()).status();
@@ -182,6 +196,7 @@ fn start_sitl(map: &str, home_loc: Option<&str>) -> Result<String, String> {
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
     let out = Command::new("docker")
         .args(["run", "-d", "--rm", "--name", SITL_CONTAINER, "-p", "5760:5760", "--label", &format!("t1s.map={map}")])
+        .args(["--label", &format!("t1s.aircraft={aircraft}"), "-e", &format!("AIRCRAFT={aircraft}")])
         .args(home_loc.map(|h| vec!["-e".to_string(), format!("HOME_LOC={h}")]).unwrap_or_default())
         .arg("-v")
         .arg(format!("{}:/sitl/logs", logs.display()))
@@ -209,6 +224,12 @@ pub fn start_sim(opts: &Options, rect: Option<Rect>) -> Result<Child, String> {
     }
     if let Some(m) = &opts.map {
         cmd.args(["--map", m]);
+    }
+    if let Some(a) = &opts.aircraft {
+        cmd.args(["--aircraft", a]);
+    }
+    if opts.test_radio {
+        cmd.arg("--test-radio");
     }
     if let Some(r) = rect {
         cmd.args(["--window-rect", &r.to_arg(), "--frameless"]);

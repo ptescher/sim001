@@ -33,6 +33,7 @@ t1s_gcs [options]
   --no-build         with --station: don't rebuild the sim first
   --map NAME         fly a real place from maps/NAME (cypress, berkeley): with --station it builds
                      the map pack if needed and starts SITL at that place's home
+  --aircraft ID      with --station: the plane to fly (default t1s-vtol: the plain t1s-ranger has no flight controller, so no console); a VTOL adds the Q modes
   --direct           with --station: start with the sticks flying through the sim's own modes
                      (ArduPilot keeps running and reporting, its outputs ignored; J toggles)
   --layout single    with --station: tile all three on the main display even with several
@@ -44,6 +45,7 @@ t1s_gcs [options]
   --assets DIR       output of `t1s_sim --export-map` (default gcs/assets)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../expectations) against this console
                      by clicking it, and exit; needs a vehicle, so use it with --station
+  --only TEXT        with --expect: run only the tests whose title contains TEXT
   --docs DIR         with --expect: write the manual and screenshots to DIR (merged with the sim's)
   --autotest         SITL only: upload a circuit, arm, fly AUTO, GUIDED goto, RTL";
 
@@ -72,7 +74,24 @@ fn main() {
         no_build: flag("--no-build"),
         direct: flag("--direct"),
         map: map.clone(),
+        aircraft: arg("--aircraft"),
+        test_radio: flag("--expect"),
     };
+    let aircraft = match &opts.aircraft {
+        None => simulation_aircraft::default(),
+        Some(id) => simulation_aircraft::find(id).unwrap_or_else(|| {
+            eprintln!("--aircraft {id}: no such plane. Available: {}", simulation_aircraft::ids().join(", "));
+            std::process::exit(1);
+        }),
+    };
+    let vtol = (aircraft.params)().motors.iter().any(|m| m.lift);
+    if station_mode && !(aircraft.params)().flight_controller {
+        eprintln!(
+            "--station: the {} has no flight controller (only a receiver and ESCs), so there is nothing for the console to talk to. Fly it with `cargo run --release` in the sim",
+            aircraft.title
+        );
+        std::process::exit(1);
+    }
     if station_mode {
         if let Err(e) = station::prepare(&opts, &assets) {
             eprintln!("\x1b[1;31mstation: {e}\x1b[0m");
@@ -106,6 +125,9 @@ fn main() {
         expect::Config {
             suite: suite.map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../expectations")),
             docs: arg("--docs").map(PathBuf::from),
+            only: arg("--only"),
+            vtol,
+            rc_modes: (aircraft.params)().rc_modes,
         }
     });
     Application::new().run(move |cx: &mut App| {
@@ -140,7 +162,7 @@ fn main() {
         let console = cx
             .open_window(window_options("T1-S Ground Control", console_bounds), |window, cx| {
                 screens::hide_window_buttons(window);
-                cx.new(|cx| ui::app::Gcs::new(vehicle.clone(), tx, origin, terrain.clone(), sensor.clone(), cx))
+                cx.new(|cx| ui::app::Gcs::new(vehicle.clone(), tx, origin, terrain.clone(), sensor.clone(), vtol, cx))
             })
             .expect("open console window");
 

@@ -18,6 +18,7 @@ use crate::ui::map::Tool;
 use crate::vehicle::{Waypoint, WpKind, mode_number};
 use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screenshot};
 use expectation_model::{Event, Value, Variable};
+use t1s_station::feed::RadioState;
 use gpui::{
     AppContext as _,
     App, Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput, Point,
@@ -34,7 +35,29 @@ pub static EXIT: AtomicI32 = AtomicI32::new(0);
 pub struct Config {
     pub suite: PathBuf,
     pub docs: Option<PathBuf>,
+    /// Run only the tests whose title contains this (any case).
+    pub only: Option<String>,
+    /// The plane in the sim is a VTOL (`--aircraft`).
+    pub vtol: bool,
+    /// The names on the radio's mode switch, in order (empty without a flight controller).
+    pub rc_modes: Vec<&'static str>,
 }
+
+/// What the pilot does with the radio.
+#[derive(Clone, Copy)]
+enum RadioMove {
+    /// The arm switch (channel 5): on or off.
+    ArmSwitch(bool),
+    /// The mode channel (channel 8), at the middle of this slot's band.
+    ModeSwitch(usize),
+    /// The throttle stick, 0 (down) to 1 (up).
+    Throttle(f32),
+}
+
+/// Where the throttle stick is for each of its values in the vocabulary.
+const STICK_LOW: f32 = 0.0;
+const STICK_MIDDLE: f32 = 0.5;
+const STICK_HIGH: f32 = 0.75;
 
 /// What each event of the vocabulary does on the console.
 enum Act {
@@ -44,6 +67,11 @@ enum Act {
     Twice(&'static str),
     /// Click the map.
     Map(MouseButton),
+    /// Something the pilot does on the radio (the sim's stand-in for the TX15).
+    Radio(RadioMove),
+    /// ARM, then CONFIRM ARM, again and again until the vehicle arms: a vehicle that has only
+    /// just come up refuses until its checks pass, and the button says so.
+    Arm,
 }
 
 const EVENTS: &[(&str, Act)] = &[
@@ -60,10 +88,17 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator downloads the vehicle's mission", Act::Button("download")),
     ("operator edits the vehicle's mission", Act::Button("edit")),
     ("operator restarts the mission", Act::Button("restart")),
-    ("operator arms the vehicle", Act::Twice("arm")),
+    ("operator arms the vehicle", Act::Arm),
     ("operator disarms the vehicle", Act::Button("disarm")),
     ("operator switches to AUTO", Act::Button("mode-AUTO")),
     ("operator switches to AUTO anyway", Act::Twice("mode-AUTO")),
+    ("operator takes off vertically", Act::Button("vtol-tkof")),
+    ("operator switches to forward flight", Act::Button("mode-CRUISE")),
+    ("operator switches to hover", Act::Button("mode-QLOITER")),
+    ("operator lands vertically", Act::Button("mode-QLAND")),
+    ("pilot raises the throttle stick", Act::Radio(RadioMove::Throttle(STICK_HIGH))),
+    ("pilot centres the throttle stick", Act::Radio(RadioMove::Throttle(STICK_MIDDLE))),
+    ("pilot lowers the throttle stick", Act::Radio(RadioMove::Throttle(STICK_LOW))),
 ];
 
 /// States the driver can read (and put in place). Those the console has no feature for are
@@ -86,9 +121,15 @@ const STATES: &[&str] = &[
     "measured distance",
     "vehicle's current item",
     "plane",
+    "airframe",
+    "flight",
+    "height above home",
+    "throttle stick",
+    "arm switch",
+    "mode switch",
 ];
 /// States an action can change directly (the others change through events).
-const SETTABLE: &[&str] = &["autopilot mode", "plan altitude"];
+const SETTABLE: &[&str] = &["autopilot mode", "plan altitude", "throttle stick", "arm switch", "mode switch"];
 
 const MODE_IDS: [&str; 10] = [
     "mode-MANUAL",
@@ -118,14 +159,18 @@ type Job = Box<dyn FnOnce(&mut App, WindowHandle<Gcs>) + Send>;
 
 /// Load and check the suite before anything opens, then start the runner thread.
 pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
-    let Config { suite, docs } = config;
-    let acceptance = match Acceptance::load(&suite) {
+    let Config { suite, docs, only, vtol, rc_modes } = config;
+    let mut acceptance = match Acceptance::load(&suite) {
         Ok(a) => a.with_coverage(),
         Err(e) => {
             eprint!("{e}");
             std::process::exit(1);
         }
     };
+    if let Some(only) = &only {
+        let only = only.to_lowercase();
+        acceptance.plans.retain(|p| p.title.to_lowercase().contains(&only));
+    }
     println!("expect: {} tests from {}", acceptance.plans.len(), suite.display());
 
     let (tx, rx): (Sender<Job>, Receiver<Job>) = channel();
@@ -141,8 +186,8 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     .detach();
 
     std::thread::spawn(move || {
-        let mut driver = ConsoleDriver { tx };
-        let opts = RunOptions { docs_dir: docs.clone(), patience: 100 };
+        let mut driver = ConsoleDriver::new(tx, vtol, rc_modes);
+        let opts = RunOptions { docs_dir: docs.clone(), patience: 480 };
         let mut report = expectation_story::Report::default();
         for plan in &acceptance.plans {
             let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
@@ -151,7 +196,18 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 expectation_story::Status::Passed => println!("expect: ✓ {}", plan.title),
                 // Another system's test (the sim's), or one for a feature the console lacks.
                 expectation_story::Status::Unsupported => {}
-                _ => println!("expect: ✗ {}", plan.title),
+                _ => {
+                    println!("expect: ✗ {}", plan.title);
+                    // What the vehicle was saying, for working out why.
+                    if let Ok(lines) = driver.call(|g, _, _| {
+                        let v = g.vehicle.lock().unwrap();
+                        v.log.iter().rev().take(70).map(|l| l.text.clone()).collect::<Vec<_>>()
+                    }) {
+                        for l in lines.iter().rev() {
+                            println!("expect:   vehicle: {l}");
+                        }
+                    }
+                }
             }
             report.results.push(r);
         }
@@ -246,6 +302,22 @@ fn same(plan: &[Waypoint], mission: &[Waypoint]) -> bool {
         })
 }
 
+/// What a VTOL is doing, from its telemetry: on the ground, hovering (a Q mode, hardly moving),
+/// cruising (a fixed-wing mode above the speed the transition ends at), or in between.
+fn flight(v: &crate::vehicle::Vehicle) -> &'static str {
+    // (No fixed-wing flight is slower than 6 m/s, so a plane that slow is hovering, whatever the mode is called.)
+    let q_mode = v.mode().starts_with('Q');
+    if v.alt_rel < 1.0 && v.groundspeed < 1.0 {
+        "grounded"
+    } else if !q_mode && v.airspeed >= 11.0 {
+        "cruising"
+    } else if v.airspeed < 6.0 && v.groundspeed < 5.0 {
+        "hovering"
+    } else {
+        "in transition"
+    }
+}
+
 fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
     let v = g.vehicle.lock().unwrap();
     let plan = &g.map.plan;
@@ -286,6 +358,8 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
             })
         }
         // The console has no terrain check, mission file or measuring yet: they stay as they start.
+        "height above home" => Value::from(v.alt_rel as f64),
+        "flight" => Value::from(flight(&v)),
         "waypoints" => Value::from("unchecked"),
         "mission file" => Value::from("missing"),
         "measured distance" => Value::from("hidden"),
@@ -350,9 +424,59 @@ fn arrange_model(g: &mut Gcs, key: &str, value: &Value) -> Result<(), String> {
 
 struct ConsoleDriver {
     tx: Sender<Job>,
+    vtol: bool,
+    rc_modes: Vec<&'static str>,
+    /// What the stand-in radio is doing now.
+    radio: RadioState,
 }
 
 impl ConsoleDriver {
+    fn new(tx: Sender<Job>, vtol: bool, rc_modes: Vec<&'static str>) -> Self {
+        let radio = RadioState {
+            connected: false,
+            roll: 0.0,
+            pitch: 0.0,
+            yaw: 0.0,
+            throttle: STICK_LOW,
+            arm: false,
+            mode: 0,
+            reset_presses: 0,
+        };
+        ConsoleDriver { tx, vtol, rc_modes, radio }
+    }
+
+    /// Move the stand-in radio and tell the sim.
+    fn radio_move(&mut self, m: RadioMove) -> Result<(), String> {
+        // Using the radio plugs it in.
+        self.radio.connected = true;
+        match m {
+            RadioMove::ArmSwitch(on) => self.radio.arm = on,
+            RadioMove::ModeSwitch(slot) => self.radio.mode = slot.min(5) as u8,
+            RadioMove::Throttle(t) => self.radio.throttle = t,
+        }
+        let radio = self.radio;
+        let sent = self.call(move |g, _, _| g.sensor.as_ref().map(|s| s.send_radio(radio)).is_some())?;
+        if sent { Ok(()) } else { Err("there is no link to the sim to carry the radio: start the station (--station)".into()) }
+    }
+
+    /// Which way the radio's three inputs read to ArduPilot: the throttle stick, the arm
+    /// switch and the mode switch.
+    fn rc_reading(&self, key: &str) -> Result<Value, String> {
+        let rc = self.call(|g, _, _| g.vehicle.lock().unwrap().rc)?;
+        Ok(match key {
+            "throttle stick" => Value::from(match rc[2] {
+                0..=1249 => "low",
+                1250..=1649 => "middle",
+                _ => "high",
+            }),
+            "arm switch" => Value::from(if rc[4] > 1500 { "on" } else { "off" }),
+            _ => {
+                // The mode switch's position nearest to the PWM.
+                let slot = simulation_aircraft::rc_mode_slot(rc[7]);
+                Value::from(*self.rc_modes.get(slot).ok_or("this plane has no mode switch")?)
+            }
+        })
+    }
     /// Run `f` on the UI thread, between frames, and return what it returns.
     fn call<T: Send + 'static>(
         &self,
@@ -384,6 +508,12 @@ impl ConsoleDriver {
     }
 
     fn read(&self, key: &str) -> Result<Value, String> {
+        if matches!(key, "throttle stick" | "arm switch" | "mode switch") {
+            return self.rc_reading(key);
+        }
+        if key == "airframe" {
+            return Ok(Value::from(if self.vtol { "VTOL" } else { "conventional" }));
+        }
         let key = key.to_string();
         self.call(move |g, _, _| observe(g, &key))?
     }
@@ -401,6 +531,67 @@ impl ConsoleDriver {
             }
             std::thread::sleep(LOOK);
         }
+    }
+
+    /// Fly the VTOL to `want`: armed and taking off straight up, then (for forward flight)
+    /// switched across.
+    fn arrange_flight(&self, want: &str) -> Result<(), String> {
+        let now = || self.read("flight").map(|v| v.as_str().unwrap_or("").to_string());
+        match want {
+            "grounded" if now()? == "grounded" => Ok(()),
+            "grounded" => Err("can't put a flying plane on the ground without landing it".into()),
+            "hovering" | "cruising" => {
+                if now()? == "grounded" {
+                    if self.read("vehicle")?.as_str() != Some("armed") {
+                        for _ in 0..6 {
+                            self.send(Cmd::Arm(true))?;
+                            if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
+                                break;
+                            }
+                        }
+                    }
+                    self.press("vtol-tkof")?;
+                }
+                if now()? == "cruising" && want == "hovering" {
+                    self.press("mode-QLOITER")?;
+                }
+                self.wait_for(90, "the plane hovering", |g| {
+                    let v = g.vehicle.lock().unwrap();
+                    flight(&v) == "hovering" && v.alt_rel > 15.0 || flight(&v) == "cruising"
+                })?;
+                if want == "cruising" && now()? != "cruising" {
+                    self.press("mode-CRUISE")?;
+                    self.wait_for(60, "the plane cruising", |g| flight(&g.vehicle.lock().unwrap()) == "cruising")?;
+                }
+                Ok(())
+            }
+            other => Err(format!("can't put the flight in `{other}`")),
+        }
+    }
+
+    /// Is the plane up, armed, or is its autopilot unhappy (the pre-arm checks fail), so that a
+    /// test can't start from it?
+    fn needs_a_fresh_plane(&self) -> Result<bool, String> {
+        const PREARM_CHECK: u32 = 0x1000_0000;
+        self.call(|g, _, _| {
+            let v = g.vehicle.lock().unwrap();
+            v.link.alive() && (v.armed || v.alt_rel.abs() > 1.0 || v.sensor_ok(PREARM_CHECK) == Some(false))
+        })
+    }
+
+    /// Start the sim again with a fresh plane, and wait for ArduPilot to go and come back.
+    fn fresh_plane(&mut self) -> Result<(), String> {
+        println!("expect: starting the next test from a fresh plane (the autopilot restarts, about a minute)");
+        self.radio.reset_presses = self.radio.reset_presses.wrapping_add(1);
+        let radio = self.radio;
+        self.call(move |g, _, _| {
+            if let Some(s) = &g.sensor {
+                s.send_radio(radio);
+            }
+        })?;
+        // The station restarts the autopilot: its link drops, and then comes back.
+        let _ = self.wait_for(45, "the autopilot restarting", |g| !g.vehicle.lock().unwrap().link.alive());
+        self.wait_for(180, "the autopilot coming back", |g| g.vehicle.lock().unwrap().link.alive())
     }
 
     fn press(&self, id: &'static str) -> Result<(), String> {
@@ -423,6 +614,23 @@ impl Driver for ConsoleDriver {
     /// Back to the Background's UI state: panning, no plan, 40 m. The vehicle is arranged per
     /// test (disarmed, MANUAL, ...), since it can't be reset by the console.
     fn reset(&mut self) -> Result<(), String> {
+        // A plane that has flown, or whose autopilot has lost its bearings, starts the next test
+        // from a fresh plane: the sim starts again (as with R), and the station restarts ArduPilot.
+        if self.vtol && self.needs_a_fresh_plane()? {
+            self.fresh_plane()?;
+        }
+        // The throttle stick starts down, as a pilot leaves it before arming.
+        if self.vtol {
+            // A test that doesn't use the radio flies without one, like a keyboard pilot.
+            self.radio.connected = false;
+            self.radio.throttle = STICK_LOW;
+            let radio = self.radio;
+            self.call(move |g, _, _| {
+                if let Some(s) = &g.sensor {
+                    s.send_radio(radio);
+                }
+            })?;
+        }
         self.call(|g, _, _| {
             g.map.tool = Tool::Pan;
             g.map.plan.clear();
@@ -442,6 +650,13 @@ impl Driver for ConsoleDriver {
                 }
                 self.wait_for(120, "the link coming up (is the station running? use --station)", |g| {
                     g.vehicle.lock().unwrap().link.alive()
+                })?;
+                // The start the spec describes waits for the ARM button to read ARM, not NOT READY:
+                // the vehicle has passed its pre-arm checks. (A switch arms once, and not if it's too early.)
+                const PREARM_CHECK: u32 = 0x1000_0000;
+                self.wait_for(180, "the vehicle passing its pre-arm checks", |g| {
+                    let v = g.vehicle.lock().unwrap();
+                    v.armed || v.sensor_ok(PREARM_CHECK).unwrap_or(true)
                 })
             }
             "vehicle" => match name()?.as_str() {
@@ -479,6 +694,68 @@ impl Driver for ConsoleDriver {
                     }
                 }
                 Err(format!("the vehicle wouldn't stay in {mode}"))
+            }
+            "airframe" => {
+                let want = name()?;
+                self.check(key, &want, " (start the station with --aircraft t1s-vtol for a VTOL)")
+            }
+            "throttle stick" => {
+                let t = match name()?.as_str() {
+                    "low" => STICK_LOW,
+                    "middle" => STICK_MIDDLE,
+                    _ => STICK_HIGH,
+                };
+                self.radio_move(RadioMove::Throttle(t))?;
+                std::thread::sleep(SETTLE);
+                Ok(())
+            }
+            "arm switch" => {
+                let want = name()?;
+                if want == "off" {
+                    self.radio_move(RadioMove::ArmSwitch(false))?;
+                    std::thread::sleep(SETTLE);
+                    return self.check(key, &want, "");
+                }
+                // A vehicle that isn't ready yet refuses to arm, so a pilot flips the switch off
+                // and on again until it takes.
+                self.radio_move(RadioMove::ArmSwitch(true))?;
+                for _ in 0..100 {
+                    if self.wait_for(3, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
+                        return self.check(key, &want, "");
+                    }
+                    self.radio_move(RadioMove::ArmSwitch(false))?;
+                    std::thread::sleep(Duration::from_millis(600));
+                    self.radio_move(RadioMove::ArmSwitch(true))?;
+                }
+                let (why, recent) = self.call(|g, _, _| {
+                    let v = g.vehicle.lock().unwrap();
+                    let why = v.prearm.as_ref().map(|p| p.1.clone());
+                    let recent: Vec<String> = v.log.iter().rev().take(8).map(|l| l.text.clone()).collect();
+                    (why, recent)
+                })?;
+                Err(format!(
+                    "the vehicle wouldn't arm: {} (its latest messages, newest first: {})",
+                    why.unwrap_or_else(|| "no reason given".into()),
+                    recent.join(" | ")
+                ))
+            }
+            "mode switch" => {
+                let want = name()?;
+                let slot = self.rc_modes.iter().position(|m| *m == want).ok_or("this plane has no such mode on its switch")?;
+                self.radio_move(RadioMove::ModeSwitch(slot))?;
+                std::thread::sleep(SETTLE);
+                self.check(key, &want, "")
+            }
+            "flight" => self.arrange_flight(&name()?),
+            // The flight arrangement brings the plane up to height. On the ground that is still to come.
+            "height above home" => {
+                let want = value.as_f64().ok_or("expected a number")?;
+                let have = self.read(key)?.as_f64().unwrap_or(0.0);
+                if have + 0.5 >= want || self.read("flight")?.as_str() == Some("grounded") {
+                    Ok(())
+                } else {
+                    Err(format!("the plane is at {have:.0} m and can't be put at {want:.0} m without flying there"))
+                }
             }
             "home position" => {
                 if name()? != "set" {
@@ -559,6 +836,8 @@ impl Driver for ConsoleDriver {
                 }
                 Ok(())
             }
+            // The radio's three inputs are put in place the way the pilot moves them.
+            "throttle stick" | "arm switch" | "mode switch" => self.arrange(var, value),
             other => Err(format!("{other} isn't something to set")),
         }
     }
@@ -571,6 +850,18 @@ impl Driver for ConsoleDriver {
                 self.press(id)?;
                 self.press(id)
             }
+            Act::Arm => {
+                for _ in 0..12 {
+                    self.press("arm")?;
+                    self.press("arm")?;
+                    if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
+                        return Ok(());
+                    }
+                }
+                let why = self.call(|g, _, _| g.vehicle.lock().unwrap().prearm.as_ref().map(|p| p.1.clone()))?;
+                Err(format!("the vehicle wouldn't arm: {}", why.unwrap_or_else(|| "no reason given".into())))
+            }
+            Act::Radio(m) => self.radio_move(m),
             Act::Map(button) => {
                 let at = self.call(|g, _, _| map_point(g))??;
                 self.with_window(move |w, cx| click(w, cx, at, button))?;
@@ -628,7 +919,7 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../expectations");
         let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
         let (tx, _rx) = channel();
-        let driver = ConsoleDriver { tx };
+        let driver = ConsoleDriver::new(tx, false, vec![]);
         let v = &a.suite.vocabulary;
         let gcs = a.suite.sections.iter().find(|s| s.slug == "gcs").expect("a gcs section").id;
         let ours = a.suite.subtree(gcs);

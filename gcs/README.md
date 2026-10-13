@@ -83,6 +83,7 @@ Options:
 - `--assets DIR`: where the exported map lives (default `gcs/assets`). Without it the map falls back to a 100 m grid.
 - `--station`, `--layout single`, `--raster`: see above. `--sensor` opens the feed window and `--feed HOST:PORT` sets the feed address.
 - `--expect [SUITE] [--docs DIR]`: runs the acceptance tests in `expectations/` against the console and exits. The driver sends real mouse events into the console window (to where each button is painted) and reads the state back, so it needs a vehicle: use `--station --expect`. With `--docs`, it writes the manual with screenshots (macOS `screencapture`, which needs the Screen Recording permission) and merges the results with the sim's. Tests that need the mission file, terrain check, survey grid, measuring or the sim window stay "not supported yet".
+- `--aircraft ID`: with `--station`, the plane to fly (`t1s-vtol`, the default, or `t1s-ranger`, which has no flight controller and so no station). For a VTOL the console adds the Q modes (QSTABILIZE, QHOVER, QLOITER, QLAND, QRTL) to its mode buttons.
 - `--autotest`: for SITL only. It uploads a circuit, reads it back, arms, flies AUTO, sends a GUIDED goto, then flies RTL, and prints `AUTOTEST PASS/FAIL`. With the t1s_sim physics, AUTO waits for a throw, so if nothing happens for 20 s it launches in FBWA with an RC throttle override and then hands back to AUTO.
 
 ## Using the map

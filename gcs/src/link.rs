@@ -31,6 +31,8 @@ pub enum Cmd {
     /// Replace the vehicle's mission (home is inserted as item 0).
     Upload(Vec<Waypoint>),
     Download,
+    /// A VTOL takes off straight up to this height above home (GUIDED, then MAV_CMD_NAV_TAKEOFF).
+    Takeoff { alt: f32 },
     /// Erase the vehicle's mission (MISSION_CLEAR_ALL). Download afterwards to see it empty.
     ClearMission,
     SetCurrentWp(u16),
@@ -262,6 +264,15 @@ impl Session {
                     current: 0,
                     autocontinue: 0,
                 }));
+            }
+            Cmd::Takeoff { alt } => {
+                log(6, format!("Command: take off vertically to {alt:.0} m"));
+                self.command_long(MavCmd::MAV_CMD_DO_SET_MODE, [1.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+                // The takeoff is refused until the vehicle is in GUIDED, and refused again once the
+                // rotors have spooled up for GUIDED's hover (about 0.7 s later: "Already flying").
+                // The mode change takes effect on the next of ArduPilot's main loops.
+                std::thread::sleep(Duration::from_millis(150));
+                self.command_long(MavCmd::MAV_CMD_NAV_TAKEOFF, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, alt]);
             }
             Cmd::Upload(plan) => self.start_upload(vehicle, plan),
             Cmd::Download => self.start_download(vehicle),

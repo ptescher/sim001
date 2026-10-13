@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use t1s_station::feed::{FLAG_DIRECT, FrameHeader, Gimbal, GimbalCmd, VehicleStatus, read_frame};
+use t1s_station::feed::{FLAG_DIRECT, FrameHeader, Gimbal, GimbalCmd, RadioState, VehicleStatus, read_frame};
 
 pub struct VideoFrame {
     pub header: FrameHeader,
@@ -56,6 +56,13 @@ impl Sensor {
     /// Gimbal state of the newest frame (what the picture actually shows).
     pub fn gimbal(&self) -> Option<Gimbal> {
         self.frame.lock().unwrap().as_ref().map(|f| f.header.gimbal)
+    }
+
+    /// Tell a sim started with `--test-radio` what the stand-in radio is doing.
+    pub fn send_radio(&self, r: RadioState) {
+        if let Some(w) = self.writer.lock().unwrap().as_mut() {
+            let _ = w.write_all(&r.encode());
+        }
     }
 
     pub fn command(&self, g: Gimbal) {
