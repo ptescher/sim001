@@ -1,7 +1,7 @@
 //! Simulation core shared between the render thread and the ArduPilot bridge thread.
 
-use simulation_aircraft::AircraftParams;
-use simulation_physics::{self as physics, ActuatorCommands, Environment, FlightState, Obstacle, Phase};
+use simulation_aircraft::{ActuatorCommands, AircraftParams, t1s_ranger};
+use simulation_physics::{self as physics, Environment, FlightState, Obstacle, Phase};
 use crate::terrain;
 use bevy::math::Vec3;
 use std::f32::consts::PI;
@@ -33,16 +33,6 @@ impl FlightMode {
         }
     }
 }
-
-/// ArduPlane modes on the FLTMODE channel (ch8), with the PWM that selects each slot.
-pub const AP_MODES: [(&str, u16); 6] = [
-    ("MANUAL", 1165),
-    ("FBWA", 1295),
-    ("CRUISE", 1425),
-    ("AUTO", 1555),
-    ("RTL", 1685),
-    ("LOITER", 1815),
-];
 
 /// Pilot stick positions, normalized.
 #[derive(Clone, Copy, Debug, Default)]
@@ -97,6 +87,16 @@ impl ArduPilotLink {
 
 pub struct SimCore {
     pub params: AircraftParams,
+    /// The stand-in radio's last state, from the ground station (`--test-radio`).
+    pub test_radio: Option<t1s_station::feed::RadioState>,
+    /// The pilot flies with a radio (not the keyboard or a gamepad): its throttle stick is where
+    /// the pilot holds it.
+    pub pilot_radio: bool,
+    /// The radio's arm switch, if the pilot gave it one: up is armed. It decides the arm signal
+    /// whatever the keyboard's toggle says.
+    pub radio_arm: Option<bool>,
+    /// The radio's mode channel in µs, if the pilot gave it one: it goes to ArduPilot as it is.
+    pub radio_mode: Option<u16>,
     pub state: FlightState,
     pub obstacles: Vec<Obstacle>,
     pub sticks: Sticks,
@@ -124,7 +124,7 @@ fn expo(x: f32, e: f32) -> f32 {
 
 impl SimCore {
     pub fn new(params: AircraftParams, obstacles: Vec<Obstacle>, ap_enabled: bool, ap_port: u16) -> Self {
-        let state = FlightState::new(&params, &terrain::hand());
+        let state = FlightState::new(&params, &terrain::start());
         Self {
             params,
             state,
@@ -136,6 +136,10 @@ impl SimCore {
             wind: WindSettings { speed: 3.0, from_dir: 20.0f32.to_radians(), turbulence: 0.3 },
             paused: false,
             last_cmd: ActuatorCommands::default(),
+            test_radio: None,
+            pilot_radio: false,
+            radio_arm: None,
+            radio_mode: None,
             last_wind: Vec3::ZERO,
             ap: ArduPilotLink {
                 enabled: ap_enabled,
@@ -145,7 +149,8 @@ impl SimCore {
                 frame_count: 0,
                 packets: 0,
                 pwm: [0; 16],
-                mode_index: 1,
+                // The mode switch starts in its first position (for the VTOL, QHOVER).
+                mode_index: 0,
                 arm_switch: false,
                 port: ap_port,
                 status: String::from("waiting for SITL"),
@@ -159,7 +164,7 @@ impl SimCore {
     }
 
     pub fn reset(&mut self) {
-        self.state.reset_to_hand(&terrain::hand());
+        self.state.reset_to_hand(&self.params, &terrain::start());
         // With a ground station attached it restarts ArduPilot on a reset (see the feed), so
         // snap straight back to the hand. Otherwise the plane is carried back, which keeps
         // ArduPilot's estimators consistent without a restart.
@@ -231,7 +236,7 @@ impl SimCore {
         let thr_l = (thr + dt_mix).clamp(0.0, 1.0);
         let thr_r = (thr - dt_mix).clamp(0.0, 1.0);
         // V-tail rudder mix at 50%, as typically set up on the real plane.
-        ActuatorCommands::from_controls(ail.clamp(-1.0, 1.0), ele.clamp(-1.0, 1.0), 0.5 * rud, [thr_l, thr_r])
+        t1s_ranger::mix(ail.clamp(-1.0, 1.0), ele.clamp(-1.0, 1.0), 0.5 * rud, [thr_l, thr_r])
     }
 
     /// Hand-launch automatically once throttle is held up, like a real throw.
@@ -266,18 +271,10 @@ impl SimCore {
             self.step_standalone(dt);
             return;
         }
-        let ang = |v: u16| if v == 0 { 0.0 } else { ((v as f32 - 1500.0) / 500.0).clamp(-1.0, 1.0) };
-        let rng = |v: u16| if v == 0 { 0.0 } else { ((v as f32 - 1000.0) / 1000.0).clamp(0.0, 1.0) };
-        // SERVO1 aileron (4), SERVO2 V-tail left (79), SERVO3 throttle left (73),
-        // SERVO4 V-tail right (80), SERVO5 throttle right (74). ArduPilot's V-tail mixer
-        // drives non-reversed servos "trailing edge up" for positive output.
-        let cmd = ActuatorCommands {
-            aileron: ang(pwm[0]),
-            vtail_left: -ang(pwm[1]),
-            vtail_right: -ang(pwm[3]),
-            throttle: [rng(pwm[2]), rng(pwm[4])],
-        };
-        self.auto_launch(0.5 * (cmd.throttle[0] + cmd.throttle[1]), dt);
+        // What each output does is in the plane's description (for the T1-S, SERVO1 to SERVO5
+        // are the aileron, the V-tail panels and the throttles: see ardupilot/t1s.parm).
+        let cmd = ActuatorCommands::from_pwm(&self.params, pwm);
+        self.auto_launch(cmd.forward_throttle(&self.params), dt);
         self.step_physics(&cmd, dt);
     }
 
@@ -289,6 +286,36 @@ impl SimCore {
         self.last_cmd = *cmd;
     }
 
+    /// The name of the radio's mode switch position `i`, for the HUD.
+    pub fn rc_mode_name(&self, i: usize) -> &'static str {
+        self.params.rc_modes.get(i).copied().unwrap_or("-")
+    }
+
+    /// The mode the radio's mode channel is on, as ArduPilot reads it.
+    pub fn mode_switch_name(&self) -> &'static str {
+        self.rc_mode_name(simulation_aircraft::rc_mode_slot(self.rc_channels()[7]))
+    }
+
+    /// The arm signal being sent: the radio's switch if it has one, else the keyboard's toggle.
+    pub fn arm_switch_is_on(&self) -> bool {
+        self.radio_arm.unwrap_or(self.ap.arm_switch)
+    }
+
+    /// The throttle channel for a stick position. A VTOL in a Q mode (or GUIDED, which hovers)
+    /// reads the stick as a climb rate with the middle holding height. A radio's stick goes as it
+    /// is. The keyboard and gamepads idle with the throttle closed, so for them a closed throttle
+    /// is sent as the middle and full throttle as a full climb. Everywhere else the stick is a
+    /// plain throttle, and so it is if the mode isn't known (no console).
+    fn throttle_pwm(&self, throttle: f32) -> u16 {
+        let t = throttle.clamp(0.0, 1.0);
+        let q_mode = self.ap.vehicle().is_some_and(|(_, m)| m.starts_with('Q') || m == "GUIDED");
+        if q_mode && !self.pilot_radio && self.params.motors.iter().any(|m| m.lift) {
+            (1500.0 + 500.0 * t).round() as u16
+        } else {
+            (1000.0 + 1000.0 * t).round() as u16
+        }
+    }
+
     /// RC channel PWMs sent to ArduPilot (AETR + aux, ch8 = flight mode).
     pub fn rc_channels(&self) -> [u16; 8] {
         let s = self.sticks;
@@ -297,13 +324,13 @@ impl SimCore {
             c(s.roll),
             // ArduPlane: RC2 above trim = nose up.
             c(s.pitch),
-            (1000.0 + 1000.0 * s.throttle.clamp(0.0, 1.0)).round() as u16,
+            self.throttle_pwm(s.throttle),
             c(s.yaw),
+            // RC5_OPTION = 153 (arm/disarm switch), on channel 5 as ExpressLRS needs.
+            if self.radio_arm.unwrap_or(self.ap.arm_switch) { 1900 } else { 1100 },
             1500,
             1500,
-            // RC7_OPTION = 153 (arm/disarm switch).
-            if self.ap.arm_switch { 1900 } else { 1100 },
-            AP_MODES[self.ap.mode_index].1,
+            self.radio_mode.unwrap_or_else(|| simulation_aircraft::rc_mode_pwm(self.ap.mode_index)),
         ]
     }
 
@@ -357,4 +384,132 @@ impl SimCore {
 pub fn wrap_deg(rad: f32) -> f32 {
     let d = rad * 180.0 / PI;
     (d % 360.0 + 360.0) % 360.0
+}
+
+/// Why a plane can't be flown as the sim was started, if it can't: a plane with a flight
+/// controller is flown by ArduPilot (the sim's own stick modes are for the plane that hasn't one).
+pub fn cannot_fly(params: &AircraftParams, title: &str, ardupilot: bool) -> Option<String> {
+    (params.flight_controller && !ardupilot).then(|| {
+        format!(
+            "the {title} has a flight controller, and ArduPilot flies it. Start the whole station with `cd gcs && cargo run --release -- --station`, or fly the plain T1-S, which has none, with `cargo run --release -- --aircraft t1s-ranger`"
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_plane_with_a_flight_controller_needs_ardupilot() {
+        let vtol = (simulation_aircraft::find("t1s-vtol").unwrap().params)();
+        let plain = (simulation_aircraft::find("t1s-ranger").unwrap().params)();
+        assert!(cannot_fly(&vtol, "VTOL", false).is_some_and(|m| m.contains("--station") && m.contains("t1s-ranger")));
+        assert!(cannot_fly(&vtol, "VTOL", true).is_none());
+        assert!(cannot_fly(&plain, "T1-S", false).is_none(), "the plain T1-S flies from the keyboard");
+    }
+
+    fn vtol() -> SimCore {
+        SimCore::new((simulation_aircraft::find("t1s-vtol").unwrap().params)(), vec![], true, 9002)
+    }
+
+    fn in_mode(c: &mut SimCore, mode: &str) {
+        c.ap.gcs = Some((Instant::now(), true, mode.into()));
+    }
+
+    /// In a Q mode the throttle stick sets the climb rate, with the middle holding height: a
+    /// closed throttle (the sim's idle) has to read as the middle, or the VTOL sinks to the ground.
+    #[test]
+    fn a_vtol_in_a_q_mode_idles_with_the_throttle_stick_centred() {
+        let mut c = vtol();
+        c.sticks.throttle = 0.0;
+        for mode in ["QHOVER", "QLOITER", "QSTABILIZE", "GUIDED"] {
+            in_mode(&mut c, mode);
+            assert_eq!(c.rc_channels()[2], 1500, "{mode}");
+        }
+        c.sticks.throttle = 1.0;
+        in_mode(&mut c, "QLOITER");
+        assert_eq!(c.rc_channels()[2], 2000, "full throttle climbs");
+    }
+
+    /// In the fixed-wing modes the throttle is a throttle: closed is closed.
+    #[test]
+    fn a_vtol_in_a_fixed_wing_mode_has_a_plain_throttle() {
+        let mut c = vtol();
+        c.sticks.throttle = 0.0;
+        for mode in ["MANUAL", "CRUISE", "FBWA", "AUTO"] {
+            in_mode(&mut c, mode);
+            assert_eq!(c.rc_channels()[2], 1000, "{mode}");
+        }
+        // The mode isn't known (no console): the safe reading is a plain throttle.
+        c.ap.gcs = None;
+        assert_eq!(c.rc_channels()[2], 1000);
+    }
+
+    /// A real radio's throttle stick is where the pilot holds it: all the way down is all the way
+    /// down (a descent in a Q mode), not the idle of the keyboard.
+    #[test]
+    fn a_radio_throttle_stick_goes_to_ardupilot_as_it_is() {
+        let mut c = vtol();
+        c.pilot_radio = true;
+        in_mode(&mut c, "QLOITER");
+        for (stick, pwm) in [(0.0, 1000), (0.5, 1500), (0.75, 1750), (1.0, 2000)] {
+            c.sticks.throttle = stick;
+            assert_eq!(c.rc_channels()[2], pwm, "stick at {stick}");
+        }
+    }
+
+    /// The radio's mode channel starts in its first position, QHOVER.
+    #[test]
+    fn a_vtol_starts_with_the_mode_switch_on_qhover() {
+        let c = vtol();
+        assert_eq!(c.rc_mode_name(c.ap.mode_index), "QHOVER");
+        assert_eq!(simulation_aircraft::rc_mode_slot(c.rc_channels()[7]), c.ap.mode_index);
+    }
+
+    /// A radio switch for arm sends its position, not a toggle: up is armed, anything else is not.
+    #[test]
+    fn a_radio_arm_switch_sends_its_position() {
+        let mut c = vtol();
+        c.ap.arm_switch = true; // the keyboard's toggle says armed
+        c.radio_arm = Some(false);
+        assert_eq!(c.rc_channels()[4], 1100, "the radio's switch is down: the toggle doesn't count");
+        c.radio_arm = Some(true);
+        assert_eq!(c.rc_channels()[4], 1900);
+        c.radio_arm = None;
+        assert_eq!(c.rc_channels()[4], 1900, "without a radio switch the toggle decides");
+    }
+
+    /// The radio's mode channel goes to ArduPilot as it is: ArduPilot picks the mode from the band.
+    #[test]
+    fn a_radio_mode_channel_goes_through_as_it_is() {
+        let mut c = vtol();
+        for pwm in [1000, 1263, 1500, 1750, 2000] {
+            c.radio_mode = Some(pwm);
+            assert_eq!(c.rc_channels()[7], pwm);
+        }
+        c.radio_mode = None;
+        assert_eq!(c.rc_channels()[7], simulation_aircraft::rc_mode_pwm(c.ap.mode_index), "without one, the mode key's slot");
+    }
+
+    /// What the HUD shows of the switches is what ArduPilot is being sent, from the radio or the keys.
+    #[test]
+    fn the_hud_shows_the_switches_as_sent() {
+        let mut c = vtol();
+        assert_eq!((c.mode_switch_name(), c.arm_switch_is_on()), ("QHOVER", false));
+        c.radio_mode = Some(1295);
+        c.radio_arm = Some(true);
+        assert_eq!((c.mode_switch_name(), c.arm_switch_is_on()), ("QLOITER", true));
+        c.radio_mode = Some(2000);
+        assert_eq!(c.mode_switch_name(), "QRTL");
+    }
+
+    /// The T1-S has no Q modes, whatever mode name it reports.
+    #[test]
+    fn the_plain_t1s_always_has_a_plain_throttle() {
+        let mut c = SimCore::new((simulation_aircraft::find("t1s-ranger").unwrap().params)(), vec![], false, 9002);
+        c.sticks.throttle = 0.0;
+        in_mode(&mut c, "QHOVER");
+        assert_eq!(c.rc_channels()[2], 1000);
+    }
 }

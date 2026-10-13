@@ -55,6 +55,7 @@ const OBSERVED: &[&str] = &[
     "help screen",
     "sim",
     "battery",
+    "flight controller",
 ];
 const STICKS: &[&str] = &["throttle", "pitch stick", "roll stick"];
 /// Wings within this many degrees of level count as level.
@@ -112,7 +113,7 @@ struct Pressed(Vec<KeyCode>);
 struct Held(Sticks);
 
 /// Load and check the suite before anything opens, then start the runner thread.
-pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>) {
+pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_controller: bool) {
     let acceptance = match Acceptance::load(&suite) {
         Ok(a) => a.with_coverage(),
         Err(e) => {
@@ -132,7 +133,7 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>) {
         .add_systems(Update, hold.after(SimSet::Input).before(SimSet::Logic).run_if(in_state(AppState::Running)));
 
     std::thread::spawn(move || {
-        let mut driver = SimDriver { tx };
+        let mut driver = SimDriver { tx, flight_controller };
         let opts = RunOptions { docs_dir: docs.clone(), patience: 100 };
         let mut report = expectation_story::Report::default();
         for plan in &acceptance.plans {
@@ -249,6 +250,8 @@ fn jpeg(image: &Image) -> Shot {
 
 struct SimDriver {
     tx: Sender<Request>,
+    /// The plane has a flight controller (`--aircraft`).
+    flight_controller: bool,
 }
 
 impl SimDriver {
@@ -333,6 +336,11 @@ impl Driver for SimDriver {
             "differential thrust" => {
                 let on = name()? == "on";
                 self.sim(move |c| c.diff_thrust = on)
+            }
+            "flight controller" => {
+                let want = name()?;
+                let have = if self.flight_controller { "fitted" } else { "missing" };
+                if want == have { Ok(()) } else { Err(format!("the plane's flight controller is {have}, not {want}")) }
             }
             "sim" => {
                 let paused = name()? == "paused";
@@ -437,6 +445,7 @@ impl Driver for SimDriver {
                 "auto-zoom" => on_off(auto_zoom, "on", "off"),
                 "help screen" => on_off(help, "shown", "hidden"),
                 "sim" => on_off(c.paused, "paused", "running"),
+                "flight controller" => Value::from(if c.params.flight_controller { "fitted" } else { "missing" }),
                 "battery" => Value::from((1.0 - s.used_mah / c.params.battery_capacity_mah).max(0.0) as f64 * 100.0),
                 other => return Err(format!("no way to observe `{other}`")),
             })
@@ -475,6 +484,12 @@ impl Driver for SimDriver {
         Ok(None)
     }
 
+    /// The plane in the sim is the one it was started with: a test that starts with a flight
+    /// controller can't be arranged on a plane without one.
+    fn can_arrange(&self, var: &Variable, value: &Value) -> bool {
+        var.key != "flight controller" || value.as_str() == Some(if self.flight_controller { "fitted" } else { "missing" })
+    }
+
     fn supports(&self, need: Need<'_>) -> bool {
         match need {
             Need::Observe(v) | Need::Arrange(v) => OBSERVED.contains(&v.key.as_str()),
@@ -495,7 +510,7 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations");
         let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
         let (tx, _rx) = channel();
-        let driver = SimDriver { tx };
+        let driver = SimDriver { tx, flight_controller: false };
         let v = &a.suite.vocabulary;
         let sim = a.suite.sections.iter().find(|s| s.slug == "sim").expect("a sim section").id;
         let ours = a.suite.subtree(sim);

@@ -4,7 +4,7 @@ use crate::theme::{P, alpha, color, geometry};
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
 use simulation_physics::{self as physics, Phase};
-use crate::sim::{wrap_deg, AP_MODES};
+use crate::sim::wrap_deg;
 use crate::terrain;
 use crate::{RenderSettings, SharedSim};
 use bevy::prelude::*;
@@ -170,8 +170,8 @@ pub fn update_hud(
     mut help: Single<&mut Visibility, (With<HelpText>, Without<RawText>)>,
     mut dots: Query<(&StickDot, &mut Node)>,
 ) {
-    // With a gamepad active, HOME/H toggles the controller diagram instead (pad_overlay).
-    if input.has(Action::Help) && input.pad_view.is_none() {
+    // With a gamepad or a radio active, HOME/H toggles the controller diagram instead.
+    if input.has(Action::Help) && input.pad_view.is_none() && input.profile != Some(crate::input::Profile::Radio) {
         hud.show_help = !hud.show_help;
     }
     if input.has(Action::Dismiss) {
@@ -188,7 +188,7 @@ pub fn update_hud(
     let dist = Vec3::new(s.pos.x - terrain::pilot_pos().x, 0.0, s.pos.z - terrain::pilot_pos().z).length();
     let soc = (1.0 - s.used_mah / c.params.battery_capacity_mah).max(0.0);
     let cell = s.voltage / c.params.battery_cells;
-    let thr = if c.ap.enabled { 0.5 * (c.last_cmd.throttle[0] + c.last_cmd.throttle[1]) } else { c.sticks.throttle };
+    let thr = if c.ap.enabled { c.last_cmd.forward_throttle(&c.params) } else { c.sticks.throttle };
 
     let mode_line = if c.ap.enabled && c.direct {
         format!(
@@ -207,8 +207,8 @@ pub fn update_hud(
         format!(
             "ARDUPILOT {} | {actual}mode sw (RC8): {} | {}",
             if c.ap.connected { "LINKED" } else { "WAITING" },
-            AP_MODES[c.ap.mode_index].0,
-            if c.ap.arm_switch { "ARM SW ON" } else { "arm sw off" }
+            c.mode_switch_name(),
+            if c.arm_switch_is_on() { "ARM SW ON" } else { "arm sw off" }
         )
     } else {
         format!(
@@ -278,7 +278,7 @@ WIND {:.1} m/s from {:03.0} deg  turb {:.0}%{}",
                     let prog = c.launch_progress();
                     // With ArduPilot the throw comes from its motor output, not the stick, and
                     // it won't arm with the throttle up.
-                    let motor = 0.5 * (c.last_cmd.throttle[0] + c.last_cmd.throttle[1]);
+                    let motor = c.last_cmd.forward_throttle(&c.params);
                     let stick_up = c.sticks.throttle > 0.1;
                     if s.carry.is_some() {
                         "Bringing it back to your hand...".into()

@@ -8,7 +8,6 @@ use crate::theme::{P, alpha, color};
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
 use simulation_physics::Phase;
-use crate::sim::AP_MODES;
 use crate::SharedSim;
 use bevy::input::gamepad::GamepadButton;
 use bevy::prelude::*;
@@ -247,7 +246,7 @@ pub fn update_pad_overlay(
     let is_gamepad = input.profile == Some(Profile::Gamepad) && input.pad_view.is_some();
     let (phase, mode, high_rates, ap_enabled, ap_arm, ap_mode, diff, direct) = {
         let c = sim.0.lock().unwrap();
-        (c.state.phase, c.mode, c.high_rates, c.ap.enabled, c.ap.arm_switch, c.ap.mode_index, c.diff_thrust, c.direct)
+        (c.state.phase, c.mode, c.high_rates, c.ap.enabled, c.ap.arm_switch, c.rc_mode_name(c.ap.mode_index), c.diff_thrust, c.direct)
     };
 
     // Auto-show when a gamepad takes over; auto-hide when the plane is thrown.
@@ -289,7 +288,7 @@ pub fn update_pad_overlay(
             Label::ZL => "Throttle cut".to_string(),
             Label::ZR => "Throttle up (hold)".to_string(),
             Label::L => format!("ArduPilot arm switch: {}", if ap_arm { "ON" } else { "off" }),
-            Label::R => format!("ArduPilot mode: {}", AP_MODES[ap_mode].0),
+            Label::R => format!("ArduPilot mode: {}", ap_mode),
             Label::Minus => "Pause".to_string(),
             Label::Plus => "Reset to hand".to_string(),
             Label::LeftStick => {
@@ -306,7 +305,7 @@ pub fn update_pad_overlay(
                 }
             }
             Label::X => {
-                if ap_enabled && !direct { format!("Next ArduPilot mode ({})", AP_MODES[ap_mode].0) } else { format!("Flight mode: {}", mode.label()) }
+                if ap_enabled && !direct { format!("Next ArduPilot mode ({})", ap_mode) } else { format!("Flight mode: {}", mode.label()) }
             }
             Label::A => format!("Camera: {cam_label}"),
             Label::B => {

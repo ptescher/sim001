@@ -13,6 +13,7 @@ pub const DEFAULT_PORT: u16 = 5600;
 const FRAME_MAGIC: [u8; 4] = *b"T1SF";
 const CMD_MAGIC: [u8; 4] = *b"T1SC";
 const STATUS_MAGIC: [u8; 4] = *b"T1SS";
+const RADIO_MAGIC: [u8; 4] = *b"T1SR";
 pub const FORMAT_BGRA8: u16 = 1;
 
 /// Gimbal limits (degrees). Pan is body-relative, + right; tilt + up; hfov is the zoom.
@@ -189,11 +190,69 @@ impl VehicleStatus {
     }
 }
 
+/// A stand-in for the pilot's radio, for acceptance tests: the sticks, and how many times each
+/// of the two switches that the pilot gave to ArduPilot has been pressed (the sim sees a press
+/// when a count changes, as it does when the radio's button goes down). Only a sim started
+/// with `--test-radio` listens.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RadioState {
+    /// The radio is plugged in. A test that doesn't use the radio leaves it out, as a pilot who
+    /// flies with the keyboard does.
+    pub connected: bool,
+    /// Right is positive.
+    pub roll: f32,
+    /// Stick back (nose up) is positive.
+    pub pitch: f32,
+    /// Right is positive.
+    pub yaw: f32,
+    /// 0 is all the way down, 1 all the way up.
+    pub throttle: f32,
+    /// The arm switch (channel 5) is on.
+    pub arm: bool,
+    /// Which of the mode channel's (channel 8) six positions it is in, 0 to 5.
+    pub mode: u8,
+    /// How many times the test has asked the sim to start again with a fresh plane, as pressing
+    /// R does. With a ground station attached, the station restarts ArduPilot for it.
+    pub reset_presses: u8,
+}
+
+impl RadioState {
+    pub fn encode(&self) -> [u8; 16] {
+        let mut b = [0u8; 16];
+        b[0..4].copy_from_slice(&RADIO_MAGIC);
+        let q = |v: f32| ((v.clamp(-1.0, 1.0) * 32767.0).round() as i16).to_le_bytes();
+        b[4..6].copy_from_slice(&q(self.roll));
+        b[6..8].copy_from_slice(&q(self.pitch));
+        b[8..10].copy_from_slice(&q(self.yaw));
+        b[10..12].copy_from_slice(&q(self.throttle.clamp(0.0, 1.0)));
+        b[12] = self.arm as u8;
+        b[13] = self.mode.min(5);
+        b[14] = self.connected as u8;
+        b[15] = self.reset_presses;
+        b
+    }
+
+    fn decode(b: &[u8; 16]) -> RadioState {
+        let q = |i: usize| i16::from_le_bytes([b[i], b[i + 1]]) as f32 / 32767.0;
+        RadioState {
+            connected: b[14] != 0,
+            roll: q(4),
+            pitch: q(6),
+            yaw: q(8),
+            throttle: q(10),
+            arm: b[12] != 0,
+            mode: b[13].min(5),
+            reset_presses: b[15],
+        }
+    }
+}
+
 /// A message from the ground station to the sim.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ClientMsg {
     Gimbal(Gimbal),
     Status(VehicleStatus),
+    Radio(RadioState),
 }
 
 impl ClientMsg {
@@ -204,6 +263,9 @@ impl ClientMsg {
             let n = (b[5] as usize).min(10);
             let mode = String::from_utf8_lossy(&b[6..6 + n]).into_owned();
             return Ok(ClientMsg::Status(VehicleStatus { armed: b[4] != 0, mode }));
+        }
+        if b[0..4] == RADIO_MAGIC {
+            return Ok(ClientMsg::Radio(RadioState::decode(b)));
         }
         GimbalCmd::decode(b).map(|c| ClientMsg::Gimbal(c.0))
     }
@@ -243,6 +305,28 @@ mod tests {
         assert_eq!(ClientMsg::decode(&GimbalCmd(g).encode()).unwrap(), ClientMsg::Gimbal(g));
         let long = VehicleStatus { armed: false, mode: "QSTABILIZE_X".into() };
         assert!(matches!(ClientMsg::decode(&long.encode()).unwrap(), ClientMsg::Status(s) if s.mode == "QSTABILIZE"));
+    }
+
+    #[test]
+    fn a_radio_message_roundtrips() {
+        let r = RadioState { connected: true, roll: -0.5, pitch: 0.25, yaw: 1.0, throttle: 0.75, arm: true, mode: 5, reset_presses: 7 };
+        let back = match ClientMsg::decode(&r.encode()).unwrap() {
+            ClientMsg::Radio(b) => b,
+            other => panic!("{other:?}"),
+        };
+        // Sticks travel as 16-bit integers: close, not exact.
+        assert!((back.roll + 0.5).abs() < 1e-3 && (back.pitch - 0.25).abs() < 1e-3);
+        assert!((back.yaw - 1.0).abs() < 1e-3 && (back.throttle - 0.75).abs() < 1e-3);
+        assert_eq!((back.arm, back.mode), (true, 5));
+        assert!(back.connected);
+        assert_eq!(back.reset_presses, 7, "the reset counter travels too");
+        let unplugged = RadioState { connected: false, ..r };
+        let ClientMsg::Radio(u) = ClientMsg::decode(&unplugged.encode()).unwrap() else { panic!() };
+        assert!(!u.connected, "a radio that isn't plugged in stays unplugged across the wire");
+        // Out-of-range sticks are clamped, not wrapped.
+        let wild = RadioState { connected: true, roll: 9.0, pitch: -9.0, yaw: 0.0, throttle: 5.0, arm: false, mode: 0, reset_presses: 0 };
+        let ClientMsg::Radio(w) = ClientMsg::decode(&wild.encode()).unwrap() else { panic!() };
+        assert!((w.roll - 1.0).abs() < 1e-3 && (w.pitch + 1.0).abs() < 1e-3 && (w.throttle - 1.0).abs() < 1e-3);
     }
 
     #[test]

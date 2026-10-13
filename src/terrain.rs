@@ -331,8 +331,8 @@ impl simulation_physics::Terrain for WorldTerrain {
     }
 }
 
-/// Where the pilot holds the plane: shoulder height at the pilot box, pointing down the runway.
-pub fn hand() -> simulation_physics::Hand {
+/// Where a plane starts: on the ground at the pilot box, pointing down the runway.
+pub fn start() -> simulation_physics::Start {
     let p = pilot_pos();
-    simulation_physics::Hand { pos: Vec3::new(p.x - 0.5, ground_height(p.x, p.z) + 1.6, p.z - 0.6), heading: launch_heading() }
+    simulation_physics::Start { pos: Vec3::new(p.x - 0.5, ground_height(p.x, p.z), p.z - 0.6), heading: launch_heading() }
 }

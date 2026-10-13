@@ -30,10 +30,30 @@ impl CamMode {
     }
 }
 
+/// The field of view (degrees) a zoom knob (0 to 1) picks for the line-of-sight camera: from the
+/// widest, 55, to the narrowest, 14, which are the limits of the automatic zoom too.
+pub fn knob_fov(k: f32) -> f32 {
+    55.0 + k.clamp(0.0, 1.0) * (14.0 - 55.0)
+}
+
+/// The view a knob (0 to 1) picks, in thirds.
+pub fn knob_view(k: f32) -> CamMode {
+    if k < 1.0 / 3.0 {
+        CamMode::LineOfSight
+    } else if k < 2.0 / 3.0 {
+        CamMode::Chase
+    } else {
+        CamMode::Fpv
+    }
+}
+
 #[derive(Resource)]
 pub struct CamState {
     pub mode: CamMode,
     pub auto_zoom: bool,
+    /// The view the radio's view knob last picked: the knob only changes the view when it moves
+    /// to another third, so C still works.
+    knob_view: Option<CamMode>,
     chase_pos: Vec3,
     fov: f32,
 }
@@ -122,7 +142,7 @@ pub fn add_raytracing(cam: &mut EntityCommands) {
 }
 
 pub fn camera_plugin(app: &mut App) {
-    app.insert_resource(CamState { mode: CamMode::LineOfSight, auto_zoom: true, chase_pos: Vec3::ZERO, fov: 50.0 })
+    app.insert_resource(CamState { mode: CamMode::LineOfSight, auto_zoom: true, knob_view: None, chase_pos: Vec3::ZERO, fov: 50.0 })
         .add_systems(Update, update_render_scale);
 }
 
@@ -250,6 +270,14 @@ pub fn update_camera(
     if input.has(Action::Zoom) {
         cs.auto_zoom = !cs.auto_zoom;
     }
+    match input.radio_view.map(knob_view) {
+        Some(v) if cs.knob_view != Some(v) => {
+            cs.knob_view = Some(v);
+            cs.mode = v;
+        }
+        None => cs.knob_view = None,
+        _ => {}
+    }
     let (pos, rot) = {
         let c = sim.0.lock().unwrap();
         (c.state.pos, c.state.rot)
@@ -268,7 +296,9 @@ pub fn update_camera(
             } else {
                 t.look_at(eye + Vec3::NEG_Z, Vec3::Y);
             }
-            if cs.auto_zoom {
+            if let Some(k) = input.radio_zoom {
+                knob_fov(k)
+            } else if cs.auto_zoom {
                 // Keep the plane at a comfortable apparent size, like your eyes "zooming" in.
                 (2.0 * (5.0 / look.length().max(1.0)).atan()).to_degrees().clamp(14.0, 55.0)
             } else {
@@ -330,5 +360,30 @@ fn solari_settings() -> SolariLighting {
         world_cache_position_base_cell_size: env("T1S_CELL").unwrap_or(0.4),
         world_cache_max_gi_ray_distance: 120.0,
         ..SolariLighting::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// P1 zooms the line-of-sight camera: all the way down is the widest view, all the way up the
+    /// narrowest, the same range the automatic zoom works in.
+    #[test]
+    fn the_zoom_knob_runs_from_wide_to_narrow() {
+        assert_eq!(knob_fov(0.0), 55.0);
+        assert_eq!(knob_fov(1.0), 14.0);
+        assert!(knob_fov(0.5) < 55.0 && knob_fov(0.5) > 14.0);
+        assert_eq!(knob_fov(-3.0), 55.0, "out of range is clamped");
+    }
+
+    /// P2 picks the view in thirds: line of sight, chase, then the nose camera.
+    #[test]
+    fn the_view_knob_picks_a_view_in_thirds() {
+        assert_eq!(knob_view(0.0), CamMode::LineOfSight);
+        assert_eq!(knob_view(0.32), CamMode::LineOfSight);
+        assert_eq!(knob_view(0.5), CamMode::Chase);
+        assert_eq!(knob_view(0.68), CamMode::Fpv);
+        assert_eq!(knob_view(1.0), CamMode::Fpv);
     }
 }

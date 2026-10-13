@@ -243,6 +243,7 @@ fn viewer(shared: &Arc<Shared>, core: Arc<Mutex<SimCore>>, mut stream: TcpStream
                 match ClientMsg::decode(&b) {
                     Ok(ClientMsg::Gimbal(g)) => *shared.commanded.lock().unwrap() = Some(g),
                     Ok(ClientMsg::Status(st)) => core.lock().unwrap().ap.gcs = Some((Instant::now(), st.armed, st.mode)),
+                    Ok(ClientMsg::Radio(r)) => core.lock().unwrap().test_radio = Some(r),
                     Err(_) => {}
                 }
             }

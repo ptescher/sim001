@@ -1,0 +1,52 @@
+# T1-S sim controls, an example for the RadioMaster TX15 (EdgeTX, USB joystick mode).
+#
+# Copy this file to controls.cfg in the repository (the sim reads it from the directory you run
+# it in, and F2 writes it there). controls.cfg is not committed, because it belongs to one radio.
+#
+# Format:  radio.<name> = <axis>, <center>, <scale>
+#   <axis>   the channel as the sim names it: LeftStickX, LeftStickY, RightStickX, ... or
+#            Other(<number>) for the channels after those.
+#   <center> the value at the middle of the stick or switch (0.0 for all of these).
+#   <scale>  1.0, or -1.0 to turn the direction round.
+# Press F3 in the sim, move a stick or a switch, and read the axis name that changes.
+
+# ---- Sticks (the first four channels of an AETR model; this is what the sim assumes) --------
+# Roll: right is positive.
+radio.roll = LeftStickX, 0.0000, 1.0000
+# Pitch: the TX15 reports the elevator stick (right stick, up and down) the other way round from
+# what the sim expects, so this is -1.0000: with it, stick forward is nose down.
+radio.pitch = LeftStickY, 0.0000, -1.0000
+# Yaw: rudder stick right is positive.
+radio.yaw = Other(65587), 0.0000, 1.0000
+# Throttle is absolute, as on the real radio: <axis>, <value with the stick down>, <value with the stick up>.
+radio.throttle = RightStickX, -1.0000, 1.0000
+
+# ---- The switches the autopilot reads (the VTOL, flown by ArduPilot) -----------------------
+# Channel 5 (SE) arms the plane: high arms, low disarms. These two lines are guesses: put the
+# axis that changes when you move SE, and the one that changes when you move SA or SB, from F3.
+# If a switch works the wrong way round, change its 1.0000 to -1.0000.
+radio.arm = Other(65588), 0.0000, 1.0000
+# Channel 8 (SA and SB mixed) is the mode channel. It goes to ArduPilot as it is, and ArduPilot
+# divides it into six modes, from the lowest position to the highest: QHOVER, QLOITER, FBWA,
+# CRUISE, AUTO and QRTL. In EdgeTX: CH8 = SB 52% + SA 13%, offset -2%.
+radio.mode = Other(65591), 0.0000, 1.0000
+
+# ---- The two knobs (optional) ----------------------------------------------------------------
+# P1 (CH11) zooms the line-of-sight camera: all the way down is wide, all the way up is narrow.
+# With a zoom knob, the automatic zoom is off. P2 (CH12) picks the view in thirds: line of sight,
+# the chase camera, then the nose camera. These two are guesses; F3 shows the axis that changes.
+radio.zoom = Other(65594), 0.0000, 1.0000
+radio.view = Other(65595), 0.0000, 1.0000
+
+# ---- Which devices are a radio, by a part of their name -----------------------------------
+radio.names = tx15, edgetx, radiomaster, opentx, frsky, jumper, tx16, boxer, zorro
+
+# ---- Buttons (optional; only for the plain T1-S flown from the radio) -----------------------
+# radio.button.launch = South
+# radio.button.reset = Start
+# radio.button.camera = East
+
+# ---- Gamepads (not the radio) ----------------------------------------------------------------
+gamepad.stick_mode = 2
+gamepad.deadzone = 0.07
+gamepad.throttle_rate = 0.7

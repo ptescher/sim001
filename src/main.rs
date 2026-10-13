@@ -8,6 +8,7 @@
 //!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
+//!   --test-radio                                a TX15 stand-in that the ground station's tests move
 //!   --fullscreen                                start borderless full-screen (F11 toggles); macOS Game Mode needs it
 //!   --aircraft ID                               which plane to fly (default t1s-ranger)
 //!   --map NAME                                  fly a real place from maps/NAME (see tools/mapbuild)
@@ -15,6 +16,7 @@
 //!   --expect [suite] [--docs dir]               run the acceptance tests in expectations/ (and write the docs)
 
 mod acceptance;
+mod test_radio;
 mod ardupilot;
 mod camera;
 mod gc_pad;
@@ -31,6 +33,7 @@ mod realsite;
 mod mesh_util;
 mod model;
 mod pad_overlay;
+mod radio_overlay;
 mod scenery;
 mod script;
 mod selftest;
@@ -49,7 +52,7 @@ use bevy::prelude::*;
 use bevy::solari::SolariPlugins;
 use bevy::window::{PresentMode, WindowLevel, WindowResolution};
 use input::{Action, PilotInput};
-use sim::{SimCore, AP_MODES};
+use sim::SimCore;
 use std::sync::{Arc, Mutex};
 
 /// Physics step for standalone mode (ArduPilot mode is paced by SITL's frame rate).
@@ -102,6 +105,8 @@ fn main() {
     }
     // Which plane to fly: `--aircraft ID` (see simulation_aircraft).
     let aircraft = match args.iter().position(|a| a == "--aircraft").and_then(|i| args.get(i + 1)) {
+        // The sim's own acceptance tests are about the plain T1-S, which the keyboard flies.
+        None if flag("--expect") => simulation_aircraft::find("t1s-ranger").unwrap(),
         None => simulation_aircraft::default(),
         Some(id) => simulation_aircraft::find(id.as_str()).unwrap_or_else(|| {
             eprintln!("--aircraft {id}: no such plane. Available: {}", simulation_aircraft::ids().join(", "));
@@ -117,6 +122,14 @@ fn main() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(9002);
     let ap_enabled = flag("--ardupilot");
+    if let Some(why) = sim::cannot_fly(&params, aircraft.title, ap_enabled) {
+        eprintln!("{why}");
+        std::process::exit(1);
+    }
+    if ap_enabled && !params.flight_controller {
+        eprintln!("--ardupilot: the {} has no flight controller (only a receiver and ESCs), so ArduPilot has nothing to fly", aircraft.title);
+        std::process::exit(1);
+    }
     let direct = flag("--direct");
     let raytracing = !flag("--raster");
 
@@ -185,6 +198,7 @@ fn main() {
         .insert_resource(GlobalAmbientLight::NONE)
         .init_resource::<hud::HudState>()
         .init_resource::<pad_overlay::PadOverlayState>()
+        .init_resource::<radio_overlay::RadioOverlayState>()
         .insert_resource(gc_pad::GcPads::new(flag("--debug-input")))
         .configure_sets(Update, (SimSet::Input, SimSet::Logic, SimSet::Visual).chain())
         .add_plugins(input::InputPlugin)
@@ -193,7 +207,7 @@ fn main() {
         .add_systems(Update, sim_update.in_set(SimSet::Logic).run_if(in_state(loading::AppState::Running)))
         .add_systems(
             Update,
-            (model::sync_plane, world::update_windsock, scenery::animate_scenery, camera::update_camera, grass::stream_grass.run_if(in_state(loading::AppState::Running)), hud::update_hud, pad_overlay::update_pad_overlay)
+            (model::sync_plane, world::update_windsock, scenery::animate_scenery, camera::update_camera, grass::stream_grass.run_if(in_state(loading::AppState::Running)), hud::update_hud, pad_overlay::update_pad_overlay, radio_overlay::update_radio_overlay)
                 .chain()
                 .in_set(SimSet::Visual),
         );
@@ -215,8 +229,11 @@ fn main() {
             .add_systems(Update, script::log_state.after(SimSet::Visual))
             .add_systems(Update, script::shot_loading.run_if(in_state(loading::AppState::Loading)));
     }
+    if flag("--test-radio") {
+        app.add_plugins(test_radio::plugin);
+    }
     if let Some(suite) = expect {
-        acceptance::plugin(&mut app, suite, docs);
+        acceptance::plugin(&mut app, suite, docs, params.flight_controller);
     }
     if matches!(app.run(), AppExit::Error(_)) {
         std::process::exit(1);
@@ -236,6 +253,7 @@ fn setup(
     camera::spawn_camera(&mut commands, &settings, &mut images);
     hud::spawn_hud(&mut commands);
     pad_overlay::spawn_pad_overlay(&mut commands);
+    radio_overlay::spawn_radio_overlay(&mut commands);
 }
 
 /// Cmd-Q (macOS) / Ctrl-Q elsewhere ends the sim.
@@ -269,12 +287,16 @@ fn sim_update(
 ) {
     let mut c = sim.0.lock().unwrap();
     c.sticks = input.sticks;
+    c.pilot_radio = input.profile == Some(input::Profile::Radio);
+    c.radio_arm = input.radio_arm;
+    c.radio_mode = input.radio_mode;
 
     for a in input.actions.clone() {
         match a {
             Action::Launch => c.state.launch(),
             Action::Reset => c.reset(),
-            Action::Mode if !c.ap.enabled || c.direct => c.mode = c.mode.next(),
+            // Self-levelling and rate hold are a flight controller's: a plane without one stays in MANUAL.
+            Action::Mode if c.params.flight_controller && (!c.ap.enabled || c.direct) => c.mode = c.mode.next(),
             Action::ControlSource if c.ap.enabled => {
                 c.direct = !c.direct;
                 input.notice = if c.direct {
@@ -292,7 +314,7 @@ fn sim_update(
             }
             Action::ApArm => c.ap.arm_switch = !c.ap.arm_switch,
             Action::ApMode | Action::Mode => {
-                c.ap.mode_index = (c.ap.mode_index + 1) % AP_MODES.len();
+                c.ap.mode_index = (c.ap.mode_index + 1) % c.params.rc_modes.len().max(1);
             }
             _ => {}
         }

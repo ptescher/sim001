@@ -77,6 +77,13 @@ pub struct RadioConfig {
     pub yaw: AxisMap,
     pub throttle: ThrottleMap,
     pub buttons: HashMap<Action, GamepadButton>,
+    /// The switch the pilot gave to ArduPilot arm: a channel that reads up (+1) to arm.
+    pub arm: Option<AxisMap>,
+    /// The channel the pilot gave to ArduPilot mode: it goes to the autopilot as it is.
+    pub mode: Option<AxisMap>,
+    /// A knob for the line-of-sight camera's zoom, and one that picks the camera view.
+    pub zoom: Option<AxisMap>,
+    pub view: Option<AxisMap>,
     /// Substrings of device names that should be treated as a radio.
     pub names: Vec<String>,
     pub calibrated: bool,
@@ -92,6 +99,10 @@ impl Default for RadioConfig {
             yaw: AxisMap { axis: GamepadAxis::Other(0x0001_0033), center: 0.0, scale: 1.0 },
             throttle: ThrottleMap { axis: GamepadAxis::RightStickX, low: -1.0, high: 1.0 },
             buttons: HashMap::new(),
+            arm: None,
+            mode: None,
+            zoom: None,
+            view: None,
             names: ["tx15", "edgetx", "radiomaster", "opentx", "frsky", "jumper", "tx16", "boxer", "zorro"]
                 .iter()
                 .map(|s| s.to_string())
@@ -161,6 +172,14 @@ pub struct PilotInput {
     pub pad_view: Option<PadSnapshot>,
     /// Ignore every controller and fly with the keyboard, whatever is plugged in (`--expect`).
     pub keyboard_only: bool,
+    /// Listen to this one controller only (the test radio, `--test-radio`).
+    pub only_pad: Option<Entity>,
+    /// What the radio's arm switch and mode channel read this frame, if the pilot gave it them.
+    pub radio_arm: Option<bool>,
+    pub radio_mode: Option<u16>,
+    /// The radio's zoom and view knobs, 0 to 1, if the pilot gave it them.
+    pub radio_zoom: Option<f32>,
+    pub radio_view: Option<f32>,
 }
 
 impl PilotInput {
@@ -182,6 +201,11 @@ impl PilotInput {
             notice: String::new(),
             pad_view: None,
             keyboard_only: false,
+            only_pad: None,
+            radio_arm: None,
+            radio_mode: None,
+            radio_zoom: None,
+            radio_view: None,
         };
         if let Ok(text) = std::fs::read_to_string(CONFIG_PATH) {
             parse_config(&text, &mut s.radio, &mut s.gamepad);
@@ -291,6 +315,10 @@ fn parse_config(text: &str, radio: &mut RadioConfig, pad: &mut GamepadConfig) {
                     radio.throttle = ThrottleMap { axis: a, low: lo, high: hi };
                 }
             }
+            "radio.arm" => radio.arm = axis_map(v),
+            "radio.mode" => radio.mode = axis_map(v),
+            "radio.zoom" => radio.zoom = axis_map(v),
+            "radio.view" => radio.view = axis_map(v),
             "radio.names" => {
                 radio.names = v.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect();
             }
@@ -311,7 +339,8 @@ fn parse_config(text: &str, radio: &mut RadioConfig, pad: &mut GamepadConfig) {
     }
 }
 
-fn save_config(radio: &RadioConfig, pad: &GamepadConfig) -> std::io::Result<()> {
+/// The config file's text.
+fn config_text(radio: &RadioConfig, pad: &GamepadConfig) -> String {
     let mut s = String::new();
     let _ = writeln!(s, "# T1-S sim controls. Re-run the radio wizard with F2.");
     let _ = writeln!(s, "# axis = <axis>, <center>, <scale>   (scale sign = direction)");
@@ -326,6 +355,18 @@ fn save_config(radio: &RadioConfig, pad: &GamepadConfig) -> std::io::Result<()> 
         radio.throttle.low,
         radio.throttle.high
     );
+    if let Some(m) = &radio.arm {
+        let _ = writeln!(s, "radio.arm = {}", am(m));
+    }
+    if let Some(m) = &radio.mode {
+        let _ = writeln!(s, "radio.mode = {}", am(m));
+    }
+    if let Some(m) = &radio.zoom {
+        let _ = writeln!(s, "radio.zoom = {}", am(m));
+    }
+    if let Some(m) = &radio.view {
+        let _ = writeln!(s, "radio.view = {}", am(m));
+    }
     let _ = writeln!(s, "radio.names = {}", radio.names.join(", "));
     for (a, b) in &radio.buttons {
         let _ = writeln!(s, "radio.button.{} = {}", action_key(*a), button_to_str(*b));
@@ -333,7 +374,26 @@ fn save_config(radio: &RadioConfig, pad: &GamepadConfig) -> std::io::Result<()> 
     let _ = writeln!(s, "gamepad.stick_mode = {}", pad.stick_mode);
     let _ = writeln!(s, "gamepad.deadzone = {}", pad.deadzone);
     let _ = writeln!(s, "gamepad.throttle_rate = {}", pad.throttle_rate);
-    std::fs::write(CONFIG_PATH, s)
+    s
+}
+
+fn save_config(radio: &RadioConfig, pad: &GamepadConfig) -> std::io::Result<()> {
+    std::fs::write(CONFIG_PATH, config_text(radio, pad))
+}
+
+/// Is a switch on a channel up? (A three-position switch reads -1, 0 and +1.) Only up arms.
+pub fn arm_switch_on(v: f32) -> bool {
+    v > 0.5
+}
+
+/// A knob's -1 to +1 as 0 (all the way down) to 1.
+pub fn knob(v: f32) -> f32 {
+    ((v + 1.0) / 2.0).clamp(0.0, 1.0)
+}
+
+/// A channel's -1 to +1 as the µs ArduPilot reads.
+pub fn channel_pwm(v: f32) -> u16 {
+    (1500.0 + 500.0 * v.clamp(-1.0, 1.0)).round() as u16
 }
 
 // ---------- systems ----------
@@ -428,9 +488,9 @@ pub fn read_input(
     // Pick a controller: prefer a radio, else the first gamepad. When the GameController
     // framework sees a gamepad, raw-HID (gilrs) gamepads are ignored: they are the same
     // physical device, and gilrs misreads some of them (Switch Pro on macOS).
-    let gc_pad = gc.pad.clone().filter(|_| !input.keyboard_only);
+    let gc_pad = gc.pad.clone().filter(|_| !input.keyboard_only && input.only_pad.is_none());
     let mut chosen: Option<(Entity, &Gamepad, String, Profile)> = None;
-    for (e, pad, name) in pads.iter().filter(|_| !input.keyboard_only) {
+    for (e, pad, name) in pads.iter().filter(|_| !input.keyboard_only).filter(|(e, ..)| input.only_pad.is_none_or(|o| o == *e)) {
         let name = name.map(|n| n.as_str().to_string()).unwrap_or_else(|| "controller".into());
         let profile = input
             .profile_override
@@ -517,6 +577,10 @@ pub fn read_input(
 
     // Controller sticks and buttons.
     let mut sticks = input.kb;
+    input.radio_arm = None;
+    input.radio_mode = None;
+    input.radio_zoom = None;
+    input.radio_view = None;
     input.source = "keyboard".into();
     input.profile = None;
     input.active_pad = None;
@@ -536,11 +600,17 @@ pub fn read_input(
                     sticks.pitch = (-r.pitch.read(pad) + input.kb.pitch).clamp(-1.0, 1.0);
                     sticks.yaw = (r.yaw.read(pad) + input.kb.yaw).clamp(-1.0, 1.0);
                     sticks.throttle = if input.kb_throttle_used && thr < 0.02 { input.kb.throttle } else { thr };
+                    let arm = r.arm.map(|m| arm_switch_on(m.read(pad)));
+                    let mode = r.mode.map(|m| channel_pwm(m.read(pad)));
                     for (a, b) in &r.buttons {
                         if pad.just_pressed(*b) {
                             input.actions.push(*a);
                         }
                     }
+                    input.radio_arm = arm;
+                    input.radio_mode = mode;
+                    input.radio_zoom = r.zoom.map(|m| knob(m.read(pad)));
+                    input.radio_view = r.view.map(|m| knob(m.read(pad)));
                 }
                 Profile::Gamepad => {
                     let snap = PadSnapshot {
@@ -777,4 +847,74 @@ fn handled_by_game_controller(name: &str) -> bool {
     ["pro controller", "nintendo", "joy-con", "xbox", "dualsense", "dualshock", "wireless controller"]
         .iter()
         .any(|k| n.contains(k))
+}
+
+#[cfg(test)]
+mod switch_tests {
+    use super::*;
+
+    /// A three-position switch on a channel reads -1 (down), 0 (middle) and +1 (up). Up arms; the
+    /// middle and down do not.
+    #[test]
+    fn an_arm_switch_is_on_only_when_it_is_up() {
+        assert!(arm_switch_on(1.0));
+        assert!(arm_switch_on(0.8));
+        assert!(!arm_switch_on(0.0), "the middle disarms");
+        assert!(!arm_switch_on(-1.0));
+    }
+
+    /// The mode channel reaches ArduPilot in µs: -1 is 1000, the middle 1500 and +1 is 2000.
+    #[test]
+    fn a_mode_channel_becomes_microseconds() {
+        assert_eq!((channel_pwm(-1.0), channel_pwm(0.0), channel_pwm(1.0)), (1000, 1500, 2000));
+        assert_eq!(channel_pwm(5.0), 2000, "clamped");
+        assert_eq!(channel_pwm(-0.34), 1330);
+    }
+
+    /// The switches the pilot gave are in the config file, and read back.
+    #[test]
+    fn the_switches_are_saved_and_read_back() {
+        let mut radio = RadioConfig::default();
+        let mut pad = GamepadConfig::default();
+        assert!(radio.arm.is_none() && radio.mode.is_none());
+        parse_config("radio.arm = Other(65589), 0.0, 1.0\nradio.mode = Other(65590), 0.0, 1.0\n", &mut radio, &mut pad);
+        let arm = radio.arm.expect("arm axis");
+        assert_eq!((arm.center, arm.scale), (0.0, 1.0));
+        assert!(radio.mode.is_some());
+        let text = config_text(&radio, &pad);
+        let mut again = RadioConfig::default();
+        parse_config(&text, &mut again, &mut GamepadConfig::default());
+        assert_eq!(again.arm, radio.arm);
+        assert_eq!(again.mode, radio.mode);
+    }
+
+    /// The two knobs (zoom and camera view) are saved and read back too.
+    #[test]
+    fn the_knobs_are_saved_and_read_back() {
+        let mut radio = RadioConfig::default();
+        assert!(radio.zoom.is_none() && radio.view.is_none());
+        parse_config("radio.zoom = Other(65594), 0.0, 1.0\nradio.view = Other(65595), 0.0, -1.0\n", &mut radio, &mut GamepadConfig::default());
+        assert!(radio.zoom.is_some());
+        assert_eq!(radio.view.expect("view").scale, -1.0);
+        let text = config_text(&radio, &GamepadConfig::default());
+        let mut again = RadioConfig::default();
+        parse_config(&text, &mut again, &mut GamepadConfig::default());
+        assert_eq!((again.zoom, again.view), (radio.zoom, radio.view));
+        // A knob reads -1 to +1, and the camera wants 0 to 1.
+        assert_eq!((knob(-1.0), knob(0.0), knob(1.0), knob(3.0)), (0.0, 0.5, 1.0, 1.0));
+    }
+
+    /// The example file in the repository is a valid config, with the switches in it.
+    #[test]
+    fn the_example_controls_file_parses() {
+        let mut radio = RadioConfig::default();
+        let mut pad = GamepadConfig::default();
+        parse_config(include_str!("../controls.cfg.example"), &mut radio, &mut pad);
+        assert!(radio.calibrated, "the sticks are there");
+        assert_eq!(radio.throttle.low, -1.0);
+        assert!(radio.arm.is_some() && radio.mode.is_some(), "SE and the six buttons");
+        assert!(radio.zoom.is_some() && radio.view.is_some(), "the two knobs");
+        assert!(radio.names.iter().any(|n| n == "tx15"));
+        assert_eq!(pad.stick_mode, 2);
+    }
 }
