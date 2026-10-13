@@ -37,7 +37,7 @@ Type is monospaced (Menlo) for the instruments, labels, headings and code, with 
 sans for prose in the docs. Corners are concentric: window 17, panel 11, screen 6, control 4,
 each inset stepping the radius down by the inset.
 
-The radio themes are checked the same way: the radio's main text reads at 4.5:1 on every background it sits on (the bars, the labels, a focused, edited or active field), and so do its labels, warnings and quick menu.
+The radio themes are checked the same way: the radio's main text reads at 4.5:1 on every background it sits on (and is the palette's secondary ink, not its extreme, because the radio fills its monitor bars with that colour too) (the bars, the labels, a focused, edited or active field), and so do its labels, warnings and quick menu.
 
 The theme's tests check that every ink reads at WCAG AA (4.5:1) on every surface it sits on,
 and that each signal reads on its own fill, in both variants. The docs site's

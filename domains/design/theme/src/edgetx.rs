@@ -9,7 +9,10 @@ use std::fmt::Write;
 /// The radio's thirteen colour variables, in the order of its theme file.
 ///
 /// - `PRIMARY1` is the text of labels and unfocused buttons: the console's phosphor green.
-/// - `PRIMARY2` is the main text and icons. `PRIMARY3` is the scroll marker and the inactive icons.
+/// - `PRIMARY2` is the main text and icons, and also the radio's solid fills (the monitor's bars,
+///   the knobs), so it is the palette's secondary ink and not its extreme: near-black text on
+///   the day theme would make black bars, and near-white on the night theme glaring ones.
+///   `PRIMARY3` is the scroll marker and the inactive icons.
 /// - `SECONDARY1` is the top and bottom bars, `SECONDARY2` the labels and buttons, `SECONDARY3`
 ///   the main screen and popups.
 /// - `FOCUS`, `EDIT` and `ACTIVE` are the backgrounds of a focused field, a field being edited
@@ -17,8 +20,8 @@ use std::fmt::Write;
 pub fn colors(p: &Palette) -> [(&'static str, Rgb); 13] {
     [
         ("PRIMARY1", p.ok),
-        ("PRIMARY2", p.text),
-        ("PRIMARY3", p.muted),
+        ("PRIMARY2", p.muted),
+        ("PRIMARY3", p.bezel_edge),
         ("SECONDARY1", p.title),
         ("SECONDARY2", p.control),
         ("SECONDARY3", p.screen),
@@ -26,10 +29,16 @@ pub fn colors(p: &Palette) -> [(&'static str, Rgb); 13] {
         ("EDIT", p.caution_fill),
         ("ACTIVE", p.control_hover),
         ("WARNING", p.warning),
-        ("DISABLED", p.faint),
+        ("DISABLED", mix(p.faint, p.muted)),
         ("QM_BG", p.bezel),
         ("QM_FG", p.text),
     ]
+}
+
+/// Halfway between two colours.
+fn mix(a: Rgb, b: Rgb) -> Rgb {
+    let m = |x: u8, y: u8| ((x as u32 + y as u32) / 2) as u32;
+    Rgb(m(a.r(), b.r()) << 16 | m(a.g(), b.g()) << 8 | m(a.b(), b.b()))
 }
 
 /// The contents of `theme.yml`.
@@ -150,9 +159,20 @@ mod tests {
             assert!(r >= 4.5, "{}: a warning is {r:.1}:1", p.name);
             let r = c("QM_FG").contrast(c("QM_BG"));
             assert!(r >= 4.5, "{}: the quick menu is {r:.1}:1", p.name);
-            // Disabled things are dim, but still there.
+            // Disabled things (the channel names on the monitor) are dim, but a pilot can read them.
             let r = c("DISABLED").contrast(c("SECONDARY3"));
-            assert!(r >= 1.5, "{}: disabled is {r:.1}:1", p.name);
+            assert!(r >= 2.5, "{}: disabled is {r:.1}:1", p.name);
+        }
+    }
+
+    /// The radio fills things with its main text colour as well (the monitor's bars, the knobs),
+    /// so that colour can't be the extreme of the palette: black on the day theme, white on the
+    /// night one. It reads at 4.5:1, and stays under 10:1 against the main screen.
+    #[test]
+    fn the_main_text_is_not_the_extreme_of_the_palette() {
+        for p in [NIGHT, DAY] {
+            let r = get(&p, "PRIMARY2").contrast(get(&p, "SECONDARY3"));
+            assert!((4.5..10.0).contains(&r), "{}: the main text is {r:.1}:1 on the screen", p.name);
         }
     }
 
