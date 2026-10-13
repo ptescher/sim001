@@ -52,6 +52,13 @@ fn run_plan(suite: &Suite, plan: &Plan, driver: &mut dyn Driver, opts: &RunOptio
 
     let mut missing: Vec<String> =
         needs(suite, plan).into_iter().filter(|n| !driver.supports(*n)).map(|n| n.to_string()).collect();
+    for (x, c) in plan.start.iter() {
+        let var = suite.vocabulary.var(x);
+        let value = var.witness(c).expect("plans only arrange satisfiable states");
+        if !driver.can_arrange(var, &value) {
+            missing.push(format!("arrange {} as {value}", var.subject));
+        }
+    }
     missing.sort();
     missing.dedup();
     if !missing.is_empty() {

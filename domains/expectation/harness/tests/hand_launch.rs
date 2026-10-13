@@ -92,3 +92,47 @@ fn results_save_and_load() {
     assert_eq!(stale.results[0].status, Status::NotRun);
     assert_eq!(stale.results[1].status, report.results[1].status);
 }
+
+/// A driver that does everything the toy world does, except start with the flight mode MANUAL.
+struct NoManualStart(Bindings<world::World>);
+
+impl expectation_harness::Driver for NoManualStart {
+    fn reset(&mut self) -> Result<(), String> {
+        expectation_harness::Driver::reset(&mut self.0)
+    }
+    fn arrange(&mut self, var: &expectation_model::Variable, value: &expectation_model::Value) -> Result<(), String> {
+        expectation_harness::Driver::arrange(&mut self.0, var, value)
+    }
+    fn set(&mut self, var: &expectation_model::Variable, value: &expectation_model::Value) -> Result<(), String> {
+        expectation_harness::Driver::set(&mut self.0, var, value)
+    }
+    fn perform(&mut self, event: &expectation_model::Event) -> Result<(), String> {
+        expectation_harness::Driver::perform(&mut self.0, event)
+    }
+    fn observe(&mut self, var: &expectation_model::Variable) -> Result<expectation_model::Value, String> {
+        expectation_harness::Driver::observe(&mut self.0, var)
+    }
+    fn settle(&mut self) {
+        expectation_harness::Driver::settle(&mut self.0)
+    }
+    fn advance(&mut self) -> expectation_harness::Progress {
+        expectation_harness::Driver::advance(&mut self.0)
+    }
+    fn supports(&self, need: expectation_harness::Need<'_>) -> bool {
+        expectation_harness::Driver::supports(&self.0, need)
+    }
+    fn can_arrange(&self, var: &expectation_model::Variable, value: &expectation_model::Value) -> bool {
+        !(var.key == "flight mode" && value.as_str() == Some("MANUAL"))
+    }
+}
+
+#[test]
+fn a_value_the_driver_cant_arrange_is_not_supported_yet() {
+    let a = suite();
+    let mut driver = NoManualStart(world::driver(false));
+    let report = a.run(&mut driver, &RunOptions::default());
+    // Not a failure: every test starts in MANUAL, and this system can't be put there.
+    assert!(report.passed(), "{}", report.failures(&a.suite, &a.plans));
+    assert!(report.results.iter().all(|r| r.status == Status::Unsupported));
+    assert!(report.results.iter().all(|r| r.start.error.as_deref().unwrap().contains("arrange the flight mode as MANUAL")));
+}

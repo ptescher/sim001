@@ -76,6 +76,15 @@ pub trait Driver {
     /// What `var` is now. Enumerated values are matched to the vocabulary ignoring case.
     fn observe(&mut self, var: &Variable) -> Result<Value, String>;
 
+    /// Can it put `var` in `value` to start a test? [`Driver::supports`] only knows the state; a
+    /// driver that can arrange some of its values and not others (a plane with no flight
+    /// controller can't start with one fitted) says so here, and the tests that need the rest
+    /// are "not supported yet" instead of failing.
+    fn can_arrange(&self, var: &Variable, value: &Value) -> bool {
+        let _ = (var, value);
+        true
+    }
+
     /// Let the system settle after an action, before anything is observed: long enough for
     /// what should happen to happen, and for what shouldn't to show. Without it, "Then the
     /// aircraft is in hand" could pass in the instant before a launch.
