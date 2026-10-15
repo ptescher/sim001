@@ -1302,10 +1302,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "design_theme"
-version = "0.1.0"
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1606,18 +1602,18 @@ dependencies = [
 name = "expectation_docs"
 version = "0.1.0"
 dependencies = [
- "design_theme",
  "expectation_graph",
  "expectation_model",
  "expectation_story",
+ "illustration_theme",
 ]
 
 [[package]]
 name = "expectation_graph"
 version = "0.1.0"
 dependencies = [
- "design_theme",
  "expectation_model",
+ "illustration_theme",
 ]
 
 [[package]]
@@ -2736,6 +2732,10 @@ dependencies = [
  "icu_normalizer",
  "icu_properties",
 ]
+
+[[package]]
+name = "illustration_theme"
+version = "0.1.0"
 
 [[package]]
 name = "image"
@@ -5539,11 +5539,11 @@ version = "0.1.0"
 dependencies = [
  "communication_telemetry",
  "communication_traffic",
- "design_theme",
  "expectation_harness",
  "expectation_model",
  "expectation_story",
  "gpui",
+ "illustration_theme",
  "image",
  "mavlink",
  "objc2",

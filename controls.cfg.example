@@ -27,7 +27,7 @@ radio.throttle = RightStickX, -1.0000, 1.0000
 # If a switch works the wrong way round, change its 1.0000 to -1.0000.
 radio.arm = Other(65588), 0.0000, 1.0000
 # Channel 8 is the mode channel: the six buttons on the front of the radio (see
-# radio/aero-6pos.yml). It goes to ArduPilot as it is, and ArduPilot divides it into six modes,
+# domains/teleoperation/edgetx/MODELS/aero-6pos.yml). It goes to ArduPilot as it is, and ArduPilot divides it into six modes,
 # button 1 to 6: QHOVER, QLOITER, FBWA, CRUISE, AUTO and QRTL.
 radio.mode = Other(65591), 0.0000, 1.0000
 

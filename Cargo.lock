@@ -2570,10 +2570,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "design_theme"
-version = "0.1.0"
-
-[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2758,19 +2754,19 @@ dependencies = [
 name = "expectation_docs"
 version = "0.1.0"
 dependencies = [
- "design_theme",
  "expectation_graph",
  "expectation_model",
  "expectation_story",
+ "illustration_theme",
 ]
 
 [[package]]
 name = "expectation_graph"
 version = "0.1.0"
 dependencies = [
- "design_theme",
  "expectation_language",
  "expectation_model",
+ "illustration_theme",
 ]
 
 [[package]]
@@ -3392,6 +3388,10 @@ name = "icu_segmenter_data"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae293c039020f9ec10710af98d29ce6aa2051486638b49c9a6409f3b4a9e98ad"
+
+[[package]]
+name = "illustration_theme"
+version = "0.1.0"
 
 [[package]]
 name = "image"
@@ -5484,11 +5484,11 @@ dependencies = [
  "communication_radio",
  "communication_telemetry",
  "communication_traffic",
- "design_theme",
  "expectation_harness",
  "expectation_model",
  "expectation_story",
  "hidapi",
+ "illustration_theme",
  "image",
  "libc",
  "objc2 0.6.5",
@@ -5887,7 +5887,7 @@ name = "visualization_engine"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "design_theme",
+ "illustration_theme",
  "libc",
  "simulation_aircraft",
  "simulation_physics",

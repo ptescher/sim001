@@ -92,13 +92,13 @@ See [domains/recreation](domains/recreation/README.md).
 
 ### RadioMaster TX15 (EdgeTX)
 
-1. **The model.** Plug the radio in as USB storage and copy [radio/aero-6pos.yml](radio/aero-6pos.yml) to the `MODELS` folder of its SD card, then choose that model (T1S VTOL) in the radio. Channels 1 to 4 are the sticks, **CH5 is SE** (the arm switch: in is armed), **CH8 is the mode channel** (the six buttons on the front, 1 to 6, give QHOVER, QLOITER, FBWA, CRUISE, AUTO and QRTL), and **CH11 and CH12 are the knobs P1 and P2**. Then plug the radio in over USB and choose **USB Joystick (HID)** when EdgeTX asks.
+1. **The model.** Plug the radio in as USB storage and copy [domains/teleoperation/edgetx/MODELS/aero-6pos.yml](domains/teleoperation/edgetx/MODELS/aero-6pos.yml) to the `MODELS` folder of its SD card, then choose that model (T1S VTOL) in the radio. Channels 1 to 4 are the sticks, **CH5 is SE** (the arm switch: in is armed), **CH8 is the mode channel** (the six buttons on the front, 1 to 6, give QHOVER, QLOITER, FBWA, CRUISE, AUTO and QRTL), and **CH11 and CH12 are the knobs P1 and P2**. Then plug the radio in over USB and choose **USB Joystick (HID)** when EdgeTX asks.
 2. **The sticks.** Start the station (see Run). In the sim window, press **F2**, centre the sticks with the throttle all the way down, press Enter, and move each stick when asked. Press Enter to skip the buttons it asks about afterwards.
 3. **The switches.** Copy [controls.cfg.example](controls.cfg.example) to `controls.cfg`. Press **F3**, move SE, press a mode button and turn each knob, and put the axis name that changes on the matching line (`radio.arm`, `radio.mode`, `radio.zoom`, `radio.view`).
 
 **P1** zooms the line-of-sight camera (the automatic zoom is off while the knob is mapped), and **P2** picks the view in thirds: line of sight, chase, nose camera.
 
-**The theme.** [radio/THEMES](radio/THEMES) has the console's colours as two EdgeTX themes, **T1S Night** and **T1S Day**. Copy the folders to the `THEMES` folder of the SD card and choose one under Radio Settings, Themes. They are generated from the shared theme (`cargo run -p design_theme --example edgetx -- radio/THEMES`).
+**The theme.** [domains/teleoperation/edgetx/THEMES](domains/teleoperation/edgetx/THEMES) has the console's colours as two EdgeTX themes, **T1S Night** and **T1S Day**. Copy the folders to the `THEMES` folder of the SD card and choose one under Radio Settings, Themes. They are generated from the shared theme (`cargo run -p illustration_theme --example edgetx -- domains/teleoperation/edgetx/THEMES`).
 
 Throttle is absolute, as on the real radio. Rates and expo come from the sim (L toggles rates). The model is a plain AETR plane with no mixing, because the autopilot (or, for the plain T1-S, the sim) does the V-tail mixing. A radio overlay (H) shows the sticks, the arm switch and the lit mode.
 

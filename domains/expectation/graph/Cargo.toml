@@ -6,7 +6,7 @@ description = "Expectation domain: conflict detection, override precedence and t
 
 [dependencies]
 expectation_model = { path = "../model" }
-design_theme = { path = "../../design/theme" }
+illustration_theme = { path = "../../illustration/theme" }
 
 [dev-dependencies]
 expectation_language = { path = "../language" }

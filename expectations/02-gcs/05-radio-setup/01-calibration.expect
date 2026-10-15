@@ -4,7 +4,7 @@ Feature: Setting up the TX15
   In the radio, put it in USB joystick mode: plug it in with the USB cable, and choose
   USB Joystick (HID) when EdgeTX asks. The sim sees every channel that the model mixes as an
   axis. A switch is not a channel until the model mixes it into one. The repository has a model
-  that does this, radio/aero-6pos.yml: copy it to the MODELS folder of the radio's SD card
+  that does this, domains/teleoperation/edgetx/MODELS/aero-6pos.yml: copy it to the MODELS folder of the radio's SD card
   (plug the radio in as USB storage), and choose it in the radio. Its channels are:
 
   Channels 1 to 4 are the sticks (aileron, elevator, throttle, rudder). Channel 5 is SE,

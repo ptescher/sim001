@@ -17,7 +17,8 @@ the compiler enforce that.
 
 | Domain | What it is |
 | --- | --- |
-| [design](design/README.md) | The look shared by the ground station, the sim's HUD and the docs: palettes, type and corners. |
+| [teleoperation](teleoperation/README.md) | The pilot's radio: the TX15's EdgeTX models and themes, laid out as its SD card so EdgeTX Companion can simulate them. |
+| [illustration](illustration/README.md) | The look shared by the ground station, the sim's HUD and the docs: palettes, type and corners. |
 | [simulation](simulation/README.md) | The flight model and the planes it flies: aircraft descriptions and the physics, headless and independent of any renderer. |
 | [recreation](recreation/README.md) | Games and trials against computer pilots who fly the same plane on the same physics: a pylon race and tag. |
 | [visualization](visualization/README.md) | The 3D view (terrain, forest, water, sky, the planes and the cameras) and the place it shows. It draws a scene that the simulator or a real plane's telemetry fills in, and it saves pictures for camera-based systems. |

@@ -1,12 +1,12 @@
-//! The shared theme (domains/design/theme) as Bevy colours. The HUD and overlays use the
+//! The shared theme (domains/illustration/theme) as Bevy colours. The HUD and overlays use the
 //! console's Night palette, the same as the ground station: they sit over a bright 3D view, so
 //! each is a little screen of its own.
 
 use bevy::color::Color;
-use design_theme::Rgb;
+use illustration_theme::Rgb;
 
-pub use design_theme::NIGHT as P;
-pub use design_theme::geometry;
+pub use illustration_theme::NIGHT as P;
+pub use illustration_theme::geometry;
 
 pub const fn color(c: Rgb) -> Color {
     Color::srgb_u8(c.r(), c.g(), c.b())

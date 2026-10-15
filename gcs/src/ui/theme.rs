@@ -1,14 +1,14 @@
 //! Console palette: tan/olive bezels around near-black screens with phosphor-green symbology,
 //! amber cautions and red warnings, after a fixed-wing UAS ground control station. The colours,
-//! type and corners come from the shared theme (domains/design/theme, its Night variant), which
+//! type and corners come from the shared theme (domains/illustration/theme, its Night variant), which
 //! the sim's HUD and the docs use too; this puts them in the shape GPUI wants.
 
-use design_theme::{NIGHT as P, geometry};
+use illustration_theme::{NIGHT as P, geometry};
 use gpui::{Hsla, Rgba, rgb};
 
-pub const FONT: &str = design_theme::typography::UI;
+pub const FONT: &str = illustration_theme::typography::UI;
 
-// Corners are concentric with the window's (see design_theme::geometry).
+// Corners are concentric with the window's (see illustration_theme::geometry).
 /// Margin between the window edge and the bezels, and between bezels.
 pub const GAP: f32 = geometry::GAP;
 pub const PANEL_RADIUS: f32 = geometry::PANEL_RADIUS;

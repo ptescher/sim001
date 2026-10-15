@@ -4,7 +4,7 @@
 # tools/mapbuild keep their own lockfiles and build on their own.
 [workspace]
 members = ["station", "domains/*/*"]
-exclude = ["gcs", "tools/mapbuild", "vendor/bevy_solari"]
+exclude = ["gcs", "tools/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
 
 [package]
 name = "t1s_sim"
@@ -32,7 +32,7 @@ communication_radio = { path = "domains/communication/radio" }
 communication_telemetry = { path = "domains/communication/telemetry" }
 communication_traffic = { path = "domains/communication/traffic" }
 # The shared look: the HUD and overlays use the same theme as the ground station and the docs.
-design_theme = { path = "domains/design/theme" }
+illustration_theme = { path = "domains/illustration/theme" }
 # Acceptance tests (`--expect`): see domains/expectation and expectations/.
 expectation_harness = { path = "domains/expectation/harness" }
 expectation_model = { path = "domains/expectation/model" }

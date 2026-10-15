@@ -18,7 +18,7 @@ fn colours(p: &Palette) -> String {
 pub fn stylesheet() -> String {
     let (day, night) = (colours(&DAY), colours(&NIGHT));
     format!(
-        "/* The T1-S theme (domains/design/theme). Generated: edit the theme, not this file. */\n\
+        "/* The T1-S theme (domains/illustration/theme). Generated: edit the theme, not this file. */\n\
          :root {{\n  --font-mono: {mono};\n  --font-sans: {sans};\n  \
          --radius-window: {w}px; --radius-panel: {p}px; --radius-screen: {sc}px; --radius-control: {c}px;\n  \
          --gap: {g}px; --bezel-pad: {bp}px;\n}}\n\

@@ -17,7 +17,7 @@ recreation_games = { path = "../domains/recreation/games" }
 communication_traffic = { path = "../domains/communication/traffic" }
 communication_telemetry = { path = "../domains/communication/telemetry" }
 # The shared look (the docs and the sim's HUD use it too).
-design_theme = { path = "../domains/design/theme" }
+illustration_theme = { path = "../domains/illustration/theme" }
 raw-window-handle = "0.6"
 # Acceptance tests (`--expect`): see domains/expectation and expectations/.
 expectation_harness = { path = "../domains/expectation/harness" }

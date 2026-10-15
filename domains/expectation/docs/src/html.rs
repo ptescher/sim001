@@ -67,7 +67,7 @@ pub fn pages(d: &Docs, f: &Facts) -> Vec<Page> {
     pages.push(Page { path: "site/map.html".into(), content: site.map_page() });
     pages.push(Page { path: "site/vocabulary.html".into(), content: site.vocabulary_page() });
     pages.push(Page { path: "site/glossary.html".into(), content: site.glossary_page() });
-    pages.push(Page { path: "site/assets/theme.css".into(), content: design_theme::css::stylesheet() });
+    pages.push(Page { path: "site/assets/theme.css".into(), content: illustration_theme::css::stylesheet() });
     pages.push(Page { path: "site/assets/style.css".into(), content: STYLE.into() });
     pages.push(Page { path: "site/theme.html".into(), content: site.theme_page() });
     pages.push(Page {
@@ -1065,10 +1065,10 @@ impl Site<'_> {
 
     /// The shared theme itself: both palettes, and the console's controls in each.
     fn theme_page(&self) -> String {
-        use design_theme::{DAY, NIGHT, geometry};
+        use illustration_theme::{DAY, NIGHT, geometry};
         let mut o = String::from(
             "<h1>Theme</h1><p class=\"lede\">The look the ground station, the sim's HUD and these docs share, from \
-             <code>domains/design/theme</code>. Night is the console: near-black screens in olive bezels, phosphor-green \
+             <code>domains/illustration/theme</code>. Night is the console: near-black screens in olive bezels, phosphor-green \
              symbology, amber cautions and red warnings. Day is the same instrument in sunlight, and these docs use it in a \
              light browser. Colours are roles, so what each one is for is the same in both.</p>",
         );
@@ -1111,8 +1111,8 @@ impl Site<'_> {
              <tr><td>Corners</td><td>window {} · panel {} · screen {} · control {} (each inset steps the radius down by the inset)</td></tr>\
              <tr><td>Spacing</td><td>gap {} · bezel padding {}</td></tr></tbody></table>\
              <p class=\"muted\">Every ink reads at 4.5:1 or better on every surface it sits on, in both variants. The theme's tests check it.</p>",
-            esc(design_theme::typography::MONO),
-            esc(design_theme::typography::SANS),
+            esc(illustration_theme::typography::MONO),
+            esc(illustration_theme::typography::SANS),
             geometry::WINDOW_RADIUS,
             geometry::PANEL_RADIUS,
             geometry::SCREEN_RADIUS,
@@ -1127,8 +1127,8 @@ impl Site<'_> {
 /// A 16:9 stand-in for a screenshot that doesn't exist: a dark screen in a bezel, in the
 /// theme's colours, following the reader's light or dark preference.
 fn placeholder(title: &str, subtitle: &str) -> String {
-    let (d, n) = (design_theme::DAY, design_theme::NIGHT);
-    let vars = |p: &design_theme::Palette| {
+    let (d, n) = (illustration_theme::DAY, illustration_theme::NIGHT);
+    let vars = |p: &illustration_theme::Palette| {
         format!(
             "--bezel:{};--edge:{};--screen:{};--stripe:{};--icon:{};--text:{};--muted:{};",
             p.bezel.css(),
@@ -1164,7 +1164,7 @@ svg {{ {day} }}
 "##,
         day = vars(&d),
         night = vars(&n),
-        mono = design_theme::typography::MONO.replace('"', "'"),
+        mono = illustration_theme::typography::MONO.replace('"', "'"),
     )
 }
 

@@ -8,4 +8,4 @@ description = "Expectation domain: documentation from expectations, stories, res
 expectation_model = { path = "../model" }
 expectation_graph = { path = "../graph" }
 expectation_story = { path = "../story" }
-design_theme = { path = "../../design/theme" }
+illustration_theme = { path = "../../illustration/theme" }

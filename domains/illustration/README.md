@@ -1,4 +1,4 @@
-# Design
+# Illustration
 
 The project's look, shared by everything with a screen:
 
@@ -8,13 +8,13 @@ The project's look, shared by everything with a screen:
 | Sim HUD, controller overlay and loading screen (Bevy) | `domains/visualization/engine/src/theme.rs` turns the Night roles into Bevy colours (`color(P.caution)`) |
 | Docs site (`docs/site/`) | `assets/theme.css` is generated from the theme: Day for light browsers, Night for dark ones. The site's own CSS uses only its tokens |
 | Docs Markdown | the Mermaid map uses the Day colours, for GitHub's light page |
-| TX15 radio (EdgeTX) | `design_theme::edgetx` places the roles on the radio's thirteen colour variables. `cargo run -p design_theme --example edgetx -- radio/THEMES` writes the Night and Day theme folders (`theme.yml`, a logo and a background) for the SD card's THEMES folder |
+| TX15 radio (EdgeTX) | `illustration_theme::edgetx` places the roles on the radio's thirteen colour variables. `cargo run -p illustration_theme --example edgetx -- domains/teleoperation/edgetx/THEMES` writes the Night and Day theme folders (`theme.yml`, a logo and a background) for the SD card's THEMES folder |
 
 ## Modules
 
 | Crate | Path | Role |
 | --- | --- | --- |
-| `design_theme` | [theme/](theme) | The palettes, type and geometry as plain data, plus a CSS export. No dependencies |
+| `illustration_theme` | [theme/](theme) | The palettes, type and geometry as plain data, plus a CSS export. No dependencies |
 
 ## The theme
 

@@ -3,7 +3,7 @@
 
 use crate::Analysis;
 use crate::flow::Node;
-use design_theme::DAY as P;
+use illustration_theme::DAY as P;
 use expectation_model::{ExpId, Suite};
 use std::fmt::Write;
 

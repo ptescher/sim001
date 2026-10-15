@@ -8,7 +8,7 @@ description = "Visualization domain: the 3D view (terrain, vegetation, water, sk
 visualization_world = { path = "../world" }
 simulation_aircraft = { path = "../../simulation/aircraft" }
 simulation_physics = { path = "../../simulation/physics" }
-design_theme = { path = "../../design/theme" }
+illustration_theme = { path = "../../illustration/theme" }
 bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
