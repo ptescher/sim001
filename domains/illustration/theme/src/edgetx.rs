@@ -8,26 +8,32 @@ use std::fmt::Write;
 
 /// The radio's thirteen colour variables, in the order of its theme file.
 ///
-/// - `PRIMARY1` is the text of labels and unfocused buttons: the console's phosphor green.
-/// - `PRIMARY2` is the main text and icons, and also the radio's solid fills (the monitor's bars,
-///   the knobs), so it is the palette's secondary ink and not its extreme: near-black text on
-///   the day theme would make black bars, and near-white on the night theme glaring ones.
-///   `PRIMARY3` is the scroll marker and the inactive icons.
+/// The radio is drawn for a light screen, and reuses a few variables for more than one job, so
+/// the roles are placed by how the radio uses them, which the tests check:
+///
+/// - `PRIMARY1` is the text on the main screen, the labels and the rows of a list: the console's
+///   ink for OK (phosphor green at night, a dark green by day).
+/// - `PRIMARY2` is the background of an unfocused row and the fill of the monitor's bars, and
+///   also the text on every strong fill (the top and bottom bars and a focused, edited or active
+///   field). So it is a mid panel tone that `PRIMARY1` reads on, and the fills are inks that it
+///   reads on: green, amber and cyan at night, their dark versions by day.
+/// - `PRIMARY3` is the scroll marker and the inactive icons.
 /// - `SECONDARY1` is the top and bottom bars, `SECONDARY2` the labels and buttons, `SECONDARY3`
 ///   the main screen and popups.
 /// - `FOCUS`, `EDIT` and `ACTIVE` are the backgrounds of a focused field, a field being edited
-///   and an active button: the fills of an OK lamp, a caution and a pressed control.
+///   and an active button.
 pub fn colors(p: &Palette) -> [(&'static str, Rgb); 13] {
+    let dark = p.screen.luminance() < 0.5;
     [
         ("PRIMARY1", p.ok),
-        ("PRIMARY2", p.muted),
-        ("PRIMARY3", p.bezel_edge),
-        ("SECONDARY1", p.title),
+        ("PRIMARY2", if dark { p.bezel_edge } else { p.title }),
+        ("PRIMARY3", if dark { p.muted } else { p.bezel_edge }),
+        ("SECONDARY1", p.ok),
         ("SECONDARY2", p.control),
         ("SECONDARY3", p.screen),
-        ("FOCUS", p.ok_fill),
-        ("EDIT", p.caution_fill),
-        ("ACTIVE", p.control_hover),
+        ("FOCUS", p.ok),
+        ("EDIT", p.caution),
+        ("ACTIVE", p.info),
         ("WARNING", p.warning),
         ("DISABLED", mix(p.faint, p.muted)),
         ("QM_BG", p.bezel),
@@ -163,18 +169,21 @@ mod tests {
     }
 
     /// Text has to read on every background the radio puts it on, in both variants: the main
-    /// text on the bars, the main screen and the focused, edited and active fields; the labels'
-    /// text on the label background; a warning on the main screen; the quick menu's own pair.
+    /// text on the screen, the labels and the rows of a list; the text of the strong fills
+    /// (bars, focused, edited and active fields) on those fills; a warning on the screen; the
+    /// quick menu's own pair.
     #[test]
     fn text_reads_where_the_radio_puts_it() {
         for p in [NIGHT, DAY] {
             let c = |n| get(&p, n);
-            for bg in ["SECONDARY1", "SECONDARY2", "SECONDARY3", "FOCUS", "EDIT", "ACTIVE"] {
-                let r = c("PRIMARY2").contrast(c(bg));
+            for bg in ["SECONDARY2", "SECONDARY3", "PRIMARY2"] {
+                let r = c("PRIMARY1").contrast(c(bg));
                 assert!(r >= 4.5, "{}: main text on {bg} is {r:.1}:1", p.name);
             }
-            let r = c("PRIMARY1").contrast(c("SECONDARY2"));
-            assert!(r >= 4.5, "{}: label text is {r:.1}:1", p.name);
+            for bg in ["SECONDARY1", "FOCUS", "EDIT", "ACTIVE"] {
+                let r = c("PRIMARY2").contrast(c(bg));
+                assert!(r >= 4.5, "{}: text on the {bg} fill is {r:.1}:1", p.name);
+            }
             let r = c("WARNING").contrast(c("SECONDARY3"));
             assert!(r >= 4.5, "{}: a warning is {r:.1}:1", p.name);
             let r = c("QM_FG").contrast(c("QM_BG"));
@@ -185,14 +194,17 @@ mod tests {
         }
     }
 
-    /// The radio fills things with its main text colour as well (the monitor's bars, the knobs),
-    /// so that colour can't be the extreme of the palette: black on the day theme, white on the
-    /// night one. It reads at 4.5:1, and stays under 10:1 against the main screen.
+    /// The monitor's bars and the scroll marker are drawn in colours that have to show against
+    /// the main screen, even though they are not text. By day the bars are a pale tint: the rows
+    /// they share a colour with carry dark text, so they can't be much darker than that.
     #[test]
-    fn the_main_text_is_not_the_extreme_of_the_palette() {
+    fn bars_and_the_scroll_marker_show_on_the_screen() {
         for p in [NIGHT, DAY] {
-            let r = get(&p, "PRIMARY2").contrast(get(&p, "SECONDARY3"));
-            assert!((4.5..10.0).contains(&r), "{}: the main text is {r:.1}:1 on the screen", p.name);
+            let screen = get(&p, "SECONDARY3");
+            for n in ["PRIMARY2", "PRIMARY3"] {
+                let r = get(&p, n).contrast(screen);
+                assert!(r >= 1.25, "{}: {n} is {r:.1}:1 on the screen", p.name);
+            }
         }
     }
 
