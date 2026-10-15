@@ -71,6 +71,19 @@ Term: MANUAL
 Term: MAVLink
   The protocol that ArduPilot and ground stations use to talk to each other.
 
+Term: Remote ID
+  A broadcast that an unmanned aircraft sends on Bluetooth or Wi-Fi. It says who the aircraft
+  is and where it is, about once a second. Any receiver near the aircraft can read it. The
+  standard is ASTM F3411. Many countries ask for it.
+
+Term: Telemetry link
+  The radio link that brings the data of the plane to the station. The station gets it from
+  the TX15. The link is narrow, so the plane sends its own data first.
+
+Term: Marker
+  The symbol of another plane on the [[tactical map]]. A live marker is bright. A stale marker
+  is dim and stays where the plane was last heard.
+
 Term: Mission
   The list of items that the autopilot flies in AUTO: waypoints, loiters, a takeoff, a
   landing or a return home. The map shows the mission on the vehicle as a solid line.

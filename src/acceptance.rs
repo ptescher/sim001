@@ -615,6 +615,7 @@ impl Driver for SimDriver {
                 }),
                 "game clock" => Value::from(match c.game.as_ref().map(|g| g.clock) {
                     None => "off",
+                    Some(Clock::Waiting) => "waiting for takeoff",
                     Some(Clock::CountingDown { .. }) => "counting down",
                     Some(Clock::Running { .. }) => "running",
                     Some(Clock::Stopped { .. }) => "stopped",

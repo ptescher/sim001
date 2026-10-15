@@ -1,0 +1,27 @@
+Feature: MAVLink network
+  Pilots who share a [[MAVLink]] network see each other's planes. Each plane sends its
+  position a few times a second. The network has a longer range than Remote ID.
+
+  Expectation: A plane on the MAVLink network gets a marker
+    Given the other plane is sending MAVLink
+    And the distance to the other plane is at most 2000 m
+    When 5 seconds pass
+    Then the map has 1 other plane
+    And the marker of the other plane is live
+    And the source of the marker is MAVLink
+
+  Expectation: The MAVLink network has a limit too
+    Given the other plane is sending MAVLink
+    And the distance to the other plane is at least 6000 m
+    And the map has 0 other planes
+    When 5 seconds pass
+    Then the map has 0 other planes
+
+  Expectation: A plane that sends both gets one marker
+    Remote ID and MAVLink tell the station about the same plane. The station joins the two
+    when they are at the same place. The label of the marker names both sources.
+    Given the other plane is sending both
+    And the distance to the other plane is at most 500 m
+    When 5 seconds pass
+    Then the map has 1 other plane
+    And the source of the marker is Remote ID and MAVLink

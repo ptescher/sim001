@@ -6,16 +6,17 @@ Story: Your first pylon race
   So that I can practise fast, tight turns against somebody
 
   A [[pylon race]] is five laps of a triangle of three pylons, against three
-  [[computer pilots]]. In this tutorial, you start a race, throw at GO and fly the five laps.
+  [[computer pilots]]. In this tutorial, you start a race, take off and fly the five laps.
   At the end, the game panel shows your place and your time.
 
   Scenario: Start, throw at GO, fly five laps
     When the pilot starts a race
     Then the game is a race
+    When the pilot throws the plane with the throttle
+    Then the game clock is counting down
+    And the plane is flying
     When the countdown ends
     Then the game clock is running
-    When the pilot throws the plane with the throttle
-    Then the plane is flying
     When the pilot flies the race
     Then the lap count is 5
     And the game clock is stopped
@@ -32,10 +33,11 @@ Story: A game of tag
   Scenario: Tag, then get tagged
     When the pilot starts a game of tag
     Then the chaser is you
+    When the pilot throws the plane with the throttle
+    Then the game clock is counting down
+    And the plane is flying
     When the countdown ends
     Then the opponents are flying
-    When the pilot throws the plane with the throttle
-    Then the plane is flying
     When the pilot tags an opponent
     Then the chaser is an opponent
     When the chaser tags the plane

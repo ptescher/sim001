@@ -11,6 +11,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 t1s_station = { path = "../station" }
 # Which planes there are, and whether one is a VTOL (the console then shows the Q modes).
 simulation_aircraft = { path = "../domains/simulation/aircraft" }
+# Other aircraft: what the radio tells the station, joined into one picture (domains/communication).
+communication_traffic = { path = "../domains/communication/traffic" }
+communication_telemetry = { path = "../domains/communication/telemetry" }
 # The shared look (the docs and the sim's HUD use it too).
 design_theme = { path = "../domains/design/theme" }
 raw-window-handle = "0.6"

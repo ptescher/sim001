@@ -51,10 +51,30 @@ pub fn theme_yml(p: &Palette, name: &str, info: &str) -> String {
     s
 }
 
-/// The files of a theme folder: the theme and a logo for the radio's theme list (a strip of the
-/// signal colours).
+/// The files of a theme folder: the theme, a logo for the radio's theme list (a strip of the
+/// signal colours) and the background behind the radio's screens.
 pub fn folder(p: &Palette, name: &str, info: &str) -> Vec<(String, Vec<u8>)> {
-    vec![("theme.yml".into(), theme_yml(p, name, info).into_bytes()), ("logo.png".into(), logo(p))]
+    vec![
+        ("theme.yml".into(), theme_yml(p, name, info).into_bytes()),
+        ("logo.png".into(), logo(p)),
+        ("background.png".into(), background(p)),
+    ]
+}
+
+/// The TX15's screen, 480 x 272: the main screen between the title bar at the top and the
+/// status bar at the bottom, in the colours the radio draws them with, so the background matches
+/// the UI around the widgets.
+fn background(p: &Palette) -> Vec<u8> {
+    let (w, h) = (480usize, 272usize);
+    let (title_h, status_h) = (40usize, 20usize);
+    let mut px = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        for _ in 0..w {
+            let c = if y < title_h || y >= h - status_h { p.title } else { p.screen };
+            px.extend([c.r(), c.g(), c.b()]);
+        }
+    }
+    png(w, h, &px)
 }
 
 /// A 120 x 40 strip: the screen, with a band each of the OK, caution, warning and info inks.
@@ -189,10 +209,12 @@ mod tests {
 
     /// The folder holds the theme file and a logo, and the logo is a PNG.
     #[test]
-    fn the_folder_has_a_theme_and_a_logo() {
+    fn the_folder_has_a_theme_a_logo_and_a_background() {
         let files = folder(&DAY, "T1S Day", "Day console");
         let names: Vec<_> = files.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(names, ["theme.yml", "logo.png"]);
-        assert_eq!(&files[1].1[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(names, ["theme.yml", "logo.png", "background.png"]);
+        for (_, bytes) in &files[1..] {
+            assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+        }
     }
 }

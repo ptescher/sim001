@@ -74,6 +74,18 @@ pub fn load_image(map: &TerrainMap) -> Option<Arc<RenderImage>> {
     Some(Arc::new(RenderImage::new(vec![image::Frame::new(buf)])))
 }
 
+/// Another aircraft, as the map draws it.
+pub struct Marker {
+    pub at: (f32, f32),
+    pub heading: f32,
+    pub velocity: (f32, f32),
+    /// Not heard for a while: the marker is dim and stays where the aircraft was last heard.
+    pub stale: bool,
+    pub name: String,
+    /// The sources and the height: `MAV RID 31 m`.
+    pub detail: String,
+}
+
 /// Snapshot of what the map draws, so the vehicle lock isn't held while painting.
 pub struct MapData {
     pub origin: Origin,
@@ -91,9 +103,40 @@ pub struct MapData {
     /// Where the camera's line of sight meets the ground, and the tracked point if any.
     pub spi: Option<(f32, f32)>,
     pub track: Option<(f32, f32)>,
+    /// The cones that mark the arena of a game of tag.
+    pub cones: Vec<(f32, f32)>,
+    /// The other aircraft that the radio has told the station about.
+    pub traffic: Vec<Marker>,
 }
 
 impl MapData {
+    fn markers(v: &Vehicle, origin: Origin) -> Vec<Marker> {
+        let now = v.start.elapsed().as_secs_f64();
+        let home_alt = v.home.map(|h| h.2);
+        v.other_aircraft()
+            .iter()
+            .map(|t| {
+                let live = t.freshness == communication_traffic::Freshness::Live;
+                // A live aircraft is drawn where it has probably got to since its last report.
+                let p = if live { t.estimate(now) } else { t.position };
+                let velocity = t.velocity.map_or((0.0, 0.0), |v| (v[0], v[1]));
+                let heading = t.heading.unwrap_or_else(|| velocity.1.atan2(velocity.0).to_degrees());
+                let height = match home_alt {
+                    Some(h) if p.alt.is_finite() => format!(" {:.0} m", p.alt - h),
+                    _ => String::new(),
+                };
+                Marker {
+                    at: origin.to_ne(p.lat, p.lon),
+                    heading,
+                    velocity,
+                    stale: !live,
+                    name: t.name.clone(),
+                    detail: format!("{}{height}", t.source_label()),
+                }
+            })
+            .collect()
+    }
+
     pub fn from(v: &Vehicle, origin: Origin) -> Self {
         let ne = |lat: f64, lon: f64| origin.to_ne(lat, lon);
         MapData {
@@ -111,6 +154,8 @@ impl MapData {
             mode: v.mode(),
             spi: None,
             track: None,
+            cones: vec![],
+            traffic: Self::markers(v, origin),
         }
     }
 }
@@ -245,6 +290,36 @@ fn paint_inner(
         dashed_circle(window, gx, gy, LOITER_RADIUS / st.mpp, 1.5, 5.0, c(MAGENTA));
         line(window, (gx - 12.0, gy), (gx + 12.0, gy), 2.0, c(MAGENTA));
         line(window, (gx, gy - 12.0), (gx, gy + 12.0), 2.0, c(MAGENTA));
+    }
+
+    // The cones round the arena of a game of tag.
+    for &(n, e) in &d.cones {
+        let (cx0, cy0) = to_s(n, e);
+        fill_poly(window, &[(cx0, cy0 - 6.0), (cx0 + 5.0, cy0 + 4.0), (cx0 - 5.0, cy0 + 4.0)], ca(AMBER, 0.95));
+    }
+
+    // The other aircraft: a small plane, a 10 s leader while it is live, its name and where we heard it.
+    for m in &d.traffic {
+        let (mx, my) = to_s(m.at.0, m.at.1);
+        let col = if m.stale { c(GREY) } else { c(CYAN) };
+        if !m.stale && (m.velocity.0 != 0.0 || m.velocity.1 != 0.0) {
+            let lead = to_s(m.at.0 + m.velocity.0 * 10.0, m.at.1 + m.velocity.1 * 10.0);
+            dashed(window, &[(mx, my), lead], 1.2, 4.0, ca(CYAN, 0.8));
+        }
+        let hd = m.heading.to_radians();
+        let shape = [(0.0, -11.0), (2.0, -4.0), (10.0, 1.0), (10.0, 3.0), (2.0, 1.5), (1.5, 7.0), (4.0, 9.5), (4.0, 11.0), (0.0, 9.5), (-4.0, 11.0), (-4.0, 9.5), (-1.5, 7.0), (-2.0, 1.5), (-10.0, 3.0), (-10.0, 1.0), (-2.0, -4.0)];
+        let pts: Vec<_> = shape
+            .iter()
+            .map(|&(px, py)| {
+                let (rx, ry) = rot(px, py, hd);
+                (mx + rx, my + ry)
+            })
+            .collect();
+        let outline: Vec<_> = pts.iter().chain(std::iter::once(&pts[0])).copied().collect();
+        polyline(window, &outline, 3.0, c(0x000000));
+        fill_poly(window, &pts, col);
+        text(window, cx, &m.name, mx + 14.0, my - 4.0, fs * 0.85, col, Align::Left);
+        text(window, cx, &m.detail, mx + 14.0, my + 9.0, fs * 0.75, col, Align::Left);
     }
 
     // Camera line of sight to the sensor point of interest, and the tracked point.

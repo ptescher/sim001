@@ -176,6 +176,10 @@ Vocabulary:
     Shows: cruising: the speed in the PFD is above 11 m/s, and the plane flies forward
   State: the height above home is 0..300 m
     Shows: the ALT REL line on the SYSTEMS screen reads {value} m
+  State: the battery current is 0..100 A
+    Shows: the BATTERY line on the SYSTEMS screen reads {value} A
+  State: the battery voltage is 0..30 V
+    Shows: the BATTERY line on the SYSTEMS screen reads {value} V
   Event: the operator takes off vertically
     Say: press VTOL TKOF. The plane climbs straight up to the plan altitude
   Event: the operator switches to forward flight

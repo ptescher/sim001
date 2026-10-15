@@ -1,0 +1,65 @@
+Story: Seeing a friend who flies near you
+  As a pilot with a TX15
+  I want to see where the other pilots' planes are
+  So that I keep clear of them
+
+  A friend flies a plane near yours. At first the station only hears the Remote ID of the
+  plane. Your friend joins the MAVLink network, and the station joins the two sources into
+  one marker. Your friend lands and switches off, and the marker goes dim.
+
+  Scenario: A friend joins and leaves
+    When the other plane is sending Remote ID
+    And 5 seconds pass
+    Then the map has 1 other plane
+    And the source of the marker is Remote ID
+    When the other plane is sending both
+    And 5 seconds pass
+    Then the map has 1 other plane
+    And the source of the marker is Remote ID and MAVLink
+    When the other plane is silent
+    And 10 seconds pass
+    Then the marker of the other plane is stale
+    When 70 seconds pass
+    Then the map has 0 other planes
+
+Story: Flying near a crowd of planes
+  As a pilot with a TX15
+  I want to see the planes that are in range, and no more
+  So that I trust the map, and my telemetry stays good
+
+  Planes that are too far away do not show. When a plane comes in range of the MAVLink
+  network, it gets a marker. Then a crowd of pilots joins the network. The radio link is
+  narrow, so the planes of the crowd cannot use all of it. Your own telemetry comes first.
+
+  Scenario: Out of range, into range, into a crowd
+    When the other plane is sending Remote ID
+    And the distance to the other plane is 2000 m
+    And 5 seconds pass
+    Then the map has 0 other planes
+    When the other plane is sending MAVLink
+    And the distance to the other plane is 7000 m
+    And 5 seconds pass
+    Then the map has 0 other planes
+    When the distance to the other plane is 1500 m
+    And 5 seconds pass
+    Then the map has 1 other plane
+    And the source of the marker is MAVLink
+    When the crowd has 30 planes
+    And 10 seconds pass
+    Then the telemetry of your plane has at least 4 position updates per second
+
+Story: Losing the radio link
+  As a pilot with a TX15
+  I want the map to tell me when it can no longer be right
+  So that I do not trust old positions
+
+  A friend flies near you, and the station tracks the plane. Then the radio link is lost. The
+  station keeps the last position of the plane, and it dims the marker.
+
+  Scenario: The link drops
+    When the other plane is sending MAVLink
+    And 5 seconds pass
+    Then the marker of the other plane is live
+    When the TX15 link is lost
+    And 10 seconds pass
+    Then the marker of the other plane is stale

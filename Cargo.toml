@@ -21,6 +21,11 @@ recreation_games = { path = "domains/recreation/games" }
 # Map packs (real places): aerial photos and land cover. Same version Bevy uses.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+# What the radios tell the pilot about other aircraft: see domains/communication.
+communication_air = { path = "domains/communication/air" }
+communication_radio = { path = "domains/communication/radio" }
+communication_telemetry = { path = "domains/communication/telemetry" }
+communication_traffic = { path = "domains/communication/traffic" }
 # The shared look: the HUD and overlays use the same theme as the ground station and the docs.
 design_theme = { path = "domains/design/theme" }
 # Acceptance tests (`--expect`): see domains/expectation and expectations/.

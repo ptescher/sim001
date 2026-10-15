@@ -1,0 +1,8 @@
+Feature: Crowds
+  The radio link is narrow. Every message about another plane uses a part of it. Your own
+  plane comes first, so a crowd of planes never stops your telemetry.
+
+  Expectation: A crowd does not crowd out your plane
+    Given the crowd has 30 planes
+    When 10 seconds pass
+    Then the telemetry of your plane has at least 4 position updates per second

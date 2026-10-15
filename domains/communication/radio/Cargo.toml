@@ -1,0 +1,17 @@
+[package]
+name = "communication_radio"
+version = "0.1.0"
+edition = "2024"
+description = "Communication domain: the TX15's telemetry link, and the whole chain from another aircraft to a marker on the station's map"
+
+[dependencies]
+communication_air = { path = "../air" }
+communication_remoteid = { path = "../remoteid" }
+communication_telemetry = { path = "../telemetry" }
+communication_traffic = { path = "../traffic" }
+mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }
+
+[dev-dependencies]
+expectation_harness = { path = "../../expectation/harness" }
+expectation_model = { path = "../../expectation/model" }
+expectation_story = { path = "../../expectation/story" }

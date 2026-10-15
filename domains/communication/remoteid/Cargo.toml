@@ -1,0 +1,7 @@
+[package]
+name = "communication_remoteid"
+version = "0.1.0"
+edition = "2024"
+description = "Communication domain: Remote ID (ASTM F3411, OpenDroneID) messages as they go on the air, encoded and decoded"
+
+[dependencies]

@@ -26,7 +26,13 @@ pub struct Options {
     pub aircraft: Option<String>,
     /// The sim takes its radio from the console (`--test-radio`), for acceptance tests.
     pub test_radio: bool,
+    /// The sim stands in for the TX15 on this port, and the console takes its telemetry from
+    /// there (None: the console talks to ArduPilot directly).
+    pub radio_port: Option<u16>,
 }
+
+/// Where the sim's TX15 stand-in listens.
+pub const RADIO_PORT: u16 = 5770;
 
 /// The map pack's metadata (home position etc.), if `name` has been built.
 pub fn pack_meta(name: &str) -> Option<t1s_station::mappack::PackMeta> {
@@ -211,7 +217,7 @@ fn start_sitl(map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<Strin
 }
 
 /// Starts the sim (release build) in its pane. Its output goes to the terminal.
-pub fn start_sim(opts: &Options, rect: Option<Rect>) -> Result<Child, String> {
+pub fn start_sim(opts: &Options, rect: Option<Rect>, home: (f64, f64, f32)) -> Result<Child, String> {
     let root = repo_root();
     let bin = sim_binary();
     let mut cmd = Command::new(&bin);
@@ -230,6 +236,10 @@ pub fn start_sim(opts: &Options, rect: Option<Rect>) -> Result<Child, String> {
     }
     if opts.test_radio {
         cmd.arg("--test-radio");
+    }
+    // The console's telemetry comes through the sim's TX15 stand-in, which needs to know where on the earth the pilot box is.
+    if let Some(port) = opts.radio_port {
+        cmd.args(["--radio", &port.to_string(), "--home", &format!("{},{},{}", home.0, home.1, home.2)]);
     }
     if let Some(r) = rect {
         cmd.args(["--window-rect", &r.to_arg(), "--frameless"]);

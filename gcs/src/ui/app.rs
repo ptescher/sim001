@@ -549,6 +549,9 @@ impl Render for Gcs {
         if let Some(s) = &self.sensor {
             map_data.spi = s.spi(&v).map(|p| (p.north, p.east));
             map_data.track = s.track.lock().unwrap().map(|t| (t.0, t.1));
+            if let Some(a) = s.frame.lock().unwrap().as_ref().and_then(|f| f.header.arena) {
+                map_data.cones = a.cones();
+            }
         }
         let history: Vec<_> = v.history.iter().copied().collect();
         let now = v.now();

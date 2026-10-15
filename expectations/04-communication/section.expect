@@ -1,0 +1,66 @@
+# Knowing where other aircraft are (domains/communication). The station only has the TX15's
+# telemetry. Other aircraft reach it in two ways: a Remote ID receiver on the pilot's plane
+# hears their broadcasts, and a MAVLink network carries their positions. Both go down the
+# radio link with the pilot's own plane. The tests run on the communication domain with no
+# window: a simulated radio medium, the TX15's downlink and the station's tracker. See
+# domains/communication/radio/tests/acceptance.rs.
+
+Section: Other aircraft
+  The station shows the other aircraft near your plane on the [[tactical map]]. It does not
+  see them itself. The station only gets the telemetry that the TX15 radio passes on. Your
+  plane tells the station about the other aircraft that it can hear.
+
+  There are two sources. Your plane has a [[Remote ID]] receiver. It hears the aircraft that
+  broadcast Remote ID, and only the aircraft that are near. Your plane is also on a
+  [[MAVLink]] network with other pilots. Each plane on the network shares its position, and
+  the network has a longer range. The station joins what it hears into one marker for each
+  aircraft.
+
+Vocabulary:
+  State: the other plane is silent | sending Remote ID | sending MAVLink | sending both
+    Set: ask the other pilot to be {value}
+    Shows: silent: the other plane has no marker after a while
+    Shows: sending Remote ID: the other plane broadcasts its position and its ID
+    Shows: sending MAVLink: the other plane shares its position on the MAVLink network
+    Shows: sending both: the other plane broadcasts Remote ID and shares its position on the MAVLink network
+  State: the distance to the other plane is 0..8000 m
+    Set: ask the other pilot to fly {value} from your plane
+    Shows: the marker of the other plane is {value} from the marker of your plane
+  State: the map has 0..40 other planes
+    Shows: the number of markers of other planes on the tactical map is {value}
+  State: the marker of the other plane is missing | live | stale
+    Shows: missing: the map has no marker for the other plane
+    Shows: live: the marker is bright, and it moves with the other plane
+    Shows: stale: the marker is dim, and it stays where the other plane was last heard
+  State: the source of the marker is none | Remote ID | MAVLink | Remote ID and MAVLink
+    Shows: Remote ID: the label of the marker says RID
+    Shows: MAVLink: the label of the marker says MAV
+    Shows: Remote ID and MAVLink: the label of the marker says MAV RID
+  State: the TX15 link is up | lost
+    Shows: lost: the LINK annunciator flashes
+  State: your Remote ID is on | off
+    Shows: on: the transmitter on your plane broadcasts the ID and the position of your plane
+  State: the crowd has 0..40 planes
+    Set: ask {value} more pilots to share their positions on the MAVLink network
+    Shows: the map gets {value} more markers
+  State: the telemetry of your plane has 0..20 position updates per second
+    Shows: at least 4: the marker of your plane moves smoothly, and the flight display does not freeze
+
+  Event: 5 seconds pass
+    Say: wait 5 seconds
+  Event: 10 seconds pass
+    Say: wait 10 seconds
+  Event: 70 seconds pass
+    Say: wait one minute and 10 seconds
+
+  Phrase: the station is connected to the TX15
+    Say: switch on the TX15 and the plane. Start the station. The map shows your plane, and no other planes
+    Given the TX15 link is up
+    And your Remote ID is on
+    And the other plane is silent
+    And the distance to the other plane is 200 m
+    And the crowd has 0 planes
+    And the map has 0 other planes
+
+Background:
+  Given the station is connected to the TX15

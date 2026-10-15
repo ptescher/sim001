@@ -1,0 +1,7 @@
+[package]
+name = "communication_traffic"
+version = "0.1.0"
+edition = "2024"
+description = "Communication domain: the tracker, which joins what is heard about other aircraft from every source into one picture"
+
+[dependencies]

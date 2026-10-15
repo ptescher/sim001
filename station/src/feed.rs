@@ -69,13 +69,38 @@ pub struct FrameHeader {
     pub gimbal: Gimbal,
     /// [`FLAG_DIRECT`] etc.
     pub flags: u32,
+    /// The arena of a game of tag, if one is being played.
+    pub arena: Option<Arena>,
+}
+
+/// The arena of a game of tag, in metres north and east of the sim's origin.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Arena {
+    pub north: f32,
+    pub east: f32,
+    pub radius: f32,
+}
+
+/// How many cones mark the edge of an arena.
+pub const ARENA_CONES: usize = 24;
+
+impl Arena {
+    /// Where the cones stand (north, east).
+    pub fn cones(&self) -> Vec<(f32, f32)> {
+        (0..ARENA_CONES)
+            .map(|i| {
+                let a = i as f32 / ARENA_CONES as f32 * std::f32::consts::TAU;
+                (self.north - a.sin() * self.radius, self.east + a.cos() * self.radius)
+            })
+            .collect()
+    }
 }
 
 /// The sticks are flying the aircraft through the sim's own modes; ArduPilot only watches.
 pub const FLAG_DIRECT: u32 = 1;
 
 impl FrameHeader {
-    pub const SIZE: usize = 40;
+    pub const SIZE: usize = 52;
 
     pub fn payload_len(&self) -> usize {
         self.stride as usize * self.height as usize
@@ -95,6 +120,10 @@ impl FrameHeader {
         b[28..32].copy_from_slice(&self.gimbal.tilt.to_le_bytes());
         b[32..36].copy_from_slice(&self.gimbal.hfov.to_le_bytes());
         b[36..40].copy_from_slice(&self.flags.to_le_bytes());
+        let a = self.arena.unwrap_or(Arena { north: 0.0, east: 0.0, radius: 0.0 });
+        b[40..44].copy_from_slice(&a.north.to_le_bytes());
+        b[44..48].copy_from_slice(&a.east.to_le_bytes());
+        b[48..52].copy_from_slice(&a.radius.to_le_bytes());
         b
     }
 
@@ -115,6 +144,7 @@ impl FrameHeader {
             sim_time: f32_at(20),
             gimbal: Gimbal { pan: f32_at(24), tilt: f32_at(28), hfov: f32_at(32) },
             flags: u32_at(36),
+            arena: Some(Arena { north: f32_at(40), east: f32_at(44), radius: f32_at(48) }).filter(|a| a.radius > 0.0),
         };
         if h.format != FORMAT_BGRA8 || (h.stride as usize) < h.width as usize * 4 || h.payload_len() > 64 << 20 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "unsupported feed frame"));
@@ -287,6 +317,7 @@ mod tests {
             sim_time: 12.5,
             gimbal: Gimbal { pan: -30.0, tilt: -10.0, hfov: 20.0 },
             flags: FLAG_DIRECT,
+            arena: Some(Arena { north: 12.0, east: -40.0, radius: 90.0 }),
         };
         let px: Vec<u8> = (0..32).collect();
         let mut wire = Vec::new();

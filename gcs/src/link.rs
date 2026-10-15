@@ -410,6 +410,15 @@ impl Session {
         }
         let mut v = vehicle.lock().unwrap();
         v.link.messages += 1;
+        // Other aircraft share the stream: their positions, and what the plane's receivers heard
+        // of them. None of it describes our vehicle.
+        if v.hear_traffic(hdr, &msg) {
+            return;
+        }
+        // Once the vehicle is known, messages from any other system are not about it.
+        if v.have_heartbeat && hdr.system_id != v.sysid {
+            return;
+        }
         match msg {
             MavMessage::HEARTBEAT(hb) => {
                 if hb.mavtype == MavType::MAV_TYPE_GCS || hb.autopilot == MavAutopilot::MAV_AUTOPILOT_INVALID {

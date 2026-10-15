@@ -124,6 +124,8 @@ const STATES: &[&str] = &[
     "airframe",
     "flight",
     "height above home",
+    "battery current",
+    "battery voltage",
     "throttle stick",
     "arm switch",
     "mode switch",
@@ -363,6 +365,8 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
         }
         // The console has no terrain check, mission file or measuring yet: they stay as they start.
         "height above home" => Value::from(v.alt_rel as f64),
+        "battery current" => Value::from(v.batt_a as f64),
+        "battery voltage" => Value::from(v.batt_v as f64),
         "flight" => Value::from(flight(&v)),
         "waypoints" => Value::from("unchecked"),
         "mission file" => Value::from("missing"),

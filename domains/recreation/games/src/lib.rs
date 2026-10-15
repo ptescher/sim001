@@ -77,6 +77,8 @@ pub enum Kind {
 /// The game clock, as the pilot sees it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Clock {
+    /// Until you take off (see `Session::after_takeoff`).
+    Waiting,
     CountingDown { left: f32 },
     /// Seconds since GO.
     Running { time: f32 },
@@ -178,7 +180,13 @@ impl Session {
         Session { kind, field, arena: field.arena(), course, referee, opponents, clock: Clock::CountingDown { left: COUNTDOWN }, params, time: 0.0, you_flew: false }
     }
 
-    /// Whether a plane may be thrown now: not before GO.
+    /// A game that waits for you to take off: the countdown starts when your plane is in the air.
+    pub fn after_takeoff(mut self) -> Session {
+        self.clock = Clock::Waiting;
+        self
+    }
+
+    /// Whether a plane may be thrown now: not during the countdown.
     pub fn may_launch(&self) -> bool {
         !matches!(self.clock, Clock::CountingDown { .. })
     }
@@ -190,12 +198,18 @@ impl Session {
 
     /// Runs the game on by `dt` seconds, with your plane as it is now.
     pub fn step(&mut self, you: &FlightState, world: &Surroundings, dt: f32) {
+        let airborne = |s: &FlightState| matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none();
+        if self.clock == Clock::Waiting {
+            if !airborne(you) {
+                return;
+            }
+            self.clock = Clock::CountingDown { left: COUNTDOWN };
+        }
         self.time += dt;
         let go = self.since_go();
         if let Clock::CountingDown { .. } = self.clock {
             self.clock = if go >= 0.0 { Clock::Running { time: go } } else { Clock::CountingDown { left: -go } };
         }
-        let airborne = |s: &FlightState| matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none();
 
         // The computer pilots fly.
         let planes: Vec<(Vec3, Vec3, bool)> =

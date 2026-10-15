@@ -184,8 +184,8 @@ impl SimCore {
         self.state.snap_to_hand();
         self.state.recharge();
         self.game = Some(match kind {
-            Kind::Race => Session::race(Self::field()),
-            Kind::Tag => Session::tag(Self::field()),
+            Kind::Race => Session::race(Self::field()).after_takeoff(),
+            Kind::Tag => Session::tag(Self::field()).after_takeoff(),
         });
     }
 
@@ -448,7 +448,7 @@ pub fn cannot_fly(params: &AircraftParams, title: &str, ardupilot: bool) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use recreation_games::Kind;
+    use recreation_games::{Clock, Kind};
 
     #[test]
     fn a_plane_with_a_flight_controller_needs_ardupilot() {
@@ -593,18 +593,20 @@ mod tests {
         assert_eq!(c.state.used_mah, 0.0);
     }
 
-    /// Nobody throws before GO: not with the throttle, nor with Space.
+    /// The game waits for the takeoff, then counts down from the throw.
     #[test]
-    fn the_throw_waits_for_go() {
+    fn the_game_starts_after_the_takeoff() {
         let mut c = plain();
         c.toggle_game(Kind::Race);
+        run(&mut c, 8.0);
+        assert_eq!(c.game.as_ref().unwrap().clock, Clock::Waiting, "waiting while the plane is in the hand");
+        assert!(c.game.as_ref().unwrap().opponents.iter().all(|o| o.state.phase == Phase::Held));
         c.sticks.throttle = 0.9;
-        run(&mut c, 4.0);
-        c.launch();
-        run(&mut c, 0.5);
-        assert_eq!(c.state.phase, Phase::Held, "thrown before GO");
         run(&mut c, 1.5);
-        assert_ne!(c.state.phase, Phase::Held, "the throttle held open throws at GO");
+        assert_ne!(c.state.phase, Phase::Held, "the throw is allowed at once");
+        assert!(matches!(c.game.as_ref().unwrap().clock, Clock::CountingDown { .. }));
+        run(&mut c, 6.0);
+        assert!(matches!(c.game.as_ref().unwrap().clock, Clock::Running { .. }));
     }
 
     /// The key of the game stops it; the other key switches to the other game.
@@ -624,7 +626,8 @@ mod tests {
     fn the_opponents_fly_while_the_sim_runs() {
         let mut c = plain();
         c.toggle_game(Kind::Tag);
-        run(&mut c, 10.0);
+        c.sticks.throttle = 0.9;
+        run(&mut c, 12.0);
         let g = c.game.as_ref().unwrap();
         assert!(g.opponents.iter().all(|o| o.state.phase == Phase::Flying), "{:?}", g.opponents.iter().map(|o| o.state.phase).collect::<Vec<_>>());
     }

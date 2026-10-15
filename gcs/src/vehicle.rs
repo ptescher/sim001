@@ -1,5 +1,7 @@
 //! Vehicle state as seen over MAVLink. Written by the link thread, read by the UI.
 
+use communication_telemetry::Decoder;
+use communication_traffic::{Track, Tracker};
 use std::collections::VecDeque;
 use std::time::Instant;
 
@@ -208,6 +210,10 @@ pub struct Vehicle {
     /// How many times the vehicle has armed since the console started (for a test that needs a
     /// plane that has not).
     pub arms: u32,
+
+    /// Other aircraft, as the radio tells the station (see domains/communication).
+    pub traffic: Tracker,
+    pub traffic_decoder: Decoder,
 }
 
 impl Vehicle {
@@ -280,6 +286,8 @@ impl Vehicle {
             armed_since: None,
             last_flight_secs: 0.0,
             arms: 0,
+            traffic: Tracker::new(),
+            traffic_decoder: Decoder::new(1),
         }
     }
 
@@ -294,6 +302,42 @@ impl Vehicle {
 
     pub fn now(&self) -> f32 {
         self.start.elapsed().as_secs_f32()
+    }
+
+    /// The other aircraft that the station knows of, as they are now.
+    pub fn other_aircraft(&self) -> Vec<Track> {
+        self.traffic.tracks(self.start.elapsed().as_secs_f64())
+    }
+
+    /// Takes in a message that is about other aircraft, or that other aircraft sent. Returns
+    /// whether it was one.
+    pub fn hear_traffic(&mut self, header: mavlink::MavHeader, msg: &mavlink::dialects::ardupilotmega::MavMessage) -> bool {
+        use mavlink::dialects::ardupilotmega::MavMessage as M;
+        let own = self.sysid;
+        let about_others = match msg {
+            // A peer's position. The plane's own position is not traffic.
+            M::GLOBAL_POSITION_INT(_) => header.system_id != own,
+            // What the receivers on the plane heard.
+            M::ADSB_VEHICLE(_)
+            | M::OPEN_DRONE_ID_BASIC_ID(_)
+            | M::OPEN_DRONE_ID_LOCATION(_)
+            | M::OPEN_DRONE_ID_MESSAGE_PACK(_) => true,
+            _ => false,
+        };
+        if !about_others {
+            return false;
+        }
+        // The decoder reads the common MAVLink dialect from bytes; these messages are the same in both.
+        let mut bytes = Vec::with_capacity(300);
+        if mavlink::write_v2_msg(&mut bytes, header, msg).is_ok() {
+            let now = self.start.elapsed().as_secs_f64();
+            self.traffic_decoder.set_own(own);
+            for o in self.traffic_decoder.push(&bytes, now).traffic {
+                self.traffic.observe(o);
+            }
+            self.traffic.prune(now);
+        }
+        true
     }
 
     pub fn flight_secs(&self) -> f32 {
@@ -356,5 +400,85 @@ impl Vehicle {
         while self.trail.len() > 3000 {
             self.trail.pop_front();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mavlink::MavHeader;
+    use mavlink::dialects::ardupilotmega::*;
+
+    fn position(lat: f64, lon: f64) -> MavMessage {
+        MavMessage::GLOBAL_POSITION_INT(GLOBAL_POSITION_INT_DATA {
+            time_boot_ms: 1000,
+            lat: (lat * 1e7) as i32,
+            lon: (lon * 1e7) as i32,
+            alt: 80_000,
+            relative_alt: 30_000,
+            vx: 1000,
+            vy: 0,
+            vz: 0,
+            hdg: 0,
+        })
+    }
+
+    fn from(system_id: u8) -> MavHeader {
+        MavHeader { system_id, component_id: 1, sequence: 0 }
+    }
+
+    #[test]
+    fn the_position_of_another_system_is_another_aircraft_and_not_the_vehicle() {
+        let mut v = Vehicle::new("test");
+        v.sysid = 1;
+        assert!(v.hear_traffic(from(3), &position(37.87, -122.27)));
+        let seen = v.other_aircraft();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].name, "MAV 3");
+        assert!((seen[0].position.lat - 37.87).abs() < 1e-6);
+        assert!(!v.have_position, "the vehicle's own position is untouched");
+    }
+
+    #[test]
+    fn the_vehicles_own_position_is_not_traffic() {
+        let mut v = Vehicle::new("test");
+        v.sysid = 1;
+        assert!(!v.hear_traffic(from(1), &position(37.87, -122.27)));
+        assert!(v.other_aircraft().is_empty());
+    }
+
+    #[test]
+    fn a_remote_id_receiver_on_the_plane_makes_traffic_and_the_planes_own_transmitter_does_not() {
+        let mut v = Vehicle::new("test");
+        v.sysid = 1;
+        let heard = |mac: [u8; 20]| {
+            MavMessage::OPEN_DRONE_ID_LOCATION(OPEN_DRONE_ID_LOCATION_DATA {
+                id_or_mac: mac,
+                latitude: 378_700_000,
+                longitude: -1_222_700_000,
+                altitude_geodetic: 80.0,
+                direction: 9000,
+                speed_horizontal: 1500,
+                speed_vertical: 0,
+                altitude_barometric: -1000.0,
+                height: -1000.0,
+                timestamp: 1.0,
+                ..Default::default()
+            })
+        };
+        let mut mac = [0u8; 20];
+        mac[..6].copy_from_slice(&[0x60, 0, 0, 0, 0, 2]);
+        assert!(v.hear_traffic(MavHeader { system_id: 1, component_id: 236, sequence: 0 }, &heard(mac)));
+        assert!(v.hear_traffic(MavHeader { system_id: 1, component_id: 236, sequence: 1 }, &heard([0; 20])));
+        let seen = v.other_aircraft();
+        assert_eq!(seen.len(), 1, "{seen:?}");
+        assert_eq!(seen[0].source_label(), "RID");
+    }
+
+    #[test]
+    fn what_the_vehicle_says_is_not_traffic() {
+        let mut v = Vehicle::new("test");
+        let hb = MavMessage::HEARTBEAT(HEARTBEAT_DATA::default());
+        assert!(!v.hear_traffic(from(1), &hb));
     }
 }

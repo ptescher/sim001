@@ -9,6 +9,10 @@
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --test-radio                                a TX15 stand-in that the ground station's tests move
+//!   --radio PORT [--radio-upstream ADDR] [--radio-rate B] [--home LAT,LON,ALT]
+//!                                               the TX15 stand-in: the station connects to PORT, and gets the
+//!                                               autopilot's MAVLink (at ADDR, default 127.0.0.1:5760) through a
+//!                                               telemetry link, with the other planes the pilot's radios hear
 //!   --fullscreen                                start borderless full-screen (F11 toggles); macOS Game Mode needs it
 //!   --aircraft ID                               which plane to fly (default t1s-ranger)
 //!   --map NAME                                  fly a real place from maps/NAME (see tools/mapbuild)
@@ -30,6 +34,7 @@ mod loading;
 mod mapgen;
 mod placement;
 mod power;
+mod radio;
 mod realsite;
 mod mesh_util;
 mod model;
@@ -214,6 +219,24 @@ fn main() {
         );
     camera::camera_plugin(&mut app);
     games::plugin(&mut app);
+    if let Some(port) = arg("--radio").and_then(|p| p.parse::<u16>().ok()) {
+        let home = arg("--home")
+            .and_then(|s| {
+                let v: Vec<f64> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+                (v.len() >= 2).then(|| communication_traffic::Position::new(v[0], v[1], v.get(2).copied().unwrap_or(0.0) as f32))
+            })
+            // ardupilot/start.sh's default home.
+            .unwrap_or(communication_traffic::Position::new(-35.363261, 149.165230, 584.0));
+        radio::plugin(
+            &mut app,
+            radio::Config {
+                port,
+                upstream: arg("--radio-upstream").cloned().unwrap_or_else(|| "127.0.0.1:5760".into()),
+                home,
+                rate: arg("--radio-rate").and_then(|r| r.parse().ok()).unwrap_or(10_000.0),
+            },
+        );
+    }
     if let Some(cfg) = feed {
         feed::feed_plugin(&mut app, cfg, core.clone());
     }

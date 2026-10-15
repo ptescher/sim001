@@ -927,6 +927,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "communication_remoteid"
+version = "0.1.0"
+
+[[package]]
+name = "communication_telemetry"
+version = "0.1.0"
+dependencies = [
+ "communication_remoteid",
+ "communication_traffic",
+ "mavlink",
+ "num-traits",
+]
+
+[[package]]
+name = "communication_traffic"
+version = "0.1.0"
+
+[[package]]
 name = "compression-codecs"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5476,6 +5494,8 @@ dependencies = [
 name = "t1s_gcs"
 version = "0.1.0"
 dependencies = [
+ "communication_telemetry",
+ "communication_traffic",
  "design_theme",
  "expectation_harness",
  "expectation_model",

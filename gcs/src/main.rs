@@ -40,7 +40,9 @@ t1s_gcs [options]
   --raster           with --station: run the sim without ray tracing
   --sensor           open the sensor feed window (sim already running with --feed)
   --feed HOST:PORT   sensor feed address (default 127.0.0.1:5600)
-  --connect ADDR     MAVLink, any rust-mavlink address (default tcpout:127.0.0.1:5760)
+  --connect ADDR     MAVLink, any rust-mavlink address (default tcpout:127.0.0.1:5760; with
+                     --station the sim's TX15 stand-in, tcpout:127.0.0.1:5770)
+  --no-radio         with --station: connect to ArduPilot directly, without the TX15 stand-in
   --origin LAT,LON[,ALT]  SITL --home = the sim's pilot box (default matches ardupilot/start.sh)
   --assets DIR       output of `t1s_sim --export-map` (default gcs/assets)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../expectations) against this console
@@ -58,7 +60,12 @@ fn main() {
         return;
     }
     let station_mode = flag("--station");
-    let address = arg("--connect").unwrap_or_else(|| "tcpout:127.0.0.1:5760".into());
+    // With --station the console's only source of telemetry is the radio, which the sim stands in for.
+    let radio_port = (station_mode && !flag("--no-radio")).then_some(station::RADIO_PORT);
+    let address = arg("--connect").unwrap_or_else(|| match radio_port {
+        Some(port) => format!("tcpout:127.0.0.1:{port}"),
+        None => "tcpout:127.0.0.1:5760".into(),
+    });
     let map = arg("--map");
     let mut origin = arg("--origin").and_then(|s| Origin::parse(&s)).unwrap_or(Origin::SITL_DEFAULT);
     // A real place's map lives in gcs/assets/<name>; the Alpine Valley's in gcs/assets.
@@ -76,6 +83,7 @@ fn main() {
         map: map.clone(),
         aircraft: arg("--aircraft"),
         test_radio: flag("--expect"),
+        radio_port,
     };
     let aircraft = match &opts.aircraft {
         None => simulation_aircraft::default(),
@@ -147,7 +155,7 @@ fn main() {
             for p in &plan {
                 println!("  {:?} on display {} at {}", p.pane, p.display, p.rect.to_arg());
             }
-            match station::start_sim(&opts, rect_of(Pane::Sim)) {
+            match station::start_sim(&opts, rect_of(Pane::Sim), (origin.lat, origin.lon, origin.alt)) {
                 Ok(child) => *sim.lock().unwrap() = Some(child),
                 Err(e) => {
                     eprintln!("station: {e}");

@@ -55,9 +55,10 @@ Vocabulary:
     Shows: free flight: the game panel, the pylons and the other planes go away
     Shows: a race: three tall pylons stand on the field, and the game panel says RACE
     Shows: tag: the game panel says TAG
-  State: the game clock is off | counting down | running | stopped
+  State: the game clock is off | waiting for takeoff | counting down | running | stopped
     Shows: off: the game panel goes away
-    Shows: counting down: all the planes go back to the hands of their pilots, and the game panel counts down to GO
+    Shows: waiting for takeoff: all the planes go back to the hands of their pilots, and the game panel says TAKE OFF
+    Shows: counting down: the game panel counts down to GO
     Shows: running: the game panel says GO, and its clock starts
     Shows: stopped: the clock on the game panel stops, and the game panel shows the results
 

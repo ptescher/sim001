@@ -1,0 +1,25 @@
+Feature: Old information
+  The station does not hide a plane that goes quiet. The marker stays where the plane was
+  last heard, and it goes dim. After a minute the marker goes away.
+
+  Expectation: A plane that goes quiet goes stale
+    Given the map has 1 other plane
+    And the marker of the other plane is live
+    When the other plane is silent
+    And 10 seconds pass
+    Then the marker of the other plane is stale
+
+  Expectation: A quiet plane leaves the map after a minute
+    Given the map has 1 other plane
+    And the marker of the other plane is stale
+    When 70 seconds pass
+    Then the map has 0 other planes
+
+  Expectation: A lost radio link makes every marker stale
+    The station only hears the other planes through the TX15. If the link is lost, the station
+    does not know where they are. It keeps the last positions, and it dims them.
+    Given the map has 1 other plane
+    And the marker of the other plane is live
+    When the TX15 link is lost
+    And 10 seconds pass
+    Then the marker of the other plane is stale

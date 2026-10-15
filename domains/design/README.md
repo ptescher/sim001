@@ -8,7 +8,7 @@ The project's look, shared by everything with a screen:
 | Sim HUD, controller overlay and loading screen (Bevy) | `src/theme.rs` turns the Night roles into Bevy colours (`color(P.caution)`) |
 | Docs site (`docs/site/`) | `assets/theme.css` is generated from the theme: Day for light browsers, Night for dark ones. The site's own CSS uses only its tokens |
 | Docs Markdown | the Mermaid map uses the Day colours, for GitHub's light page |
-| TX15 radio (EdgeTX) | `design_theme::edgetx` places the roles on the radio's thirteen colour variables. `cargo run -p design_theme --example edgetx -- radio/THEMES` writes the Night and Day theme folders (`theme.yml` and a logo) for the SD card's THEMES folder |
+| TX15 radio (EdgeTX) | `design_theme::edgetx` places the roles on the radio's thirteen colour variables. `cargo run -p design_theme --example edgetx -- radio/THEMES` writes the Night and Day theme folders (`theme.yml`, a logo and a background) for the SD card's THEMES folder |
 
 ## Modules
 

@@ -1,0 +1,11 @@
+[package]
+name = "communication_air"
+version = "0.1.0"
+edition = "2024"
+description = "Communication domain: the air between aircraft, which carries Remote ID broadcasts and MAVLink positions the way the radios do, with their range and their losses"
+
+[dependencies]
+communication_remoteid = { path = "../remoteid" }
+communication_telemetry = { path = "../telemetry" }
+communication_traffic = { path = "../traffic" }
+mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }

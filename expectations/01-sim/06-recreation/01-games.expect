@@ -1,15 +1,16 @@
 Feature: Starting and stopping a game
   G starts a [[pylon race]] and T starts a game of [[tag]]. Each game starts in the same way.
   All the planes go back to the hands of their pilots, with a fresh battery, and the game
-  panel counts down from 5. At GO the computer pilots throw their planes, one each second.
-  Throw your plane when you are ready: the game clock runs from GO. Press the key of the game
+  waits while you get ready: set up, arm and throw your plane. When you take off, the game
+  panel counts down from 5. At GO the computer pilots throw their planes, one each second, and
+  the game clock runs from GO. Press the key of the game
   again to stop it. To start a game again from the beginning, press its key two times.
 
   Expectation: G starts a race
     Given the game is not a race
     When the pilot starts a race
     Then the game is a race
-    And the game clock is counting down
+    And the game clock is waiting for takeoff
     And the plane is in hand
     And the opponents are in hand
     And the lap count is 0
@@ -20,7 +21,7 @@ Feature: Starting and stopping a game
     Given the game is not tag
     When the pilot starts a game of tag
     Then the game is tag
-    And the game clock is counting down
+    And the game clock is waiting for takeoff
     And the plane is in hand
     And the opponents are in hand
     And the chaser is you
@@ -32,22 +33,12 @@ Feature: Starting and stopping a game
     Then the game is free flight
     And the game clock is off
 
-  Expectation: The countdown holds the plane in your hand
-    Nobody can throw before GO. Hold the throttle open, and the plane goes at GO.
-    Overrides: Throttle up throws the plane
-    Overrides: A throw with the nose down crashes the plane
-    Given the game clock is counting down
+  Expectation: The game waits for you to take off
+    The preflight is yours to do: the countdown does not start until your plane is in the air.
+    Given the game clock is waiting for takeoff
     And the plane is in hand
-    When the throttle is above 55 %
-    Then the plane is in hand
-
-  Expectation: Space waits for GO
-    Overrides: Space throws the plane
-    Overrides: A throw during a pause waits for the pause to end
-    Given the game clock is counting down
-    And the plane is in hand
-    When the pilot throws the plane
-    Then the plane is in hand
+    When the pilot throws the plane with the throttle
+    Then the game clock is counting down
 
   Expectation: At GO the computer pilots throw their planes
     Given the game clock is counting down

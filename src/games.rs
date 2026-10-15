@@ -14,7 +14,7 @@ use recreation_games::{Clock, Gate, Kind, Session};
 /// Where the course furniture waits when no game needs it, out of sight under the ground.
 const PARKED: Vec3 = Vec3::new(0.0, -500.0, 0.0);
 /// How many cones mark the edge of the tag arena.
-const CONES: usize = 24;
+const CONES: usize = t1s_station::feed::ARENA_CONES;
 /// How long after GO the panel says GO, and how long the result stays in the middle (s).
 const GO_SHOWN: f32 = 2.0;
 const RESULT_SHOWN: f32 = 6.0;
@@ -121,6 +121,7 @@ pub fn panel_text(g: &Session) -> String {
         (Kind::Tag, _) => lines.push("TAG".to_string()),
     }
     match g.clock {
+        Clock::Waiting => lines.push("TAKE OFF".into()),
         Clock::CountingDown { left } => lines.push(format!("GO IN {}", left.ceil() as u32)),
         Clock::Running { time } if time < GO_SHOWN => lines.push("GO!".into()),
         Clock::Running { time } | Clock::Stopped { time } => lines.push(clock(time)),
@@ -174,7 +175,8 @@ pub fn centre_text(g: &Session, plane_in_hand: bool) -> Option<String> {
         Kind::Tag => "TAG",
     };
     match g.clock {
-        Clock::CountingDown { left } => Some(format!("{what} STARTS IN {}\nHold the throttle open to throw at GO", left.ceil() as u32)),
+        Clock::Waiting => Some(format!("{what} STARTS WHEN YOU TAKE OFF")),
+        Clock::CountingDown { left } => Some(format!("{what} STARTS IN {}", left.ceil() as u32)),
         Clock::Running { time } if time < GO_SHOWN && plane_in_hand => Some("GO! Throw your plane".into()),
         Clock::Stopped { time } if g.since_go() - time < RESULT_SHOWN => {
             let last = panel_text(g);

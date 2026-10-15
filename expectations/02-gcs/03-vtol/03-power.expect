@@ -1,0 +1,29 @@
+Feature: Battery and power
+  The T1-S VTOL flies on a 4S pack. A hover uses much more power than forward flight,
+  because the three rotors carry the whole weight. In forward flight the wing carries the
+  weight, and only the two wing motors turn at a low speed. The BATTERY line on the SYSTEMS
+  screen shows the voltage and the current of the pack.
+
+  Expectation: A hover draws 15 to 25 A
+    Given the vehicle is armed
+    And the plane is on the ground
+    When the operator takes off vertically
+    Then the flight is hovering
+    And the battery current is at least 15 A
+    And the battery current is at most 25 A
+
+  Expectation: The load pulls the voltage down
+    A full 4S high-voltage pack reads 17.4 V with no load. A hover draws a large current,
+    so the voltage drops below that. It stays above 14 V, which is 3.5 V for each cell.
+    Given the vehicle is armed
+    And the plane is on the ground
+    When the operator takes off vertically
+    Then the battery voltage is at most 17 V
+    And the battery voltage is at least 14 V
+
+  Expectation: Cruise draws 3 to 7 A
+    Given the flight is hovering
+    When the operator switches to forward flight
+    Then the flight is cruising
+    And the battery current is at least 3 A
+    And the battery current is at most 7 A
