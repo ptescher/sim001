@@ -286,6 +286,7 @@ fn pose(s: &simulation_physics::FlightState) -> Pose {
         rot: s.rot,
         deflection: s.deflection.clone(),
         spool: s.spool.clone(),
+        tilt: s.tilt.clone(),
         crashed: s.phase == simulation_physics::Phase::Crashed,
     }
 }

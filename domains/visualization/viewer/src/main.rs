@@ -10,6 +10,7 @@
 //!   --raster            rasterized lighting instead of ray tracing
 //!   --capture DIR       save pictures of the scenery and exit; each view is one
 //!   --at NAME=x,agl,z,tx,tagl,tz[,fov]   (repeat it). Heights are above the ground.
+//!   --plane x,agl,z,heading,roll,tilt   hold a VTOL still there (degrees; tilt 0 forward, 90 up)
 //!
 //! C cycles the view (line of sight, chase, nose camera); Z switches the auto-zoom.
 
@@ -28,6 +29,10 @@ struct Telemetry(Arc<Mutex<Watcher>>);
 
 #[derive(Resource)]
 struct Source(String);
+
+/// A plane held still where `--plane` says.
+#[derive(Resource)]
+struct Parked(Option<Pose>);
 
 #[derive(Component)]
 struct Status;
@@ -88,6 +93,7 @@ fn main() {
     .add_plugins(EnginePlugin { raytracing: !flag("--raster"), tips: vec!["Waiting for the scenery. The plane appears when its telemetry arrives."], ..default() })
     .insert_resource(Telemetry(watcher))
     .insert_resource(Source(source))
+    .insert_resource(Parked(arg("--plane").map(|p| parked_pose(&p))))
     .add_systems(Startup, spawn_status)
     .add_systems(Update, (keys, publish).before(EngineSet::Draw))
     .add_systems(Update, update_status);
@@ -131,7 +137,22 @@ fn pilot_box() -> Vec3 {
     Vec3::new(p.x, terrain::ground_height(p.x, p.z), p.z)
 }
 
-fn publish(telemetry: Res<Telemetry>, mut scene: ResMut<Scene>) {
+/// `x,agl,z,heading,roll`: east, height above the ground, south, degrees clockwise from north,
+/// degrees of right bank.
+fn parked_pose(s: &str) -> Pose {
+    let n: Vec<f32> = s.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+    assert!(n.len() >= 3, "--plane {s}: expected x,agl,z[,heading,roll,tilt]");
+    let (heading, roll) = (n.get(3).copied().unwrap_or(0.0).to_radians(), n.get(4).copied().unwrap_or(0.0).to_radians());
+    let tilt = n.get(5).copied().unwrap_or(0.0).to_radians();
+    let ground = terrain::ground_height(n[0], n[2]);
+    Pose { pos: Vec3::new(n[0], ground + n[1], n[2]), rot: Quat::from_rotation_y(-heading) * Quat::from_rotation_z(-roll), spool: vec![0.6, 0.6, 0.6], tilt: vec![tilt, tilt, 0.0], ..default() }
+}
+
+fn publish(telemetry: Res<Telemetry>, parked: Res<Parked>, mut scene: ResMut<Scene>) {
+    if let Some(p) = &parked.0 {
+        scene.vehicles[0] = Some(p.clone());
+        return;
+    }
     let placed = telemetry.0.lock().unwrap().placement();
     scene.vehicles[0] = placed.map(|p| Pose { pos: pilot_box() + p.offset, rot: p.rot, ..default() });
 }

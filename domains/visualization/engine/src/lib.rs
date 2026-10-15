@@ -50,6 +50,9 @@ pub struct Pose {
     pub deflection: Vec<f32>,
     /// Each motor's spool, 0 to 1, in the aircraft's motor order.
     pub spool: Vec<f32>,
+    /// Each motor's tilt from pointing forward (rad), in the same order; empty for a plane whose
+    /// motors don't tilt.
+    pub tilt: Vec<f32>,
     /// A crashed plane's props are stopped.
     pub crashed: bool,
 }
