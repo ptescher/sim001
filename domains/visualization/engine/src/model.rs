@@ -2,8 +2,7 @@
 
 use simulation_aircraft::t1s_ranger::geom::*;
 use crate::mesh_util::{airfoil_panel, cuboid, loft, PanelSpec};
-use simulation_physics::Phase;
-use crate::SharedSim;
+use crate::Scene;
 use bevy::prelude::*;
 use bevy::solari::prelude::RaytracingMesh3d;
 
@@ -314,7 +313,7 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
 }
 
 pub fn sync_plane(
-    sim: Res<SharedSim>,
+    scene: Res<Scene>,
     mut roots: Query<(&PlaneRoot, &mut Transform)>,
     mut surfaces: Query<(&ControlSurfaceVis, &mut Transform), Without<PlaneRoot>>,
     mut props: Query<(&PropVis, &mut Transform), (Without<PlaneRoot>, Without<ControlSurfaceVis>)>,
@@ -323,12 +322,8 @@ pub fn sync_plane(
     time: Res<Time>,
     mut angles: Local<[[f32; 2]; PLANES]>,
 ) {
-    let c = sim.0.lock().unwrap();
-    // Plane 0 is yours; the others are the computer pilots', while a game is on.
-    let state = |plane: usize| match plane {
-        0 => Some(&c.state),
-        i => c.game.as_ref().and_then(|g| g.opponents.get(i - 1)).map(|o| &o.state),
-    };
+    // Plane 0 is yours; the others are other aircraft (the computer pilots', in a game).
+    let state = |plane: usize| scene.vehicles.get(plane).and_then(Option::as_ref);
     for (root, mut t) in &mut roots {
         match state(root.0) {
             Some(s) => {
@@ -342,7 +337,7 @@ pub fn sync_plane(
         // Surfaces are modelled "trailing edge down = positive"; rotating about an axis
         // pointing roughly +X by a positive angle moves the trailing edge (+Z) down.
         if let Some(s) = state(cs.plane) {
-            t.rotation = Quat::from_axis_angle(cs.axis, s.deflection[cs.surface]);
+            t.rotation = Quat::from_axis_angle(cs.axis, s.deflection.get(cs.surface).copied().unwrap_or(0.0));
         }
     }
     for (p, mut t) in &mut props {
@@ -351,14 +346,14 @@ pub fn sync_plane(
         // translucent disc carry the "fast" look.
         let dir = if p.1 == 0 { 1.0 } else { -1.0 };
         let a = &mut angles[p.0][p.1];
-        *a = (*a + dir * s.spool[p.1].sqrt() * 21.0 * time.delta_secs()) % std::f32::consts::TAU;
+        *a = (*a + dir * s.spool.get(p.1).copied().unwrap_or(0.0).sqrt() * 21.0 * time.delta_secs()) % std::f32::consts::TAU;
         t.rotation = Quat::from_rotation_z(*a);
     }
     for d in &discs {
         let Some(s) = state(d.0) else { continue };
         if let Some(mut m) = materials.get_mut(&d.2) {
-            let a = (s.spool[d.1] * 0.55).clamp(0.0, 0.4);
-            m.base_color = Color::srgba(0.12, 0.12, 0.13, if s.phase == Phase::Crashed { 0.0 } else { a });
+            let a = (s.spool.get(d.1).copied().unwrap_or(0.0) * 0.55).clamp(0.0, 0.4);
+            m.base_color = Color::srgba(0.12, 0.12, 0.13, if s.crashed { 0.0 } else { a });
         }
     }
 }

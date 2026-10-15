@@ -9,7 +9,7 @@
 
 use crate::terrain;
 use crate::terrain_render::surface_color;
-use crate::world::sun_dir;
+use crate::field::sun_dir;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::math::{Vec2, Vec3};

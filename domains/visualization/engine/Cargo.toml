@@ -1,0 +1,15 @@
+[package]
+name = "visualization_engine"
+version = "0.1.0"
+edition = "2024"
+description = "Visualization domain: the 3D view (terrain, vegetation, water, sky, planes, cameras) drawn from a Scene that a simulation or a real plane's telemetry fills in"
+
+[dependencies]
+visualization_world = { path = "../world" }
+simulation_aircraft = { path = "../../simulation/aircraft" }
+simulation_physics = { path = "../../simulation/physics" }
+design_theme = { path = "../../design/theme" }
+bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"

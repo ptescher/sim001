@@ -5482,6 +5482,8 @@ dependencies = [
  "simulation_aircraft",
  "simulation_physics",
  "t1s_station",
+ "visualization_engine",
+ "visualization_world",
 ]
 
 [[package]]
@@ -5862,6 +5864,50 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "visualization_engine"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "design_theme",
+ "libc",
+ "simulation_aircraft",
+ "simulation_physics",
+ "visualization_world",
+]
+
+[[package]]
+name = "visualization_telemetry"
+version = "0.1.0"
+dependencies = [
+ "communication_telemetry",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+ "glam",
+ "mavlink",
+]
+
+[[package]]
+name = "visualization_viewer"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "visualization_engine",
+ "visualization_telemetry",
+ "visualization_world",
+]
+
+[[package]]
+name = "visualization_world"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "image",
+ "simulation_physics",
+ "t1s_station",
+]
 
 [[package]]
 name = "walkdir"

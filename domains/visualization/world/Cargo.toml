@@ -1,0 +1,11 @@
+[package]
+name = "visualization_world"
+version = "0.1.0"
+edition = "2024"
+description = "Visualization domain: the place being flown (ground heights, water, trees, buildings), procedural or from a map pack, for the renderer and the physics alike"
+
+[dependencies]
+simulation_physics = { path = "../../simulation/physics" }
+t1s_station = { path = "../../../station" }
+glam = "0.33"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

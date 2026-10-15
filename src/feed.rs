@@ -8,7 +8,8 @@
 
 use crate::camera::{RenderScale, add_raytracing, scene_look};
 use crate::sim::SimCore;
-use crate::{RenderSettings, SharedSim};
+use crate::SharedSim;
+use visualization_engine::RenderSettings;
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
 use bevy::render::gpu_readback::{Readback, ReadbackComplete};

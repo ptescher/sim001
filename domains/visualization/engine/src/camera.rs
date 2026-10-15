@@ -1,8 +1,7 @@
 //! Cameras: line-of-sight (pilot on the field), chase, and FPV (nose camera).
 
-use crate::input::{Action, PilotInput};
 use crate::terrain;
-use crate::{RenderSettings, SharedSim};
+use crate::{RenderSettings, Scene, ViewInput};
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::{CameraMainTextureUsages, Exposure};
 use bevy::core_pipeline::tonemapping::Tonemapping;
@@ -125,6 +124,14 @@ pub fn scene_look() -> impl Bundle {
             shadows: bevy::render::view::ColorGradingSection { contrast: 1.05, saturation: 1.05, ..default() },
             ..default()
         },
+        // Aerial perspective: far ridges fade into a pale blue haze. Solari does not apply it:
+        // ray-traced cameras get `haze::Haze` instead (see `add_raytracing`).
+        DistanceFog {
+            color: Color::srgb(0.62, 0.72, 0.85),
+            directional_light_color: Color::srgba(1.0, 0.95, 0.85, 0.3),
+            directional_light_exponent: 20.0,
+            falloff: FogFalloff::from_visibility_colors(25_000.0, Color::srgb(0.40, 0.48, 0.60), Color::srgb(0.75, 0.83, 0.95)),
+        },
         Bloom::NATURAL,
         Msaa::Off,
         TemporalAntiAliasing::default(),
@@ -138,11 +145,38 @@ pub fn feed_solari_settings() -> SolariLighting {
 
 /// Solari needs storage access to the main texture and MSAA off.
 pub fn add_raytracing(cam: &mut EntityCommands) {
-    cam.insert((solari_settings(), CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING)));
+    cam.insert((solari_settings(), CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING), crate::haze::Haze::default()));
 }
 
+/// A camera placed by hand, for pictures of the scenery: heights are above the ground.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct View {
+    pub eye: Vec3,
+    pub target: Vec3,
+    /// Vertical field of view, degrees.
+    pub fov: f32,
+}
+
+impl View {
+    /// `x,agl,z,tx,tagl,tz[,fov]`: the eye and the point it looks at, each a height above the
+    /// ground, and the field of view (default 60 degrees).
+    pub fn parse(s: &str) -> Option<View> {
+        let n: Vec<f32> = s.split(',').map(|s| s.trim().parse().ok()).collect::<Option<_>>()?;
+        (n.len() >= 6).then(|| View { eye: Vec3::new(n[0], n[1], n[2]), target: Vec3::new(n[3], n[4], n[5]), fov: n.get(6).copied().unwrap_or(60.0) })
+    }
+
+    pub fn transform(&self) -> Transform {
+        let gy = |p: Vec3| Vec3::new(p.x, terrain::ground_height(p.x, p.z) + p.y, p.z);
+        Transform::from_translation(gy(self.eye)).looking_at(gy(self.target), Vec3::Y)
+    }
+}
+
+/// When set, the main camera stays at this view.
+#[derive(Resource, Default, Clone, Copy)]
+pub struct PinnedView(pub Option<View>);
+
 pub fn camera_plugin(app: &mut App) {
-    app.insert_resource(CamState { mode: CamMode::LineOfSight, auto_zoom: true, knob_view: None, chase_pos: Vec3::ZERO, fov: 50.0 })
+    app.init_resource::<PinnedView>().insert_resource(CamState { mode: CamMode::LineOfSight, auto_zoom: true, knob_view: None, chase_pos: Vec3::ZERO, fov: 50.0 })
         .add_systems(Update, update_render_scale);
 }
 
@@ -255,22 +289,23 @@ fn auto_scale(a: &mut AutoScale, scale: f32, dt: f32) -> Option<f32> {
 }
 pub fn update_camera(
     time: Res<Time>,
-    input: Res<PilotInput>,
-    sim: Res<SharedSim>,
+    mut input: ResMut<ViewInput>,
+    scene: Res<Scene>,
     mut cs: ResMut<CamState>,
+    pinned: Res<PinnedView>,
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
-    if input.has(Action::Camera) {
+    if std::mem::take(&mut input.cycle) {
         cs.mode = match cs.mode {
             CamMode::LineOfSight => CamMode::Chase,
             CamMode::Chase => CamMode::Fpv,
             CamMode::Fpv => CamMode::LineOfSight,
         };
     }
-    if input.has(Action::Zoom) {
+    if std::mem::take(&mut input.toggle_auto_zoom) {
         cs.auto_zoom = !cs.auto_zoom;
     }
-    match input.radio_view.map(knob_view) {
+    match input.view_knob.map(knob_view) {
         Some(v) if cs.knob_view != Some(v) => {
             cs.knob_view = Some(v);
             cs.mode = v;
@@ -278,10 +313,7 @@ pub fn update_camera(
         None => cs.knob_view = None,
         _ => {}
     }
-    let (pos, rot) = {
-        let c = sim.0.lock().unwrap();
-        (c.state.pos, c.state.rot)
-    };
+    let (pos, rot) = scene.vehicles[0].as_ref().map_or((Vec3::new(0.0, 1.0, 0.0), Quat::IDENTITY), |p| (p.pos, p.rot));
     let dt = time.delta_secs().min(0.1);
     let Ok((mut t, mut proj)) = cam.single_mut() else { return };
 
@@ -296,7 +328,7 @@ pub fn update_camera(
             } else {
                 t.look_at(eye + Vec3::NEG_Z, Vec3::Y);
             }
-            if let Some(k) = input.radio_zoom {
+            if let Some(k) = input.zoom_knob {
                 knob_fov(k)
             } else if cs.auto_zoom {
                 // Keep the plane at a comfortable apparent size, like your eyes "zooming" in.
@@ -328,18 +360,12 @@ pub fn update_camera(
             75.0
         }
     };
-    // T1S_VIEW="x,agl,z,tx,tagl,tz[,fov]": pin the camera (for screenshots of the scenery).
+    // A pinned view (T1S_VIEW, or a capture) wins over the pilot's.
     let mut target_fov = target_fov;
-    if let Ok(v) = std::env::var("T1S_VIEW") {
-        let n: Vec<f32> = v.split(',').filter_map(|s| s.trim().parse().ok()).collect();
-        if n.len() >= 6 {
-            // Heights are above ground level.
-            let gy = |x: f32, z: f32| terrain::ground_height(x, z);
-            *t = Transform::from_xyz(n[0], gy(n[0], n[2]) + n[1], n[2])
-                .looking_at(Vec3::new(n[3], gy(n[3], n[5]) + n[4], n[5]), Vec3::Y);
-            target_fov = n.get(6).copied().unwrap_or(60.0);
-            cs.fov = target_fov;
-        }
+    if let Some(v) = pinned.0.or_else(|| std::env::var("T1S_VIEW").ok().and_then(|v| View::parse(&v))) {
+        *t = v.transform();
+        target_fov = v.fov;
+        cs.fov = target_fov;
     }
     cs.fov += (target_fov - cs.fov) * (1.0 - (-dt * 4.0).exp());
     if let Projection::Perspective(p) = &mut *proj {
@@ -378,6 +404,15 @@ mod tests {
     }
 
     /// P2 picks the view in thirds: line of sight, chase, then the nose camera.
+    #[test]
+    fn a_view_parses_with_and_without_its_field_of_view() {
+        let v = View::parse("1,2,3,4,5,6").unwrap();
+        assert_eq!((v.eye, v.target, v.fov), (Vec3::new(1.0, 2.0, 3.0), Vec3::new(4.0, 5.0, 6.0), 60.0));
+        assert_eq!(View::parse("1,2,3,4,5,6,30").unwrap().fov, 30.0);
+        assert_eq!(View::parse("1,2,3"), None);
+        assert_eq!(View::parse("a,b,c,d,e,f"), None);
+    }
+
     #[test]
     fn the_view_knob_picks_a_view_in_thirds() {
         assert_eq!(knob_view(0.0), CamMode::LineOfSight);

@@ -1,0 +1,27 @@
+Story: Watching a flight from the pilot box
+  As a pilot with a real plane
+  I want to see the flight in the 3D view of the simulator
+  So that I can replay what the plane did, and record pictures for a camera system
+
+  Start the view before the plane is on. The view stays empty until the telemetry starts.
+  After that, the plane appears where it is, and it moves and banks with the real plane. The
+  link drops for a while, and the plane stays where it was last heard.
+
+  Scenario: The plane takes off, turns and goes quiet
+    When 1 second passes
+    Then the plane in the view is missing
+    When the telemetry is flowing
+    And the reported height is 40 m
+    And the reported distance north of home is 120 m
+    And 1 second passes
+    Then the plane in the view is shown
+    And the height above the pilot box in the view is 40 m
+    And the distance north of the pilot box in the view is 120 m
+    When the reported bank is 30 degrees
+    And the reported heading is east
+    And 1 second passes
+    Then the right wing in the view is low
+    And the heading in the view is east
+    When the telemetry is silent
+    And 10 seconds pass
+    Then the plane in the view is shown

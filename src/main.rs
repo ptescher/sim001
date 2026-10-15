@@ -20,57 +20,38 @@
 //!   --expect [suite] [--docs dir]               run the acceptance tests in expectations/ (and write the docs)
 
 mod acceptance;
+// The 3D view is the visualization domain's engine; the sim is one of its sources.
+use visualization_engine::{camera, loading, mapgen, mesh_util, model, terrain, theme};
 mod test_radio;
 mod ardupilot;
-mod camera;
 mod gc_pad;
 mod games;
-mod foliage;
-mod grass;
 mod hud;
 mod feed;
 mod input;
-mod loading;
-mod mapgen;
 mod placement;
 mod power;
 mod radio;
-mod realsite;
-mod mesh_util;
-mod model;
 mod pad_overlay;
 mod radio_overlay;
-mod scenery;
 mod script;
 mod selftest;
 mod sim;
 #[cfg(target_os = "macos")]
 mod switch_hid;
-mod terrain;
-mod terrain_render;
-mod theme;
-mod treegen;
-mod vegetation;
-mod world;
 
-use bevy::light::atmosphere::ScatteringMedium;
 use bevy::prelude::*;
-use bevy::solari::SolariPlugins;
 use bevy::window::{PresentMode, WindowLevel, WindowResolution};
 use input::{Action, PilotInput};
 use sim::SimCore;
 use std::sync::{Arc, Mutex};
+use visualization_engine::{EnginePlugin, EngineSet, Obstacles, Pose, Scene, ViewInput, Wind};
 
 /// Physics step for standalone mode (ArduPilot mode is paced by SITL's frame rate).
 const PHYSICS_DT: f32 = 1.0 / 600.0;
 
 #[derive(Resource, Clone)]
 pub struct SharedSim(pub Arc<Mutex<SimCore>>);
-
-#[derive(Resource, Clone)]
-pub struct RenderSettings {
-    pub raytracing: bool,
-}
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SimSet {
@@ -195,29 +176,28 @@ fn main() {
         }),
         ..default()
     }));
-    if raytracing {
-        app.add_plugins(SolariPlugins);
-    }
+    // Your plane in orange, and the computer pilots' planes in their own colours, for the games.
+    let mut liveries = vec![Color::srgb(1.0, 0.36, 0.05)];
+    liveries.extend(recreation_games::PILOTS.iter().map(|(_, _, [r, g, b])| Color::linear_rgb(*r, *g, *b)));
+    app.add_plugins(EnginePlugin { raytracing, liveries, tips: TIPS.to_vec() });
     app.insert_resource(SharedSim(core.clone()))
-        .insert_resource(RenderSettings { raytracing })
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(GlobalAmbientLight::NONE)
         .init_resource::<hud::HudState>()
         .init_resource::<pad_overlay::PadOverlayState>()
         .init_resource::<radio_overlay::RadioOverlayState>()
         .insert_resource(gc_pad::GcPads::new(flag("--debug-input")))
-        .configure_sets(Update, (SimSet::Input, SimSet::Logic, SimSet::Visual).chain())
+        .configure_sets(Update, (SimSet::Input, SimSet::Logic, EngineSet::Draw, SimSet::Visual).chain())
         .add_plugins(input::InputPlugin)
         .add_systems(Update, (quit_on_cmd_q, toggle_fullscreen))
-        .add_systems(Startup, (setup, grass::setup_grass))
-        .add_systems(Update, sim_update.in_set(SimSet::Logic).run_if(in_state(loading::AppState::Running)))
+        .add_systems(Startup, setup)
+        .add_systems(Update, take_obstacles.run_if(resource_added::<Obstacles>))
         .add_systems(
             Update,
-            (model::sync_plane, world::update_windsock, scenery::animate_scenery, camera::update_camera, grass::stream_grass.run_if(in_state(loading::AppState::Running)), hud::update_hud, pad_overlay::update_pad_overlay, radio_overlay::update_radio_overlay)
-                .chain()
-                .in_set(SimSet::Visual),
+            (sim_update.run_if(in_state(loading::AppState::Running)), publish_scene).chain().in_set(SimSet::Logic),
+        )
+        .add_systems(
+            Update,
+            (hud::update_hud, pad_overlay::update_pad_overlay, radio_overlay::update_radio_overlay).chain().in_set(SimSet::Visual),
         );
-    camera::camera_plugin(&mut app);
     games::plugin(&mut app);
     if let Some(port) = arg("--radio").and_then(|p| p.parse::<u16>().ok()) {
         let home = arg("--home")
@@ -243,7 +223,6 @@ fn main() {
     if let Some(r) = window_rect {
         app.insert_resource(placement::WindowRect(r, title_bar)).add_systems(Update, placement::place_window);
     }
-    loading::loading_plugin(&mut app);
     if let Some(dir) = args.iter().position(|a| a == "--shots").and_then(|i| args.get(i + 1)) {
         std::fs::create_dir_all(dir).ok();
         app.insert_resource(script::ShotScript { dir: dir.clone(), t: 0.0, done: vec![] })
@@ -265,24 +244,42 @@ fn main() {
     }
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut images: ResMut<Assets<Image>>,
-    mut media: ResMut<Assets<ScatteringMedium>>,
-    settings: Res<RenderSettings>,
-) {
-    world::spawn_world(&mut commands, &mut meshes, &mut materials, &mut images, &mut media, &settings);
-    model::spawn_plane(&mut commands, &mut meshes, &mut materials, 0, Color::srgb(1.0, 0.36, 0.05));
-    // The computer pilots' planes, in their own colours, for the games.
-    for (i, (_, _, [r, g, b])) in recreation_games::PILOTS.iter().enumerate() {
-        model::spawn_plane(&mut commands, &mut meshes, &mut materials, i + 1, Color::linear_rgb(*r, *g, *b));
-    }
-    camera::spawn_camera(&mut commands, &settings, &mut images);
+fn setup(mut commands: Commands) {
     hud::spawn_hud(&mut commands);
     pad_overlay::spawn_pad_overlay(&mut commands);
     radio_overlay::spawn_radio_overlay(&mut commands);
+}
+
+/// The world's trees and buildings, once the engine has loaded them, are in the plane's way.
+fn take_obstacles(obstacles: Res<Obstacles>, sim: Res<SharedSim>) {
+    sim.0.lock().unwrap().obstacles = obstacles.0.clone();
+}
+
+fn pose(s: &simulation_physics::FlightState) -> Pose {
+    Pose {
+        pos: s.pos,
+        rot: s.rot,
+        deflection: s.deflection.clone(),
+        spool: s.spool.clone(),
+        crashed: s.phase == simulation_physics::Phase::Crashed,
+    }
+}
+
+/// The engine draws the sim: your plane, the computer pilots' while a game is on, and the wind.
+/// The camera keys and the radio's knobs go to the view.
+fn publish_scene(sim: Res<SharedSim>, input: Res<PilotInput>, mut scene: ResMut<Scene>, mut view: ResMut<ViewInput>) {
+    let c = sim.0.lock().unwrap();
+    for (i, slot) in scene.vehicles.iter_mut().enumerate() {
+        *slot = match i {
+            0 => Some(pose(&c.state)),
+            i => c.game.as_ref().and_then(|g| g.opponents.get(i - 1)).map(|o| pose(&o.state)),
+        };
+    }
+    scene.wind = Wind { from_dir: c.wind.from_dir, speed: c.wind.speed, at_sock: c.wind_at(Vec3::new(18.0, 5.0, 6.0), c.state.time) };
+    view.cycle |= input.has(Action::Camera);
+    view.toggle_auto_zoom |= input.has(Action::Zoom);
+    view.view_knob = input.radio_view;
+    view.zoom_knob = input.radio_zoom;
 }
 
 /// Cmd-Q (macOS) / Ctrl-Q elsewhere ends the sim.
@@ -382,6 +379,17 @@ fn sim_update(
         *acc -= PHYSICS_DT;
     }
 }
+
+const TIPS: &[&str] = &[
+    "Hold the throttle above 55% to hand-launch, just like at the field.",
+    "Line-of-sight view with auto-zoom (Z) is the closest thing to flying at the field.",
+    "Watch the windsock by the pilot box: land into the wind.",
+    "ANGLE mode self-levels; switch to MANUAL (M) when you're ready.",
+    "Stalls drop a wing: keep your airspeed up in turns near the ground.",
+    "Resolution adapts to hold 60 fps. F5 / F6 set it by hand, F7 goes back to automatic.",
+    "HOME on the Pro Controller shows the controller layout.",
+    "Fly with ArduPilot: run with --ardupilot and start ardupilot/run_sitl.sh.",
+];
 
 /// Extra SDL mappings for controllers whose exact USB version isn't in gilrs' bundled
 /// database (e.g. Switch Pro Controllers reporting version 0x0200 on macOS).

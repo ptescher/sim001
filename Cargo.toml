@@ -16,6 +16,9 @@ t1s_station = { path = "station" }
 # The flight model and the planes it flies: see domains/simulation.
 simulation_aircraft = { path = "domains/simulation/aircraft" }
 simulation_physics = { path = "domains/simulation/physics" }
+# The 3D view and the place it shows: see domains/visualization.
+visualization_engine = { path = "domains/visualization/engine" }
+visualization_world = { path = "domains/visualization/world" }
 # Games against computer pilots: see domains/recreation.
 recreation_games = { path = "domains/recreation/games" }
 # Map packs (real places): aerial photos and land cover. Same version Bevy uses.

@@ -1,0 +1,54 @@
+# The 3D view (domains/visualization). The engine draws a scene, and a source fills it in: the
+# simulator, or the telemetry of a real plane. This section is about the second source. The
+# tests run with no window: MAVLink in, the scene out. See
+# domains/visualization/telemetry/tests/acceptance.rs.
+
+Section: Watching a real plane
+  The 3D view of the simulator can also show a real plane. `t1s_view` listens for the
+  [[MAVLink]] telemetry of the plane, and it puts the plane in the same scenery as the
+  simulator. It does not fly anything. You can watch a flight from the pilot box, from behind
+  the plane or from its nose, and a camera system can learn from the same pictures.
+
+  The view puts [[home]] at the pilot box. Use a map pack of the field (`--map NAME`) when
+  the scenery must match the real place.
+
+Vocabulary:
+  State: the telemetry is flowing | silent
+    Set: let the telemetry of the plane be {value}
+    Shows: flowing: the autopilot sends its attitude and its position a few times a second
+  State: the reported distance north of home is 0..2000 m
+    Set: fly the plane {value} north of home
+  State: the reported height is 0..500 m
+    Set: fly the plane at {value} above home
+  State: the reported bank is 0..90 degrees
+    Set: bank the plane {value} to the right
+  State: the reported heading is north | east | south | west
+    Set: turn the plane to fly {value}
+  State: the plane in the view is missing | shown
+    Shows: missing: the view shows the scenery and no plane
+    Shows: shown: the view shows the plane
+  State: the distance north of the pilot box in the view is 0..2000 m
+    Shows: the plane in the view is {value} north of the pilot box
+  State: the height above the pilot box in the view is 0..500 m
+    Shows: the plane in the view is {value} above the ground at the pilot box
+  State: the right wing in the view is low | level | high
+    Shows: low: the plane in the view banks to the right
+  State: the heading in the view is north | east | south | west
+    Shows: the nose of the plane in the view points {value}
+
+  Event: 1 second passes
+    Say: wait 1 second
+  Event: 10 seconds pass
+    Say: wait 10 seconds
+
+  Phrase: the view is listening
+    Say: start `t1s_view`. It listens for MAVLink on UDP port 14550
+    Given the plane in the view is missing
+    And the telemetry is silent
+    And the reported distance north of home is 0 m
+    And the reported height is 0 m
+    And the reported bank is 0 degrees
+    And the reported heading is north
+
+Background:
+  Given the view is listening

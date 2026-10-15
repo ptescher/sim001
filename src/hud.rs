@@ -6,7 +6,8 @@ use crate::input::{Action, PilotInput, Profile};
 use simulation_physics::{self as physics, Phase};
 use crate::sim::wrap_deg;
 use crate::terrain;
-use crate::{RenderSettings, SharedSim};
+use crate::SharedSim;
+use visualization_engine::RenderSettings;
 use bevy::prelude::*;
 
 #[derive(Component)]

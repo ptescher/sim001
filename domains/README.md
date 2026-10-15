@@ -20,6 +20,7 @@ the compiler enforce that.
 | [design](design/README.md) | The look shared by the ground station, the sim's HUD and the docs: palettes, type and corners. |
 | [simulation](simulation/README.md) | The flight model and the planes it flies: aircraft descriptions and the physics, headless and independent of any renderer. |
 | [recreation](recreation/README.md) | Games and trials against computer pilots who fly the same plane on the same physics: a pylon race and tag. |
+| [visualization](visualization/README.md) | The 3D view (terrain, forest, water, sky, the planes and the cameras) and the place it shows. It draws a scene that the simulator or a real plane's telemetry fills in, and it saves pictures for camera-based systems. |
 | [communication](communication/README.md) | How the station finds out where other aircraft are, using only what the radio passes on: Remote ID, a MAVLink network and ADS-B, the radios between aircraft, and the tracker that joins them into one picture. |
 | [expectation](expectation/README.md) | Behaviour written as expectations, checked for conflicts, run as acceptance tests from user stories, and turned into documentation. |
 

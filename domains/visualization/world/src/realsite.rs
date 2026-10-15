@@ -5,7 +5,7 @@
 //! pilot box), with y = 0 at the ground there. The ground is coloured from the photos.
 
 use crate::terrain::{Building, Tree};
-use bevy::math::{Vec2, Vec3};
+use glam::{Vec2, Vec3};
 use std::path::Path;
 use t1s_station::mappack::{self, PackBox, PackMeta, Square, cover};
 

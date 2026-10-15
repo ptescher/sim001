@@ -3,7 +3,7 @@
 use crate::mesh_util::{cuboid, finish, texture, GeoBuilder};
 use crate::model::rt;
 use crate::terrain::{self, fbm};
-use crate::{RenderSettings, SharedSim};
+use crate::{RenderSettings, Scene};
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::{light_consts::lux, Atmosphere, SunDisk};
 use bevy::prelude::*;
@@ -155,10 +155,8 @@ pub fn spawn_world(
     commands.entity(sock_root).add_child(sock_mesh);
 }
 
-pub fn update_windsock(sim: Res<SharedSim>, mut socks: Query<&mut Transform, With<Windsock>>) {
-    let c = sim.0.lock().unwrap();
-    let w = c.wind_at(Vec3::new(18.0, 5.0, 6.0), c.state.time);
-    drop(c);
+pub fn update_windsock(scene: Res<Scene>, mut socks: Query<&mut Transform, With<Windsock>>) {
+    let w = scene.wind.at_sock;
     for mut t in &mut socks {
         let horiz = Vec3::new(w.x, 0.0, w.z);
         let speed = horiz.length();

@@ -4,7 +4,7 @@
 
 use simulation_physics::Obstacle;
 use crate::realsite::RealSite;
-use bevy::math::{Vec2, Vec3};
+use glam::{Vec2, Vec3};
 use std::sync::OnceLock;
 
 static SITE: OnceLock<Option<RealSite>> = OnceLock::new();
@@ -129,7 +129,7 @@ fn ridged(x: f32, z: f32, octaves: u32) -> f32 {
     sum / norm
 }
 
-fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
+pub fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
     let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
 }
@@ -254,8 +254,8 @@ pub fn trees() -> Vec<Tree> {
             }
             let near_line = 1.0 - smoothstep(treeline - 80.0, treeline, h) * 0.45;
             let height = (13.0 + hash(ix + 77, iz - 33) * 13.0) * near_line;
-            // Spruce/fir dominate; aspen groves in the lower, gentler ground.
-            let aspen_zone = (1.0 - smoothstep(300.0, 700.0, r)) * 0.45 + fbm(x / 120.0, z / 120.0, 2) * 0.25;
+            // Subalpine fir and spruce, with a few aspen groves in the lower, gentler ground.
+            let aspen_zone = ((1.0 - smoothstep(300.0, 700.0, r)) * 0.45 + fbm(x / 120.0, z / 120.0, 2) * 0.25 - 0.45).max(0.0);
             out.push(Tree {
                 pos: Vec3::new(x, h, z),
                 height,

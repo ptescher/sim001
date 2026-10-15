@@ -166,10 +166,20 @@ fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
             c = mix(c, scale(dirt, 0.9 + 0.2 * blade.abs()), dirt_amt.clamp(0.0, 1.0));
         }
         if f[F_LAKE] < 1.4 {
-            let shore = 1.0 - smoothstep(1.02, 1.22, f[F_LAKE] + wobble * 0.03);
-            c = mix(c, [0.16, 0.13, 0.09], shore * 0.85);
+            // Sedge and moss down to the water, as at a mountain lake, and a dark wet margin
+            // where the bank meets the water.
+            let lush = 1.0 - smoothstep(1.02, 1.30, f[F_LAKE] + wobble * 0.03);
+            c = mix(c, scale([0.070, 0.100, 0.020], 0.85 + 0.3 * blade.abs()), lush * 0.6);
+            let above = f[F_H] - terrain::WATER_LEVEL;
+            let wet = 1.0 - smoothstep(0.04, 0.30 + 0.1 * wobble, above);
+            c = mix(c, scale([0.028, 0.030, 0.012], 0.8 + 0.4 * blade.abs()), wet);
         }
     }
+
+    // A summer meadow under a high sun is a warm yellow-green, less saturated than paint: warm
+    // the greens a little and pull them a little towards their grey.
+    let lum = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+    c = mix([lum, lum, lum], [c[0] * 1.25, c[1], c[2] * 0.9], 0.88);
 
     // Rock on steep slopes and high ground, with strata; snow above, not on cliffs.
     if f[F_ROCK] > 0.0 {
@@ -483,10 +493,14 @@ pub fn ground_cover(x: f32, z: f32) -> Cover {
             None => none,
         };
     }
-    if terrain::is_runway(x, z) || terrain::is_water(x, z) || terrain::lake_factor(x, z) < 1.08 {
+    if terrain::is_runway(x, z) {
         return none;
     }
     let h = terrain::ground_height(x, z);
+    // Grass grows to the water's edge.
+    if h < terrain::WATER_LEVEL + 0.06 {
+        return none;
+    }
     let n = terrain::ground_normal(x, z);
     let slope = 1.0 - n.y;
     let r = (x * x + z * z).sqrt();

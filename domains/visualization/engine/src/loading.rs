@@ -8,7 +8,7 @@ use simulation_physics::Obstacle;
 use crate::terrain::{self, Tree};
 use crate::terrain_render;
 use crate::vegetation::{self, VegetationBuild, VegetationHandles};
-use crate::SharedSim;
+use crate::Obstacles;
 use bevy::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -66,16 +66,9 @@ struct LoadingStage;
 struct LoadingTip;
 
 const TREES_PER_FRAME: usize = 800;
-const TIPS: &[&str] = &[
-    "Hold the throttle above 55% to hand-launch, just like at the field.",
-    "Line-of-sight view with auto-zoom (Z) is the closest thing to flying at the field.",
-    "Watch the windsock by the pilot box: land into the wind.",
-    "ANGLE mode self-levels; switch to MANUAL (M) when you're ready.",
-    "Stalls drop a wing: keep your airspeed up in turns near the ground.",
-    "Resolution adapts to hold 60 fps. F5 / F6 set it by hand, F7 goes back to automatic.",
-    "HOME on the Pro Controller shows the controller layout.",
-    "Fly with ArduPilot: run with --ardupilot and start ardupilot/run_sitl.sh.",
-];
+/// Shown one at a time on the loading screen, five seconds each.
+#[derive(Resource, Clone, Default)]
+pub struct Tips(pub Vec<&'static str>);
 
 pub fn loading_plugin(app: &mut App) {
     app.init_state::<AppState>()
@@ -125,7 +118,6 @@ fn advance_loading(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
-    sim: Res<SharedSim>,
     mut render_scale: ResMut<RenderScale>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
@@ -136,7 +128,7 @@ fn advance_loading(
             render_scale.suspended = true;
             let result = loading.shared.lock().unwrap().result.take();
             if let Some(build) = result {
-                sim.0.lock().unwrap().obstacles = build.obstacles;
+                commands.insert_resource(Obstacles(build.obstacles));
                 let total = build.terrain.len();
                 loading.phase = Phase::Uploading {
                     terrain: build.terrain.into_iter().rev().collect(),
@@ -263,6 +255,7 @@ fn update_loading_ui(
     mut commands: Commands,
     time: Res<Time>,
     mut loading: ResMut<Loading>,
+    tips: Res<Tips>,
     mut bar: Query<&mut Node, With<LoadingBar>>,
     mut texts: ParamSet<(Query<&mut Text, With<LoadingStage>>, Query<&mut Text, With<LoadingTip>>)>,
     mut root: Query<(Entity, &mut BackgroundGradient), With<LoadingRoot>>,
@@ -284,7 +277,7 @@ fn update_loading_ui(
         let elapsed = loading.started.elapsed().as_secs_f32();
         t.0 = format!("{stage}   ({elapsed:.0} s)");
     }
-    let tip = TIPS[(loading.started.elapsed().as_secs() / 5) as usize % TIPS.len()];
+    let tip = tips.0.get((loading.started.elapsed().as_secs() / 5) as usize % tips.0.len().max(1)).copied().unwrap_or("");
     for mut t in &mut texts.p1() {
         if t.0 != tip {
             t.0 = tip.to_string();

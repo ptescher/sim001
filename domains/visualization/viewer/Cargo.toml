@@ -1,0 +1,15 @@
+[package]
+name = "visualization_viewer"
+version = "0.1.0"
+edition = "2024"
+description = "Visualization domain: t1s_view, the 3D view of a real plane from its MAVLink telemetry, and pictures of the scenery"
+
+[[bin]]
+name = "t1s_view"
+path = "src/main.rs"
+
+[dependencies]
+visualization_engine = { path = "../engine" }
+visualization_telemetry = { path = "../telemetry" }
+visualization_world = { path = "../world" }
+bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }

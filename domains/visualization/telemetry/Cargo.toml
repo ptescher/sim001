@@ -1,0 +1,15 @@
+[package]
+name = "visualization_telemetry"
+version = "0.1.0"
+edition = "2024"
+description = "Visualization domain: a real plane's MAVLink telemetry (home, position, attitude, motors) turned into where the 3D view draws it"
+
+[dependencies]
+communication_telemetry = { path = "../../communication/telemetry" }
+mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }
+glam = "0.33"
+
+[dev-dependencies]
+expectation_harness = { path = "../../expectation/harness" }
+expectation_model = { path = "../../expectation/model" }
+expectation_story = { path = "../../expectation/story" }

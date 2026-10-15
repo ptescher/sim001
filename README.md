@@ -46,11 +46,14 @@ See [maps/README.md](maps/README.md) for the data, licenses and how to add a pla
 
 The setting is an alpine valley modelled on Rocky Mountain lakes:
 - **Mountains:** domain-warped ridged-noise mountains with granite faces and snow.
-- **Forest:** about 24,000 trees, dense spruce/fir up to a ragged treeline plus aspen groves, grown by our own generator (`src/treegen.rs`). It grows recursive branches with taper, gnarl and gravity, then adds painted needle sprays and leaf clusters on alpha-cut cards. Solari has no alpha support, so each tree also carries an invisible solid proxy that only the ray tracer sees, for shadows, reflections and GI. Beyond about 300 m the trees switch to a cheap solid crown.
+- **Forest:** about 24,000 trees, narrow subalpine fir and spruce up to a ragged treeline with a few aspen groves, grown by our own generator (`domains/visualization/engine/src/treegen.rs`). It grows recursive branches with taper, gnarl and gravity, then adds painted needle sprays and leaf clusters on alpha-cut cards. Solari has no alpha support, so each tree also carries an invisible solid proxy that only the ray tracer sees, for shadows, reflections and GI. Beyond about 300 m the trees switch to a cheap solid crown.
 - **Ground cover:** 3D grass and alpine flowers (daisies, avens, lupine) stream in around the camera when it's near the ground. The mown field gets short turf, the meadows tall grass with flower drifts, and the forest floor moss.
-- **Rocks:** granite boulders and outcrops.
-- **Lake:** a mirror lake with an irregular shoreline and animated ripples.
-- **Clouds:** drifting cumulus.
+- **Rocks:** granite boulders, outcrops and shoreline cobbles.
+- **Lake:** a still mirror lake with an irregular, grassy shoreline and cobbles at the waterline. It is a mirror over its own bed: stones and silt show in the shallows and fade to dark where it is deep, with the reflections taking over at a grazing angle.
+- **Clouds:** a field of fair-weather cumulus, flat-bottomed, out to the horizon. The ray tracer does not see them, so they neither reflect in the lake nor shade the ground.
+- **Haze:** far ridges fade into blue, as through real air. Solari ignores Bevy's `DistanceFog`, so the ray-traced view has its own pass (`domains/visualization/engine/src/haze.rs`).
+
+The 3D view is its own domain, [domains/visualization](domains/visualization/README.md). It can also show a real plane from its MAVLink telemetry (`t1s_view`), and save pictures of the scenery from set views for camera-based systems.
 
 The terrain is 81 chunks with level-of-detail geometry. Each chunk has its own texture, baked at startup (about 10 s, multithreaded) at up to 14 cm/texel around the field. Solari only ray traces Bevy's standard material, so materials are blended in these baked textures rather than in custom shaders.
 

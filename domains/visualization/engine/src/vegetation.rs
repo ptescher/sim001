@@ -231,6 +231,9 @@ pub struct VegetationHandles {
     spruce_distant: Handle<Mesh>,
     aspen_distant: Handle<Mesh>,
     spruce_solid_mats: Vec<Handle<StandardMaterial>>,
+    /// The needle mass as reflections and bounced light see it: a smooth cone has none of the
+    /// shadowed gaps between branches, so it is darker than the crown it stands in for.
+    spruce_proxy_mats: Vec<Handle<StandardMaterial>>,
     aspen_solid_mats: Vec<Handle<StandardMaterial>>,
     spray_mats: Vec<Handle<StandardMaterial>>,
     leaf_mats: Vec<Handle<StandardMaterial>>,
@@ -266,7 +269,7 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         let speck = fbm(u * 180.0, v * 180.0, 2);
         let grain = fbm(u * 40.0, v * 40.0, 3);
         let lichen = ((fbm(u * 9.0 + 4.0, v * 9.0, 4) - 0.55) * 4.0).clamp(0.0, 1.0);
-        let g = 0.20 + 0.12 * grain + 0.10 * (speck - 0.5);
+        let g = 0.11 + 0.08 * grain + 0.07 * (speck - 0.5);
         let rock = [g * 1.02, g, g * 0.97];
         let lich = [0.16, 0.18, 0.08];
         [
@@ -297,8 +300,20 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
             d += 2.0;
         }
         let d = d * (0.88 + 0.22 * rnd(k, 21));
-        let size = 1.2 + 4.5 * rnd(k, 22).powi(2);
+        let size = 0.8 + 2.4 * rnd(k, 22).powi(2);
         place(lc.x + dir.x * d, lc.y + dir.y * d, size, 0.15, k);
+    }
+    // Cobbles along the waterline, some under the water, as a stream or a lake leaves them.
+    for k in 0..if alpine { 900u32 } else { 0 } {
+        let a = rnd(k, 40) * TAU;
+        let dir = Vec2::new(a.cos(), a.sin());
+        let mut d = 0.0;
+        while terrain::ground_height(lc.x + dir.x * d, lc.y + dir.y * d) < terrain::WATER_LEVEL && d < 400.0 {
+            d += 0.5;
+        }
+        let d = d + (rnd(k, 41) - 0.6) * 5.0;
+        let size = 0.12 + 0.55 * rnd(k, 42).powi(3);
+        place(lc.x + dir.x * d, lc.y + dir.y * d, size, 0.3, 1000 + k);
     }
     // Outcrops on steep hillsides, and scattered erratics in the meadows.
     let spacing = 34.0;
@@ -355,6 +370,10 @@ pub fn upload_vegetation(
     let spruce_solid_mats: Vec<_> = [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
         .iter()
         .map(|&(r, g, b)| mat(materials, Color::linear_rgb(r, g, b), 0.85))
+        .collect();
+    let spruce_proxy_mats: Vec<_> = [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
+        .iter()
+        .map(|&(r, g, b)| mat(materials, Color::linear_rgb(r * 0.3, g * 0.3, b * 0.3), 0.9))
         .collect();
     let aspen_solid_mats: Vec<_> = [(0.060, 0.120, 0.028), (0.078, 0.135, 0.030), (0.050, 0.100, 0.026)]
         .iter()
@@ -422,6 +441,7 @@ pub fn upload_vegetation(
         spruce_distant: meshes.add(b.spruce_distant),
         aspen_distant: meshes.add(b.aspen_distant),
         spruce_solid_mats,
+        spruce_proxy_mats,
         aspen_solid_mats,
         spray_mats,
         leaf_mats,
@@ -453,7 +473,8 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
     let base = t.pos - Vec3::Y * 0.3;
     let shade = t.shade as usize;
     if t.conifer {
-        let w = h * (0.85 + 0.3 * rnd(i as u32, 11));
+        // Narrow spires, as subalpine fir and Engelmann spruce grow where the snow is deep.
+        let w = h * (0.55 + 0.3 * rnd(i as u32, 11));
         let (wood, cards) = &v.spruce_gen[i % v.spruce_gen.len()];
         let k = h / SPRUCE_REF;
         let gen_tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::new(k * w / h, k, k * w / h));
@@ -468,8 +489,8 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         commands.spawn((Mesh3d(solid), MeshMaterial3d(solid_mat.clone()), tf, far));
         commands.spawn((Mesh3d(v.spruce_distant.clone()), MeshMaterial3d(solid_mat.clone()), tf, distant));
         // Ray-tracing proxy for the needle mass: a smooth cone a bit inside the visible crown.
-        let proxy = tf.with_scale(Vec3::new(w * 0.8, h * 0.96, w * 0.8));
-        commands.spawn((RaytracingMesh3d(v.spruce_proxy.clone()), MeshMaterial3d(solid_mat), proxy));
+        let proxy = tf.with_scale(Vec3::new(w * 0.62, h * 0.92, w * 0.62));
+        commands.spawn((RaytracingMesh3d(v.spruce_proxy.clone()), MeshMaterial3d(v.spruce_proxy_mats[shade % 4].clone()), proxy));
     } else {
         let h = h * 0.8;
         let (wood, cards) = &v.aspen_gen[i % v.aspen_gen.len()];

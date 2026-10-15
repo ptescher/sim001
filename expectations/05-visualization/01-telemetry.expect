@@ -1,0 +1,40 @@
+Feature: The plane follows its telemetry
+  The view shows the plane where its telemetry says it is, and at the same attitude. Before
+  the first message, the view has no plane.
+
+  Expectation: No telemetry, no plane
+    Given the telemetry is silent
+    When 1 second passes
+    Then the plane in the view is missing
+
+  Expectation: The plane is where it says it is
+    Given the telemetry is flowing
+    And the reported distance north of home is 120 m
+    And the reported height is 40 m
+    When 1 second passes
+    Then the plane in the view is shown
+    And the distance north of the pilot box in the view is 120 m
+    And the height above the pilot box in the view is 40 m
+
+  Expectation: The plane banks as it banks
+    Given the telemetry is flowing
+    And the reported bank is 30 degrees
+    When 1 second passes
+    Then the right wing in the view is low
+
+  Expectation: The plane points where it flies
+    Given the telemetry is flowing
+    And the reported heading is east
+    When 1 second passes
+    Then the heading in the view is east
+
+  Expectation: A quiet plane stays where it was last heard
+    The view does not hide a plane when the telemetry stops. A lost link is often short, and
+    the last position is the best guess.
+    Given the telemetry is flowing
+    And the reported distance north of home is 120 m
+    And the plane in the view is shown
+    When the telemetry is silent
+    And 10 seconds pass
+    Then the plane in the view is shown
+    And the distance north of the pilot box in the view is 120 m
