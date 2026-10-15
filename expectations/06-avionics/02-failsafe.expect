@@ -1,0 +1,19 @@
+Feature: Losing the TX15
+  If the serial line goes quiet, the flight computer does the same as a receiver that lost
+  its link. It sets the throttle channel below the failsafe level of ArduPilot. ArduPilot then
+  starts its [[failsafe]].
+
+  Expectation: A quiet line is a failsafe
+    Given the TX15 throttle stick is 50 %
+    When the TX15 is not connected
+    And 5 seconds pass
+    Then the throttle channel is at most 900 us
+    And the TX15 uplink quality is 0 %
+
+  Expectation: The plane flies again when the TX15 comes back
+    Given the TX15 is not connected
+    And the TX15 throttle stick is 50 %
+    When the TX15 is connected
+    And 5 seconds pass
+    Then the throttle channel is at least 1490 us
+    And the TX15 uplink quality is 100 %

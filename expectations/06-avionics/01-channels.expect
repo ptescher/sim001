@@ -1,0 +1,38 @@
+Feature: Sticks to channels
+  The flight computer reads the channels that the TX15 sends. It gives ArduPilot the same
+  pulse widths that a receiver in the plane would give. A centred stick gives 1500 us. The
+  ends of the stick give 1000 us and 2000 us.
+
+  Expectation: A centred stick is 1500 us
+    Given the TX15 roll stick is 0 %
+    And the TX15 pitch stick is 0 %
+    And the TX15 throttle stick is 0 %
+    When 5 seconds pass
+    Then the roll channel is 1500 us
+    And the pitch channel is 1500 us
+
+  Expectation: A stick at full travel is at the end of the range
+    Given the TX15 roll stick is 100 %
+    And the TX15 throttle stick is 100 %
+    When 5 seconds pass
+    Then the roll channel is at least 1990 us
+    And the throttle channel is at least 1990 us
+
+  Expectation: A stick at half travel is half way
+    Given the TX15 pitch stick is -50 %
+    When 5 seconds pass
+    Then the pitch channel is at least 1245 us
+    And the pitch channel is at most 1255 us
+
+  Expectation: The arm switch goes to its channel
+    Given the TX15 arm switch is on
+    When 5 seconds pass
+    Then the arm channel is at least 1900 us
+
+  Expectation: A frame with a wrong checksum does nothing
+    Overrides: A stick at full travel is at the end of the range
+    A frame that the line has damaged must not move the plane.
+    Given the corrupted frames are 100 %
+    And the TX15 roll stick is 100 %
+    When 5 seconds pass
+    Then the roll channel is 1500 us

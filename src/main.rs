@@ -9,7 +9,9 @@
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --test-radio                                a TX15 stand-in that the ground station's tests move
-//!   --radio PORT [--radio-upstream ADDR] [--radio-rate B] [--home LAT,LON,ALT]
+//!   --flight-computer tcp:PORT|DEVICE [--autopilot ADDR]
+//!                                               a flight computer between the TX15 (on a UART, in CRSF) and ArduPilot
+//!   --radio PORT [--radio-uart tcp:HOST:PORT] [--radio-upstream ADDR] [--radio-rate B] [--home LAT,LON,ALT]
 //!                                               the TX15 stand-in: the station connects to PORT, and gets the
 //!                                               autopilot's MAVLink (at ADDR, default 127.0.0.1:5760) through a
 //!                                               telemetry link, with the other planes the pilot's radios hear
@@ -24,6 +26,7 @@ mod acceptance;
 use visualization_engine::{camera, loading, mapgen, mesh_util, model, terrain, theme};
 mod test_radio;
 mod ardupilot;
+mod flight_computer;
 mod gc_pad;
 mod games;
 mod hud;
@@ -204,22 +207,39 @@ fn main() {
             (hud::update_hud, pad_overlay::update_pad_overlay, radio_overlay::update_radio_overlay).chain().in_set(SimSet::Visual),
         );
     games::plugin(&mut app);
+    let home = arg("--home")
+        .and_then(|s| {
+            let v: Vec<f64> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+            (v.len() >= 2).then(|| communication_traffic::Position::new(v[0], v[1], v.get(2).copied().unwrap_or(0.0) as f32))
+        })
+        // ardupilot/start.sh's default home.
+        .unwrap_or(communication_traffic::Position::new(-35.363261, 149.165230, 584.0));
+    let autopilot = arg("--autopilot").cloned().unwrap_or_else(|| "127.0.0.1:5760".into());
+    // The flight computer: the TX15 on a UART instead of a USB controller, and the plane's
+    // MAVLink carried on the same line.
+    if let Some(line) = arg("--flight-computer") {
+        let cfg = flight_computer::Config { line: line.clone(), autopilot: autopilot.clone(), home };
+        if let Err(e) = flight_computer::spawn(core.clone(), cfg) {
+            eprintln!("--flight-computer {line}: {e}");
+            std::process::exit(1);
+        }
+    }
     if let Some(port) = arg("--radio").and_then(|p| p.parse::<u16>().ok()) {
-        let home = arg("--home")
-            .and_then(|s| {
-                let v: Vec<f64> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
-                (v.len() >= 2).then(|| communication_traffic::Position::new(v[0], v[1], v.get(2).copied().unwrap_or(0.0) as f32))
-            })
-            // ardupilot/start.sh's default home.
-            .unwrap_or(communication_traffic::Position::new(-35.363261, 149.165230, 584.0));
+        // With --radio-uart the TX15 stand-in is on the other end of the flight computer's line,
+        // and the station only hears what comes down it.
+        let upstream = match arg("--radio-uart") {
+            Some(line) => match flight_computer::tx15(core.clone(), line) {
+                Ok(addr) => addr.to_string(),
+                Err(e) => {
+                    eprintln!("--radio-uart {line}: {e}");
+                    std::process::exit(1);
+                }
+            },
+            None => arg("--radio-upstream").cloned().unwrap_or(autopilot),
+        };
         radio::plugin(
             &mut app,
-            radio::Config {
-                port,
-                upstream: arg("--radio-upstream").cloned().unwrap_or_else(|| "127.0.0.1:5760".into()),
-                home,
-                rate: arg("--radio-rate").and_then(|r| r.parse().ok()).unwrap_or(10_000.0),
-            },
+            radio::Config { port, upstream, home, rate: arg("--radio-rate").and_then(|r| r.parse().ok()).unwrap_or(10_000.0) },
         );
     }
     if let Some(cfg) = feed {

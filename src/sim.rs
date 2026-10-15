@@ -99,6 +99,9 @@ pub struct SimCore {
     pub radio_arm: Option<bool>,
     /// The radio's mode channel in µs, if the pilot gave it one: it goes to ArduPilot as it is.
     pub radio_mode: Option<u16>,
+    /// With a flight computer on a UART (`--flight-computer`): the radio channels it gives
+    /// ArduPilot, in µs. They replace the sticks, the keyboard and the USB controller.
+    pub uart_rc: Option<[u16; 16]>,
     pub state: FlightState,
     pub obstacles: Vec<Obstacle>,
     pub sticks: Sticks,
@@ -182,6 +185,7 @@ impl SimCore {
             pilot_radio: false,
             radio_arm: None,
             radio_mode: None,
+            uart_rc: None,
             last_wind: Vec3::ZERO,
             ap: ArduPilotLink {
                 enabled: ap_enabled,
@@ -409,8 +413,22 @@ impl SimCore {
         }
     }
 
-    /// RC channel PWMs sent to ArduPilot (AETR + aux, ch8 = flight mode).
+    /// RC channel PWMs sent to ArduPilot (AETR + aux, ch8 = flight mode). With a flight computer
+    /// on a UART, they are what it reads from the TX15.
     pub fn rc_channels(&self) -> [u16; 8] {
+        let mut rc = match self.uart_rc {
+            Some(rc) => std::array::from_fn(|i| rc[i]),
+            None => self.pilot_channels(),
+        };
+        // In a game with ArduPilot nobody arms before GO, whatever is carrying the radio.
+        if self.ap.enabled && !self.may_launch() {
+            rc[4] = rc[4].min(1100);
+        }
+        rc
+    }
+
+    /// The channels the pilot's own controls make: what a TX15 stand-in puts on the UART.
+    pub fn pilot_channels(&self) -> [u16; 8] {
         let s = self.sticks;
         let c = |x: f32| (1500.0 + 500.0 * x.clamp(-1.0, 1.0)).round() as u16;
         [
@@ -747,6 +765,20 @@ mod tests {
         assert_eq!(c.rc_channels()[4], 1100, "held off during the countdown");
         run_ardupilot(&mut c, recreation_games::COUNTDOWN + 3.0);
         assert!(matches!(c.game.as_ref().unwrap().clock, Clock::Running { .. }), "{:?}", c.game.as_ref().unwrap().clock);
+        assert_eq!(c.rc_channels()[4], 1900, "at GO it goes through");
+    }
+
+    /// The same holds when the radio comes through the flight computer's UART.
+    #[test]
+    fn with_ardupilot_the_arm_switch_waits_for_go_on_the_uart_too() {
+        let mut c = vtol();
+        run_ardupilot(&mut c, 0.5);
+        c.toggle_game(Kind::Race);
+        let mut rc = [1500u16; 16];
+        rc[4] = 1900;
+        c.uart_rc = Some(rc);
+        assert_eq!(c.rc_channels()[4], 1100, "held off during the countdown");
+        run_ardupilot(&mut c, recreation_games::COUNTDOWN + 3.0);
         assert_eq!(c.rc_channels()[4], 1900, "at GO it goes through");
     }
 

@@ -43,6 +43,8 @@ t1s_gcs [options]
   --connect ADDR     MAVLink, any rust-mavlink address (default tcpout:127.0.0.1:5760; with
                      --station the sim's TX15 stand-in, tcpout:127.0.0.1:5770)
   --no-radio         with --station: connect to ArduPilot directly, without the TX15 stand-in
+  --flight-computer  with --station: the plane's radio goes through the sim's flight computer, on a UART
+                     in CRSF, and the console hears only the telemetry that comes down that line
   --origin LAT,LON[,ALT]  SITL --home = the sim's pilot box (default matches ardupilot/start.sh)
   --assets DIR       output of `t1s_sim --export-map` (default gcs/assets)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../expectations) against this console
@@ -84,6 +86,7 @@ fn main() {
         aircraft: arg("--aircraft"),
         test_radio: flag("--expect"),
         radio_port,
+        flight_computer: radio_port.is_some() && flag("--flight-computer"),
     };
     let aircraft = match &opts.aircraft {
         None => simulation_aircraft::default(),

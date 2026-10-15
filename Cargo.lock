@@ -428,6 +428,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "avionics_computer"
+version = "0.1.0"
+dependencies = [
+ "avionics_crsf",
+ "communication_telemetry",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+ "mavlink",
+]
+
+[[package]]
+name = "avionics_crsf"
+version = "0.1.0"
+
+[[package]]
 name = "base64"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5462,6 +5478,7 @@ dependencies = [
 name = "t1s_sim"
 version = "0.1.0"
 dependencies = [
+ "avionics_computer",
  "bevy",
  "communication_air",
  "communication_radio",

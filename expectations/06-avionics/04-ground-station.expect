@@ -1,0 +1,34 @@
+Feature: The ground station gets the telemetry of the flight computer
+  The ground station does not talk to ArduPilot. The MAVLink telemetry of ArduPilot goes to
+  the flight computer. The flight computer sends it down the serial line to the TX15, and the
+  TX15 passes it on. The link is narrow, so the flight computer cannot send more than the
+  line carries. Its own frames for the TX15 go first.
+
+  Expectation: The ground station hears the plane through the TX15
+    Given the ground station telemetry is flowing
+    When 5 seconds pass
+    Then the ground station telemetry is flowing
+
+  Expectation: The position on the map comes from the telemetry of the line
+    Given the ground station telemetry is flowing
+    And the ground station map distance is 400 m
+    When 5 seconds pass
+    Then the ground station map distance is at least 399 m
+    And the ground station map distance is at most 401 m
+
+  Expectation: Commands of the ground station reach ArduPilot
+    Given the ground station telemetry is flowing
+    When the ground station command is sent
+    And 5 seconds pass
+    Then the autopilot command is received
+
+  Expectation: The telemetry does not use more than the line carries
+    Given the ground station telemetry is flowing
+    When 10 seconds pass
+    Then the ground station telemetry rate is at most 4000 bytes per second
+
+  Expectation: Without the TX15 the ground station hears nothing
+    Given the ground station telemetry is flowing
+    When the TX15 is not connected
+    And 10 seconds pass
+    Then the ground station telemetry is silent

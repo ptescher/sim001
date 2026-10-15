@@ -1,0 +1,98 @@
+Story: Flying with a TX15 on the serial line
+  As a pilot with a TX15
+  I want the sticks to reach the plane through the flight computer
+  So that I fly the way I fly the real plane
+
+  You connect the TX15 to the flight computer with a serial line. The sticks move the
+  channels of the autopilot, and the screen of the TX15 shows what the plane does. You arm
+  the plane, ArduPilot changes its mode, and the TX15 shows the new mode.
+
+  Scenario: Fly and watch the screen
+    Given the TX15 screen mode is AUTO
+    And the TX15 screen arming is armed
+    And the TX15 screen battery is 11.1 V
+    And the TX15 screen bank is 30 degrees
+    And the ground station telemetry is flowing
+    And the ground station map distance is 400 m
+    And the TX15 arm switch is on
+    When 5 seconds pass
+    Then the arm channel is at least 1900 us
+    And the TX15 screen mode is AUTO
+    And the TX15 screen arming is armed
+    And the TX15 screen battery is at least 11 V
+    And the TX15 screen battery is at most 11.2 V
+    And the TX15 screen bank is at least 29 degrees
+    And the TX15 screen bank is at most 31 degrees
+    And the ground station telemetry is flowing
+    And the ground station map distance is at least 399 m
+    And the ground station map distance is at most 401 m
+
+  Scenario: Full travel on the sticks
+    Given the TX15 roll stick is 100 %
+    And the TX15 pitch stick is -50 %
+    And the TX15 throttle stick is 100 %
+    And the TX15 arm switch is on
+    When 5 seconds pass
+    Then the roll channel is at least 1990 us
+    And the pitch channel is at least 1245 us
+    And the pitch channel is at most 1255 us
+    And the throttle channel is at least 1990 us
+    And the arm channel is at least 1900 us
+
+  Scenario: Sticks centred
+    Given the TX15 roll stick is 0 %
+    And the TX15 pitch stick is 0 %
+    And the TX15 throttle stick is 0 %
+    When 5 seconds pass
+    Then the roll channel is 1500 us
+    And the pitch channel is 1500 us
+
+  Scenario: A damaged line
+    Given the corrupted frames are 100 %
+    And the TX15 roll stick is 100 %
+    When 5 seconds pass
+    Then the roll channel is 1500 us
+
+Story: Losing the TX15 and getting it back
+  As a pilot with a TX15
+  I want the plane to fail safe when the line goes quiet
+  So that a lost link does not leave the throttle open
+
+  You unplug the TX15 while the throttle is at half. The flight computer sets the throttle
+  below the failsafe level of ArduPilot. You plug the TX15 in, and the plane flies again.
+
+  Scenario: Unplug
+    Given the TX15 throttle stick is 50 %
+    When the TX15 is not connected
+    And 5 seconds pass
+    Then the throttle channel is at most 900 us
+    And the TX15 uplink quality is 0 %
+
+  Scenario: Plug in again
+    Given the TX15 is not connected
+    And the TX15 throttle stick is 50 %
+    When the TX15 is connected
+    And 5 seconds pass
+    Then the throttle channel is at least 1490 us
+    And the TX15 uplink quality is 100 %
+
+Story: Commanding the plane from the ground station
+  As a pilot with a TX15
+  I want the ground station to command the plane through the TX15
+  So that it needs no radio of its own
+
+  The ground station sends a command. It goes up the serial line, and ArduPilot gets it.
+  The TX15 shows the new mode.
+
+  Scenario: Command through the line
+    Given the TX15 screen mode is RTL
+    And the ground station telemetry is flowing
+    When the ground station command is sent
+    And 5 seconds pass
+    Then the autopilot command is received
+    And the TX15 screen mode is RTL
+
+  Scenario: The line is narrow
+    Given the ground station telemetry is flowing
+    When 10 seconds pass
+    Then the ground station telemetry rate is at most 4000 bytes per second
