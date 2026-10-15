@@ -1,6 +1,7 @@
 //! Simulation core shared between the render thread and the ArduPilot bridge thread.
 
-use recreation_games::{Field, Kind, Session, Surroundings};
+use recreation_games::{Field, Kind, PILOTS, Radio, Session, Surroundings};
+use recreation_games::pilot::Fbwa;
 use simulation_aircraft::{ActuatorCommands, AircraftParams, t1s_ranger};
 use simulation_physics::{self as physics, Environment, FlightState, Obstacle, Phase};
 use crate::terrain;
@@ -119,6 +120,43 @@ pub struct SimCore {
     pub direct: bool,
     /// The game being played (G: a pylon race, T: tag), with its computer pilots.
     pub game: Option<Session>,
+    /// With ArduPilot, the computer pilots' planes, each flown by an autopilot of its own (see
+    /// `step_opponent`): they stand on the field beside the pilot box until a game takes them.
+    pub parked: Vec<FlightState>,
+    /// Each computer pilot's autopilot link, as `ap` is yours.
+    pub others: Vec<OtherLink>,
+    /// FBWA as the autopilots fly it: what the computer pilots' roll and pitch sticks ask for.
+    pub fbwa: Fbwa,
+}
+
+/// A computer pilot's autopilot, as the sim sees it.
+#[derive(Clone, Debug, Default)]
+pub struct OtherLink {
+    pub connected: bool,
+    pub last_packet: Option<Instant>,
+}
+
+/// FBWA's limits from the plane's ArduPilot parameter files, layered as ArduPilot layers them
+/// (a later file wins), over ArduPlane's own defaults.
+pub fn fbwa_from_parms(files: &[&str]) -> Fbwa {
+    let get = |name: &str, default: f32| {
+        files
+            .iter()
+            .flat_map(|f| f.lines())
+            .filter_map(|l| {
+                let mut w = l.split_whitespace();
+                (w.next() == Some(name)).then(|| w.next()?.parse::<f32>().ok()).flatten()
+            })
+            .last()
+            .unwrap_or(default)
+            .to_radians()
+    };
+    Fbwa { roll_limit: get("ROLL_LIMIT_DEG", 45.0), pitch_max: get("PTCH_LIM_MAX_DEG", 20.0), pitch_min: get("PTCH_LIM_MIN_DEG", -25.0) }
+}
+
+/// The T1-S's ArduPilot parameters, as ardupilot/start.sh gives them to SITL.
+fn t1s_fbwa() -> Fbwa {
+    fbwa_from_parms(&[include_str!("../ardupilot/t1s.parm"), include_str!("../ardupilot/t1s-vtol.parm")])
 }
 
 fn expo(x: f32, e: f32) -> f32 {
@@ -128,6 +166,7 @@ fn expo(x: f32, e: f32) -> f32 {
 impl SimCore {
     pub fn new(params: AircraftParams, obstacles: Vec<Obstacle>, ap_enabled: bool, ap_port: u16) -> Self {
         let state = FlightState::new(&params, &terrain::start());
+        let parked = if ap_enabled { (0..PILOTS.len()).map(|i| FlightState::new(&params, &Self::field().hand(i))).collect() } else { vec![] };
         Self {
             params,
             state,
@@ -164,6 +203,9 @@ impl SimCore {
             resets: 0,
             direct: false,
             game: None,
+            parked,
+            others: if ap_enabled { vec![OtherLink::default(); PILOTS.len()] } else { vec![] },
+            fbwa: t1s_fbwa(),
         }
     }
 
@@ -176,8 +218,27 @@ impl SimCore {
     /// G or T: start that game, with the plane back in the hand on a fresh pack, or stop it if
     /// it is the one being played.
     pub fn toggle_game(&mut self, kind: Kind) {
-        if self.game.as_ref().is_some_and(|g| g.kind == kind) {
-            self.game = None;
+        let same = self.game.as_ref().is_some_and(|g| g.kind == kind);
+        if let Some(game) = self.game.take() {
+            // The computer pilots' planes stay where they are, with their autopilots.
+            if self.ap.enabled {
+                self.parked = game.into_planes();
+            }
+        }
+        if same {
+            return;
+        }
+        if self.ap.enabled {
+            // Nobody's autopilot restarts (it takes a minute): your plane is carried to the
+            // pilot box, the computer pilots' to their places, and the countdown waits for them.
+            self.state.reset_to_hand(&self.params, &terrain::start());
+            self.state.recharge();
+            let planes = std::mem::take(&mut self.parked);
+            let session = match kind {
+                Kind::Race => Session::race(Self::field()),
+                Kind::Tag => Session::tag(Self::field()),
+            };
+            self.game = Some(session.with_autopilots(self.params.clone(), self.fbwa, planes));
             return;
         }
         self.reset();
@@ -358,59 +419,111 @@ impl SimCore {
             c(s.pitch),
             self.throttle_pwm(s.throttle),
             c(s.yaw),
-            // RC5_OPTION = 153 (arm/disarm switch), on channel 5 as ExpressLRS needs.
-            if self.radio_arm.unwrap_or(self.ap.arm_switch) { 1900 } else { 1100 },
+            // RC5_OPTION = 153 (arm/disarm switch), on channel 5 as ExpressLRS needs. In a game
+            // with ArduPilot nobody arms before GO, so the switch is held off until then.
+            if self.radio_arm.unwrap_or(self.ap.arm_switch) && (!self.ap.enabled || self.may_launch()) { 1900 } else { 1100 },
             1500,
             1500,
             self.radio_mode.unwrap_or_else(|| simulation_aircraft::rc_mode_pwm(self.ap.mode_index)),
         ]
     }
 
+    /// One step of computer pilot `i`'s plane, in lockstep with its own autopilot (`pwm` is what
+    /// that autopilot sends), and the sensor packet for it, with what the computer pilot's radio
+    /// sends after the step.
+    pub fn step_opponent(&mut self, i: usize, pwm: &[u16; 16], dt: f32) -> String {
+        if let Some(link) = self.others.get_mut(i) {
+            link.connected = true;
+            link.last_packet = Some(Instant::now());
+        }
+        let cmd = ActuatorCommands::from_pwm(&self.params, pwm);
+        let w = self.wind;
+        let ground = &terrain::WorldTerrain;
+        let (state, radio) = match &mut self.game {
+            Some(game) if i < game.opponents.len() => {
+                let s = &mut game.opponents[i].state;
+                let wind = wind_at(&w, s.pos, s.time);
+                physics::step(&self.params, s, &cmd, &Environment { wind }, ground, &self.obstacles, dt);
+                let radio = game.radio(i, ground, dt);
+                (&game.opponents[i].state, radio)
+            }
+            _ => {
+                let Some(s) = self.parked.get_mut(i) else { return String::new() };
+                let wind = wind_at(&w, s.pos, s.time);
+                physics::step(&self.params, s, &cmd, &Environment { wind }, ground, &self.obstacles, dt);
+                // Parked: switch off, throttle down, in the mode switch's first position.
+                (&self.parked[i], Radio::default())
+            }
+        };
+        let wind = wind_at(&w, state.pos, state.time);
+        sitl_json(state, wind, &radio_channels(&radio))
+    }
+
     /// Build the JSON sensor packet for ArduPilot's JSON SITL backend.
     pub fn sitl_json(&self) -> String {
-        let s = &self.state;
-        let home_ground = terrain::ground_height(terrain::pilot_pos().x, terrain::pilot_pos().z);
-        // World (+X east, +Y up, -Z north) -> NED.
-        let ned = |v: Vec3| [-v.z, v.x, -v.y];
-        let rel = s.pos - Vec3::new(terrain::pilot_pos().x, home_ground, terrain::pilot_pos().z);
-        let pos = ned(rel);
-        let vel = ned(s.vel);
-        let wind = ned(self.last_wind);
-        // Body (Bevy: +X right, +Y up, -Z fwd) -> FRD.
-        let frd = |v: Vec3| [-v.z, v.x, -v.y];
-        let gyro = frd(s.omega);
-        let acc = frd(s.specific_force);
-        // Attitude: body FRD axes expressed in NED.
-        let fwd = ned(s.rot * Vec3::NEG_Z);
-        let right = ned(s.rot * Vec3::X);
-        let down = ned(s.rot * Vec3::NEG_Y);
-        let m = bevy::math::Mat3::from_cols(fwd.into(), right.into(), down.into());
-        let q = bevy::math::Quat::from_mat3(&m).normalize();
-        let rc = self.rc_channels();
-        let mut rc_json = String::new();
-        for (i, v) in rc.iter().enumerate() {
-            if i > 0 {
-                rc_json.push(',');
-            }
-            rc_json.push_str(&format!("\"rc_{}\":{}", i + 1, v));
+        sitl_json(&self.state, self.last_wind, &self.rc_channels())
+    }
+}
+
+/// The RC channels a computer pilot's radio sends (AETR, the arm switch on 5, the mode on 8).
+fn radio_channels(r: &Radio) -> [u16; 8] {
+    let c = |x: f32| (1500.0 + 500.0 * x.clamp(-1.0, 1.0)).round() as u16;
+    let s = r.sticks;
+    [
+        c(s.aileron),
+        c(s.elevator),
+        (1000.0 + 1000.0 * s.throttle.clamp(0.0, 1.0)).round() as u16,
+        c(s.rudder),
+        if r.arm { 1900 } else { 1100 },
+        1500,
+        1500,
+        simulation_aircraft::rc_mode_pwm(r.mode),
+    ]
+}
+
+/// The JSON sensor packet for ArduPilot's JSON SITL backend: a plane's state, the wind it flies
+/// in, and the RC channels its radio sends.
+fn sitl_json(s: &FlightState, wind: Vec3, rc: &[u16; 8]) -> String {
+    let home_ground = terrain::ground_height(terrain::pilot_pos().x, terrain::pilot_pos().z);
+    // World (+X east, +Y up, -Z north) -> NED.
+    let ned = |v: Vec3| [-v.z, v.x, -v.y];
+    let rel = s.pos - Vec3::new(terrain::pilot_pos().x, home_ground, terrain::pilot_pos().z);
+    let pos = ned(rel);
+    let vel = ned(s.vel);
+    let wind = ned(wind);
+    // Body (Bevy: +X right, +Y up, -Z fwd) -> FRD.
+    let frd = |v: Vec3| [-v.z, v.x, -v.y];
+    let gyro = frd(s.omega);
+    let acc = frd(s.specific_force);
+    // Attitude: body FRD axes expressed in NED.
+    let fwd = ned(s.rot * Vec3::NEG_Z);
+    let right = ned(s.rot * Vec3::X);
+    let down = ned(s.rot * Vec3::NEG_Y);
+    let m = bevy::math::Mat3::from_cols(fwd.into(), right.into(), down.into());
+    let q = bevy::math::Quat::from_mat3(&m).normalize();
+    let mut rc_json = String::new();
+    for (i, v) in rc.iter().enumerate() {
+        if i > 0 {
+            rc_json.push(',');
         }
-        format!(
-            "\n{{\"timestamp\":{:.6},\"imu\":{{\"gyro\":[{:.6},{:.6},{:.6}],\"accel_body\":[{:.5},{:.5},{:.5}]}},\
+        rc_json.push_str(&format!("\"rc_{}\":{}", i + 1, v));
+    }
+    format!(
+        "\n{{\"timestamp\":{:.6},\"imu\":{{\"gyro\":[{:.6},{:.6},{:.6}],\"accel_body\":[{:.5},{:.5},{:.5}]}},\
 \"position\":[{:.4},{:.4},{:.4}],\"quaternion\":[{:.7},{:.7},{:.7},{:.7}],\"velocity\":[{:.5},{:.5},{:.5}],\
 \"airspeed\":{:.4},\"velocity_wind\":[{:.4},{:.4},{:.4}],\"battery\":{{\"voltage\":{:.3},\"current\":{:.3}}},\
 \"rc\":{{{}}}}}\n",
-            s.time,
-            gyro[0], gyro[1], gyro[2],
-            acc[0], acc[1], acc[2],
-            pos[0], pos[1], pos[2],
-            q.w, q.x, q.y, q.z,
-            vel[0], vel[1], vel[2],
-            s.airspeed,
-            wind[0], wind[1], wind[2],
-            s.voltage, s.current,
-            rc_json
-        )
-    }
+        s.time,
+        gyro[0], gyro[1], gyro[2],
+        acc[0], acc[1], acc[2],
+        pos[0], pos[1], pos[2],
+        q.w, q.x, q.y, q.z,
+        vel[0], vel[1], vel[2],
+        s.airspeed,
+        wind[0], wind[1], wind[2],
+        s.voltage, s.current,
+        rc_json
+    )
 }
 
 /// Wind at a point: mean wind with a boundary-layer profile plus turbulence.
@@ -567,6 +680,96 @@ mod tests {
         assert_eq!((c.mode_switch_name(), c.arm_switch_is_on()), ("QLOITER", true));
         c.radio_mode = Some(2000);
         assert_eq!(c.mode_switch_name(), "QRTL");
+    }
+
+    /// The pulse width of each of the 16 outputs, all idle: what a disarmed autopilot sends.
+    const IDLE: [u16; 16] = [1500, 1500, 1000, 1500, 1500, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+
+    /// Steps your plane (as its autopilot's bridge does) and each computer pilot's (as theirs
+    /// do), with every autopilot idle; returns the computer pilots' last JSON replies.
+    fn run_ardupilot(c: &mut SimCore, seconds: f32) -> Vec<String> {
+        let dt = 1.0 / 400.0;
+        let mut replies = vec![String::new(); recreation_games::PILOTS.len()];
+        for _ in 0..(seconds / dt) as usize {
+            c.step_ardupilot(&IDLE, dt);
+            for (i, r) in replies.iter_mut().enumerate() {
+                *r = c.step_opponent(i, &IDLE, dt);
+            }
+        }
+        replies
+    }
+
+    /// Channel `n` (1-based) of a JSON reply's RC block.
+    fn rc_in(json: &str, n: usize) -> u16 {
+        let key = format!("\"rc_{n}\":");
+        let at = json.find(&key).unwrap() + key.len();
+        json[at..].split(|c: char| !c.is_ascii_digit()).next().unwrap().parse().unwrap()
+    }
+
+    /// With ArduPilot, the computer pilots' planes are there before a game: on the field beside
+    /// the pilot box, each answering its own autopilot, disarmed.
+    #[test]
+    fn with_ardupilot_the_computer_pilots_planes_answer_their_autopilots() {
+        let mut c = vtol();
+        let replies = run_ardupilot(&mut c, 1.0);
+        for r in &replies {
+            assert!(r.contains("\"position\""), "a sensor packet: {r}");
+            assert_eq!(rc_in(r, 5), 1100, "arm switch off");
+            assert_eq!(rc_in(r, 3), 1000, "throttle down");
+        }
+        assert_eq!(c.parked.len(), recreation_games::PILOTS.len());
+    }
+
+    /// A game with ArduPilot doesn't restart anyone's autopilot (a restart takes a minute): your
+    /// plane is carried to the pilot box, and the computer pilots fly with their autopilots.
+    #[test]
+    fn with_ardupilot_a_game_starts_without_restarting_the_autopilot() {
+        let mut c = vtol();
+        run_ardupilot(&mut c, 0.5);
+        let resets = c.resets;
+        c.toggle_game(Kind::Race);
+        assert_eq!(c.resets, resets, "no restart");
+        let g = c.game.as_ref().unwrap();
+        assert!(matches!(g.clock, Clock::CountingDown { .. }));
+        assert!(g.opponent_params().flight_controller, "their planes are like yours, with a flight controller");
+        assert!(c.parked.is_empty(), "the game has their planes");
+        c.toggle_game(Kind::Race);
+        assert_eq!(c.parked.len(), recreation_games::PILOTS.len(), "and gives them back");
+    }
+
+    /// Nobody arms before GO: your arm switch reaches ArduPilot only once the game is running.
+    #[test]
+    fn with_ardupilot_your_arm_switch_waits_for_go() {
+        let mut c = vtol();
+        run_ardupilot(&mut c, 0.5);
+        c.toggle_game(Kind::Race);
+        c.radio_arm = Some(true);
+        assert_eq!(c.rc_channels()[4], 1100, "held off during the countdown");
+        run_ardupilot(&mut c, recreation_games::COUNTDOWN + 3.0);
+        assert!(matches!(c.game.as_ref().unwrap().clock, Clock::Running { .. }), "{:?}", c.game.as_ref().unwrap().clock);
+        assert_eq!(c.rc_channels()[4], 1900, "at GO it goes through");
+    }
+
+    /// At GO the computer pilots put their arm switches on.
+    #[test]
+    fn with_ardupilot_the_computer_pilots_arm_at_go() {
+        let mut c = vtol();
+        run_ardupilot(&mut c, 0.5);
+        c.toggle_game(Kind::Race);
+        let before = run_ardupilot(&mut c, 1.0);
+        assert!(before.iter().all(|r| rc_in(r, 5) == 1100));
+        let after = run_ardupilot(&mut c, recreation_games::COUNTDOWN + 2.0);
+        assert!(after.iter().all(|r| rc_in(r, 5) == 1900), "{after:?}");
+    }
+
+    /// FBWA's limits come from the plane's parameter files: later files win, as ArduPilot layers
+    /// them, and ArduPlane's own defaults fill in the rest.
+    #[test]
+    fn fbwa_reads_its_limits_from_the_parameter_files() {
+        let f = fbwa_from_parms(&["# a comment\nROLL_LIMIT_DEG 50\nPTCH_LIM_MAX_DEG 25", "PTCH_LIM_MAX_DEG 20\n"]);
+        assert!((f.roll_limit.to_degrees() - 50.0).abs() < 1e-3);
+        assert!((f.pitch_max.to_degrees() - 20.0).abs() < 1e-3, "the later file wins");
+        assert!((f.pitch_min.to_degrees() + 25.0).abs() < 1e-3, "ArduPlane's default");
     }
 
     fn plain() -> SimCore {

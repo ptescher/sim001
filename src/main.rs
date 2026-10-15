@@ -124,7 +124,12 @@ fn main() {
     let core = Arc::new(Mutex::new(SimCore::new(params.clone(), vec![], ap_enabled, ap_port)));
     if ap_enabled {
         core.lock().unwrap().direct = direct;
-        ardupilot::spawn_bridge(core.clone(), ap_port);
+        ardupilot::spawn_bridge(core.clone(), ap_port, ardupilot::Plane::Yours);
+        // Each computer pilot's plane has an autopilot of its own (SITL instances 1 to 3).
+        for i in 0..recreation_games::PILOTS.len() {
+            let plane = ardupilot::Plane::Opponent(i);
+            ardupilot::spawn_bridge(core.clone(), ardupilot::port_for(ap_port, plane), plane);
+        }
     }
 
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
@@ -272,7 +277,11 @@ fn publish_scene(sim: Res<SharedSim>, input: Res<PilotInput>, mut scene: ResMut<
     for (i, slot) in scene.vehicles.iter_mut().enumerate() {
         *slot = match i {
             0 => Some(pose(&c.state)),
-            i => c.game.as_ref().and_then(|g| g.opponents.get(i - 1)).map(|o| pose(&o.state)),
+            // With ArduPilot their planes are on the field between games too.
+            i => match &c.game {
+                Some(g) => g.opponents.get(i - 1).map(|o| pose(&o.state)),
+                None => c.parked.get(i - 1).map(pose),
+            },
         };
     }
     scene.wind = Wind { from_dir: c.wind.from_dir, speed: c.wind.speed, at_sock: c.wind_at(Vec3::new(18.0, 5.0, 6.0), c.state.time) };

@@ -20,6 +20,33 @@ In the sim, **G** starts a pylon race and **T** a game of tag. The same key agai
 `recreation_games` depends on the other three and on the simulation domain; the others don't
 depend on each other.
 
+## Games with ArduPilot
+
+When the station flies your plane (`gcs --station`), the computer pilots fly planes like yours,
+each with an ArduPlane SITL of its own, and the computer pilot flies it through a radio, as you
+do with the TX15. So the start-up time is the same for everyone.
+
+- The station starts four SITL containers: `t1s-sitl` (yours, instance 0) and `t1s-sitl-1` to
+  `t1s-sitl-3` for Kestrel, Merlin and Swift. SITL instance N sends its physics to UDP port
+  9002 + 10·N, and the sim has a bridge for each (`src/ardupilot.rs`). Between games their planes
+  stand on the field beside the pilot box with their autopilots running.
+- A game starts from cold: every plane on the ground, disarmed, and the countdown starts at once
+  (it waits while a plane is being set down at its place). Nobody arms before GO: the sim holds
+  your arm switch off until then.
+- At GO, each computer pilot puts its arm switch on with the throttle down, as ArduPilot needs. If
+  the props do not turn, it takes the switch off and tries again. Once they turn, it climbs in
+  QHOVER with the throttle stick above the middle. At 15 m it pushes the FBWA button and takes the
+  wing over, and then it flies the game.
+- In FBWA the roll stick asks for a bank (all the way over is `ROLL_LIMIT_DEG`, 50° on the T1-S)
+  and the pitch stick for a pitch (up to `PTCH_LIM_MAX_DEG`). `Pilot::with_radio` turns the pilot's
+  bank and climb rate into those sticks, and the racing lines are 1.5 times as wide, because the
+  autopilot limits the bank. The limits come from `ardupilot/t1s.parm` and `t1s-vtol.parm`.
+- `Session::radio(i)` says what computer pilot `i`'s radio sends. The sim calls it after each step
+  of that pilot's plane, which its autopilot flies (`SimCore::step_opponent`).
+
+Without ArduPilot (the keyboard sim, flying the plain T1-S), the computer pilots fly their planes
+direct on the flight model, as before.
+
 ## How a game runs
 
 The sim owns your plane and steps its physics. Every physics step it hands the `Session` your
@@ -27,7 +54,7 @@ plane and the world around it (`Surroundings`: the ground, the trees and the win
 session steps the computer pilots' planes with `simulation_physics::step` and lets the referee
 judge everyone. Player 0 is you; the computer pilots are players 1 to 3.
 
-A game starts with every plane in its pilot's hand and a 5 s countdown. Nobody can throw before
+Without ArduPilot, a game starts with every plane in its pilot's hand and a 5 s countdown. Nobody can throw before
 GO. At GO the computer pilots throw, one each second, as the leagues release their models; you
 throw when you are ready, and the game clock runs from GO.
 

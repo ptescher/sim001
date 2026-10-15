@@ -18,7 +18,7 @@ use crate::ui::map::Tool;
 use crate::vehicle::{Waypoint, WpKind, mode_number};
 use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screenshot};
 use expectation_model::{Event, Value, Variable};
-use t1s_station::feed::RadioState;
+use t1s_station::feed::{GameClock, GameKind, GameStatus, Key, RadioState};
 use gpui::{
     AppContext as _,
     App, Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput, Point,
@@ -72,6 +72,10 @@ enum Act {
     /// ARM, then CONFIRM ARM, again and again until the vehicle arms: a vehicle that has only
     /// just come up refuses until its checks pass, and the button says so.
     Arm,
+    /// A key in the sim's window.
+    Key(Key),
+    /// Wait for the game's countdown to reach GO.
+    Go,
 }
 
 const EVENTS: &[(&str, Act)] = &[
@@ -99,6 +103,9 @@ const EVENTS: &[(&str, Act)] = &[
     ("pilot raises the throttle stick", Act::Radio(RadioMove::Throttle(STICK_HIGH))),
     ("pilot centres the throttle stick", Act::Radio(RadioMove::Throttle(STICK_MIDDLE))),
     ("pilot lowers the throttle stick", Act::Radio(RadioMove::Throttle(STICK_LOW))),
+    ("pilot starts a race", Act::Key(Key::Race)),
+    ("pilot starts a game of tag", Act::Key(Key::Tag)),
+    ("countdown ends", Act::Go),
 ];
 
 /// States the driver can read (and put in place). Those the console has no feature for are
@@ -129,6 +136,9 @@ const STATES: &[&str] = &[
     "throttle stick",
     "arm switch",
     "mode switch",
+    "game",
+    "game clock",
+    "opponents",
 ];
 /// States an action can change directly (the others change through events).
 const SETTABLE: &[&str] = &["autopilot mode", "plan altitude", "throttle stick", "arm switch", "mode switch"];
@@ -308,6 +318,40 @@ fn same(plan: &[Waypoint], mission: &[Waypoint]) -> bool {
         })
 }
 
+/// The game and its clock as the sim reports them on the sensor feed.
+fn game_reading(key: &str, game: Option<GameStatus>) -> &'static str {
+    match (key, game) {
+        ("game", None) => "free flight",
+        ("game", Some(g)) if g.kind == GameKind::Race => "a race",
+        ("game", Some(_)) => "tag",
+        (_, None) => "off",
+        (_, Some(g)) => match g.clock {
+            GameClock::Waiting => "waiting for takeoff",
+            GameClock::CountingDown => "counting down",
+            GameClock::Running => "running",
+            GameClock::Stopped => "stopped",
+        },
+    }
+}
+
+/// Where the computer pilots' planes are, from their markers on the map: all on the ground
+/// near home, all above 5 m, or in between. Planes that stand side by side are one marker (the
+/// tracker joins reports from the same place), so this looks at the markers there are, and the
+/// heights are those of the other aircraft's reports less your own plane's ground height.
+fn opponents(v: &crate::vehicle::Vehicle) -> &'static str {
+    let Some((_, _, home)) = v.home else { return "not on the map" };
+    let heights: Vec<f32> = v.other_aircraft().iter().map(|t| t.position.alt - home).collect();
+    if heights.is_empty() {
+        "not on the map"
+    } else if heights.iter().all(|h| *h < 3.0) {
+        "on the ground"
+    } else if heights.iter().all(|h| *h > 5.0) {
+        "flying"
+    } else {
+        "launching"
+    }
+}
+
 /// What a VTOL is doing, from its telemetry: on the ground, hovering (a Q mode, hardly moving),
 /// cruising (a fixed-wing mode above the speed the transition ends at), or in between.
 fn flight(v: &crate::vehicle::Vehicle) -> &'static str {
@@ -368,6 +412,7 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
         "battery current" => Value::from(v.batt_a as f64),
         "battery voltage" => Value::from(v.batt_v as f64),
         "flight" => Value::from(flight(&v)),
+        "opponents" => Value::from(opponents(&v)),
         "waypoints" => Value::from("unchecked"),
         "mission file" => Value::from("missing"),
         "measured distance" => Value::from("hidden"),
@@ -482,6 +527,9 @@ impl ConsoleDriver {
                 1250..=1649 => "middle",
                 _ => "high",
             }),
+            // Where the pilot put the switch: in a game the sim holds it off until GO, so what
+            // reaches the autopilot is not always where it is.
+            "arm switch" if self.radio.connected => Value::from(if self.radio.arm { "on" } else { "off" }),
             "arm switch" => Value::from(if rc[4] > 1500 { "on" } else { "off" }),
             _ => {
                 // The mode switch's position nearest to the PWM.
@@ -536,6 +584,10 @@ impl ConsoleDriver {
         }
         if key == "airframe" {
             return Ok(Value::from(if self.vtol { "VTOL" } else { "conventional" }));
+        }
+        if key == "game" || key == "game clock" {
+            let game = self.call(|g, _, _| g.sensor.as_ref().and_then(|s| s.game()))?;
+            return Ok(Value::from(game_reading(key, game)));
         }
         let key = key.to_string();
         self.call(move |g, _, _| observe(g, &key))?
@@ -635,6 +687,16 @@ impl ConsoleDriver {
             let v = g.vehicle.lock().unwrap();
             v.sensor_ok(PREARM_CHECK) == Some(true) && v.prearm.as_ref().is_none_or(|p| p.0.elapsed() > Duration::from_secs(10))
         })
+    }
+
+    fn perform_key(&self, k: Key) -> Result<(), String> {
+        self.call(move |g, _, _| {
+            if let Some(s) = &g.sensor {
+                s.press_key(k)
+            }
+        })?;
+        std::thread::sleep(SETTLE);
+        Ok(())
     }
 
     fn press(&self, id: &'static str) -> Result<(), String> {
@@ -776,6 +838,13 @@ impl Driver for ConsoleDriver {
                 // A vehicle that isn't ready yet refuses to arm, so a pilot flips the switch off
                 // and on again until it takes.
                 self.radio_move(RadioMove::ArmSwitch(true))?;
+                // In a countdown the sim holds the switch off until GO: the pilot puts it on, and
+                // nothing arms.
+                let counting = |g: &mut Gcs| g.sensor.as_ref().and_then(|s| s.game()).is_some_and(|x| x.clock == GameClock::CountingDown);
+                if self.call(move |g, _, _| counting(g))? {
+                    std::thread::sleep(SETTLE);
+                    return self.check(key, &want, "");
+                }
                 for _ in 0..100 {
                     self.out_of_time()?;
                     if self.wait_for(3, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
@@ -868,6 +937,13 @@ impl Driver for ConsoleDriver {
                 let want = name()?;
                 self.check(key, &want, " (the console can't do anything else yet)")
             }
+            // No game: press the key of the one being played, which stops it.
+            "game clock" | "game" if matches!(name()?.as_str(), "off" | "free flight") => {
+                if let Some(game) = self.call(|g, _, _| g.sensor.as_ref().and_then(|s| s.game()))? {
+                    self.perform_key(if game.kind == GameKind::Race { Key::Race } else { Key::Tag })?;
+                }
+                self.check(key, &name()?, "")
+            }
             _ => {
                 let (key, value) = (key.to_string(), value.clone());
                 self.call(move |g, _, _| arrange_model(g, &key, &value))?
@@ -921,6 +997,15 @@ impl Driver for ConsoleDriver {
                 Err(format!("the vehicle wouldn't arm: {}", why.unwrap_or_else(|| "no reason given".into())))
             }
             Act::Radio(m) => self.radio_move(m),
+            Act::Key(k) => {
+                let sent = self.call(move |g, _, _| g.sensor.as_ref().map(|s| s.press_key(k)).is_some())?;
+                if !sent {
+                    return Err("there is no link to the sim to press its keys: start the station (--station)".into());
+                }
+                std::thread::sleep(SETTLE);
+                Ok(())
+            }
+            Act::Go => self.wait_for(30, "GO", |g| g.sensor.as_ref().and_then(|s| s.game()).is_some_and(|x| x.clock == GameClock::Running)),
             Act::Map(button) => {
                 let at = self.call(|g, _, _| map_point(g))??;
                 self.with_window(move |w, cx| click(w, cx, at, button))?;

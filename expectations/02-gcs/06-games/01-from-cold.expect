@@ -1,0 +1,39 @@
+Feature: Everyone starts from cold
+  In a game, every plane starts in the same way: on the ground and disarmed. Nobody can arm
+  before GO. At GO, every pilot arms, takes off and flies away. The computer pilots do the
+  same with their radios, so nobody has a head start.
+
+  Expectation: A race starts with every plane on the ground
+    The game panel counts down at once: there is nothing to wait for, because nobody is in the
+    air yet.
+    Overrides: G starts a race
+    Given the game clock is off
+    When the pilot starts a race
+    Then the game is a race
+    And the game clock is counting down
+    And the vehicle is disarmed
+    And the opponents are on the ground
+
+  Expectation: Nobody arms before GO
+    The arm switch does nothing until GO. A plane that is armed early has a head start.
+    Overrides: The arm switch arms the vehicle
+    Given the game clock is counting down
+    And the vehicle is disarmed
+    When the arm switch is on
+    Then the vehicle is disarmed
+
+  Expectation: At GO the arm switch arms your plane
+    If the arm switch is on at GO, the autopilot arms the plane at once.
+    Given the game clock is counting down
+    And the arm switch is on
+    When the countdown ends
+    Then the game clock is running
+    And the vehicle is armed
+
+  Expectation: The computer pilots take off after GO
+    At GO, each computer pilot puts its arm switch on. Then it takes off straight up in QHOVER,
+    and it pushes the FBWA button to fly on the wing. That takes about as long as it takes you.
+    Given the game clock is counting down
+    And the opponents are on the ground
+    When the countdown ends
+    Then the opponents are flying

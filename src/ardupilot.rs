@@ -2,6 +2,9 @@
 //!
 //! SITL sends a binary servo packet to UDP 9002 every physics frame and blocks until we reply
 //! with a JSON sensor packet, so the flight model runs in lockstep with the autopilot.
+//!
+//! In games, each computer pilot's plane has an autopilot of its own: SITL instance N (`-I N`)
+//! sends to port 9002 + 10·N, and computer pilot N - 1 answers it (see `SimCore::step_opponent`).
 
 use crate::sim::SimCore;
 use std::net::UdpSocket;
@@ -40,7 +43,26 @@ pub fn parse_servo_packet(buf: &[u8]) -> Option<ServoPacket> {
     Some(ServoPacket { frame_rate, frame_count, pwm })
 }
 
-pub fn spawn_bridge(core: Arc<Mutex<SimCore>>, port: u16) {
+/// Whose plane a bridge flies.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Plane {
+    Yours,
+    /// Computer pilot `i`'s.
+    Opponent(usize),
+}
+
+/// The port SITL instance `instance` sends its servo packets to, with yours on `base`.
+pub fn port_for(base: u16, plane: Plane) -> u16 {
+    match plane {
+        Plane::Yours => base,
+        Plane::Opponent(i) => base + 10 * (i as u16 + 1),
+    }
+}
+
+pub fn spawn_bridge(core: Arc<Mutex<SimCore>>, port: u16, plane: Plane) {
+    if let Plane::Opponent(i) = plane {
+        return spawn_opponent_bridge(core, port, i);
+    }
     std::thread::Builder::new()
         .name("ardupilot-json".into())
         .spawn(move || {
@@ -112,9 +134,58 @@ pub fn spawn_bridge(core: Arc<Mutex<SimCore>>, port: u16) {
         .expect("spawn ArduPilot bridge thread");
 }
 
+/// A computer pilot's autopilot: the same lockstep, with that pilot's plane and radio.
+fn spawn_opponent_bridge(core: Arc<Mutex<SimCore>>, port: u16, i: usize) {
+    std::thread::Builder::new()
+        .name(format!("ardupilot-json-{}", i + 1))
+        .spawn(move || {
+            let Ok(sock) = UdpSocket::bind(("0.0.0.0", port)) else {
+                eprintln!("computer pilot {}: cannot bind UDP {port}", i + 1);
+                return;
+            };
+            sock.set_read_timeout(Some(Duration::from_millis(200))).ok();
+            let mut buf = [0u8; 256];
+            let (mut last_frame, mut last_reply): (Option<u32>, String) = (None, String::new());
+            loop {
+                match sock.recv_from(&mut buf) {
+                    Ok((n, src)) => {
+                        let Some(pkt) = parse_servo_packet(&buf[..n]) else { continue };
+                        let reply = match last_frame {
+                            Some(f) if f == pkt.frame_count && !last_reply.is_empty() => last_reply.clone(),
+                            _ => {
+                                let dt = if pkt.frame_rate > 0 { (1.0 / pkt.frame_rate as f32).clamp(1.0 / 4000.0, 1.0 / 50.0) } else { 1.0 / 1200.0 };
+                                core.lock().unwrap().step_opponent(i, &pkt.pwm, dt)
+                            }
+                        };
+                        last_frame = Some(pkt.frame_count);
+                        let _ = sock.send_to(reply.as_bytes(), src);
+                        last_reply = reply;
+                    }
+                    Err(_) => {
+                        let mut c = core.lock().unwrap();
+                        if let Some(link) = c.others.get_mut(i) {
+                            if link.last_packet.is_some_and(|t| t.elapsed() > Duration::from_secs(1)) {
+                                link.connected = false;
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        .expect("spawn ArduPilot bridge thread");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SITL `-I N` sends to 9002 + 10·N: yours is instance 0, the computer pilots 1 to 3.
+    #[test]
+    fn each_autopilot_has_its_port() {
+        assert_eq!(port_for(9002, Plane::Yours), 9002);
+        assert_eq!(port_for(9002, Plane::Opponent(0)), 9012);
+        assert_eq!(port_for(9002, Plane::Opponent(2)), 9032);
+    }
 
     #[test]
     fn parses_16_channel_packet() {

@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use recreation_games::Kind;
-use t1s_station::feed::{Arena, ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, Gimbal, write_frame};
+use t1s_station::feed::{Arena, ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, GameClock, GameKind, GameStatus, Gimbal, write_frame};
 
 /// Camera position in the airframe (Bevy body axes: +X right, +Y up, -Z forward): a small
 /// sensor ball just ahead of and below the nose tip, clear of the fuselage so it never looks
@@ -192,11 +192,20 @@ fn on_readback(ev: On<ReadbackComplete>, link: Res<FeedLink>, sim: Res<SharedSim
     }
     st.last_sent = Some(Instant::now());
     st.frame = st.frame.wrapping_add(1);
-    let (sim_time, resets, flags, arena) = {
+    let (sim_time, resets, flags, arena, game) = {
         let c = sim.0.lock().unwrap();
+        let game = c.game.as_ref().map(|g| GameStatus {
+            kind: if g.kind == Kind::Tag { GameKind::Tag } else { GameKind::Race },
+            clock: match g.clock {
+                recreation_games::Clock::Waiting => GameClock::Waiting,
+                recreation_games::Clock::CountingDown { .. } => GameClock::CountingDown,
+                recreation_games::Clock::Running { .. } => GameClock::Running,
+                recreation_games::Clock::Stopped { .. } => GameClock::Stopped,
+            },
+        });
         // The sim's x is east and -z north.
         let arena = c.game.as_ref().filter(|g| g.kind == Kind::Tag).map(|g| Arena { north: -g.arena.centre.z, east: g.arena.centre.x, radius: g.arena.radius });
-        (c.state.time as f32, c.resets, if c.ap.enabled && c.direct { FLAG_DIRECT } else { 0 }, arena)
+        (c.state.time as f32, c.resets, if c.ap.enabled && c.direct { FLAG_DIRECT } else { 0 }, arena, game)
     };
     let header = FrameHeader {
         format: FORMAT_BGRA8,
@@ -209,6 +218,7 @@ fn on_readback(ev: On<ReadbackComplete>, link: Res<FeedLink>, sim: Res<SharedSim
         gimbal: st.gimbal,
         flags,
         arena,
+        game,
     };
     *link.0.latest.lock().unwrap() = Some(Frame { header, pixels: Arc::new(ev.data.clone()) });
     link.0.new_frame.notify_all();
@@ -249,6 +259,10 @@ fn viewer(shared: &Arc<Shared>, core: Arc<Mutex<SimCore>>, mut stream: TcpStream
                     Ok(ClientMsg::Gimbal(g)) => *shared.commanded.lock().unwrap() = Some(g),
                     Ok(ClientMsg::Status(st)) => core.lock().unwrap().ap.gcs = Some((Instant::now(), st.armed, st.mode)),
                     Ok(ClientMsg::Radio(r)) => core.lock().unwrap().test_radio = Some(r),
+                    Ok(ClientMsg::Key(k)) => core.lock().unwrap().toggle_game(match k {
+                        t1s_station::feed::Key::Race => Kind::Race,
+                        t1s_station::feed::Key::Tag => Kind::Tag,
+                    }),
                     Err(_) => {}
                 }
             }

@@ -2,6 +2,10 @@
 //! elevator, rudder, throttle), on the flight model in `simulation_physics`. Nothing here moves
 //! the plane directly; the physics does, from the controls.
 //!
+//! With a radio and a flight controller (`Pilot::with_radio`), the hands move the sticks
+//! instead, and the autopilot flies the plane in FBWA: the roll stick asks for a bank and the
+//! pitch stick for a pitch. The [`Controls`] are then the sticks.
+//!
 //! It works in layers, as a person does. The hands hold a bank angle and a climb rate (`hold`).
 //! Above that, the pilot steers for a point (`toward`) or along a line (`follow`). Above that,
 //! the games decide where to go. How well it flies is its [`Skill`].
@@ -43,7 +47,8 @@ pub const CLUB: Skill = Skill { name: "club", max_bank: 66.0 * DEG, turn_radius:
 pub const ROOKIE: Skill = Skill { name: "rookie", max_bank: 58.0 * DEG, turn_radius: 40.0, throttle: 0.85, awareness: 40.0 };
 
 /// What the pilot's hands do: -1..1 for the surfaces (aileron right, elevator nose up, rudder
-/// nose right positive), 0..1 for the throttle.
+/// nose right positive), 0..1 for the throttle. With a radio, they are the sticks that move
+/// those channels (roll, pitch, yaw and throttle).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Controls {
     pub aileron: f32,
@@ -160,6 +165,19 @@ fn along_curve(vel: Vec3, turn: f32, time: f32) -> Vec3 {
     Vec3::new(s * vel.x + c * vel.z, 0.0, -c * vel.x + s * vel.z)
 }
 
+/// ArduPlane's FBWA, as the plane's parameters set it up: the roll stick all the way over asks
+/// for `roll_limit` of bank, and the pitch stick asks for a pitch up to `pitch_max` (back) or
+/// down to `pitch_min` (forward).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Fbwa {
+    /// `ROLL_LIMIT_DEG` (rad).
+    pub roll_limit: f32,
+    /// `PTCH_LIM_MAX_DEG` (rad).
+    pub pitch_max: f32,
+    /// `PTCH_LIM_MIN_DEG` (rad, negative).
+    pub pitch_min: f32,
+}
+
 /// A computer pilot. It keeps a little memory between steps (what the hands have learnt about
 /// trim, and where on its line it is).
 #[derive(Clone, Debug)]
@@ -172,11 +190,23 @@ pub struct Pilot {
     other_turn: f32,
     /// What the throttle hand has learnt about the speed to sit behind another plane.
     pace: f32,
+    /// With a radio, the autopilot's FBWA that the sticks talk to.
+    radio: Option<Fbwa>,
 }
 
 impl Pilot {
     pub fn new(skill: Skill) -> Pilot {
-        Pilot { skill, trim: 0.0, cursor: None, other_vel: None, other_turn: 0.0, pace: 0.0 }
+        Pilot { skill, trim: 0.0, cursor: None, other_vel: None, other_turn: 0.0, pace: 0.0, radio: None }
+    }
+
+    /// A pilot with a radio, flying through a flight controller in FBWA.
+    pub fn with_radio(skill: Skill, fbwa: Fbwa) -> Pilot {
+        Pilot { radio: Some(fbwa), ..Pilot::new(skill) }
+    }
+
+    /// The autopilot this pilot's sticks talk to, if it flies with a radio.
+    pub fn radio(&self) -> Option<Fbwa> {
+        self.radio
     }
 
     /// Forget the line it was on (a new game, a new lap line).
@@ -209,6 +239,9 @@ impl Pilot {
             climb = climb.max(4.0);
         }
         let bank = bank.clamp(-limit, limit);
+        if let Some(fbwa) = self.radio {
+            return self.sticks(s, fbwa, bank, climb, throttle, dt);
+        }
         // Surfaces bite harder the faster the plane goes.
         let gain = (13.0 / v).powi(2).clamp(0.25, 2.5);
         let aileron = (1.8 * (bank - roll) - 0.2 * p) * gain;
@@ -225,6 +258,19 @@ impl Pilot {
         // Slow in a turn: open the throttle, or the turn bleeds the speed away.
         let throttle = if v < 20.0 { throttle.max(((20.0 - v) / 4.0).min(1.0)) } else { throttle };
         Controls { aileron, elevator, rudder: 0.3 * aileron, throttle }
+    }
+
+    /// The sticks for a bank and a climb rate, in FBWA. The autopilot holds the bank and the
+    /// pitch that the sticks ask for; the pitch for a climb rate is the angle of the climb,
+    /// and a slow trim learns how much more the wing needs (its angle of attack, more in a turn).
+    fn sticks(&mut self, s: &FlightState, fbwa: Fbwa, bank: f32, climb: f32, throttle: f32, dt: f32) -> Controls {
+        let v = s.airspeed.max(8.0);
+        self.trim = (self.trim + 0.05 * (climb - s.vel.y) * dt).clamp(-0.15, 0.25);
+        let pitch = (climb / v).clamp(-0.45, 0.45).asin() + self.trim;
+        let stick = |angle: f32, limit: f32| (angle / limit).clamp(-1.0, 1.0);
+        let elevator = if pitch >= 0.0 { stick(pitch, fbwa.pitch_max) } else { -stick(pitch, fbwa.pitch_min) };
+        let throttle = if v < 18.0 { throttle.max(((18.0 - v) / 4.0).min(1.0)) } else { throttle };
+        Controls { aileron: stick(bank, fbwa.roll_limit), elevator, rudder: 0.0, throttle }
     }
 
     /// Steer for a point in the air, at a throttle.
@@ -361,6 +407,43 @@ mod tests {
 
     fn flat_dist(a: Vec3, b: Vec3) -> f32 {
         Vec3::new(a.x - b.x, 0.0, a.z - b.z).length()
+    }
+
+    /// ArduPlane's FBWA as the T1-S is set up (ardupilot/t1s.parm).
+    const T1S_FBWA: Fbwa = Fbwa { roll_limit: 50.0 * DEG, pitch_max: 25.0 * DEG, pitch_min: -25.0 * DEG };
+
+    /// With a radio in FBWA, the roll stick asks the autopilot for a bank: halfway over is half
+    /// the bank it allows, and it can ask for no more than all of it.
+    #[test]
+    fn with_a_radio_the_roll_stick_asks_for_a_bank() {
+        let (_, mut s) = flying(60.0);
+        s.airspeed = 22.0;
+        let mut pilot = Pilot::with_radio(ACE, T1S_FBWA);
+        let c = pilot.hold(&s, 25.0 * DEG, 0.0, 0.8, &Flat, 0.01);
+        assert!((c.aileron - 0.5).abs() < 0.02, "half the limit is half the stick: {}", c.aileron);
+        let c = pilot.hold(&s, -80.0 * DEG, 0.0, 0.8, &Flat, 0.01);
+        assert!((c.aileron + 1.0).abs() < 1e-3, "the stick stops at the limit: {}", c.aileron);
+        assert_eq!(c.rudder, 0.0, "the autopilot coordinates the turn");
+    }
+
+    /// The pitch stick asks for a pitch: up to climb, down to come down.
+    #[test]
+    fn with_a_radio_the_pitch_stick_asks_for_a_climb() {
+        let (_, s) = flying(60.0);
+        let mut pilot = Pilot::with_radio(ACE, T1S_FBWA);
+        let up = pilot.hold(&s, 0.0, 4.0, 0.8, &Flat, 0.01).elevator;
+        let down = pilot.hold(&s, 0.0, -4.0, 0.8, &Flat, 0.01).elevator;
+        assert!(up > 0.1 && down < -0.1, "climb {up}, descend {down}");
+        assert!(up <= 1.0 && down >= -1.0);
+    }
+
+    /// Low down, it levels the wings and climbs, with a radio as with its hands.
+    #[test]
+    fn with_a_radio_it_will_not_fly_into_the_ground() {
+        let (_, s) = flying(2.0);
+        let mut pilot = Pilot::with_radio(ACE, T1S_FBWA);
+        let c = pilot.hold(&s, 60.0 * DEG, -5.0, 0.8, &Flat, 0.01);
+        assert!(c.aileron.abs() < 0.25 && c.elevator > 0.0, "{c:?}");
     }
 
     #[test]

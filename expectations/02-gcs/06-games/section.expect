@@ -1,0 +1,24 @@
+# Games against computer pilots when the station flies the plane (domains/recreation). Each
+# computer pilot's plane has its own ArduPlane SITL, and the computer pilot flies it through
+# the same radio channels as the TX15: the sticks, the arm switch and the mode switch. The
+# console's driver (gcs/src/expect.rs) starts the game in the sim over the sensor feed link,
+# and sees the other planes as the operator does, on the tactical map.
+
+Section: Games with ArduPilot
+  When the station flies your plane, the [[computer pilots]] fly theirs with [[ArduPilot]]
+  too. Each one has a T1-S VTOL of its own, with an autopilot of its own. It flies the plane
+  with a radio, as you do with the TX15: the sticks, the arm switch and the mode buttons. So
+  each plane takes the same time to get into the air.
+
+  Press G in the window of the sim for a [[pylon race]], or T for a game of [[tag]]. The
+  planes of the computer pilots stand on the field near the pilot box. The station shows
+  them on the [[tactical map]], with the other aircraft.
+
+Vocabulary:
+  State: the opponents are in hand | on the ground | launching | flying | down
+    Shows: on the ground: the markers of the computer pilots' planes stand on the field near the pilot box, at 0 m
+    Shows: flying: the markers of the computer pilots' planes climb above 5 m and fly away
+
+Background:
+  Given the console is connected to a VTOL on the ground
+  And the TX15 is ready

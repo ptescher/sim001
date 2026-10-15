@@ -11,6 +11,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 t1s_station = { path = "../station" }
 # Which planes there are, and whether one is a VTOL (the console then shows the Q modes).
 simulation_aircraft = { path = "../domains/simulation/aircraft" }
+# The computer pilots, each of whose planes has an autopilot of its own (domains/recreation).
+recreation_games = { path = "../domains/recreation/games" }
 # Other aircraft: what the radio tells the station, joined into one picture (domains/communication).
 communication_traffic = { path = "../domains/communication/traffic" }
 communication_telemetry = { path = "../domains/communication/telemetry" }

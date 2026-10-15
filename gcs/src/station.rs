@@ -112,17 +112,22 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         run(Command::new("docker").args(["build", "-t", SITL_IMAGE, "ardupilot"]).current_dir(&root), "building the SITL image")?;
     }
 
-    step(5, total, "ArduPlane SITL container");
+    step(5, total, "ArduPlane SITL containers: yours, and one for each computer pilot");
     // ArduPilot's home must be the sim's pilot box: the map's home, else start.sh's default.
     let home = opts.map.as_deref().and_then(pack_meta).map(|m| {
         (format!("{:.7},{:.7},{:.1},{:.0}", m.home_lat, m.home_lon, m.home_alt, m.launch_heading), m.title)
     });
-    println!("  {}", start_sitl(
-            opts.map.as_deref().unwrap_or("alpine"),
-            opts.aircraft.as_deref().unwrap_or(simulation_aircraft::default().id),
-            home.as_ref().map(|h| h.0.as_str()),
-        )?
-    );
+    // The computer pilots fly planes like yours, each with an autopilot of its own, so that a
+    // game is fair: they take as long to get into the air as you do.
+    for instance in 0..=recreation_games::PILOTS.len() {
+        println!("  {}", start_sitl(
+                instance,
+                opts.map.as_deref().unwrap_or("alpine"),
+                opts.aircraft.as_deref().unwrap_or(simulation_aircraft::default().id),
+                home.as_ref().map(|h| h.0.as_str()),
+            )?
+        );
+    }
     if let Some((loc, title)) = home {
         println!("  home {loc} ({title})");
     }
@@ -165,18 +170,43 @@ fn ensure_docker() -> Result<(), String> {
     Err("the Docker daemon isn't running: start it and try again".into())
 }
 
-/// Starts the SITL container, or reboots it if it's already running: it was flying a previous
-/// sim's aircraft, and ArduPilot's EKF would see the new one jump back to the pilot box. A
-/// container from an older image is replaced, so parameter changes take effect.
-fn start_sitl(map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
+/// The container of SITL instance `instance`: 0 is yours, 1 to 3 the computer pilots'.
+fn sitl_container(instance: usize) -> String {
+    if instance == 0 { SITL_CONTAINER.to_string() } else { format!("{SITL_CONTAINER}-{instance}") }
+}
+
+/// The `docker run` arguments for SITL instance `instance` (before the image). Yours puts its
+/// MAVLink on tcp:5760 for the console; a computer pilot's has nobody to talk to, so it publishes
+/// no port. Each keeps its flight logs apart.
+fn sitl_run_args(instance: usize, map: &str, aircraft: &str, home_loc: Option<&str>, logs: &std::path::Path) -> Vec<String> {
+    let name = sitl_container(instance);
+    let mut a: Vec<String> = ["run", "-d", "--rm", "--name", &name].iter().map(|s| s.to_string()).collect();
+    if instance == 0 {
+        a.extend(["-p".into(), "5760:5760".into()]);
+    }
+    a.extend(["--label".into(), format!("t1s.map={map}"), "--label".into(), format!("t1s.aircraft={aircraft}")]);
+    a.extend(["-e".into(), format!("AIRCRAFT={aircraft}"), "-e".into(), format!("INSTANCE={instance}")]);
+    if let Some(h) = home_loc {
+        a.extend(["-e".into(), format!("HOME_LOC={h}")]);
+    }
+    a.extend(["-v".into(), format!("{}:/sitl/logs", logs.display())]);
+    a
+}
+
+/// Starts SITL instance `instance`, or reboots it if it's already running: it was flying a
+/// previous sim's aircraft, and ArduPilot's EKF would see the new one jump back to the pilot box.
+/// A container from an older image is replaced, so parameter changes take effect.
+fn start_sitl(instance: usize, map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
+    let name = sitl_container(instance);
+    let name = name.as_str();
     let running = Command::new("docker")
-        .args(["ps", "--filter", &format!("name=^{SITL_CONTAINER}$"), "--format", "{{.Image}}"])
+        .args(["ps", "--filter", &format!("name=^{name}$"), "--format", "{{.Image}}"])
         .output()
         .map_err(|e| format!("docker ps: {e}"))?;
     if !String::from_utf8_lossy(&running.stdout).trim().is_empty() {
         let inspect = |fmt: &str| {
             Command::new("docker")
-                .args(["inspect", "-f", fmt, SITL_CONTAINER])
+                .args(["inspect", "-f", fmt, name])
                 .output()
                 .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
                 .unwrap_or_default()
@@ -187,8 +217,8 @@ fn start_sitl(map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<Strin
         // Its parameters belong to the plane it was started for.
         let same_aircraft = inspect("{{index .Config.Labels \"t1s.aircraft\"}}") == aircraft;
         if same_image && same_map && same_aircraft {
-            run(Command::new("docker").args(["restart", "-t", "1", SITL_CONTAINER]).stdout(Stdio::null()), "restarting SITL")?;
-            return Ok(format!("restarted {SITL_CONTAINER}"));
+            run(Command::new("docker").args(["restart", "-t", "1", name]).stdout(Stdio::null()), "restarting SITL")?;
+            return Ok(format!("restarted {name}"));
         }
         println!(
             "  {}: replacing the container",
@@ -196,21 +226,21 @@ fn start_sitl(map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<Strin
         );
     }
     // Gone, stopped, or from an older image.
-    let _ = Command::new("docker").args(["rm", "-f", SITL_CONTAINER]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    let _ = Command::new("docker").args(["rm", "-f", name]).stdout(Stdio::null()).stderr(Stdio::null()).status();
     // ArduPilot's flight logs (.BIN) land in logs/sitl/ in the repo, so they outlive the container.
-    let logs = repo_root().join("logs/sitl");
+    let logs = if instance == 0 { repo_root().join("logs/sitl") } else { repo_root().join(format!("logs/sitl/opponent-{instance}")) };
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
     let out = Command::new("docker")
-        .args(["run", "-d", "--rm", "--name", SITL_CONTAINER, "-p", "5760:5760", "--label", &format!("t1s.map={map}")])
-        .args(["--label", &format!("t1s.aircraft={aircraft}"), "-e", &format!("AIRCRAFT={aircraft}")])
-        .args(home_loc.map(|h| vec!["-e".to_string(), format!("HOME_LOC={h}")]).unwrap_or_default())
-        .arg("-v")
-        .arg(format!("{}:/sitl/logs", logs.display()))
+        .args(sitl_run_args(instance, map, aircraft, home_loc, &logs))
         .arg(SITL_IMAGE)
         .output()
         .map_err(|e| format!("docker run: {e}"))?;
     if out.status.success() {
-        Ok(format!("started {SITL_CONTAINER} (MAVLink on tcp:5760, flight logs in {})", logs.display()))
+        Ok(if instance == 0 {
+            format!("started {name} (MAVLink on tcp:5760, flight logs in {})", logs.display())
+        } else {
+            format!("started {name} (a computer pilot's autopilot, flight logs in {})", logs.display())
+        })
     } else {
         Err(format!("docker run failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
     }
@@ -245,4 +275,25 @@ pub fn start_sim(opts: &Options, rect: Option<Rect>, home: (f64, f64, f32)) -> R
         cmd.args(["--window-rect", &r.to_arg(), "--frameless"]);
     }
     cmd.spawn().map_err(|e| format!("starting {}: {e}", bin.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Your autopilot talks to the console on tcp:5760. Each computer pilot's is an instance of
+    /// its own (so its physics port is 9002 + 10·N), publishes no port, and logs on its own.
+    #[test]
+    fn each_autopilot_is_a_container_of_its_own() {
+        let logs = std::path::Path::new("/logs");
+        let yours = sitl_run_args(0, "alpine", "t1s-vtol", None, logs);
+        assert!(yours.windows(2).any(|w| w == ["--name", "t1s-sitl"]));
+        assert!(yours.windows(2).any(|w| w == ["-p", "5760:5760"]));
+        assert!(yours.contains(&"INSTANCE=0".to_string()));
+        let kestrel = sitl_run_args(1, "alpine", "t1s-vtol", Some("1,2,3,4"), logs);
+        assert!(kestrel.windows(2).any(|w| w == ["--name", "t1s-sitl-1"]));
+        assert!(!kestrel.contains(&"-p".to_string()), "nobody connects to it");
+        assert!(kestrel.contains(&"INSTANCE=1".to_string()) && kestrel.contains(&"HOME_LOC=1,2,3,4".to_string()));
+        assert!(kestrel.contains(&"AIRCRAFT=t1s-vtol".to_string()), "a plane like yours");
+    }
 }

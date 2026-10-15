@@ -14,7 +14,7 @@ Section: Recreation
   plane.
 
 Vocabulary:
-  State: the opponents are in hand | launching | flying | down
+  State: the opponents are in hand | on the ground | launching | flying | down
     Shows: in hand: the three computer pilots hold their planes beside you
     Shows: flying: the computer pilots throw their planes, one each second, and the planes climb away
   State: the lap count is 0..5

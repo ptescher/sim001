@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use t1s_station::feed::{FLAG_DIRECT, FrameHeader, Gimbal, GimbalCmd, RadioState, VehicleStatus, read_frame};
+use t1s_station::feed::{FLAG_DIRECT, FrameHeader, GameStatus, Gimbal, GimbalCmd, Key, KeyPress, RadioState, VehicleStatus, read_frame};
 
 pub struct VideoFrame {
     pub header: FrameHeader,
@@ -63,6 +63,18 @@ impl Sensor {
         if let Some(w) = self.writer.lock().unwrap().as_mut() {
             let _ = w.write_all(&r.encode());
         }
+    }
+
+    /// Press one of the sim's keys (G starts a race, T a game of tag).
+    pub fn press_key(&self, k: Key) {
+        if let Some(w) = self.writer.lock().unwrap().as_mut() {
+            let _ = w.write_all(&KeyPress(k).encode());
+        }
+    }
+
+    /// The game the sim is playing, per the newest frame.
+    pub fn game(&self) -> Option<GameStatus> {
+        self.frame.lock().unwrap().as_ref().filter(|f| f.at.elapsed().as_secs_f32() < 2.0).and_then(|f| f.header.game)
     }
 
     pub fn command(&self, g: Gimbal) {

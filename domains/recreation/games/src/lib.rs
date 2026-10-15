@@ -7,13 +7,18 @@
 //!
 //! A game starts with everyone's plane in hand and a countdown. At GO the computer pilots throw,
 //! one each second as the pylon racing leagues release their models, and you throw when you like.
+//!
+//! With autopilots (`Session::with_autopilots`), the computer pilots fly planes like yours, each
+//! with an autopilot of its own, through a radio: the host steps each of their planes from its
+//! autopilot's outputs, and asks the session what that computer pilot's radio sends
+//! (`Session::radio`). Everyone starts on the ground, disarmed, and nobody arms before GO.
 
 pub use recreation_pilot::{self as pilot, Controls};
 pub use recreation_racing::{self as racing, Gate, Status};
 pub use recreation_tag::{self as tag, Arena};
 
 use glam::{Quat, Vec3};
-use recreation_pilot::{ACE, CLUB, Path, Pilot, ROOKIE, Skill};
+use recreation_pilot::{ACE, CLUB, Fbwa, Path, Pilot, ROOKIE, Skill};
 use recreation_racing::{Course, Race};
 use recreation_tag::{Plane, Rules, Tag};
 use simulation_aircraft::{AircraftParams, t1s_ranger};
@@ -31,6 +36,15 @@ pub const ARENA_AHEAD: f32 = 70.0;
 const TOP_SPEED: f32 = 26.0;
 /// A computer pilot that crashes in a game of tag gets its plane back after this long (s).
 const DOWN_TIME: f32 = 3.0;
+/// With an autopilot, how high a computer pilot climbs in a hover before it flies on the wing
+/// (m above the ground).
+const TAKEOFF_HEIGHT: f32 = 15.0;
+/// With an autopilot, how long it holds its arm switch on before it decides the plane will not
+/// arm yet, and how long it waits before it tries again (s).
+const ARM_TRY: f32 = 3.0;
+const ARM_REST: f32 = 1.0;
+/// In FBWA the autopilot limits the bank (50° on the T1-S), so the racing lines are wider.
+const RADIO_TURN: f32 = 1.5;
 
 /// Where the games are played: the pilot box, and the way the pilot faces.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -120,6 +134,42 @@ pub struct Opponent {
     down_for: f32,
     /// Who it chases, when it is it, and when it chose.
     target: Option<(usize, f32)>,
+    /// With an autopilot: how far through its preflight it is.
+    stage: Stage,
+}
+
+/// A computer pilot's preflight with an autopilot, done on its radio as a pilot does it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Stage {
+    /// Before GO, or its plane is being set down: switch off, throttle down.
+    Cold,
+    /// The arm switch is on, with the throttle down, for this long.
+    Arming(f32),
+    /// The plane would not arm: switch off for this long, then try again.
+    Resting(f32),
+    /// Armed: climbing straight up in QHOVER.
+    Climbing,
+    /// In FBWA, speeding up, for this long.
+    Transition(f32),
+    Flying,
+}
+
+/// What a computer pilot's radio sends: the sticks, the arm switch and the position of the mode
+/// switch (its slot in the plane's `rc_modes`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Radio {
+    /// Roll, pitch and yaw -1..1 (in `aileron`, `elevator`, `rudder`), throttle 0..1.
+    pub sticks: Controls,
+    pub arm: bool,
+    pub mode: usize,
+}
+
+/// The computer pilots' planes and autopilots, when they fly with them.
+#[derive(Clone, Debug)]
+struct Autopilots {
+    params: AircraftParams,
+    qhover: usize,
+    fbwa: usize,
 }
 
 /// The three computer pilots: an ace, a club pilot and a rookie.
@@ -141,6 +191,10 @@ pub struct Session {
     time: f32,
     /// Your plane has been in the air since GO.
     you_flew: bool,
+    /// With autopilots: their planes, and the mode switch's QHOVER and FBWA.
+    autopilots: Option<Autopilots>,
+    /// Your position, velocity and whether you are in the air, as of the last step.
+    you_now: (Vec3, Vec3, bool),
 }
 
 impl Session {
@@ -174,10 +228,113 @@ impl Session {
                     thrown_at: None,
                     down_for: 0.0,
                     target: None,
+                    stage: Stage::Cold,
                 }
             })
             .collect();
-        Session { kind, field, arena: field.arena(), course, referee, opponents, clock: Clock::CountingDown { left: COUNTDOWN }, params, time: 0.0, you_flew: false }
+        Session {
+            kind,
+            field,
+            arena: field.arena(),
+            course,
+            referee,
+            opponents,
+            clock: Clock::CountingDown { left: COUNTDOWN },
+            params,
+            time: 0.0,
+            you_flew: false,
+            autopilots: None,
+            you_now: (field.pilot, Vec3::ZERO, false),
+        }
+    }
+
+    /// The computer pilots fly planes like yours (`params`), each with an autopilot of its own,
+    /// through a radio whose sticks talk to the autopilot's FBWA (`fbwa`). `planes` are their
+    /// planes as they are now: each is carried to its place on the ground, disarmed. The
+    /// countdown starts at once, and waits while a plane is being set down.
+    pub fn with_autopilots(mut self, params: AircraftParams, fbwa: Fbwa, planes: Vec<FlightState>) -> Session {
+        for (o, mut plane) in self.opponents.iter_mut().zip(planes) {
+            plane.reset_to_hand(&params, &o.start);
+            o.state = plane;
+            o.pilot = Pilot::with_radio(o.skill, fbwa);
+            o.line = Path::closed(self.course.outside_line(o.skill.turn_radius * RADIO_TURN, 1.0));
+            o.stage = Stage::Cold;
+        }
+        let slot = |name: &str| params.rc_modes.iter().position(|m| *m == name).unwrap_or(0);
+        self.autopilots = Some(Autopilots { qhover: slot("QHOVER"), fbwa: slot("FBWA"), params });
+        self.clock = Clock::CountingDown { left: COUNTDOWN };
+        self
+    }
+
+    /// The computer pilots' planes, back to the host at the end of the game.
+    pub fn into_planes(self) -> Vec<FlightState> {
+        self.opponents.into_iter().map(|o| o.state).collect()
+    }
+
+    /// The plane the computer pilots fly: yours with autopilots, else the T1-S.
+    pub fn opponent_params(&self) -> &AircraftParams {
+        self.autopilots.as_ref().map_or(&self.params, |a| &a.params)
+    }
+
+    /// What computer pilot `i`'s radio sends now. With autopilots, the host calls it after each
+    /// step its autopilot gives the plane. Before GO the switch is off and the throttle down. At
+    /// GO it arms, with the throttle down, and tries again if the props don't turn. Once they
+    /// turn it climbs in QHOVER, pushes FBWA at height, and then flies the game.
+    pub fn radio(&mut self, i: usize, ground: &dyn Terrain, dt: f32) -> Radio {
+        let Some(ap) = &self.autopilots else { return Radio::default() };
+        let (qhover, fbwa) = (ap.qhover, ap.fbwa);
+        let props = ap.params.motors.iter().zip(&self.opponents[i].state.spool).any(|(m, &spool)| m.lift && spool > 0.03);
+        let off = Radio { sticks: Controls::default(), arm: false, mode: qhover };
+        let on = |throttle: f32, mode: usize| Radio { sticks: Controls { throttle, ..Default::default() }, arm: true, mode };
+        let started = self.since_go() >= 0.0 && matches!(self.clock, Clock::Running { .. } | Clock::Stopped { .. });
+        let tag = self.kind == Kind::Tag;
+        let o = &mut self.opponents[i];
+        if o.state.phase == Phase::Crashed {
+            // In tag the pilot fetches the plane and starts again; a crash ends a race.
+            o.down_for += dt;
+            if tag && o.down_for > DOWN_TIME {
+                o.down_for = 0.0;
+                o.state.reset_to_hand(&ap.params, &o.start);
+                o.stage = Stage::Cold;
+            }
+            return off;
+        }
+        if !started || o.state.carry.is_some() || o.state.phase == Phase::Held {
+            o.stage = Stage::Cold;
+            return off;
+        }
+        let agl = o.state.pos.y - ground.height(o.state.pos.x, o.state.pos.z);
+        o.stage = match o.stage {
+            Stage::Cold => Stage::Arming(0.0),
+            Stage::Arming(_) if props => Stage::Climbing,
+            Stage::Arming(t) if t > ARM_TRY => Stage::Resting(0.0),
+            Stage::Arming(t) => Stage::Arming(t + dt),
+            Stage::Resting(t) if t > ARM_REST => Stage::Arming(0.0),
+            Stage::Resting(t) => Stage::Resting(t + dt),
+            Stage::Climbing if agl > TAKEOFF_HEIGHT => Stage::Transition(0.0),
+            Stage::Transition(t) if t > 3.0 && o.state.airspeed > 15.0 => Stage::Flying,
+            Stage::Transition(t) => Stage::Transition(t + dt),
+            stage => stage,
+        };
+        match o.stage {
+            Stage::Cold | Stage::Resting(_) => off,
+            Stage::Arming(_) => on(0.0, qhover),
+            // Above the middle of the stick, QHOVER climbs.
+            Stage::Climbing => on(0.9, qhover),
+            // Wings level and a little nose up while the wing takes over.
+            Stage::Transition(_) => Radio { sticks: Controls { elevator: 0.2, throttle: 1.0, ..Default::default() }, arm: true, mode: fbwa },
+            Stage::Flying => {
+                let planes = self.planes();
+                Radio { sticks: self.steer(i, &planes, ground, dt), arm: true, mode: fbwa }
+            }
+        }
+    }
+
+    /// Every player's position, velocity and whether it is in the air (0 is you, as of the last
+    /// step).
+    fn planes(&self) -> Vec<(Vec3, Vec3, bool)> {
+        let airborne = |s: &FlightState| matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none() && !s.on_ground;
+        std::iter::once(self.you_now).chain(self.opponents.iter().map(|o| (o.state.pos, o.state.vel, airborne(&o.state)))).collect()
     }
 
     /// A game that waits for you to take off: the countdown starts when your plane is in the air.
@@ -205,6 +362,15 @@ impl Session {
             }
             self.clock = Clock::CountingDown { left: COUNTDOWN };
         }
+        self.you_now = (you.pos, you.vel, airborne(you) && !you.on_ground);
+        // With autopilots, the countdown waits until every plane is set down at its place.
+        let settling = |s: &FlightState| s.carry.is_some() || s.phase == Phase::Held;
+        if self.autopilots.is_some()
+            && matches!(self.clock, Clock::CountingDown { .. })
+            && (settling(you) || self.opponents.iter().any(|o| settling(&o.state)))
+        {
+            return;
+        }
         self.time += dt;
         let go = self.since_go();
         if let Clock::CountingDown { .. } = self.clock {
@@ -214,7 +380,9 @@ impl Session {
         // The computer pilots fly.
         let planes: Vec<(Vec3, Vec3, bool)> =
             std::iter::once(you).chain(self.opponents.iter().map(|o| &o.state)).map(|s| (s.pos, s.vel, airborne(s) && !s.on_ground)).collect();
-        for i in 0..self.opponents.len() {
+        // With autopilots, their planes are the host's to step (see `radio`).
+        let hands = if self.autopilots.is_none() { self.opponents.len() } else { 0 };
+        for i in 0..hands {
             let controls = self.brain(i, &planes, world.ground, dt);
             let o = &mut self.opponents[i];
             let wind = (world.wind)(o.state.pos, o.state.time);
@@ -266,8 +434,7 @@ impl Session {
     /// velocity and whether it is in the air.
     fn brain(&mut self, i: usize, planes: &[(Vec3, Vec3, bool)], ground: &dyn Terrain, dt: f32) -> Controls {
         let go = self.since_go();
-        let me = i + 1;
-        let o = &mut self.opponents[i];
+                let o = &mut self.opponents[i];
         match o.state.phase {
             Phase::Held => {
                 if o.state.carry.is_some() || go < o.throw_at {
@@ -295,6 +462,16 @@ impl Session {
         if o.thrown_at.is_some_and(|t| go - t < 2.5) || (agl < 6.0 && o.thrown_at.is_some_and(|t| go - t < 6.0)) {
             return o.pilot.climb_out(s, ground, dt);
         }
+        self.steer(i, planes, ground, dt)
+    }
+
+    /// How computer pilot `i` flies the game once it is in the air: round the course, or after
+    /// the others, or away from the one that is it.
+    fn steer(&mut self, i: usize, planes: &[(Vec3, Vec3, bool)], ground: &dyn Terrain, dt: f32) -> Controls {
+        let go = self.since_go();
+        let me = i + 1;
+        let o = &mut self.opponents[i];
+        let s = &o.state;
         let finished = match &self.referee {
             Referee::Race(race) => race.racers[me].status != Status::Racing,
             Referee::Tag(tag) => tag.over(),
@@ -800,6 +977,127 @@ mod tests {
         assert_eq!(crashes, 0, "computer pilots crashed");
         assert_eq!(tag.players[0].it_time, 0.0);
     }
+    // With autopilots: the computer pilots fly T1-S VTOLs like yours, each through a radio.
+
+    const FBWA: pilot::Fbwa = pilot::Fbwa { roll_limit: 50.0 * DEG, pitch_max: 25.0 * DEG, pitch_min: -25.0 * DEG };
+    const DEG: f32 = std::f32::consts::PI / 180.0;
+
+    fn vtol() -> AircraftParams {
+        (simulation_aircraft::find("t1s-vtol").unwrap().params)()
+    }
+
+    /// Their planes where they were parked: on the ground at their places.
+    fn parked(p: &AircraftParams) -> Vec<FlightState> {
+        (0..PILOTS.len()).map(|i| FlightState::new(p, &field().hand(i))).collect()
+    }
+
+    /// A race with autopilots, and your VTOL on the ground at the pilot box.
+    fn race_with_autopilots() -> (Session, FlightState) {
+        let p = vtol();
+        let game = Session::race(field()).with_autopilots(p.clone(), FBWA, parked(&p));
+        let you = FlightState::new(&p, &Start { pos: Vec3::new(-0.5, 0.0, -0.6), heading: 0.0 });
+        (game, you)
+    }
+
+    /// The host's side: your plane sits on the ground, each computer pilot's autopilot moves its
+    /// plane (here: nothing, the motors idle) and the computer pilot answers on its radio.
+    /// Returns the last radios.
+    fn run_with_autopilots(game: &mut Session, you: &mut FlightState, seconds: f32) -> Vec<Radio> {
+        let p = vtol();
+        let world = Surroundings { ground: &Flat, obstacles: &[], wind: &calm };
+        let mut radios = vec![];
+        let mut t = 0.0;
+        while t < seconds {
+            radios.clear();
+            for i in 0..game.opponents.len() {
+                physics::step(&p, &mut game.opponents[i].state, &Default::default(), &Environment::default(), &Flat, &[], DT);
+                radios.push(game.radio(i, &Flat, DT));
+            }
+            physics::step(&p, you, &Default::default(), &Environment::default(), &Flat, &[], DT);
+            game.step(you, &world, DT);
+            t += DT;
+        }
+        radios
+    }
+
+    fn slot(name: &str) -> usize {
+        vtol().rc_modes.iter().position(|m| *m == name).unwrap()
+    }
+
+    /// With autopilots, a game starts from cold: every plane on the ground, the countdown
+    /// running, and the computer pilots' arm switches off, throttles down, in QHOVER.
+    #[test]
+    fn with_autopilots_a_game_starts_from_cold() {
+        let (mut game, mut you) = race_with_autopilots();
+        assert!(matches!(game.clock, Clock::CountingDown { .. }), "no waiting for your takeoff: {:?}", game.clock);
+        let radios = run_with_autopilots(&mut game, &mut you, 1.0);
+        for r in &radios {
+            assert!(!r.arm && r.sticks.throttle == 0.0 && r.mode == slot("QHOVER"), "{r:?}");
+        }
+        assert!(game.opponents.iter().all(|o| o.state.on_ground), "their planes stand on the ground");
+    }
+
+    /// The countdown waits until every plane is set down at its place.
+    #[test]
+    fn with_autopilots_the_countdown_waits_for_the_planes_to_be_set_down() {
+        let p = vtol();
+        let mut far = parked(&p);
+        far[1].pos += Vec3::new(30.0, 0.0, 0.0);
+        let mut game = Session::race(field()).with_autopilots(p.clone(), FBWA, far);
+        assert!(game.opponents[1].state.carry.is_some(), "carried back from where it was");
+        let mut you = FlightState::new(&p, &Start { pos: Vec3::new(-0.5, 0.0, -0.6), heading: 0.0 });
+        run_with_autopilots(&mut game, &mut you, 2.0);
+        assert_eq!(game.clock, Clock::CountingDown { left: COUNTDOWN }, "held while a plane is carried");
+        run_with_autopilots(&mut game, &mut you, 30.0);
+        assert!(matches!(game.clock, Clock::Running { .. }), "{:?}", game.clock);
+    }
+
+    /// At GO, each computer pilot puts its arm switch on, with the throttle all the way down as
+    /// ArduPilot needs. While the props don't turn it isn't armed: it tries again.
+    #[test]
+    fn with_autopilots_at_go_each_computer_pilot_arms() {
+        let (mut game, mut you) = race_with_autopilots();
+        let radios = run_with_autopilots(&mut game, &mut you, COUNTDOWN + 0.5);
+        for r in &radios {
+            assert!(r.arm && r.sticks.throttle == 0.0 && r.mode == slot("QHOVER"), "{r:?}");
+        }
+        // Nothing has armed (the props have not turned): it takes the switch off, then tries again.
+        let mut off = false;
+        let mut again = false;
+        for _ in 0..(8.0 / DT) as usize {
+            let r = run_with_autopilots(&mut game, &mut you, DT)[0];
+            off |= !r.arm;
+            again |= off && r.arm;
+        }
+        assert!(off && again, "it tries to arm again");
+    }
+
+    /// Once its props turn it climbs straight up in QHOVER, and at height it pushes FBWA.
+    #[test]
+    fn with_autopilots_it_takes_off_in_qhover_then_flies_in_fbwa() {
+        let (mut game, mut you) = race_with_autopilots();
+        run_with_autopilots(&mut game, &mut you, COUNTDOWN + 0.5);
+        let p = vtol();
+        let lift: Vec<usize> = p.motors.iter().enumerate().filter(|(_, m)| m.lift).map(|(i, _)| i).collect();
+        // Armed: the autopilot spins the props.
+        for &m in &lift {
+            game.opponents[0].state.spool[m] = 0.2;
+        }
+        let r = game.radio(0, &Flat, DT);
+        assert!(r.arm && r.mode == slot("QHOVER") && r.sticks.throttle > 0.6, "climbs: {r:?}");
+        // High enough: forward flight.
+        game.opponents[0].state.pos.y = 25.0;
+        game.opponents[0].state.on_ground = false;
+        let r = game.radio(0, &Flat, DT);
+        assert!(r.arm && r.mode == slot("FBWA"), "flies on the wing: {r:?}");
+    }
+
+    /// The planes go back to the host at the end of the game.
+    #[test]
+    fn with_autopilots_the_planes_go_back_to_the_host() {
+        let (game, _) = race_with_autopilots();
+        assert_eq!(game.into_planes().len(), PILOTS.len());
+    }
 }
 
 #[cfg(test)]
@@ -850,4 +1148,5 @@ mod probe {
     fn t1s_aircraft() -> AircraftParams {
         t1s_ranger::params()
     }
+
 }

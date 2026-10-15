@@ -1,0 +1,17 @@
+Story: Racing the computer pilots from the station
+  As a pilot with a TX15
+  I want the computer pilots to start the race as I do
+  So that the race is fair
+
+  Start a race in the sim. All the planes stand on the field, and nobody can arm before GO.
+  At GO, you and the computer pilots arm, take off and fly to the course.
+
+  Scenario: Wait for GO, then go
+    When the pilot starts a race
+    Then the game clock is counting down
+    And the opponents are on the ground
+    When the arm switch is on
+    Then the vehicle is disarmed
+    When the countdown ends
+    Then the vehicle is armed
+    And the opponents are flying
