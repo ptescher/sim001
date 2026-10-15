@@ -1,7 +1,7 @@
 semver: 3.0.0
 header: 
    name: "T1S VTOL"
-   bitmap: "Flug62.png"
+   bitmap: "T1S_VTOL.png"
    labels: ""
 telemetryProtocol: 0
 thrTrim: 0

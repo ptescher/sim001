@@ -1,0 +1,18 @@
+# Companion mirrors the radio's whole SD card into this folder. Only what the project owns is tracked.
+/FIRMWARE/
+/LOGS/
+/SCREENSHOTS/
+/SCRIPTS/
+/SOUNDS/
+/TEMPLATES/
+/WIDGETS/
+/edgetx.sdcard.version
+/IMAGES/*
+!/IMAGES/T1S_*.png
+/MODELS/*
+!/MODELS/aero-6pos.yml
+/RADIO/*
+!/RADIO/.gitkeep
+/THEMES/*
+!/THEMES/T1S Day/
+!/THEMES/T1S Night/
