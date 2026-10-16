@@ -14,10 +14,10 @@
 --     0xAA from the radio, 0xEA), and the ground station's commands, carried on to the plane
 --     (envelopes to the flight controller, 0xC8).
 -- Down the cable: attitude, battery, GPS, speed, climb, flight mode, link statistics and MAVLink
--- envelopes (with ArduPilot's own messages). The widget draws them in the layout of Yaapu's
--- ArduPilot telemetry script: the flight mode and ARMED state on top, an artificial horizon with
--- the speeds and the height beside it, the battery, GPS and home on the right, and ArduPilot's
--- messages along the bottom. The layout is in domains/avionics (the TX15 screen).
+-- envelopes (with ArduPilot's own messages). The widget draws them in the console's components:
+-- lamps along the top (mode, armed, GPS, link, battery), bezelled monitors for the air data, the
+-- artificial horizon and the nav data, and ArduPilot's messages along the bottom. The same layout,
+-- as a picture for the docs, is in domains/avionics (the TX15 screen); change them together.
 -- See domains/avionics.
 
 local ADDR_FC, ADDR_RADIO, ADDR_TX = 0xC8, 0xEA, 0xEE

@@ -6,6 +6,7 @@ description = "Avionics domain: the simulated flight computer between a TX15 on 
 
 [dependencies]
 avionics_crsf = { path = "../crsf" }
+illustration_theme = { path = "../../illustration/theme" }
 
 [dev-dependencies]
 communication_telemetry = { path = "../../communication/telemetry" }

@@ -436,6 +436,7 @@ dependencies = [
  "expectation_harness",
  "expectation_model",
  "expectation_story",
+ "illustration_theme",
  "mavlink",
 ]
 
