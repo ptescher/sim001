@@ -17,7 +17,7 @@ echo "== the sim with a flight controller (ArduPilot SITL)"
 limit 400 ardupilot/expect_sim.sh --docs "$DOCS" || true
 if [ "$1" != "--no-station" ]; then
   echo "== the console (the station: Docker, SITL, the sim and the console)"
-  (cd domains/groundstation/console && limit 2400 cargo run --release -- --station --expect --docs "$DOCS") || true
+  (cd domains/teleoperation/console && limit 2400 cargo run --release -- --station --expect --docs "$DOCS") || true
 fi
 echo "== the docs"
 cargo run -q -p expectation_cli -- docs expectations "$DOCS"

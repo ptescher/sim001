@@ -1,5 +1,5 @@
 [package]
-name = "groundstation_shared"
+name = "teleoperation_shared"
 version = "0.1.0"
 edition = "2024"
 description = "Shared between t1s_sim and the ground station console: the sensor video feed protocol and the window layout planner"

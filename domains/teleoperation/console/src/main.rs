@@ -12,6 +12,7 @@ mod geo;
 mod link;
 mod screens;
 mod station;
+mod tx15_screen;
 mod ui;
 mod vehicle;
 
@@ -22,7 +23,7 @@ use gpui::{
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use groundstation_shared::layout::{self, Mode, Pane, Rect};
+use teleoperation_shared::layout::{self, Mode, Pane, Rect};
 use vehicle::Vehicle;
 
 actions!(t1s_gcs, [Quit]);
@@ -51,7 +52,7 @@ t1s_gcs [options]
                      USB serial set to LUA and the t1sfc script running): the sticks, the telemetry and
                      the console's MAVLink all go through the radio
   --origin LAT,LON[,ALT]  SITL --home = the sim's pilot box (default matches ardupilot/start.sh)
-  --assets DIR       output of `t1s_sim --export-map` (default domains/groundstation/console/assets)
+  --assets DIR       output of `t1s_sim --export-map` (default domains/teleoperation/console/assets)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../../../expectations) against this console
                      by clicking it, and exit; needs a vehicle, so use it with --station
   --only TEXT        with --expect: run only the tests whose title contains TEXT
@@ -82,7 +83,7 @@ fn main() {
     let mut origin = arg("--origin")
         .and_then(|s| Origin::parse(&s))
         .unwrap_or(Origin::SITL_DEFAULT);
-    // A real place's map lives in domains/groundstation/console/assets/<name>; the Alpine Valley's in domains/groundstation/console/assets.
+    // A real place's map lives in domains/teleoperation/console/assets/<name>; the Alpine Valley's in domains/teleoperation/console/assets.
     let assets = arg("--assets")
         .map(PathBuf::from)
         .unwrap_or_else(|| match &map {
@@ -95,14 +96,14 @@ fn main() {
         Mode::Auto
     };
     let feed_addr =
-        arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", groundstation_shared::feed::DEFAULT_PORT));
+        arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", teleoperation_shared::feed::DEFAULT_PORT));
     let opts = station::Options {
         raytrace: flag("--raytrace"),
         feed_port: feed_addr
             .rsplit(':')
             .next()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(groundstation_shared::feed::DEFAULT_PORT),
+            .unwrap_or(teleoperation_shared::feed::DEFAULT_PORT),
         no_build: flag("--no-build"),
         direct: flag("--direct"),
         map: map.clone(),
@@ -110,6 +111,9 @@ fn main() {
         test_radio: flag("--expect"),
         radio_port,
         flight_computer: radio_port.is_some() && flag("--flight-computer"),
+        // The simulated TX15 on the serial line writes its screen here, for the tests to read.
+        tx15_screen: (radio_port.is_some() && flag("--flight-computer") && flag("--expect"))
+            .then(|| std::env::temp_dir().join(format!("t1s_tx15_screen_{}.json", std::process::id()))),
         tx15_serial: radio_port.and(arg("--tx15-serial")),
     };
     let aircraft = match &opts.aircraft {
@@ -154,7 +158,7 @@ fn main() {
     match &terrain {
         Some(t) => println!("terrain map {} ({:.0} m square)", t.png.display(), t.size_m),
         None => println!(
-            "no terrain map in {} (run `cargo run --release -- --export-map domains/groundstation/console/assets` in the sim)",
+            "no terrain map in {} (run `cargo run --release -- --export-map domains/teleoperation/console/assets` in the sim)",
             assets.display()
         ),
     }
@@ -188,6 +192,8 @@ fn main() {
             only: arg("--only"),
             vtol,
             rc_modes: (aircraft.params)().rc_modes,
+            serial_line: opts.flight_computer,
+            tx15_screen: opts.tx15_screen.clone(),
         }
     });
     Application::new().run(move |cx: &mut App| {
@@ -312,12 +318,12 @@ fn window_options(title: &'static str, bounds: Bounds<gpui::Pixels>) -> WindowOp
     }
 }
 
-/// `domains/groundstation/console/assets` whether run from the repo root or from the console's directory.
+/// `domains/teleoperation/console/assets` whether run from the repo root or from the console's directory.
 fn default_assets() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
     if manifest.exists() {
         manifest
     } else {
-        PathBuf::from("domains/groundstation/console/assets")
+        PathBuf::from("domains/teleoperation/console/assets")
     }
 }

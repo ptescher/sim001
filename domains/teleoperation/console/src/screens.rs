@@ -2,7 +2,7 @@
 //! of the main display, y down) with their usable area below the menu bar and beside the Dock.
 
 use gpui::App;
-use groundstation_shared::layout::{Display, Rect};
+use teleoperation_shared::layout::{Display, Rect};
 
 #[cfg(target_os = "macos")]
 pub fn displays(_cx: &App) -> Vec<Display> {

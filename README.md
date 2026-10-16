@@ -14,7 +14,7 @@ There are two planes (`--aircraft`):
 - **`t1s-vtol`, the default:** the T1-S VTOL, with two tilt-rotors and a rear rotor, and a flight controller. ArduPilot flies it, so start the whole station, which starts the sim, the ground control console and ArduPilot together:
 
   ```bash
-  cd domains/groundstation/console && cargo run --release -- --station
+  cd domains/teleoperation/console && cargo run --release -- --station
   ```
 
 - **`t1s-ranger`:** the plain T1-S. It has only a receiver and two ESCs, no flight controller, so it has no ArduPilot, no console and one flight mode (MANUAL). Fly it from the keyboard or a radio:
@@ -36,7 +36,7 @@ Starting the sim alone with the VTOL tells you this and exits.
 Besides the Alpine Valley, the sim flies real places built from USGS lidar elevation, NAIP aerial photos and OpenStreetMap. Trees and water are derived from the photos. The two built so far are **Cypress Island Airfield, WA** (`cypress`) and the **Park at the Berkeley Waterfront, CA** (`berkeley`):
 
 ```bash
-cd domains/groundstation/console && cargo run --release -- --station --map cypress   # builds the map pack the first time
+cd domains/teleoperation/console && cargo run --release -- --station --map cypress   # builds the map pack the first time
 cargo run --release -- --map berkeley                     # the sim alone
 ```
 
@@ -146,16 +146,16 @@ ArduPlane SITL ──servo PWM (UDP 9002)──▶ t1s_sim ──JSON: IMU, atti
    sim_vehicle.py -v ArduPlane -f JSON --add-param-file=ardupilot/t1s.parm --console --map
    ```
 
-3. Connect a ground station to `tcp:localhost:5760` (Docker). Use the GCS in [`domains/groundstation/console/`](domains/groundstation/console/README.md), QGroundControl or Mission Planner, or the MAVProxy console that `sim_vehicle.py` opens.
+3. Connect a ground station to `tcp:localhost:5760` (Docker). Use the GCS in [`domains/teleoperation/console/`](domains/teleoperation/console/README.md), QGroundControl or Mission Planner, or the MAVProxy console that `sim_vehicle.py` opens.
 
 ### Ground control station
 
 ![Station tiled on one display](docs/station_tiled.png)
 
-`domains/groundstation/console/` is a GPUI ground station built for this sim. It has a HUD-style PFD and a tactical map drawn on an orthophoto of the sim's own terrain. It also has mission planning and upload, GUIDED fly-to, caution/warning annunciators, trend charts and the autopilot message log. See [gcs/README.md](gcs/README.md).
+`domains/teleoperation/console/` is a GPUI ground station built for this sim. It has a HUD-style PFD and a tactical map drawn on an orthophoto of the sim's own terrain. It also has mission planning and upload, GUIDED fly-to, caution/warning annunciators, trend charts and the autopilot message log. See [gcs/README.md](gcs/README.md).
 
 ```bash
-cd domains/groundstation/console && cargo run --release -- --station
+cd domains/teleoperation/console && cargo run --release -- --station
 ```
 
 That's the whole setup. `--station` builds the sim, exports the terrain map if missing, starts Docker Desktop, builds the SITL image if missing (first time only, about 15 minutes), starts SITL and the sim, and lays out three panes: the sim's view, the aircraft's camera feed and the console. They're tiled on one display or spread across several. Sim flags it uses: `--feed [port]` streams the gimballed sensor camera over TCP (default 5600, `--feed-size WxH`), `--window-rect x,y,w,h --title-bar N` places the window, and `--exit-with-parent` quits the sim with the ground station.
@@ -195,7 +195,7 @@ Each feature is written there as Given/When/Then expectations in a shared vocabu
 cargo run -p expectation_cli -- check expectations        # conflicts, coverage, story problems (no window)
 cargo run --release -- --expect                           # run the tests in the sim window
 cargo run --release -- --expect --docs docs               # ...and rewrite docs/ from the results
-(cd domains/groundstation/console && cargo run --release -- --station --expect --docs ../../../docs)   # the same for the console (needs Docker)
+(cd domains/teleoperation/console && cargo run --release -- --station --expect --docs ../../../docs)   # the same for the console (needs Docker)
 cargo run -p expectation_cli -- docs expectations docs    # rewrite docs/ from the saved results
 tools/docs.sh                                             # every runner in turn, with a time limit on each, then the docs
 ardupilot/expect_sim.sh --docs docs                       # the sim's tests for a plane with a flight controller (ArduPilot beside it)

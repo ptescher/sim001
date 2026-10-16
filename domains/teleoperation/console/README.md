@@ -16,20 +16,20 @@ A [GPUI](https://gpui.rs) ground control station for ArduPlane SITL running on t
 ## Station: everything at once
 
 ```bash
-cd domains/groundstation/console && cargo run --release -- --station
+cd domains/teleoperation/console && cargo run --release -- --station
 ```
 
 This one command brings up the whole simulator station. It runs every prerequisite first, in the terminal, and stops with a clear message if one fails:
 
 1. **Builds the sim** (`cargo build --release` in the repo root; a no-op when it's up to date). `--no-build` skips it.
-2. **Exports the terrain map** to `domains/groundstation/console/assets/` if it's missing (about 8 s).
+2. **Exports the terrain map** to `domains/teleoperation/console/assets/` if it's missing (about 8 s).
 3. **Starts Docker Desktop** if the daemon isn't running.
 4. **Builds the ArduPlane SITL image** from `ardupilot/Dockerfile`. The first time takes about 15 minutes. After that the build is cached, takes seconds, and picks up changes to `t1s.parm`.
 5. **Starts the SITL container**, or reboots it if it's already running, so ArduPilot starts together with the new sim. A container from an older image is replaced so new parameters take effect. ArduPilot's flight logs (`.BIN`, one per boot) are kept in `logs/sitl/` in the repo. Open them in [UAV Log Viewer](https://plot.ardupilot.org) or MAVExplorer.
 
 Then it starts **t1s_sim** as SITL's physics with the sensor feed on and its window placed in its pane, and opens **the console** and **the sensor feed**. `cargo run` builds the GCS itself.
 
-The panes are laid out over your displays (the layout code is in `domains/groundstation/shared/src/layout.rs`):
+The panes are laid out over your displays (the layout code is in `domains/teleoperation/shared/src/layout.rs`):
 
 | Displays | Layout |
 | --- | --- |
@@ -47,7 +47,7 @@ Below 1500 pt wide, the console switches to two columns. When the sensor window 
 
 ![Sensor feed looking forward: HUD conformal with the camera picture](../../../docs/sensor_feed.png)
 
-The sim renders a gimballed camera just ahead of and below the nose. It streams the frames over TCP 5600 while a viewer is connected (`t1s_sim --feed`, protocol in `domains/groundstation/shared/src/feed.rs`). Frames are raw BGRA at 320×240 and up to 30 fps, which suits loopback well. With no viewer connected, the camera renders a tiny frame and nothing is read back. A second ray-traced view is expensive on the GPU, so the feed is small by default; `--feed-size 640x480` gives a sharper image at some cost in frame rate.
+The sim renders a gimballed camera just ahead of and below the nose. It streams the frames over TCP 5600 while a viewer is connected (`t1s_sim --feed`, protocol in `domains/teleoperation/shared/src/feed.rs`). Frames are raw BGRA at 320×240 and up to 30 fps, which suits loopback well. With no viewer connected, the camera renders a tiny frame and nothing is read back. A second ray-traced view is expensive on the GPU, so the feed is small by default; `--feed-size 640x480` gives a sharper image at some cost in frame rate.
 
 - **Looking straight ahead (FWD):** the flight HUD is drawn over the video. Its pitch scale matches the camera's field of view, so the horizon and flight path marker line up with the picture.
 - **Slewed:** sensor symbology replaces the HUD. You get a reticle, azimuth and elevation scales, the line-of-sight bearing, and the **SPI** (the sensor point of interest: where the line of sight meets the sim's terrain), with coordinates, ground elevation and slant range. The SPI and line of sight also appear on the tactical map.
@@ -62,15 +62,15 @@ To use the feed without `--station`, run the sim with `--ardupilot --feed` and t
 ## Run
 
 ```bash
-# once: export the map + height grid from the sim (about 8 s, writes domains/groundstation/console/assets/)
-cargo run --release -- --export-map domains/groundstation/console/assets
+# once: export the map + height grid from the sim (about 8 s, writes domains/teleoperation/console/assets/)
+cargo run --release -- --export-map domains/teleoperation/console/assets
 
 # the usual stack
 cargo run --release -- --ardupilot      # sim as physics backend
 ardupilot/run_sitl.sh                   # ArduPlane SITL in Docker, MAVLink on tcp:5760
 
 # the GCS
-cd domains/groundstation/console && cargo run --release
+cd domains/teleoperation/console && cargo run --release
 ```
 
 The macOS build compiles GPUI's Metal shaders, so it needs the Metal Toolchain:
@@ -80,7 +80,7 @@ Options:
 
 - `--connect ADDR`: any rust-mavlink address. The default is `tcpout:127.0.0.1:5760`. Use `udpin:0.0.0.0:14550` for MAVProxy `--out`. SITL's port 5760 takes one client, so close QGroundControl first or give it another port.
 - `--origin LAT,LON,ALT`: SITL's `--home`, which is the sim's pilot box. Map positions are metres from this point. The default matches `ardupilot/start.sh`.
-- `--assets DIR`: where the exported map lives (default `domains/groundstation/console/assets`). Without it the map falls back to a 100 m grid.
+- `--assets DIR`: where the exported map lives (default `domains/teleoperation/console/assets`). Without it the map falls back to a 100 m grid.
 - `--no-radio`: with `--station`, connect to ArduPilot directly. Without it the console takes all its telemetry from the sim's TX15 stand-in on port 5770, which relays ArduPilot's MAVLink at the speed of a telemetry link and adds the other aircraft that the plane's radios hear. They show on the tactical map as cyan planes, dim when they have been quiet. See [domains/communication](../domains/communication/README.md).
 - `--station`, `--layout single`, `--raytrace`: see above. `--sensor` opens the feed window and `--feed HOST:PORT` sets the feed address.
 - `--expect [SUITE] [--docs DIR]`: runs the acceptance tests in `expectations/` against the console and exits. The driver sends real mouse events into the console window (to where each button is painted) and reads the state back, so it needs a vehicle: use `--station --expect`. With `--docs`, it writes the manual with screenshots (macOS `screencapture`, which needs the Screen Recording permission) and merges the results with the sim's. Tests that need the mission file, terrain check, survey grid, measuring or the sim window stay "not supported yet".

@@ -13,7 +13,7 @@
 //! [`tx15`] is the other end of a virtual line: the TX15 stand-in for `--radio`.
 
 use crate::sim::SimCore;
-use aviation_computer::{FlightComputer, Handset, Vehicle};
+use aviation_computer::{FlightComputer, Handset, Screen, Vehicle};
 use communication_traffic::Position;
 use simulation_physics as physics;
 use std::io::{ErrorKind, Read, Write};
@@ -22,6 +22,32 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 type Core = Arc<Mutex<SimCore>>;
+
+/// Where the TX15 stand-in writes its screen for the station's tests (`--tx15-screen`): a JSON
+/// file of what the lamps show, and the picture beside it, as SVG.
+static SCREEN_FILE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+pub fn set_screen_file(path: std::path::PathBuf) {
+    let _ = SCREEN_FILE.set(path);
+}
+
+/// Write what the screen shows to `path` (JSON) and `path` with the extension `svg`. The files
+/// appear whole: a reader never sees half of one.
+pub fn write_screen(path: &std::path::Path, screen: &Screen) -> std::io::Result<()> {
+    let live = screen.last_frame.is_some();
+    let json = format!(
+        "{{\"live\":{live},\"mode\":\"{}\",\"armed\":{}}}",
+        if live { screen.mode.replace('"', "") } else { "NO LINK".into() },
+        live && screen.armed
+    );
+    let put = |to: std::path::PathBuf, text: String| -> std::io::Result<()> {
+        let tmp = to.with_extension("tmp");
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(tmp, to)
+    };
+    put(path.with_extension("svg"), screen.to_svg())?;
+    put(path.to_path_buf(), json)
+}
 
 const TICK: Duration = Duration::from_millis(4);
 
@@ -372,8 +398,13 @@ fn bridge(core: &Core, mut relay: TcpStream, mut line: Line) {
     let start = Instant::now();
     let mut handset = Handset::new();
     let mut buf = [0u8; 4096];
+    let mut screen_written = Instant::now() - Duration::from_secs(1);
     loop {
         let now = start.elapsed().as_secs_f64();
+        if let Some(path) = SCREEN_FILE.get().filter(|_| screen_written.elapsed() > Duration::from_millis(250)) {
+            screen_written = Instant::now();
+            let _ = write_screen(path, &handset.screen);
+        }
         let pilot = core.lock().unwrap().pilot_channels();
         for (i, us) in pilot.iter().enumerate() {
             handset.channels[i] = *us;
@@ -403,6 +434,21 @@ fn bridge(core: &Core, mut relay: TcpStream, mut line: Line) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_screen_is_written_for_the_station_as_json_and_a_picture() {
+        let dir = std::env::temp_dir().join(format!("t1s_screen_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("tx15.json");
+        let mut screen = Screen { mode: "FBWA".into(), armed: true, last_frame: Some(0.0), ..Default::default() };
+        write_screen(&path, &screen).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), r#"{"live":true,"mode":"FBWA","armed":true}"#);
+        assert!(std::fs::read_to_string(path.with_extension("svg")).unwrap().contains(">FBWA<"));
+        screen.last_frame = None;
+        write_screen(&path, &screen).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), r#"{"live":false,"mode":"NO LINK","armed":false}"#);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     fn free_port() -> u16 {
         TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()

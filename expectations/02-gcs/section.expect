@@ -1,7 +1,7 @@
-# The ground control station (domains/groundstation/console/) flying ArduPlane SITL on the sim's physics, as the
+# The ground control station (domains/teleoperation/console/) flying ArduPlane SITL on the sim's physics, as the
 # operator sees it. Modelled on Mission Planner's planning docs (ardupilot.org/planner):
 # where the console does something already, these say what it does; elsewhere they say what
-# it should do. The console's driver (domains/groundstation/console/src/expect.rs, `--station --expect`) clicks the real
+# it should do. The console's driver (domains/teleoperation/console/src/expect.rs, `--station --expect`) clicks the real
 # console; tests that need the mission file, the terrain check, the survey grid, measuring or
 # the sim's window aren't supported yet.
 
@@ -113,7 +113,7 @@ Vocabulary:
   Event: the plane reaches the last item
 
   Phrase: the console is connected to a plane on the ground
-    Say: install Rust and Docker Desktop. Then run `cd domains/groundstation/console && cargo run --release -- --station`. The first time, it builds ArduPlane [[SITL]], which takes approximately 15 minutes. After that, it starts in a few seconds. Three windows open: the console, the [[sensor feed]] and the sim. The console connects to the plane. The plane is on the ground and disarmed, in MANUAL, with home set and no plan. Wait until the ARM button shows ARM, not ARM: NOT READY
+    Say: install Rust and Docker Desktop. Then run `cd domains/teleoperation/console && cargo run --release -- --station`. The first time, it builds ArduPlane [[SITL]], which takes approximately 15 minutes. After that, it starts in a few seconds. Three windows open: the console, the [[sensor feed]] and the sim. The console connects to the plane. The plane is on the ground and disarmed, in MANUAL, with home set and no plan. Wait until the ARM button shows ARM, not ARM: NOT READY
     Given the link is connected
     And the game clock is off
     And the vehicle is disarmed
@@ -186,9 +186,14 @@ Vocabulary:
   Event: the pilot sends the plane home
     Say: press button 6 on the front of the radio. The plane flies to home, and lands there
 
+  State: the radio line is USB | serial
+    Shows: USB: the sim reads the TX15 as a USB game controller (HID)
+    Shows: serial: the station was started with --flight-computer, and the sim reads the TX15 from the flight computer's serial line
+
   Phrase: the TX15 is ready
     Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8, calibrate the sticks in the sim with F2, and copy the channels of the switches from controls.cfg.example. Then put the throttle stick all the way down, SE out and press button 1
-    Given the throttle stick is low
+    Given the radio line is USB
+    And the throttle stick is low
     And the arm switch is off
     And the mode switch is QHOVER
 

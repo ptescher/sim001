@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use groundstation_shared::feed::{FLAG_DIRECT, FrameHeader, GameStatus, Gimbal, GimbalCmd, Key, KeyPress, RadioState, VehicleStatus, read_frame};
+use teleoperation_shared::feed::{FLAG_DIRECT, FrameHeader, GameStatus, Gimbal, GimbalCmd, Key, KeyPress, RadioState, VehicleStatus, read_frame};
 
 pub struct VideoFrame {
     pub header: FrameHeader,

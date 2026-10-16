@@ -46,7 +46,7 @@ port 5770, not to ArduPilot. The sim then stands in for the TX15 (`src/radio.rs`
 - In a game, each computer pilot transmits on its own radios. Kestrel sends Remote ID and is on
   the MAVLink network, so its marker joins the two. Merlin sends Remote ID only. Swift is on the
   MAVLink network only. The receivers on your plane hear them by distance (`Air`).
-- The console (`domains/groundstation/console/src/link.rs`, `Vehicle::hear_traffic`) ignores every message from another
+- The console (`domains/teleoperation/console/src/link.rs`, `Vehicle::hear_traffic`) ignores every message from another
   system for the vehicle's state, hands the traffic to the tracker, and draws a marker for each
   track on the tactical map. `--no-radio` connects the console to ArduPilot directly.
 

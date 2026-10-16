@@ -1,5 +1,5 @@
 [package]
-name = "groundstation_console"
+name = "teleoperation_console"
 version = "0.1.0"
 edition = "2024"
 description = "Ground control station for the T1-S sim + ArduPlane SITL, built on GPUI"
@@ -8,7 +8,9 @@ description = "Ground control station for the T1-S sim + ArduPlane SITL, built o
 gpui = "0.2.2"
 mavlink = { version = "0.19", default-features = false, features = ["std", "transport-tcp", "transport-udp", "dialect-ardupilotmega", "dialect-common", "mav2-message-extensions"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
-groundstation_shared = { path = "../shared" }
+teleoperation_shared = { path = "../shared" }
+# The map pack format: the console shows a real place's map.
+visualization_mappack = { path = "../../visualization/mappack" }
 # Which planes there are, and whether one is a VTOL (the console then shows the Q modes).
 simulation_aircraft = { path = "../../simulation/aircraft" }
 # The computer pilots, each of whose planes has an autopilot of its own (domains/recreation).

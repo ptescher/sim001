@@ -22,6 +22,8 @@ Background:
 Vocabulary:
   Phrase: the TX15 is on the serial line
     Say: start the station with `--flight-computer`. The simulated TX15 is on the serial line. Put the throttle stick all the way down, SE out and press button 1
-    Given the throttle stick is low
+    Given the radio line is serial
+    And the throttle stick is low
     And the arm switch is off
     And the mode switch is QHOVER
+    And the TX15 screen arming is disarmed

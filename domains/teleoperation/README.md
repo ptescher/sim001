@@ -1,9 +1,11 @@
 # Teleoperation
 
-The pilot's end of the link: the TX15 and its EdgeTX settings.
+The pilot's end of the link: the TX15 and its EdgeTX settings, and the ground control station that flies ArduPlane SITL and the sim over MAVLink.
 
 | Path | What it holds |
 | --- | --- |
+| [console/](console/README.md) | `teleoperation_console` (binary `t1s_gcs`): the GPUI console with a PFD, a tactical map, mission planning and the sensor feed. Excluded from the workspace: it keeps its own lockfile |
+| [shared/](shared) | `teleoperation_shared`: what the sim and the console both use, the sensor feed wire protocol and the window layout planner. No dependencies |
 | [edgetx/](edgetx) | The radio's SD card as files: `MODELS/` (the T1S VTOL model), an empty `RADIO/` (the radio's own settings folder; the SD card has one) and `THEMES/` (T1S Night and T1S Day, generated from the shared theme by `cargo run -p illustration_theme --example edgetx`) |
 
 ## Previewing in EdgeTX Companion

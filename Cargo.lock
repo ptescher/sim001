@@ -3147,10 +3147,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "groundstation_shared"
-version = "0.1.0"
-
-[[package]]
 name = "guillotiere"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5493,7 +5489,6 @@ dependencies = [
  "expectation_harness",
  "expectation_model",
  "expectation_story",
- "groundstation_shared",
  "hidapi",
  "illustration_theme",
  "image",
@@ -5505,6 +5500,7 @@ dependencies = [
  "recreation_games",
  "simulation_aircraft",
  "simulation_physics",
+ "teleoperation_shared",
  "visualization_engine",
  "visualization_world",
 ]
@@ -5526,6 +5522,10 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "teleoperation_shared"
+version = "0.1.0"
 
 [[package]]
 name = "thiserror"
@@ -5897,6 +5897,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "visualization_mappack"
+version = "0.1.0"
+
+[[package]]
 name = "visualization_telemetry"
 version = "0.1.0"
 dependencies = [
@@ -5923,9 +5927,9 @@ name = "visualization_world"
 version = "0.1.0"
 dependencies = [
  "glam",
- "groundstation_shared",
  "image",
  "simulation_physics",
+ "visualization_mappack",
 ]
 
 [[package]]

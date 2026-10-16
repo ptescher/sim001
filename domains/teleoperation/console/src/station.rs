@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
-use groundstation_shared::layout::Rect;
+use teleoperation_shared::layout::Rect;
 
 const SITL_IMAGE: &str = "t1s-ardupilot-sitl";
 const SITL_CONTAINER: &str = "t1s-sitl";
@@ -32,6 +32,8 @@ pub struct Options {
     /// With the radio: the TX15 stand-in and ArduPilot talk through the sim's flight computer,
     /// on a UART in CRSF, and the console hears only what comes down that line.
     pub flight_computer: bool,
+    /// With the flight computer, where the simulated TX15 writes its screen (for the tests).
+    pub tx15_screen: Option<PathBuf>,
     /// A real TX15 on its USB cable (a serial device): the sim's flight computer is on that line,
     /// and the console's telemetry comes through the radio.
     pub tx15_serial: Option<String>,
@@ -43,11 +45,11 @@ pub const RADIO_PORT: u16 = 5770;
 pub const UART_PORT: u16 = 5771;
 
 /// The map pack's metadata (home position etc.), if `name` has been built.
-pub fn pack_meta(name: &str) -> Option<groundstation_shared::mappack::PackMeta> {
-    groundstation_shared::mappack::PackMeta::read(&repo_root().join("maps").join(name).join("build")).ok()
+pub fn pack_meta(name: &str) -> Option<visualization_mappack::PackMeta> {
+    visualization_mappack::PackMeta::read(&repo_root().join("maps").join(name).join("build")).ok()
 }
 
-/// Repository root (the sim's crate), three levels above this crate (domains/groundstation/console).
+/// Repository root (the sim's crate), three levels above this crate (domains/teleoperation/console).
 pub fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -431,6 +433,9 @@ pub fn start_sim(
         if let Some(device) = &opts.tx15_serial {
             cmd.args(["--flight-computer", device]);
         } else if opts.flight_computer {
+            if let Some(path) = &opts.tx15_screen {
+                cmd.arg("--tx15-screen").arg(path);
+            }
             cmd.args([
                 "--flight-computer",
                 &format!("tcp:{UART_PORT}"),

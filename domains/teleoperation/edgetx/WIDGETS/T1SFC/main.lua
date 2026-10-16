@@ -216,6 +216,7 @@ local function tick()
 end
 
 local day = false                                       -- the Day option
+local themeDay = false                                  -- the radio's theme is a light one
 local options = { { "Day", BOOL, 0 } }
 
 local function create(zone, opts)
@@ -265,14 +266,26 @@ local WHITE, BLACK, YELLOW
 local PANEL_R, SCREEN_R, PAD, CONTROL_R = 11, 6, 5, 4
 local lastColor = nil
 
--- The palette as the radio's colour numbers, made once (and again if the Day option changes).
+-- Is the radio's theme a light one? Its screen colour (SECONDARY3) is near-white in T1S Day and
+-- near-black in T1S Night; the colour is RGB565, so the green field (6 bits) stands for brightness.
+-- Older firmware without lcd.getColor keeps the Day option as the only switch.
+local function themeIsLight()
+  if not (lcd.getColor and COLOR_THEME_SECONDARY3) then return false end
+  local ok, c = pcall(lcd.getColor, COLOR_THEME_SECONDARY3)
+  if not ok or type(c) ~= "number" then return false end
+  return math.floor(c / 32) % 64 >= 32
+end
+
+-- The palette as the radio's colour numbers, made once (and again if the theme or Day option changes).
 local function usePalette()
-  if P and builtFor == day then return end
-  local src = day and PALETTES.day or PALETTES.night
+  themeDay = themeIsLight()
+  local useDay = day or themeDay
+  if P and builtFor == useDay then return end
+  local src = useDay and PALETTES.day or PALETTES.night
   P = {}
   for k, c in pairs(src) do P[k] = lcd.RGB(c[1], c[2], c[3]) end
   WHITE, BLACK, YELLOW = lcd.RGB(255, 255, 255), lcd.RGB(0, 0, 0), lcd.RGB(255, 210, 0)
-  builtFor = day
+  builtFor = useDay
 end
 
 -- The radio has one custom-colour slot: a colour goes in it just before a draw that uses it.

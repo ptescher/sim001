@@ -6,14 +6,14 @@
 //! and near-infrared) and OpenStreetMap runways/buildings, and writes `maps/<name>/build/`:
 //! `height.f32`, `ortho_wide.jpg`, `ortho_core.jpg`, `landcover.png`, `trees.bin`,
 //! `buildings.txt`, `runway.txt`, `pack.txt`, plus the ground station's map in
-//! `domains/groundstation/console/assets/<name>/`. Trees are grown where the photo shows canopy.
+//! `domains/teleoperation/console/assets/<name>/`. Trees are grown where the photo shows canopy.
 
 mod fetch;
 
 use fetch::{Mosaic, Request};
 use image::{GrayImage, RgbImage};
 use std::path::{Path, PathBuf};
-use groundstation_shared::mappack::{self, MapConfig, PackBox, PackMeta, PackTree, Square, cover};
+use visualization_mappack::{self as mappack, MapConfig, PackBox, PackMeta, PackTree, Square, cover};
 
 /// Elevation grid spacing, wide photo and core photo resolutions (m/px), core size (m).
 const HEIGHT_M: f32 = 2.0;
@@ -188,7 +188,7 @@ fn build(root: &Path, name: &str) -> Result<(), String> {
     };
     meta.write(&out).map_err(|e| e.to_string())?;
 
-    write_gcs_assets(&root.join("domains/groundstation/console/assets").join(name), &meta, &wide, &height_at, runways.first())?;
+    write_gcs_assets(&root.join("domains/teleoperation/console/assets").join(name), &meta, &wide, &height_at, runways.first())?;
     println!("done in {:.0} s: {}", t0.elapsed().as_secs_f32(), out.display());
     Ok(())
 }

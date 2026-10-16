@@ -20,7 +20,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use groundstation_shared::feed::{Gimbal, HFOV_DEFAULT};
+use teleoperation_shared::feed::{Gimbal, HFOV_DEFAULT};
 
 pub struct SensorView {
     sensor: Arc<Sensor>,
@@ -234,7 +234,7 @@ fn vfov(hfov: f32, aspect: f32) -> f32 {
 
 fn paint_video(
     bounds: Bounds<Pixels>,
-    frame: Option<(groundstation_shared::feed::FrameHeader, Arc<RenderImage>)>,
+    frame: Option<(teleoperation_shared::feed::FrameHeader, Arc<RenderImage>)>,
     o: &Overlay,
     rect_cell: &Rc<Cell<Bounds<Pixels>>>,
     window: &mut Window,

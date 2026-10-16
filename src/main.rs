@@ -4,12 +4,12 @@
 //!   cargo run --release -- --raytrace   ray-traced lighting (Bevy Solari)
 //!   cargo run --release -- --ardupilot  physics backend for ArduPilot SITL (JSON, UDP 9002)
 //!   cargo run --release -- --selftest   headless flight-model checks
-//!   cargo run --release -- --export-map domains/groundstation/console/assets   map + heights for the ground station
+//!   cargo run --release -- --export-map domains/teleoperation/console/assets   map + heights for the ground station
 //!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --test-radio                                a TX15 stand-in that the ground station's tests move
-//!   --flight-computer tcp:PORT|DEVICE [--autopilot ADDR]
+//!   --flight-computer tcp:PORT|DEVICE [--autopilot ADDR] [--tx15-screen FILE]
 //!                                               a flight computer between the TX15 (on a UART, in CRSF) and ArduPilot
 //!   --radio PORT [--radio-uart tcp:HOST:PORT] [--radio-upstream ADDR] [--radio-rate B] [--home LAT,LON,ALT]
 //!                                               the TX15 stand-in: the station connects to PORT, and gets the
@@ -71,7 +71,7 @@ fn main() {
         selftest::run_all();
         return;
     }
-    if let Some(dir) = args.iter().position(|a| a == "--export-map").map(|i| args.get(i + 1).map_or("domains/groundstation/console/assets", |s| s.as_str())) {
+    if let Some(dir) = args.iter().position(|a| a == "--export-map").map(|i| args.get(i + 1).map_or("domains/teleoperation/console/assets", |s| s.as_str())) {
         mapgen::export(dir);
         return;
     }
@@ -141,13 +141,13 @@ fn main() {
 
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
     let feed = flag("--feed").then(|| feed::FeedConfig {
-        port: arg("--feed").and_then(|p| p.parse().ok()).unwrap_or(groundstation_shared::feed::DEFAULT_PORT),
+        port: arg("--feed").and_then(|p| p.parse().ok()).unwrap_or(teleoperation_shared::feed::DEFAULT_PORT),
         size: arg("--feed-size")
             .and_then(|s| s.split_once('x'))
             .and_then(|(w, h)| Some(UVec2::new(w.parse().ok()?, h.parse().ok()?)))
             .unwrap_or(UVec2::new(320, 240)),
     });
-    let window_rect = arg("--window-rect").and_then(|s| groundstation_shared::layout::Rect::parse(s));
+    let window_rect = arg("--window-rect").and_then(|s| teleoperation_shared::layout::Rect::parse(s));
     let frameless = flag("--frameless");
     // A frameless window's content fills its frame; otherwise allow for the title bar.
     let title_bar: f32 = if frameless { 0.0 } else { arg("--title-bar").and_then(|s| s.parse().ok()).unwrap_or(28.0) };
@@ -226,6 +226,9 @@ fn main() {
     // The flight computer: the TX15 on a UART instead of a USB controller, and the plane's
     // MAVLink carried on the same line.
     let mut ground_station_via_radio = None;
+    if let Some(path) = arg("--tx15-screen") {
+        flight_computer::set_screen_file(path.into());
+    }
     if let Some(line) = arg("--flight-computer") {
         let cfg = flight_computer::Config { line: line.clone(), autopilot: autopilot.clone(), home };
         match flight_computer::spawn(core.clone(), cfg) {

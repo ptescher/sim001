@@ -10,7 +10,7 @@ Besides the procedural Alpine Valley, the sim can fly real places built from fre
 ## Fly one
 
 ```bash
-cd domains/groundstation/console && cargo run --release -- --station --map cypress
+cd domains/teleoperation/console && cargo run --release -- --station --map cypress
 ```
 
 The station builds the map pack the first time, which takes a few minutes to download. It starts ArduPilot SITL with its home at the place's pilot box, then opens the sim, the sensor feed and the console on that map. The sim can also fly a map on its own: `cargo run --release -- --map berkeley`.
@@ -54,7 +54,7 @@ Trees and land cover aren't downloaded. `domains/visualization/mapbuild` derives
    cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- <name>
    ```
 
-   This writes `maps/<name>/build/` (git-ignored) and the ground station's map in `domains/groundstation/console/assets/<name>/`. Downloads are cached in `build/cache/`, so re-runs take seconds and a flaky server can't lose data. NAIP and 3DEP cover the US only.
+   This writes `maps/<name>/build/` (git-ignored) and the ground station's map in `domains/teleoperation/console/assets/<name>/`. Downloads are cached in `build/cache/`, so re-runs take seconds and a flaky server can't lose data. NAIP and 3DEP cover the US only.
 
 3. Check `build/landcover_preview.png` against `build/ortho_wide.jpg`. Brown is ground, green trees, blue water, grey paved, red buildings. If trees or water are off for the region, `MAPBUILD_PROBE="lat,lon;lat,lon"` prints the vegetation statistics around known spots to tune the thresholds in `classify()`.
 
@@ -69,4 +69,4 @@ Trees and land cover aren't downloaded. `domains/visualization/mapbuild` derives
 | `trees.bin` | The trees grown from the canopy |
 | `buildings.txt`, `runway.txt` | OSM footprints as oriented boxes |
 
-Positions are metres north and east of home, the same origin ArduPilot uses, so the sim, SITL and the ground station all agree. The pack format is in `domains/groundstation/shared/src/mappack.rs`.
+Positions are metres north and east of home, the same origin ArduPilot uses, so the sim, SITL and the ground station all agree. The pack format is in `domains/visualization/mappack/src/lib.rs`.

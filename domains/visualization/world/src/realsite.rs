@@ -7,7 +7,7 @@
 use crate::terrain::{Building, Tree};
 use glam::{Vec2, Vec3};
 use std::path::Path;
-use groundstation_shared::mappack::{self, PackBox, PackMeta, Square, cover};
+use visualization_mappack::{self as mappack, PackBox, PackMeta, Square, cover};
 
 const PHOTO_ALBEDO: f32 = 0.7;
 

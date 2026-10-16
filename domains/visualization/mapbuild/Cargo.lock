@@ -121,10 +121,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "groundstation_shared"
-version = "0.1.0"
-
-[[package]]
 name = "icu_collections"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,12 +586,16 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 name = "visualization_mapbuild"
 version = "0.1.0"
 dependencies = [
- "groundstation_shared",
  "image",
  "serde_json",
  "tiff",
  "ureq",
+ "visualization_mappack",
 ]
+
+[[package]]
+name = "visualization_mappack"
+version = "0.1.0"
 
 [[package]]
 name = "wasi"

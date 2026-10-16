@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
-use groundstation_shared::feed::{GameClock, GameKind, GameStatus, Key, RadioState};
+use teleoperation_shared::feed::{GameClock, GameKind, GameStatus, Key, RadioState};
 
 /// The process exit code once the run is over (0 when everything that could run passed).
 pub static EXIT: AtomicI32 = AtomicI32::new(0);
@@ -40,6 +40,10 @@ pub struct Config {
     pub vtol: bool,
     /// The names on the radio's mode switch, in order (empty without a flight controller).
     pub rc_modes: Vec<&'static str>,
+    /// The TX15 is on the flight computer's serial line, not a USB controller (`--flight-computer`).
+    pub serial_line: bool,
+    /// Where the simulated TX15 writes its screen, with the serial line.
+    pub tx15_screen: Option<PathBuf>,
 }
 
 /// What the pilot does with the radio.
@@ -195,6 +199,9 @@ const STATES: &[&str] = &[
     "height above home",
     "battery current",
     "battery voltage",
+    "radio line",
+    "tx15 screen mode",
+    "tx15 screen arming",
     "throttle stick",
     "aileron stick",
     "vtol's wings",
@@ -266,6 +273,8 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
         only,
         vtol,
         rc_modes,
+        serial_line,
+        tx15_screen,
     } = config;
     let mut acceptance = match Acceptance::load(&suite) {
         Ok(a) => a.with_coverage(),
@@ -310,6 +319,8 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     });
     std::thread::spawn(move || {
         let mut driver = ConsoleDriver::new(tx, vtol, rc_modes);
+        driver.serial_line = serial_line;
+        driver.tx15_screen = tx15_screen;
         let opts = RunOptions {
             docs_dir: docs.clone(),
             patience: 480,
@@ -712,6 +723,9 @@ struct ConsoleDriver {
     /// How long the next test has, from when its plane is ready, and when it is up.
     budget: Duration,
     deadline: Option<Instant>,
+    /// The TX15 is on the flight computer's serial line, and writes its screen to this file.
+    serial_line: bool,
+    tx15_screen: Option<PathBuf>,
 }
 
 impl ConsoleDriver {
@@ -734,7 +748,16 @@ impl ConsoleDriver {
             arms_seen: 0,
             budget: Duration::from_secs(35),
             deadline: None,
+            serial_line: false,
+            tx15_screen: None,
         }
+    }
+
+    /// What the lamps of the simulated TX15 show now (the sim writes them down every quarter second).
+    fn tx15_lamps(&self) -> Result<crate::tx15_screen::Lamps, String> {
+        let path = self.tx15_screen.as_ref().ok_or("the TX15 is not on the serial line: start the station with --flight-computer")?;
+        let text = std::fs::read_to_string(path).map_err(|e| format!("the simulated TX15 has not written its screen yet ({e})"))?;
+        crate::tx15_screen::parse(&text).ok_or_else(|| format!("can't read the screen of the TX15: {text}"))
     }
 
     /// Move the stand-in radio and tell the sim.
@@ -860,6 +883,19 @@ impl ConsoleDriver {
             "throttle stick" | "aileron stick" | "arm switch" | "mode switch"
         ) {
             return self.rc_reading(key);
+        }
+        if key == "radio line" {
+            return Ok(Value::from(if self.serial_line { "serial" } else { "USB" }));
+        }
+        if key == "tx15 screen mode" || key == "tx15 screen arming" {
+            let lamps = self.tx15_lamps()?;
+            return Ok(Value::from(if key == "tx15 screen mode" {
+                lamps.mode
+            } else if lamps.armed {
+                "armed".to_string()
+            } else {
+                "disarmed".to_string()
+            }));
         }
         if key == "airframe" {
             return Ok(Value::from(if self.vtol { "VTOL" } else { "conventional" }));
@@ -1134,6 +1170,14 @@ impl Driver for ConsoleDriver {
                     }
                 }
                 Err(format!("the vehicle wouldn't stay in {mode}"))
+            }
+            "radio line" => {
+                let want = name()?;
+                self.check(key, &want, " (start the station with --flight-computer for the serial line)")
+            }
+            "tx15 screen mode" | "tx15 screen arming" => {
+                let want = name()?;
+                self.check(key, &want, "")
             }
             "airframe" => {
                 let want = name()?;
@@ -1431,7 +1475,14 @@ impl Driver for ConsoleDriver {
             .is_ok_and(|s| s.success());
         let bytes = if ok { std::fs::read(&path).ok() } else { None };
         let _ = std::fs::remove_file(&path);
-        Ok(bytes.filter(|b| !b.is_empty()).map(Screenshot::jpeg))
+        let bytes = bytes.filter(|b| !b.is_empty());
+        // With the TX15 on the serial line, its screen goes above the console's.
+        if let (Some(jpg), Some(file)) = (&bytes, &self.tx15_screen) {
+            if let Some(svg) = std::fs::read_to_string(file.with_extension("svg")).ok().and_then(|s| crate::tx15_screen::composite(jpg, &s)) {
+                return Ok(Some(Screenshot::svg(svg)));
+            }
+        }
+        Ok(bytes.map(Screenshot::jpeg))
     }
 
     fn supports(&self, need: Need<'_>) -> bool {

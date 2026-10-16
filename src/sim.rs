@@ -90,7 +90,7 @@ impl ArduPilotLink {
 pub struct SimCore {
     pub params: AircraftParams,
     /// The stand-in radio's last state, from the ground station (`--test-radio`).
-    pub test_radio: Option<groundstation_shared::feed::RadioState>,
+    pub test_radio: Option<teleoperation_shared::feed::RadioState>,
     /// The pilot flies with a radio (not the keyboard or a gamepad): its throttle stick is where
     /// the pilot holds it.
     pub pilot_radio: bool,
@@ -604,7 +604,7 @@ pub fn wrap_deg(rad: f32) -> f32 {
 pub fn cannot_fly(params: &AircraftParams, title: &str, ardupilot: bool) -> Option<String> {
     (params.flight_controller && !ardupilot).then(|| {
         format!(
-            "the {title} has a flight controller, and ArduPilot flies it. Start the whole station with `cd domains/groundstation/console && cargo run --release -- --station`, or fly the plain T1-S, which has none, with `cargo run --release -- --aircraft t1s-ranger`"
+            "the {title} has a flight controller, and ArduPilot flies it. Start the whole station with `cd domains/teleoperation/console && cargo run --release -- --station`, or fly the plain T1-S, which has none, with `cargo run --release -- --aircraft t1s-ranger`"
         )
     })
 }

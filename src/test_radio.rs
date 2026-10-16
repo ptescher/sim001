@@ -13,7 +13,7 @@ use bevy::input::gamepad::{
     GamepadAxis, GamepadConnection, GamepadConnectionEvent, RawGamepadAxisChangedEvent, RawGamepadEvent,
 };
 use bevy::prelude::*;
-use groundstation_shared::feed::RadioState;
+use teleoperation_shared::feed::RadioState;
 
 /// Channels 5 and 8 of a TX15 in joystick mode (see controls.cfg.example).
 const ARM_AXIS: GamepadAxis = GamepadAxis::Other(0x0001_0034);

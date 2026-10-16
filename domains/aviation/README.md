@@ -41,7 +41,7 @@ plug the radio in, pick VCP.
 Then plug the radio in, and start the station with its device:
 
 ```bash
-cd domains/groundstation/console && cargo run --release -- --station --tx15-serial /dev/cu.usbmodemXXXX
+cd domains/teleoperation/console && cargo run --release -- --station --tx15-serial /dev/cu.usbmodemXXXX
 ```
 
 The sim opens the device (CRSF's 420 000 baud, raw), and says every two seconds how the line is
