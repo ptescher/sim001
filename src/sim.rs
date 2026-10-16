@@ -128,9 +128,20 @@ pub struct SimCore {
     pub parked: Vec<FlightState>,
     /// Each computer pilot's autopilot link, as `ap` is yours.
     pub others: Vec<OtherLink>,
+    /// Something that moves the sticks as the plane flies, 60 times a second of sim time (the
+    /// acceptance tests' stand-in pilot): it runs inside the physics loop, so it flies the same
+    /// whether the sim runs at real time or faster.
+    pub hook: Option<Hook>,
+    hook_clock: f32,
     /// FBWA as the autopilots fly it: what the computer pilots' roll and pitch sticks ask for.
     pub fbwa: Fbwa,
 }
+
+/// A function called with the sim and the time since its last call.
+pub type Hook = Box<dyn FnMut(&mut SimCore, f32) + Send>;
+
+/// How often a hook is called (s of sim time).
+const HOOK_DT: f32 = 1.0 / 60.0;
 
 /// A computer pilot's autopilot, as the sim sees it.
 #[derive(Clone, Debug, Default)]
@@ -209,6 +220,8 @@ impl SimCore {
             game: None,
             parked,
             others: if ap_enabled { vec![OtherLink::default(); PILOTS.len()] } else { vec![] },
+            hook: None,
+            hook_clock: 0.0,
             fbwa: t1s_fbwa(),
         }
     }
@@ -350,9 +363,22 @@ impl SimCore {
 
     /// Standalone step (built-in flight modes).
     pub fn step_standalone(&mut self, dt: f32) {
+        self.run_hook(dt);
         let cmd = self.stick_commands(dt);
         self.auto_launch(self.sticks.throttle, dt);
         self.step_physics(&cmd, dt);
+    }
+
+    fn run_hook(&mut self, dt: f32) {
+        self.hook_clock += dt;
+        if self.hook_clock < HOOK_DT || self.hook.is_none() {
+            return;
+        }
+        let since = std::mem::take(&mut self.hook_clock);
+        if let Some(mut hook) = self.hook.take() {
+            hook(self, since);
+            self.hook = Some(hook);
+        }
     }
 
     /// Lockstep step driven by ArduPilot servo outputs.

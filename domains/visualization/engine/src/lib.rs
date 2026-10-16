@@ -156,10 +156,11 @@ fn setup(
     mut media: ResMut<Assets<ScatteringMedium>>,
     settings: Res<RenderSettings>,
     liveries: Res<Liveries>,
+    offscreen: Option<Res<camera::UiOffscreen>>,
 ) {
     field::spawn_world(&mut commands, &mut meshes, &mut materials, &mut images, &mut media, &settings);
     for (i, accent) in liveries.0.iter().take(PLANES).enumerate() {
         model::spawn_plane(&mut commands, &mut meshes, &mut materials, i, *accent);
     }
-    camera::spawn_camera(&mut commands, &settings, &mut images);
+    camera::spawn_camera(&mut commands, &settings, &mut images, offscreen.map(|o| *o));
 }

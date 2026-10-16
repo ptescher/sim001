@@ -170,3 +170,9 @@ Term: It
 Term: Arena
   The part of the sky for a game of [[tag]]: a circle of 90 m round the centre of the field,
   below 60 m. Small cones mark its edge. If you fly out of it, you are [[it]].
+
+Term: Flight computer
+  The device between the TX15 and the autopilot. The TX15 sends it the stick and switch channels on a serial line. It passes them on to [[ArduPilot]] as the radio channels, and it sends the plane's state back to the TX15. In the sim, a simulated flight computer does this.
+
+Term: CRSF
+  The serial protocol of ExpressLRS radio links. The TX15 and the [[flight computer]] use it on their serial line: channels one way, telemetry and MAVLink the other.

@@ -187,6 +187,10 @@ fn main() {
     // Your plane in orange, and the computer pilots' planes in their own colours, for the games.
     let mut liveries = vec![Color::srgb(1.0, 0.36, 0.05)];
     liveries.extend(recreation_games::PILOTS.iter().map(|(_, _, [r, g, b])| Color::linear_rgb(*r, *g, *b)));
+    // The tests take their pictures of the UI drawn offscreen, so they do not need the window on screen.
+    if expect.is_some() {
+        app.insert_resource(visualization_engine::camera::UiOffscreen(UVec2::new(1600, 900)));
+    }
     app.add_plugins(EnginePlugin { raytracing, liveries, tips: TIPS.to_vec() });
     app.insert_resource(SharedSim(core.clone()))
         .init_resource::<hud::HudState>()
@@ -340,9 +344,13 @@ fn sim_update(
     mut input: ResMut<PilotInput>,
     sim: Res<SharedSim>,
     mut acc: Local<f32>,
+    scale: Option<Res<acceptance::TimeScale>>,
 ) {
     let mut c = sim.0.lock().unwrap();
-    c.sticks = input.sticks;
+    // (A hook, the tests' stand-in pilot, holds the sticks itself.)
+    if c.hook.is_none() {
+        c.sticks = input.sticks;
+    }
     c.pilot_radio = input.profile == Some(input::Profile::Radio);
     c.radio_arm = input.radio_arm;
     c.radio_mode = input.radio_mode;
@@ -403,7 +411,7 @@ fn sim_update(
         *acc = 0.0;
         return;
     }
-    *acc += time.delta_secs().min(0.1);
+    *acc += time.delta_secs().min(0.1) * scale.map_or(1.0, |s| s.0);
     while *acc >= PHYSICS_DT {
         c.step_standalone(PHYSICS_DT);
         *acc -= PHYSICS_DT;

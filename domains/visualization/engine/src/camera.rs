@@ -77,7 +77,17 @@ pub struct RenderScale {
 #[derive(Component)]
 struct SceneView;
 
-pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: &mut Assets<Image>) {
+/// Draw the window's UI (the scene and the HUD over it) into an image of this size instead of
+/// the window: for pictures of the whole view that do not need the window on screen (macOS does
+/// not draw a window that is covered or on another Space). Insert it before the engine starts.
+#[derive(Resource, Clone, Copy)]
+pub struct UiOffscreen(pub UVec2);
+
+/// The image that the UI is drawn into with [`UiOffscreen`].
+#[derive(Resource, Clone)]
+pub struct UiImage(pub Handle<Image>);
+
+pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: &mut Assets<Image>, offscreen: Option<UiOffscreen>) {
     use bevy::camera::RenderTarget;
     use bevy::image::ImageSampler;
     use bevy::render::render_resource::TextureFormat;
@@ -88,7 +98,14 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
     commands.insert_resource(RenderScale { scale: if settings.raytracing { 0.0 } else { 1.0 }, auto: settings.raytracing, image: image.clone(), suspended: true });
 
     // Window camera: draws the upscaled scene image and the HUD at full resolution.
-    commands.spawn((Camera2d, Camera { order: 1, ..default() }, bevy::ui::IsDefaultUiCamera));
+    let mut ui_camera = commands.spawn((Camera2d, Camera { order: 1, ..default() }, bevy::ui::IsDefaultUiCamera));
+    if let Some(UiOffscreen(size)) = offscreen {
+        let mut target = Image::new_target_texture(size.x, size.y, TextureFormat::Bgra8UnormSrgb, None);
+        target.sampler = ImageSampler::linear();
+        let target = images.add(target);
+        ui_camera.insert(RenderTarget::Image(target.clone().into()));
+        commands.insert_resource(UiImage(target));
+    }
     commands.spawn((
         SceneView,
         ImageNode::new(image.clone()),

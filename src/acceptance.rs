@@ -22,7 +22,7 @@ use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions};
 use expectation_model::{Event, Value, Variable};
 use recreation_games::{Clock, Errand, Kind, StandIn};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
@@ -129,20 +129,26 @@ struct Occluded(bool);
 #[derive(Resource, Default)]
 struct Pressed(Vec<KeyCode>);
 
-/// The sticks as the test holds them.
-#[derive(Resource, Default)]
-struct Held(Sticks);
+/// How much faster than real time the tests run the sim (`T1S_EXPECT_SPEED`, default 8). The
+/// stand-in pilot flies inside the physics loop, so it flies the same at any speed.
+#[derive(Resource, Clone, Copy)]
+pub struct TimeScale(pub f32);
 
-/// In a game, a computer pilot flies the plane for the test once it is in the air, through
-/// the sticks, as a pilot would: what it is doing now (by default racing, or loitering in tag).
-#[derive(Resource, Default)]
-struct Helper {
+/// The stand-in pilot and the sticks the test holds: the sticks as the test holds them, and a
+/// stand-in that flies them in a game (by default racing, or loitering in tag, or what it is
+/// told to do).
+#[derive(Default)]
+struct Standin {
+    held: Sticks,
     errand: Option<Errand>,
     pilot: StandIn,
 }
 
+type Shared = Arc<Mutex<Standin>>;
+
 /// Load and check the suite before anything opens, then start the runner thread.
 pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_controller: bool) {
+    let scale = TimeScale(std::env::var("T1S_EXPECT_SPEED").ok().and_then(|v| v.parse().ok()).unwrap_or(8.0f32).clamp(1.0, 20.0));
     let acceptance = match Acceptance::load(&suite) {
         Ok(a) => a.with_coverage(),
         Err(e) => {
@@ -160,25 +166,28 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
     let (tx, rx) = channel();
     app.insert_resource(Remote { rx: Mutex::new(rx), waiting: None, shot: None, told_hidden: false })
         .init_resource::<Pressed>()
-        .init_resource::<Held>()
-        .init_resource::<Helper>()
+        .insert_resource(scale)
         .init_resource::<Occluded>()
         .add_systems(Update, track_occlusion)
-        .add_systems(Update, serve.before(SimSet::Input).run_if(in_state(AppState::Running)))
-        .add_systems(Update, hold.after(SimSet::Input).before(SimSet::Logic).run_if(in_state(AppState::Running)));
+        .add_systems(Update, serve.before(SimSet::Input).run_if(in_state(AppState::Running)));
+    let standin: Shared = Arc::default();
+    install_standin(&app.world().resource::<SharedSim>().0, standin.clone());
 
     std::thread::spawn(move || {
-        let mut driver = SimDriver { tx, flight_controller };
+        let mut driver = SimDriver { tx, flight_controller, standin, deadline: Mutex::new(None) };
         let opts = RunOptions { docs_dir: docs.clone(), patience: 100 };
         let mut report = expectation_story::Report::default();
+        let began = std::time::Instant::now();
         for plan in &acceptance.plans {
+            let started = std::time::Instant::now();
             let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
             let r = r.results.into_iter().next().unwrap();
+            let took = started.elapsed().as_secs_f32();
             match r.status {
-                expectation_story::Status::Passed => println!("expect: ✓ {}", plan.title),
+                expectation_story::Status::Passed => println!("expect: ✓ {} ({took:.0} s)", plan.title),
                 // Another system's test: counted at the end rather than listed.
                 expectation_story::Status::Unsupported => {}
-                _ => println!("expect: ✗ {}", plan.title),
+                _ => println!("expect: ✗ {} ({took:.0} s)", plan.title),
             }
             report.results.push(r);
         }
@@ -190,6 +199,7 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
                 Err(e) => eprintln!("expect: couldn't write the docs to {}: {e}", dir.display()),
             }
         }
+        println!("expect: {} tests in {:.0} s", report.results.len(), began.elapsed().as_secs_f32());
         let unsupported = report.count(expectation_story::Status::Unsupported);
         if unsupported > 0 {
             println!("expect: {unsupported} tests need a driver the sim doesn't have yet (the ground station's)");
@@ -208,9 +218,25 @@ fn serve(world: &mut World) {
         world.resource_mut::<ButtonInput<KeyCode>>().release(key);
     }
     let dt = world.resource::<Time<Real>>().delta_secs();
+    // Waits count sim time, which runs faster than the clock.
+    let sim_dt = dt * world.resource::<TimeScale>().0;
     let hidden = world.resource::<Occluded>().0;
     world.resource_scope(|world, mut remote: Mut<Remote>| {
         if let Some((tx, visible)) = remote.shot.take() {
+            // The UI is drawn offscreen for the tests: the window can be anywhere.
+            if let Some(ui) = world.get_resource::<visualization_engine::camera::UiImage>().map(|i| i.0.clone()) {
+                if visible < 0.5 {
+                    remote.shot = Some((tx, visible + dt));
+                } else {
+                    let mut tx = Some(tx);
+                    world.spawn(Screenshot::image(ui)).observe(move |shot: On<ScreenshotCaptured>| {
+                        if let Some(tx) = tx.take() {
+                            let _ = tx.send(jpeg(&shot.image));
+                        }
+                    });
+                }
+                return;
+            }
             if hidden {
                 if !remote.told_hidden {
                     println!("expect: the sim window is hidden; screenshots wait until it's on screen");
@@ -232,8 +258,8 @@ fn serve(world: &mut World) {
             return;
         }
         if let Some((left, tx)) = remote.waiting.take() {
-            if left > dt {
-                remote.waiting = Some((left - dt, tx));
+            if left > sim_dt {
+                remote.waiting = Some((left - sim_dt, tx));
                 return;
             }
             let _ = tx.send(());
@@ -262,30 +288,33 @@ fn track_occlusion(mut events: MessageReader<WindowOccluded>, mut occluded: ResM
     }
 }
 
-fn hold(held: Res<Held>, mut helper: ResMut<Helper>, sim: Res<SharedSim>, time: Res<Time>, mut input: ResMut<PilotInput>) {
-    input.sticks = held.0;
-    let c = sim.0.lock().unwrap();
-    let Some(game) = &c.game else {
-        helper.errand = None;
-        return;
-    };
-    if !matches!(c.state.phase, Phase::Launching | Phase::Flying) {
-        return;
-    }
-    let errand = helper.errand.unwrap_or(match game.kind {
-        Kind::Race => Errand::Race,
-        Kind::Tag => Errand::Loiter,
-    });
-    let dt = time.delta_secs().clamp(0.001, 0.1);
-    let hands = helper.pilot.fly(game, &c.state, errand, &crate::terrain::WorldTerrain, dt);
-    // MANUAL moves the surfaces by the stick through the rates and an expo: undo both.
-    let rate = if c.high_rates { 1.0 } else { 0.65 };
-    input.sticks = Sticks {
-        roll: unexpo(hands.aileron / rate, 0.3),
-        pitch: unexpo(hands.elevator / rate, 0.3),
-        yaw: unexpo(hands.rudder / rate, 0.2),
-        throttle: hands.throttle.clamp(0.0, 1.0),
-    };
+/// Gives the sim a pilot that flies the plane in a game, as `Standin` says, 60 times a second of
+/// sim time.
+fn install_standin(sim: &Arc<Mutex<SimCore>>, standin: Shared) {
+    sim.lock().unwrap().hook = Some(Box::new(move |c: &mut SimCore, dt: f32| {
+        let mut st = standin.lock().unwrap();
+        c.sticks = st.held;
+        let Some(game) = &c.game else {
+            st.errand = None;
+            return;
+        };
+        if !matches!(c.state.phase, Phase::Launching | Phase::Flying) {
+            return;
+        }
+        let errand = st.errand.unwrap_or(match game.kind {
+            Kind::Race => Errand::Race,
+            Kind::Tag => Errand::Loiter,
+        });
+        let hands = st.pilot.fly(game, &c.state, errand, &crate::terrain::WorldTerrain, dt);
+        // MANUAL moves the surfaces by the stick through the rates and an expo: undo both.
+        let rate = if c.high_rates { 1.0 } else { 0.65 };
+        c.sticks = Sticks {
+            roll: unexpo(hands.aileron / rate, 0.3),
+            pitch: unexpo(hands.elevator / rate, 0.3),
+            yaw: unexpo(hands.rudder / rate, 0.2),
+            throttle: hands.throttle.clamp(0.0, 1.0),
+        };
+    }));
 }
 
 /// The stick that gives `y` through the sim's expo `e·x³ + (1 − e)·x`.
@@ -319,11 +348,25 @@ struct SimDriver {
     tx: Sender<Request>,
     /// The plane has a flight controller (`--aircraft`).
     flight_controller: bool,
+    standin: Shared,
+    /// When the test that is running has to be done (`T1S_EXPECT_TIMEOUT` s after it starts,
+    /// default 20): a test that is not done by then is a failure, and the suite moves on.
+    deadline: Mutex<Option<std::time::Instant>>,
 }
 
 impl SimDriver {
+    /// An error if the test has used up its time.
+    fn out_of_time(&self) -> Result<(), String> {
+        if self.deadline.lock().unwrap().is_some_and(|d| std::time::Instant::now() > d) {
+            let secs = std::env::var("T1S_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20);
+            return Err(format!("the test ran out of time ({secs} s)"));
+        }
+        Ok(())
+    }
+
     /// Run `f` against the world on the next frame and return what it returns.
     fn call<T: Send + 'static>(&self, f: impl FnOnce(&mut World) -> T + Send + 'static) -> Result<T, String> {
+        self.out_of_time()?;
         let (tx, rx) = channel();
         let job: Job = Box::new(move |w| {
             let _ = tx.send(f(w));
@@ -337,6 +380,7 @@ impl SimDriver {
     }
 
     fn wait(&self, secs: f32) -> Result<(), String> {
+        self.out_of_time()?;
         let (tx, rx) = channel();
         self.tx.send(Request::Wait(secs, tx)).map_err(|_| "the sim has quit".to_string())?;
         rx.recv_timeout(ANSWER).map_err(|_| "the sim stopped answering".to_string())
@@ -358,7 +402,10 @@ impl SimDriver {
 
     /// Give the stand-in pilot a job.
     fn errand(&self, errand: Errand) -> Result<(), String> {
-        self.call(move |w| w.resource_mut::<Helper>().errand = Some(errand))
+        {
+        self.standin.lock().unwrap().errand = Some(errand);
+        Ok(())
+    }
     }
 
     /// The events the stand-in pilot flies, or the test waits for: each returns when it has
@@ -431,7 +478,14 @@ impl Driver for SimDriver {
     /// thrust on, line of sight with auto-zoom, no help, running, a full battery. Controllers
     /// are ignored from here on, so a connected gamepad can't change what the keys do.
     fn reset(&mut self) -> Result<(), String> {
-        self.call(|w| {
+        // Getting ready is not the test's time: its clock starts when this is done.
+        *self.deadline.lock().unwrap() = None;
+        {
+            let mut st = self.standin.lock().unwrap();
+            st.errand = None;
+            st.held = Sticks::default();
+        }
+        let done = self.call(|w| {
             {
                 let sim = w.resource::<SharedSim>().0.clone();
                 let mut c = sim.lock().unwrap();
@@ -444,8 +498,6 @@ impl Driver for SimDriver {
                 c.paused = false;
                 c.game = None;
             }
-            w.resource_mut::<Helper>().errand = None;
-            w.resource_mut::<Held>().0 = Sticks::default();
             let mut cam = w.resource_mut::<CamState>();
             cam.mode = CamMode::LineOfSight;
             cam.auto_zoom = true;
@@ -453,7 +505,10 @@ impl Driver for SimDriver {
             let mut input = w.resource_mut::<PilotInput>();
             input.wizard = None;
             input.keyboard_only = true;
-        })
+        });
+        let secs = std::env::var("T1S_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20);
+        *self.deadline.lock().unwrap() = Some(std::time::Instant::now() + Duration::from_secs(secs));
+        done
     }
 
     fn arrange(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
@@ -531,7 +586,10 @@ impl Driver for SimDriver {
         match var.key.as_str() {
             "throttle" => {
                 let t = value.as_f64().ok_or("expected a number")? as f32 / 100.0;
-                self.call(move |w| w.resource_mut::<Held>().0.throttle = t)
+                {
+                self.standin.lock().unwrap().held.throttle = t;
+                Ok(())
+            }
             }
             "pitch stick" => {
                 // Stick forward is nose down.
@@ -540,7 +598,10 @@ impl Driver for SimDriver {
                     "back" => 1.0,
                     _ => 0.0,
                 };
-                self.call(move |w| w.resource_mut::<Held>().0.pitch = p)
+                {
+                self.standin.lock().unwrap().held.pitch = p;
+                Ok(())
+            }
             }
             "roll stick" => {
                 // Stick right is positive.
@@ -549,7 +610,10 @@ impl Driver for SimDriver {
                     "right" => 1.0,
                     _ => 0.0,
                 };
-                self.call(move |w| w.resource_mut::<Held>().0.roll = r)
+                {
+                self.standin.lock().unwrap().held.roll = r;
+                Ok(())
+            }
             }
             _ => Err(format!("{} isn't a stick", var.subject)),
         }
