@@ -415,6 +415,10 @@ local function refresh(widget, event, touchState)
   if pct > 4 then roundRect(bx + 2, by + 10, 64 * pct / 100, 10, 4, pct > 30 and GREEN or RED) end
   -- Bottom: what ArduPilot said last (PreArm checks, mode changes, failsafes).
   roundRect(z.x + 2, z.y + z.h - 48, z.w - 4, 46, 10, PANEL)
+  if #messages == 0 and live then
+    text(z.x + 12, z.y + z.h - 45, t.armed and "Armed. ArduPilot's messages show here." or "Disarmed: waiting for ArduPilot's pre-arm checks.", SMLSIZE, GREY)
+    text(z.x + 12, z.y + z.h - 32, t.armed and "" or "A failed check shows here in red (PreArm: ...).", SMLSIZE, GREY)
+  end
   local first = math.max(1, #messages - 2)
   for i = first, #messages do
     local m = messages[i]
