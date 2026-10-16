@@ -105,7 +105,7 @@ named after its directory. Each directory under the suite is a **section**, a ne
 features that share a setup. Its `Section: <name>` line (in any of its files) and the text
 under it name and describe it. A leading `01-` in a directory name only orders it. A
 section's `Background:` is its setup, written over its parent's, so everything in
-`gcs/planning/` starts where `gcs/` does with the PLAN tool picked on top. Pages about a
+`domains/groundstation/console/planning/` starts where `domains/groundstation/console/` does with the PLAN tool picked on top. Pages about a
 section start from that setup and don't re-explain how to get there, the way a manual
 assumes you've read the chapter before.
 

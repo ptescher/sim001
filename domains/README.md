@@ -23,9 +23,10 @@ the compiler enforce that.
 | [recreation](recreation/README.md) | Games and trials against computer pilots who fly the same plane on the same physics: a pylon race and tag. |
 | [visualization](visualization/README.md) | The 3D view (terrain, forest, water, sky, the planes and the cameras) and the place it shows. It draws a scene that the simulator or a real plane's telemetry fills in, and it saves pictures for camera-based systems. |
 | [communication](communication/README.md) | How the station finds out where other aircraft are, using only what the radio passes on: Remote ID, a MAVLink network and ADS-B, the radios between aircraft, and the tracker that joins them into one picture. |
-| [avionics](avionics/README.md) | The flight computer between the TX15 and ArduPilot: the TX15 on a UART in CRSF instead of a USB controller, channels in, failsafe, telemetry and the ground station's MAVLink carried on the same line. |
+| [aviation](aviation/README.md) | The flight computer between the TX15 and ArduPilot: the TX15 on a UART in CRSF instead of a USB controller, channels in, failsafe, telemetry and the ground station's MAVLink carried on the same line. |
+| [groundstation](groundstation/README.md) | The GPUI ground control station that flies ArduPlane SITL and the sim, and the feed protocol and window layout it shares with the sim. |
 | [expectation](expectation/README.md) | Behaviour written as expectations, checked for conflicts, run as acceptance tests from user stories, and turned into documentation. |
 
-The sim (`src/`), `station/`, `gcs/` and `tools/mapbuild` predate the layout and will move
-into domains as the work goes on. `gcs/` and `tools/mapbuild` are excluded from the
-workspace for now because they keep their own lockfiles.
+The sim (`src/`) predates the layout and will move into a domain as the work goes on.
+`groundstation/console` and `visualization/mapbuild` are excluded from the workspace for now
+because they keep their own lockfiles.

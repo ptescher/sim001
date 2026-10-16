@@ -1,0 +1,19 @@
+[package]
+name = "visualization_mapbuild"
+version = "0.1.0"
+edition = "2024"
+description = "Builds real-world map packs for t1s_sim from USGS 3DEP lidar, USGS NAIP imagery and OpenStreetMap"
+
+[dependencies]
+groundstation_shared = { path = "../../groundstation/shared" }
+ureq = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+tiff = "0.9"
+serde_json = "1"
+
+[profile.dev]
+opt-level = 2
+
+[[bin]]
+name = "mapbuild"
+path = "src/main.rs"

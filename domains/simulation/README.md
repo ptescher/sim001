@@ -52,7 +52,7 @@ The values are textbook estimates, not fitted to a real rotor.
 ## Flying the VTOL
 
 ```bash
-cd gcs && cargo run --release -- --station
+cd domains/groundstation/console && cargo run --release -- --station
 ```
 
 The station starts the SITL container with `AIRCRAFT=t1s-vtol` (so `start.sh` layers

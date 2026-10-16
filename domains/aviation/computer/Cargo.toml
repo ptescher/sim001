@@ -1,0 +1,16 @@
+[package]
+name = "aviation_computer"
+version = "0.1.0"
+edition = "2024"
+description = "Aviation domain: the simulated flight computer between a TX15 on a UART and ArduPilot, and the TX15's end of the line"
+
+[dependencies]
+aviation_crsf = { path = "../crsf" }
+illustration_theme = { path = "../../illustration/theme" }
+
+[dev-dependencies]
+communication_telemetry = { path = "../../communication/telemetry" }
+expectation_harness = { path = "../../expectation/harness" }
+expectation_model = { path = "../../expectation/model" }
+expectation_story = { path = "../../expectation/story" }
+mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 DOCS="$PWD/docs"
 limit() { secs=$1; shift; perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; }
 echo "== domains with no window"
-T1S_DOCS="$DOCS" limit 900 cargo test --release -p communication_radio -p avionics_computer -p visualization_telemetry --test acceptance
+T1S_DOCS="$DOCS" limit 900 cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry --test acceptance
 echo "== the sim"
 limit 900 cargo build --release
 limit 480 ./target/release/t1s_sim --expect --docs "$DOCS" || true
@@ -17,7 +17,7 @@ echo "== the sim with a flight controller (ArduPilot SITL)"
 limit 400 ardupilot/expect_sim.sh --docs "$DOCS" || true
 if [ "$1" != "--no-station" ]; then
   echo "== the console (the station: Docker, SITL, the sim and the console)"
-  (cd gcs && limit 2400 cargo run --release -- --station --expect --docs "$DOCS") || true
+  (cd domains/groundstation/console && limit 2400 cargo run --release -- --station --expect --docs "$DOCS") || true
 fi
 echo "== the docs"
 cargo run -q -p expectation_cli -- docs expectations "$DOCS"

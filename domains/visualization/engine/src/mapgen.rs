@@ -1,6 +1,6 @@
 //! Headless export of a top-down "satellite" map and height grid for the ground station.
 //!
-//!   cargo run --release -- --export-map gcs/assets
+//!   cargo run --release -- --export-map domains/groundstation/console/assets
 //!
 //! Writes `terrain_map.png` (shaded orthophoto: baked ground colours, lake, runway, trees with
 //! sun shadows, buildings), `terrain_height.bin` (little-endian f32 grid of ground height above

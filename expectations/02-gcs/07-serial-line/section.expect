@@ -1,0 +1,27 @@
+# The TX15 on the flight computer's serial line, as on the real plane (domains/aviation). The
+# station starts the sim with `--flight-computer`, and a simulated TX15 sends the sticks and
+# switches down the line. The flight computer turns them into the radio channels of ArduPilot,
+# and sends the telemetry back to the TX15, which shows it on its screen. The sim writes that
+# screen to a file that the console's driver reads (--tx15-screen).
+
+Section: The TX15 on the serial line
+  On the real plane, the TX15 is not a USB game controller. It sends its sticks and switches to
+  the [[flight computer]] on a serial line, in the protocol of ExpressLRS. The flight computer
+  gives ArduPilot the radio channels. ArduPilot sends its state back on the same line, and the
+  TX15 shows it on its screen. The lamps along the top of the screen show the flight mode,
+  whether the plane is armed, GPS, the link and the battery.
+
+  Start the station with `--flight-computer`, and the sim ignores the USB controller. A
+  simulated TX15 on the serial line takes its place, so that the plane reacts as it does with
+  the real radio. These tutorials show the radio the way you use it at the field.
+
+Background:
+  Given the console is connected to a VTOL on the ground
+  And the TX15 is on the serial line
+
+Vocabulary:
+  Phrase: the TX15 is on the serial line
+    Say: start the station with `--flight-computer`. The simulated TX15 is on the serial line. Put the throttle stick all the way down, SE out and press button 1
+    Given the throttle stick is low
+    And the arm switch is off
+    And the mode switch is QHOVER

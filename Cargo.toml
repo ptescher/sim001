@@ -1,10 +1,10 @@
 # The repo is one Cargo workspace laid out as workspace -> domain -> module: each domain is a
 # directory under domains/, and each module in it is a crate (domains/<domain>/<module>).
-# See domains/README.md. The sim (this package) and station/ predate the layout. gcs/ and
-# tools/mapbuild keep their own lockfiles and build on their own.
+# See domains/README.md. The sim (this package) predates the layout. domains/groundstation/console
+# and domains/visualization/mapbuild keep their own lockfiles and build on their own.
 [workspace]
-members = ["station", "domains/*/*"]
-exclude = ["gcs", "tools/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
+members = ["domains/*/*"]
+exclude = ["domains/groundstation/console", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
 
 [package]
 name = "t1s_sim"
@@ -12,7 +12,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-t1s_station = { path = "station" }
+groundstation_shared = { path = "domains/groundstation/shared" }
 # The flight model and the planes it flies: see domains/simulation.
 simulation_aircraft = { path = "domains/simulation/aircraft" }
 simulation_physics = { path = "domains/simulation/physics" }
@@ -24,9 +24,9 @@ recreation_games = { path = "domains/recreation/games" }
 # Map packs (real places): aerial photos and land cover. Same version Bevy uses.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
-# The flight computer between the TX15 and ArduPilot: see domains/avionics.
-avionics_computer = { path = "domains/avionics/computer" }
-avionics_crsf = { path = "domains/avionics/crsf" }
+# The flight computer between the TX15 and ArduPilot: see domains/aviation.
+aviation_computer = { path = "domains/aviation/computer" }
+aviation_crsf = { path = "domains/aviation/crsf" }
 # What the radios tell the pilot about other aircraft: see domains/communication.
 communication_air = { path = "domains/communication/air" }
 communication_radio = { path = "domains/communication/radio" }

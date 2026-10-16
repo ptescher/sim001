@@ -6,8 +6,8 @@
 //!                       MAVProxy send it)
 //!   --tcp ADDR          connect to MAVLink on TCP instead (SITL's spare port is 127.0.0.1:5762)
 //!   --home LAT,LON,ALT  where the pilot box is; default the map's home, or what the plane says
-//!   --map NAME          the scenery of a real place, from maps/NAME (see tools/mapbuild)
-//!   --raster            rasterized lighting instead of ray tracing
+//!   --map NAME          the scenery of a real place, from maps/NAME (see domains/visualization/mapbuild)
+//!   --raytrace          ray-traced lighting (Bevy Solari) instead of rasterized
 //!   --capture DIR       save pictures of the scenery and exit; each view is one
 //!   --at NAME=x,agl,z,tx,tagl,tz[,fov]   (repeat it). Heights are above the ground.
 //!   --plane x,agl,z,heading,roll,tilt   hold a VTOL still there (degrees; tilt 0 forward, 90 up)
@@ -90,7 +90,7 @@ fn main() {
         }),
         ..default()
     }))
-    .add_plugins(EnginePlugin { raytracing: !flag("--raster"), tips: vec!["Waiting for the scenery. The plane appears when its telemetry arrives."], ..default() })
+    .add_plugins(EnginePlugin { raytracing: flag("--raytrace"), tips: vec!["Waiting for the scenery. The plane appears when its telemetry arrives."], ..default() })
     .insert_resource(Telemetry(watcher))
     .insert_resource(Source(source))
     .insert_resource(Parked(arg("--plane").map(|p| parked_pose(&p))))

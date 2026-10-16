@@ -1,7 +1,7 @@
-# The ground control station (gcs/) flying ArduPlane SITL on the sim's physics, as the
+# The ground control station (domains/groundstation/console/) flying ArduPlane SITL on the sim's physics, as the
 # operator sees it. Modelled on Mission Planner's planning docs (ardupilot.org/planner):
 # where the console does something already, these say what it does; elsewhere they say what
-# it should do. The console's driver (gcs/src/expect.rs, `--station --expect`) clicks the real
+# it should do. The console's driver (domains/groundstation/console/src/expect.rs, `--station --expect`) clicks the real
 # console; tests that need the mission file, the terrain check, the survey grid, measuring or
 # the sim's window aren't supported yet.
 
@@ -113,7 +113,7 @@ Vocabulary:
   Event: the plane reaches the last item
 
   Phrase: the console is connected to a plane on the ground
-    Say: install Rust and Docker Desktop. Then run `cd gcs && cargo run --release -- --station`. The first time, it builds ArduPlane [[SITL]], which takes approximately 15 minutes. After that, it starts in a few seconds. Three windows open: the console, the [[sensor feed]] and the sim. The console connects to the plane. The plane is on the ground and disarmed, in MANUAL, with home set and no plan. Wait until the ARM button shows ARM, not ARM: NOT READY
+    Say: install Rust and Docker Desktop. Then run `cd domains/groundstation/console && cargo run --release -- --station`. The first time, it builds ArduPlane [[SITL]], which takes approximately 15 minutes. After that, it starts in a few seconds. Three windows open: the console, the [[sensor feed]] and the sim. The console connects to the plane. The plane is on the ground and disarmed, in MANUAL, with home set and no plan. Wait until the ARM button shows ARM, not ARM: NOT READY
     Given the link is connected
     And the game clock is off
     And the vehicle is disarmed
@@ -161,6 +161,30 @@ Vocabulary:
   State: the mode switch is QHOVER | QLOITER | FBWA | CRUISE | AUTO | QRTL
     Set: press the button for {value} on the front of the radio: button 1 is QHOVER, 2 is QLOITER, 3 is FBWA, 4 is CRUISE, 5 is AUTO and 6 is QRTL
     Shows: the second number after the slash in the RC 1-4 line on the SYSTEMS screen is the one for {value}
+
+  State: the aileron stick is left | centred | right
+    Set: move the aileron stick {value}: all the way left, in the middle, or all the way right
+    Shows: left: the first number of the RC 1-4 line on the SYSTEMS screen is near 1250
+    Shows: centred: the first number of the RC 1-4 line on the SYSTEMS screen is near 1500
+    Shows: right: the first number of the RC 1-4 line on the SYSTEMS screen is near 1750
+  State: the VTOL's wings are level | banked
+    Shows: level: the horizon in the PFD is flat, and the roll reading is near 0
+    Shows: banked: the horizon in the PFD is tilted, and the roll reading is more than 10° from 0
+  State: the last landing is soft | hard
+    Shows: soft: the plane touches the ground at less than 2 m/s, and the HUD of the sim does not say CRASHED
+    Shows: hard: the plane touches the ground at 2 m/s or more
+
+  Event: the pilot switches to forward flight
+    Say: push the throttle stick all the way up, pull the elevator stick back a little, and press button 3 on the front of the radio. The wing motors tilt forward and the plane speeds up
+  Event: the pilot switches back to a hover
+    Say: centre the elevator stick, put the throttle stick in the middle, and press button 2 on the front of the radio. The plane slows down and the wing motors tilt up
+
+  Event: the pilot switches to QHOVER
+    Say: press button 1 on the front of the radio. The plane stays in the air, and the wind can move it
+  Event: the pilot switches to cruise
+    Say: press button 4 on the front of the radio, with the throttle stick up. The wing motors tilt forward and the plane flies on its wing
+  Event: the pilot sends the plane home
+    Say: press button 6 on the front of the radio. The plane flies to home, and lands there
 
   Phrase: the TX15 is ready
     Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8, calibrate the sticks in the sim with F2, and copy the channels of the switches from controls.cfg.example. Then put the throttle stick all the way down, SE out and press button 1

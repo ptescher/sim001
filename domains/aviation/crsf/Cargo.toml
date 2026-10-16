@@ -1,0 +1,5 @@
+[package]
+name = "aviation_crsf"
+version = "0.1.0"
+edition = "2024"
+description = "Aviation domain: CRSF (ExpressLRS) frames, channels, telemetry and the MAVLink envelope"

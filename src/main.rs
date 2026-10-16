@@ -1,10 +1,10 @@
 //! HEEWING T1-S Ranger flight simulator.
 //!
-//!   cargo run --release                 ray-traced (Bevy Solari), built-in flight modes
-//!   cargo run --release -- --raster     classic rasterized lighting with shadow maps
+//!   cargo run --release                 rasterized lighting with shadow maps, built-in flight modes
+//!   cargo run --release -- --raytrace   ray-traced lighting (Bevy Solari)
 //!   cargo run --release -- --ardupilot  physics backend for ArduPilot SITL (JSON, UDP 9002)
 //!   cargo run --release -- --selftest   headless flight-model checks
-//!   cargo run --release -- --export-map gcs/assets   map + heights for the ground station
+//!   cargo run --release -- --export-map domains/groundstation/console/assets   map + heights for the ground station
 //!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
@@ -17,7 +17,7 @@
 //!                                               telemetry link, with the other planes the pilot's radios hear
 //!   --fullscreen                                start borderless full-screen (F11 toggles); macOS Game Mode needs it
 //!   --aircraft ID                               which plane to fly (default t1s-ranger)
-//!   --map NAME                                  fly a real place from maps/NAME (see tools/mapbuild)
+//!   --map NAME                                  fly a real place from maps/NAME (see domains/visualization/mapbuild)
 //!   --direct                                    with --ardupilot: start with the sticks flying (J toggles)
 //!   --expect [suite] [--docs dir]               run the acceptance tests in expectations/ (and write the docs)
 
@@ -71,7 +71,7 @@ fn main() {
         selftest::run_all();
         return;
     }
-    if let Some(dir) = args.iter().position(|a| a == "--export-map").map(|i| args.get(i + 1).map_or("gcs/assets", |s| s.as_str())) {
+    if let Some(dir) = args.iter().position(|a| a == "--export-map").map(|i| args.get(i + 1).map_or("domains/groundstation/console/assets", |s| s.as_str())) {
         mapgen::export(dir);
         return;
     }
@@ -79,7 +79,7 @@ fn main() {
     if let Some(name) = args.iter().position(|a| a == "--map").and_then(|i| args.get(i + 1)) {
         let maps = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("maps");
         if let Err(e) = terrain::load_site(&maps, name) {
-            eprintln!("--map {name}: {e}\nBuild it with: cargo run --release --manifest-path tools/mapbuild/Cargo.toml -- {name}");
+            eprintln!("--map {name}: {e}\nBuild it with: cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- {name}");
             std::process::exit(1);
         }
         let r = terrain::real().unwrap();
@@ -125,7 +125,7 @@ fn main() {
         std::process::exit(1);
     }
     let direct = flag("--direct");
-    let raytracing = !flag("--raster");
+    let raytracing = flag("--raytrace");
 
     // Trees/obstacles are generated with the rest of the world on the loading screen.
     let core = Arc::new(Mutex::new(SimCore::new(params.clone(), vec![], ap_enabled, ap_port)));
@@ -141,13 +141,13 @@ fn main() {
 
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
     let feed = flag("--feed").then(|| feed::FeedConfig {
-        port: arg("--feed").and_then(|p| p.parse().ok()).unwrap_or(t1s_station::feed::DEFAULT_PORT),
+        port: arg("--feed").and_then(|p| p.parse().ok()).unwrap_or(groundstation_shared::feed::DEFAULT_PORT),
         size: arg("--feed-size")
             .and_then(|s| s.split_once('x'))
             .and_then(|(w, h)| Some(UVec2::new(w.parse().ok()?, h.parse().ok()?)))
             .unwrap_or(UVec2::new(320, 240)),
     });
-    let window_rect = arg("--window-rect").and_then(|s| t1s_station::layout::Rect::parse(s));
+    let window_rect = arg("--window-rect").and_then(|s| groundstation_shared::layout::Rect::parse(s));
     let frameless = flag("--frameless");
     // A frameless window's content fills its frame; otherwise allow for the title bar.
     let title_bar: f32 = if frameless { 0.0 } else { arg("--title-bar").and_then(|s| s.parse().ok()).unwrap_or(28.0) };

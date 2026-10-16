@@ -1,0 +1,40 @@
+Story: Flying a VTOL with the TX15
+  As a pilot with a TX15
+  I want to fly the VTOL with the radio as I fly the real plane
+  So that I know the radio, its screen and the plane work together before I go to the field
+
+  This tutorial uses the radio as it is on the real plane. The TX15 sends its sticks and switches
+  on a serial line, and the plane answers on the screen of the TX15. You arm the plane with SE,
+  and you pick QLOITER with button 2. Push the throttle stick up, and the plane climbs straight
+  up. Press button 3 for FBWA, and the plane flies forward on its wing and levels itself. Bank it
+  with the aileron stick, and let go. Press button 2 to hover again, and press button 6. The plane
+  flies home and lands softly. At each step, look at the screen of the TX15.
+
+  Scenario: Arm, lift off, fly forward in FBWA, hover again and land softly
+    When the arm switch is on
+    Then the vehicle is armed
+    And the TX15 screen arming is armed
+    When the mode switch is QLOITER
+    Then the autopilot mode is QLOITER
+    And the TX15 screen mode is QLOITER
+    When the throttle stick is high
+    Then the flight is hovering
+    And the plane is flying
+    And the height above home is at least 15 m
+    When the pilot switches to forward flight
+    Then the flight is cruising
+    And the autopilot mode is FBWA
+    And the TX15 screen mode is FBWA
+    When the aileron stick is right
+    Then the VTOL's wings are banked
+    When the aileron stick is centred
+    Then the VTOL's wings are level
+    When the pilot switches back to a hover
+    Then the flight is hovering
+    And the autopilot mode is QLOITER
+    And the TX15 screen mode is QLOITER
+    When the pilot sends the plane home
+    Then the autopilot mode is QRTL
+    And the plane is on the ground
+    And the last landing is soft
+    And the TX15 screen arming is disarmed

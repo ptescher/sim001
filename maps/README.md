@@ -10,7 +10,7 @@ Besides the procedural Alpine Valley, the sim can fly real places built from fre
 ## Fly one
 
 ```bash
-cd gcs && cargo run --release -- --station --map cypress
+cd domains/groundstation/console && cargo run --release -- --station --map cypress
 ```
 
 The station builds the map pack the first time, which takes a few minutes to download. It starts ArduPilot SITL with its home at the place's pilot box, then opens the sim, the sensor feed and the console on that map. The sim can also fly a map on its own: `cargo run --release -- --map berkeley`.
@@ -24,7 +24,7 @@ The station builds the map pack the first time, which takes a few minutes to dow
 | Near-infrared | NAIP band 4 | 1 m | Public domain |
 | Runway, buildings | [OpenStreetMap](https://www.openstreetmap.org/) via Overpass | vector | © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/) |
 
-Trees and land cover aren't downloaded. `tools/mapbuild` derives them from the photos:
+Trees and land cover aren't downloaded. `domains/visualization/mapbuild` derives them from the photos:
 
 - **Water:** near sea level and unvegetated, or very dark in near-infrared. Dark patches smaller than 0.5 ha are shadows and are dropped, which keeps inland lakes.
 - **Trees:** a stronger vegetation signal (NDVI) than the image's typical land, darker than it, and textured like crowns where the signal is weak. The thresholds adapt to each region, because NAIP differs a lot between states and years: Berkeley's photos are far brighter than Washington's.
@@ -51,10 +51,10 @@ Trees and land cover aren't downloaded. `tools/mapbuild` derives them from the p
 2. Build it:
 
    ```bash
-   cargo run --release --manifest-path tools/mapbuild/Cargo.toml -- <name>
+   cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- <name>
    ```
 
-   This writes `maps/<name>/build/` (git-ignored) and the ground station's map in `gcs/assets/<name>/`. Downloads are cached in `build/cache/`, so re-runs take seconds and a flaky server can't lose data. NAIP and 3DEP cover the US only.
+   This writes `maps/<name>/build/` (git-ignored) and the ground station's map in `domains/groundstation/console/assets/<name>/`. Downloads are cached in `build/cache/`, so re-runs take seconds and a flaky server can't lose data. NAIP and 3DEP cover the US only.
 
 3. Check `build/landcover_preview.png` against `build/ortho_wide.jpg`. Brown is ground, green trees, blue water, grey paved, red buildings. If trees or water are off for the region, `MAPBUILD_PROBE="lat,lon;lat,lon"` prints the vegetation statistics around known spots to tune the thresholds in `classify()`.
 
@@ -69,4 +69,4 @@ Trees and land cover aren't downloaded. `tools/mapbuild` derives them from the p
 | `trees.bin` | The trees grown from the canopy |
 | `buildings.txt`, `runway.txt` | OSM footprints as oriented boxes |
 
-Positions are metres north and east of home, the same origin ArduPilot uses, so the sim, SITL and the ground station all agree. The pack format is in `station/src/mappack.rs`.
+Positions are metres north and east of home, the same origin ArduPilot uses, so the sim, SITL and the ground station all agree. The pack format is in `domains/groundstation/shared/src/mappack.rs`.

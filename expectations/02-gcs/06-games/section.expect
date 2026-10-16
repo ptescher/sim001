@@ -1,7 +1,7 @@
 # Games against computer pilots when the station flies the plane (domains/recreation). Each
 # computer pilot's plane has its own ArduPlane SITL, and the computer pilot flies it through
 # the same radio channels as the TX15: the sticks, the arm switch and the mode switch. The
-# console's driver (gcs/src/expect.rs) starts the game in the sim over the sensor feed link,
+# console's driver (domains/groundstation/console/src/expect.rs) starts the game in the sim over the sensor feed link,
 # and sees the other planes as the operator does, on the tactical map.
 
 Section: Games with ArduPilot

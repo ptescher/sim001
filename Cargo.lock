@@ -428,10 +428,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
-name = "avionics_computer"
+name = "aviation_computer"
 version = "0.1.0"
 dependencies = [
- "avionics_crsf",
+ "aviation_crsf",
  "communication_telemetry",
  "expectation_harness",
  "expectation_model",
@@ -441,7 +441,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "avionics_crsf"
+name = "aviation_crsf"
 version = "0.1.0"
 
 [[package]]
@@ -3147,6 +3147,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "groundstation_shared"
+version = "0.1.0"
+
+[[package]]
 name = "guillotiere"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5479,8 +5483,8 @@ dependencies = [
 name = "t1s_sim"
 version = "0.1.0"
 dependencies = [
- "avionics_computer",
- "avionics_crsf",
+ "aviation_computer",
+ "aviation_crsf",
  "bevy",
  "communication_air",
  "communication_radio",
@@ -5489,6 +5493,7 @@ dependencies = [
  "expectation_harness",
  "expectation_model",
  "expectation_story",
+ "groundstation_shared",
  "hidapi",
  "illustration_theme",
  "image",
@@ -5500,14 +5505,9 @@ dependencies = [
  "recreation_games",
  "simulation_aircraft",
  "simulation_physics",
- "t1s_station",
  "visualization_engine",
  "visualization_world",
 ]
-
-[[package]]
-name = "t1s_station"
-version = "0.1.0"
 
 [[package]]
 name = "taffy"
@@ -5923,9 +5923,9 @@ name = "visualization_world"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "groundstation_shared",
  "image",
  "simulation_physics",
- "t1s_station",
 ]
 
 [[package]]

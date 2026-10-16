@@ -2,7 +2,7 @@
 
 A Bevy 0.20 flight simulator for practising with the HEEWING T1-S Ranger twin-motor FPV plane.
 
-- **Ray-traced lighting** using Bevy Solari: ray-traced shadows, global illumination and reflections, with a physical sky from Bevy's atmosphere. It runs on Apple Silicon M3/M4 through Metal hardware ray tracing. Use `--raster` on GPUs without ray tracing.
+- **Rasterized lighting** with shadow maps and a physical sky from Bevy's atmosphere, by default. Add `--raytrace` for optional ray-traced shadows, global illumination and reflections using Bevy Solari. It runs on Apple Silicon M3/M4 through Metal hardware ray tracing.
 - **Flight model:** a 6-DOF model built from strip theory. Each wing section and V-tail panel sees its own airflow, including rotation, prop wash and wing downwash. Stability, stalls, tip stalls, adverse yaw, dihedral effect and V-tail coupling come out of the geometry. The model also includes twin-motor thrust with differential thrust, a 4S LiPo with voltage sag, wind with a boundary-layer profile and turbulence, ground contact, prop strikes, and collisions with trees and buildings.
 - **Controls:** a RadioMaster TX15 (or any EdgeTX/OpenTX radio) as a USB joystick, a Nintendo Switch Pro Controller, or the keyboard.
 - **ArduPilot:** the sim can act as the physics backend for ArduPlane SITL through the JSON interface. It runs in lockstep and forwards your sticks to ArduPilot as RC input.
@@ -14,14 +14,14 @@ There are two planes (`--aircraft`):
 - **`t1s-vtol`, the default:** the T1-S VTOL, with two tilt-rotors and a rear rotor, and a flight controller. ArduPilot flies it, so start the whole station, which starts the sim, the ground control console and ArduPilot together:
 
   ```bash
-  cd gcs && cargo run --release -- --station
+  cd domains/groundstation/console && cargo run --release -- --station
   ```
 
 - **`t1s-ranger`:** the plain T1-S. It has only a receiver and two ESCs, no flight controller, so it has no ArduPilot, no console and one flight mode (MANUAL). Fly it from the keyboard or a radio:
 
   ```bash
-  cargo run --release -- --aircraft t1s-ranger              # ray traced
-  cargo run --release -- --aircraft t1s-ranger --raster     # rasterized, with shadow maps
+  cargo run --release -- --aircraft t1s-ranger              # rasterized, with shadow maps
+  cargo run --release -- --aircraft t1s-ranger --raytrace   # ray traced (Apple Silicon M3/M4 or other hardware RT)
   cargo run --release -- --selftest                         # headless flight-model numbers
   ```
 
@@ -36,7 +36,7 @@ Starting the sim alone with the VTOL tells you this and exits.
 Besides the Alpine Valley, the sim flies real places built from USGS lidar elevation, NAIP aerial photos and OpenStreetMap. Trees and water are derived from the photos. The two built so far are **Cypress Island Airfield, WA** (`cypress`) and the **Park at the Berkeley Waterfront, CA** (`berkeley`):
 
 ```bash
-cd gcs && cargo run --release -- --station --map cypress   # builds the map pack the first time
+cd domains/groundstation/console && cargo run --release -- --station --map cypress   # builds the map pack the first time
 cargo run --release -- --map berkeley                     # the sim alone
 ```
 
@@ -74,7 +74,7 @@ The plane starts in your hand. **Hold the throttle above 55% to throw it**, or p
 | L / X | low-high rates / differential thrust on-off |
 | C / Z | camera: line-of-sight from the pilot box, chase, FPV (nose cam, 20° up) / LOS auto-zoom |
 | `[` `]` `,` `.` `/` | wind speed, wind direction, turbulence |
-| F5 / F6 | ray-traced render resolution down / up (default ≈1920 px wide) |
+| F5 / F6 | render resolution down / up (default ≈1920 px wide) |
 | P, H/F1, F2, F3, F4 | pause, help, radio calibration, raw controller axes, radio/gamepad profile |
 | G / T | start a pylon race / a game of tag against computer pilots (the same key again stops it) |
 | Esc | close help, the controller overlay or the calibration wizard (quit with Cmd+Q) |
@@ -146,16 +146,16 @@ ArduPlane SITL ──servo PWM (UDP 9002)──▶ t1s_sim ──JSON: IMU, atti
    sim_vehicle.py -v ArduPlane -f JSON --add-param-file=ardupilot/t1s.parm --console --map
    ```
 
-3. Connect a ground station to `tcp:localhost:5760` (Docker). Use the GCS in [`gcs/`](gcs/README.md), QGroundControl or Mission Planner, or the MAVProxy console that `sim_vehicle.py` opens.
+3. Connect a ground station to `tcp:localhost:5760` (Docker). Use the GCS in [`domains/groundstation/console/`](domains/groundstation/console/README.md), QGroundControl or Mission Planner, or the MAVProxy console that `sim_vehicle.py` opens.
 
 ### Ground control station
 
 ![Station tiled on one display](docs/station_tiled.png)
 
-`gcs/` is a GPUI ground station built for this sim. It has a HUD-style PFD and a tactical map drawn on an orthophoto of the sim's own terrain. It also has mission planning and upload, GUIDED fly-to, caution/warning annunciators, trend charts and the autopilot message log. See [gcs/README.md](gcs/README.md).
+`domains/groundstation/console/` is a GPUI ground station built for this sim. It has a HUD-style PFD and a tactical map drawn on an orthophoto of the sim's own terrain. It also has mission planning and upload, GUIDED fly-to, caution/warning annunciators, trend charts and the autopilot message log. See [gcs/README.md](gcs/README.md).
 
 ```bash
-cd gcs && cargo run --release -- --station
+cd domains/groundstation/console && cargo run --release -- --station
 ```
 
 That's the whole setup. `--station` builds the sim, exports the terrain map if missing, starts Docker Desktop, builds the SITL image if missing (first time only, about 15 minutes), starts SITL and the sim, and lays out three panes: the sim's view, the aircraft's camera feed and the console. They're tiled on one display or spread across several. Sim flags it uses: `--feed [port]` streams the gimballed sensor camera over TCP (default 5600, `--feed-size WxH`), `--window-rect x,y,w,h --title-bar N` places the window, and `--exit-with-parent` quits the sim with the ground station.
@@ -195,12 +195,12 @@ Each feature is written there as Given/When/Then expectations in a shared vocabu
 cargo run -p expectation_cli -- check expectations        # conflicts, coverage, story problems (no window)
 cargo run --release -- --expect                           # run the tests in the sim window
 cargo run --release -- --expect --docs docs               # ...and rewrite docs/ from the results
-(cd gcs && cargo run --release -- --station --expect --docs ../docs)   # the same for the console (needs Docker)
+(cd domains/groundstation/console && cargo run --release -- --station --expect --docs ../../../docs)   # the same for the console (needs Docker)
 cargo run -p expectation_cli -- docs expectations docs    # rewrite docs/ from the saved results
 tools/docs.sh                                             # every runner in turn, with a time limit on each, then the docs
 ardupilot/expect_sim.sh --docs docs                       # the sim's tests for a plane with a flight controller (ArduPilot beside it)
 ```
 
-The domains' own tests (what the radios tell the station, the flight computer and the TX15's screen, the view of a real plane) run with no window, and `T1S_DOCS=docs cargo test --release -p communication_radio -p avionics_computer -p visualization_telemetry --test acceptance` puts their results and pictures in the docs beside the others. The TX15's screen is drawn as an SVG from the same layout as its widget. Each runner keeps its own results in `docs/results/`, and the docs merge them. Time limits: `T1S_EXPECT_TIMEOUT` (the sim's, 40 s a test) and `T1S_EXPECT_SPEED` (how much faster than real time the sim runs for them, 8).
+The domains' own tests (what the radios tell the station, the flight computer and the TX15's screen, the view of a real plane) run with no window, and `T1S_DOCS=docs cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry --test acceptance` puts their results and pictures in the docs beside the others. The TX15's screen is drawn as an SVG from the same layout as its widget. Each runner keeps its own results in `docs/results/`, and the docs merge them. Time limits: `T1S_EXPECT_TIMEOUT` (the sim's, 40 s a test) and `T1S_EXPECT_SPEED` (how much faster than real time the sim runs for them, 8).
 
 The run takes a few minutes and keeps the window on top, because screenshots need it visible. Connected controllers are ignored, so the keys behave the same every time. `cargo test` checks the suite without a window. The system behind this is the [expectation](domains/expectation/README.md) domain. The repo is one Cargo workspace laid out as workspace → domain → module (see [domains/README.md](domains/README.md)).

@@ -1,0 +1,95 @@
+# The flight computer (domains/aviation). It sits between the TX15 and ArduPilot. The TX15
+# talks to it on a serial line (UART), in the CRSF protocol of ExpressLRS, not as a USB game
+# controller (HID). The telemetry of ArduPilot goes the other way on the same line, and the
+# ground station gets its telemetry from there. The tests run with no window: a simulated
+# TX15 on the line, the flight computer, and an autopilot that reports its state. See
+# domains/aviation/computer/tests/acceptance.rs.
+
+Section: The flight computer
+  The flight computer is a small computer that stands between the [[TX15]] and [[ArduPilot]].
+  In the simulator it takes the place of the receiver and of the wiring in the plane. The TX15
+  sends the sticks and switches down a serial line. The flight computer turns them into the
+  radio channels that ArduPilot reads.
+
+  The flight computer also sends the telemetry of ArduPilot back to the TX15 on the same line.
+  The TX15 shows the flight mode, the battery and the bank on its screen. It also passes the
+  [[MAVLink]] telemetry on to the ground station. The ground station gets no telemetry from
+  any other place. The commands of the ground station go the same way in the other direction.
+
+  Start the simulator with `--flight-computer PORT`. The simulator then ignores the USB
+  controller. Only the serial line moves the plane.
+
+Vocabulary:
+  State: the TX15 is connected | not connected
+    Set: connect the TX15 to the flight computer, or unplug it
+    Shows: connected: the TX15 sends its channels down the serial line 150 times a second
+  State: the TX15 roll stick is -100..100 %
+    Set: move the roll stick of the TX15 to {value}
+  State: the TX15 pitch stick is -100..100 %
+    Set: move the pitch stick of the TX15 to {value}
+  State: the TX15 throttle stick is 0..100 %
+    Set: move the throttle stick of the TX15 to {value}
+  State: the TX15 arm switch is off | on
+    Set: put the arm switch of the TX15 {value}
+  State: the roll channel is 800..2200 us
+    Shows: {value}: the autopilot reads this pulse width on the roll channel
+  State: the pitch channel is 800..2200 us
+    Shows: {value}: the autopilot reads this pulse width on the pitch channel
+  State: the throttle channel is 800..2200 us
+    Shows: {value}: the autopilot reads this pulse width on the throttle channel
+  State: the arm channel is 800..2200 us
+    Shows: {value}: the autopilot reads this pulse width on the channel of the arm switch
+  State: the corrupted frames are 0..100 %
+    Set: let this share of the frames on the serial line have a wrong checksum
+  State: the TX15 screen battery is 0..30 V
+    Set: let the battery of the plane be at {value}
+    Shows: {value}: the screen of the TX15 shows this battery voltage
+  State: the TX15 screen bank is -90..90 degrees
+    Set: bank the plane to {value}
+    Shows: {value}: the screen of the TX15 shows this bank
+  State: the TX15 screen airspeed is 0..60 m/s
+    Set: let the plane fly at {value}
+    Shows: {value}: the AS reading on the screen of the TX15 is this speed
+  State: the TX15 screen climb is -10..10 m/s
+    Set: let the plane climb at {value}
+    Shows: {value}: the VS reading on the screen of the TX15 is this rate, with a sign
+  State: the TX15 screen satellites is 0..30
+    Set: let the GPS of the plane have {value} satellites
+    Shows: {value}: the GPS reading in the top bar of the screen of the TX15 is this number
+  State: the TX15 screen message is none | PreArm: Throttle (RC3) is not neutral | Mode QHOVER | Failsafe: radio lost
+    Set: let ArduPilot say {value}
+    Shows: none: the message lines at the bottom of the screen of the TX15 are empty
+    Shows: {value}: the newest message line at the bottom of the screen of the TX15 says this, in the colour of its severity
+  State: the TX15 uplink quality is 0..100 %
+    Shows: {value}: the screen of the TX15 shows this uplink quality
+  State: the ground station telemetry is silent | flowing
+    Set: let ArduPilot send, or not send, its MAVLink telemetry
+    Shows: flowing: the ground station hears the HEARTBEAT of the plane
+    Shows: silent: the ground station hears nothing from the plane
+  State: the ground station map distance is 0..2000 m
+    Set: fly the plane this far north of home
+    Shows: {value}: the plane on the map of the ground station is this far north of home
+  State: the ground station command is not sent | sent
+    Set: send a command to the plane from the ground station
+  State: the autopilot command is not received | received
+    Shows: received: ArduPilot gets the command of the ground station
+  State: the ground station telemetry rate is 0..10000 bytes per second
+    Shows: {value}: the telemetry that reaches the ground station in one second
+
+Background:
+  Given the TX15 is connected
+  And the TX15 roll stick is 0 %
+  And the TX15 pitch stick is 0 %
+  And the TX15 throttle stick is 0 %
+  And the TX15 arm switch is off
+  And the corrupted frames are 0 %
+  And the TX15 screen mode is MANUAL
+  And the TX15 screen arming is disarmed
+  And the TX15 screen battery is 12 V
+  And the TX15 screen bank is 0 degrees
+  And the TX15 screen airspeed is 0 m/s
+  And the TX15 screen climb is 0 m/s
+  And the TX15 screen satellites is 12
+  And the TX15 screen message is none
+  And the ground station telemetry is silent
+  And the ground station map distance is 0 m

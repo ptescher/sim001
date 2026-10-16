@@ -4,7 +4,7 @@ The project's look, shared by everything with a screen:
 
 | Where | How it uses the theme |
 | --- | --- |
-| Ground station (`gcs/`, GPUI) | `gcs/src/ui/theme.rs` names the Night roles as the console's colours (`GREEN`, `AMBER`, `BEZEL`, …) and adds GPUI conversions |
+| Ground station (`domains/groundstation/console/`, GPUI) | `domains/groundstation/console/src/ui/theme.rs` names the Night roles as the console's colours (`GREEN`, `AMBER`, `BEZEL`, …) and adds GPUI conversions |
 | Sim HUD, controller overlay and loading screen (Bevy) | `domains/visualization/engine/src/theme.rs` turns the Night roles into Bevy colours (`color(P.caution)`) |
 | Docs site (`docs/site/`) | `assets/theme.css` is generated from the theme: Day for light browsers, Night for dark ones. The site's own CSS uses only its tokens |
 | Docs Markdown | the Mermaid map uses the Day colours, for GitHub's light page |

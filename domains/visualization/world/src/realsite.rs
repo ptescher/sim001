@@ -1,4 +1,4 @@
-//! A real place, loaded from a map pack built by `tools/mapbuild` (USGS 3DEP lidar elevation,
+//! A real place, loaded from a map pack built by `domains/visualization/mapbuild` (USGS 3DEP lidar elevation,
 //! USGS NAIP aerial photos, trees grown from the photo's canopy, OSM runway and buildings).
 //!
 //! World frame as everywhere in the sim: +X east, +Y up, -Z north, in metres from home (the
@@ -7,7 +7,7 @@
 use crate::terrain::{Building, Tree};
 use glam::{Vec2, Vec3};
 use std::path::Path;
-use t1s_station::mappack::{self, PackBox, PackMeta, Square, cover};
+use groundstation_shared::mappack::{self, PackBox, PackMeta, Square, cover};
 
 const PHOTO_ALBEDO: f32 = 0.7;
 

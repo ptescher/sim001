@@ -40,7 +40,7 @@ Before writing a line, find out what the user actually does and sees:
 
 - Read the code for the feature: the real key bindings, button labels, mode names and
   messages. In the sim they're in `src/input.rs` and the help text in `src/hud.rs`; in the
-  ground station, `gcs/src/ui/`. Docs that name a button that doesn't exist are wrong docs.
+  ground station, `domains/groundstation/console/src/ui/`. Docs that name a button that doesn't exist are wrong docs.
 - Read the section the feature belongs in (`expectations/<section>/`), its vocabulary, and
   the glossary page (`docs/glossary.md`), so you reuse terms instead of inventing new ones.
 - Decide what the reader's goals are. Those become stories. The rules the system follows

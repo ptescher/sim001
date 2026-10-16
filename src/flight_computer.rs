@@ -1,6 +1,6 @@
 //! The flight computer (`--flight-computer LINE`): a computer between the TX15 and ArduPilot,
 //! which the TX15 talks to on a serial line (UART) in CRSF instead of as a USB controller.
-//! See `domains/avionics`.
+//! See `domains/aviation`.
 //!
 //! - The TX15's channels become the radio channels ArduPilot reads (`SimCore::uart_rc`). If the
 //!   line goes quiet, the throttle channel drops below ArduPilot's failsafe level.
@@ -13,7 +13,7 @@
 //! [`tx15`] is the other end of a virtual line: the TX15 stand-in for `--radio`.
 
 use crate::sim::SimCore;
-use avionics_computer::{FlightComputer, Handset, Vehicle};
+use aviation_computer::{FlightComputer, Handset, Vehicle};
 use communication_traffic::Position;
 use simulation_physics as physics;
 use std::io::{ErrorKind, Read, Write};
@@ -242,7 +242,7 @@ fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpLis
     let on_radio = matches!(line, Line::Device(_));
     #[cfg(not(unix))]
     let on_radio = false;
-    let mut fc = FlightComputer::with_mavlink_rate(if on_radio { 1500.0 } else { avionics_computer::MAVLINK_RATE });
+    let mut fc = FlightComputer::with_mavlink_rate(if on_radio { 1500.0 } else { aviation_computer::MAVLINK_RATE });
     let mut autopilot: Option<TcpStream> = None;
     let mut next_connect = 0.0;
     let mut buf = [0u8; 4096];
@@ -427,7 +427,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_tx15_on_a_serial_device_flies_the_plane_and_carries_the_ground_station() {
-        use avionics_crsf as crsf;
+        use aviation_crsf as crsf;
         use std::os::fd::FromRawFd;
         // SAFETY: openpty fills two descriptors and a name; they are ours to own.
         let (master, name) = unsafe {

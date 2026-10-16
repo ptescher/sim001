@@ -1,5 +1,5 @@
 //! Sensor camera: a gimballed camera under the nose, rendered offscreen and streamed to the
-//! ground station over TCP (see `t1s_station::feed`) while a viewer is connected.
+//! ground station over TCP (see `groundstation_shared::feed`) while a viewer is connected.
 //!
 //!   cargo run --release -- --ardupilot --feed          serve on 127.0.0.1:5600
 //!
@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use recreation_games::Kind;
-use t1s_station::feed::{Arena, ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, GameClock, GameKind, GameStatus, Gimbal, write_frame};
+use groundstation_shared::feed::{Arena, ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, GameClock, GameKind, GameStatus, Gimbal, write_frame};
 
 /// Camera position in the airframe (Bevy body axes: +X right, +Y up, -Z forward): a small
 /// sensor ball just ahead of and below the nose tip, clear of the fuselage so it never looks
@@ -92,7 +92,7 @@ fn spawn_feed_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>, 
         Camera3d::default(),
         Camera { order: -1, ..default() },
         RenderTarget::Image(image.clone().into()),
-        Projection::Perspective(PerspectiveProjection { fov: vfov(t1s_station::feed::HFOV_DEFAULT, size).to_radians(), near: 0.02, ..default() }),
+        Projection::Perspective(PerspectiveProjection { fov: vfov(groundstation_shared::feed::HFOV_DEFAULT, size).to_radians(), near: 0.02, ..default() }),
         Transform::default(),
         scene_look(),
     ));
@@ -260,8 +260,8 @@ fn viewer(shared: &Arc<Shared>, core: Arc<Mutex<SimCore>>, mut stream: TcpStream
                     Ok(ClientMsg::Status(st)) => core.lock().unwrap().ap.gcs = Some((Instant::now(), st.armed, st.mode)),
                     Ok(ClientMsg::Radio(r)) => core.lock().unwrap().test_radio = Some(r),
                     Ok(ClientMsg::Key(k)) => core.lock().unwrap().toggle_game(match k {
-                        t1s_station::feed::Key::Race => Kind::Race,
-                        t1s_station::feed::Key::Tag => Kind::Tag,
+                        groundstation_shared::feed::Key::Race => Kind::Race,
+                        groundstation_shared::feed::Key::Tag => Kind::Tag,
                     }),
                     Err(_) => {}
                 }

@@ -17,8 +17,8 @@
 -- envelopes (with ArduPilot's own messages). The widget draws them in the console's components:
 -- lamps along the top (mode, armed, GPS, link, battery), bezelled monitors for the air data, the
 -- artificial horizon and the nav data, and ArduPilot's messages along the bottom. The same layout,
--- as a picture for the docs, is in domains/avionics (the TX15 screen); change them together.
--- See domains/avionics.
+-- as a picture for the docs, is in domains/aviation (the TX15 screen); change them together.
+-- See domains/aviation.
 
 local ADDR_FC, ADDR_RADIO, ADDR_TX = 0xC8, 0xEA, 0xEE
 local T_RC, T_BATTERY, T_LINK, T_ATTITUDE, T_MODE, T_GPS, T_AIRSPEED, T_VARIO, T_ENVELOPE =

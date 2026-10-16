@@ -1,0 +1,73 @@
+Feature: The screen of the TX15
+  The screen of the TX15 shows what ArduPilot reports, from the telemetry on the serial line. The
+  lamps along the top show the flight mode and whether the plane is armed. Below them are the air
+  data, the horizon and the data for navigation. Use the screen to check each action: when you
+  press a button or a switch, you see the plane answer on the radio itself.
+
+  Expectation: The screen shows that the plane is armed
+    Given the arm switch is off
+    And the vehicle is disarmed
+    And the TX15 screen arming is disarmed
+    When the arm switch is on
+    Then the vehicle is armed
+    And the TX15 screen arming is armed
+
+  Expectation: The screen shows the flight mode
+    Given the vehicle is armed
+    And the arm switch is on
+    When the mode switch is QLOITER
+    Then the autopilot mode is QLOITER
+    And the TX15 screen mode is QLOITER
+
+  Expectation: The throttle stick lifts the plane on the serial line
+    Given the vehicle is armed
+    And the autopilot mode is QLOITER
+    And the plane is on the ground
+    When the throttle stick is high
+    Then the flight is hovering
+    And the plane is flying
+    And the height above home is at least 15 m
+
+  Expectation: The screen shows forward flight
+    Given the vehicle is armed
+    And the flight is hovering
+    And the plane is flying
+    And the height above home is at least 15 m
+    And the throttle stick is high
+    When the pilot switches to forward flight
+    Then the flight is cruising
+    And the autopilot mode is FBWA
+    And the TX15 screen mode is FBWA
+
+  Expectation: The aileron stick banks the plane on the serial line
+    Given the vehicle is armed
+    And the autopilot mode is FBWA
+    And the flight is cruising
+    When the aileron stick is right
+    Then the VTOL's wings are banked
+
+  Expectation: The wings become level again on the serial line
+    Given the vehicle is armed
+    And the autopilot mode is FBWA
+    And the aileron stick is right
+    And the VTOL's wings are banked
+    When the aileron stick is centred
+    Then the VTOL's wings are level
+
+  Expectation: The screen shows the plane back in a hover
+    Given the vehicle is armed
+    And the autopilot mode is FBWA
+    And the flight is cruising
+    When the pilot switches back to a hover
+    Then the flight is hovering
+    And the autopilot mode is QLOITER
+    And the TX15 screen mode is QLOITER
+
+  Expectation: The screen shows the plane landed and disarmed
+    Given the vehicle is armed
+    And the plane is flying
+    When the pilot sends the plane home
+    Then the autopilot mode is QRTL
+    And the plane is on the ground
+    And the last landing is soft
+    And the TX15 screen arming is disarmed

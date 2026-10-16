@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 use bevy::window::{PrimaryWindow, WindowPosition};
-use t1s_station::layout::Rect;
+use groundstation_shared::layout::Rect;
 
 /// The frame rectangle and the title bar height (measured by the ground station from AppKit;
 /// the rectangle includes it, Bevy's resolution doesn't).

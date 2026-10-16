@@ -14,7 +14,7 @@ use recreation_games::{Clock, Gate, Kind, Session};
 /// Where the course furniture waits when no game needs it, out of sight under the ground.
 const PARKED: Vec3 = Vec3::new(0.0, -500.0, 0.0);
 /// How many cones mark the edge of the tag arena.
-const CONES: usize = t1s_station::feed::ARENA_CONES;
+const CONES: usize = groundstation_shared::feed::ARENA_CONES;
 /// How long after GO the panel says GO, and how long the result stays in the middle (s).
 const GO_SHOWN: f32 = 2.0;
 const RESULT_SHOWN: f32 = 6.0;
