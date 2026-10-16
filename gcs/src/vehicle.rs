@@ -34,11 +34,17 @@ pub const PLANE_MODES: &[(u32, &str)] = &[
 ];
 
 pub fn mode_name(custom_mode: u32) -> &'static str {
-    PLANE_MODES.iter().find(|(m, _)| *m == custom_mode).map_or("UNKNOWN", |(_, n)| n)
+    PLANE_MODES
+        .iter()
+        .find(|(m, _)| *m == custom_mode)
+        .map_or("UNKNOWN", |(_, n)| n)
 }
 
 pub fn mode_number(name: &str) -> Option<u32> {
-    PLANE_MODES.iter().find(|(_, n)| *n == name).map(|(m, _)| *m)
+    PLANE_MODES
+        .iter()
+        .find(|(_, n)| *n == name)
+        .map(|(m, _)| *m)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -116,7 +122,8 @@ pub struct LinkInfo {
 impl LinkInfo {
     /// Heartbeat seen within the last 3 s.
     pub fn alive(&self) -> bool {
-        self.last_heartbeat.is_some_and(|t| t.elapsed().as_secs_f32() < 3.0)
+        self.last_heartbeat
+            .is_some_and(|t| t.elapsed().as_secs_f32() < 3.0)
     }
 }
 
@@ -200,6 +207,10 @@ pub struct Vehicle {
 
     pub rc: [u16; 8],
     pub servo: [u16; 8],
+    /// How fast the plane came down (m/s) when it last touched the ground, if it has.
+    pub last_touchdown: Option<f32>,
+    airborne: bool,
+    fastest_sink: f32,
 
     pub log: VecDeque<LogLine>,
     /// Ground track, (lat, lon), roughly 2 Hz.
@@ -220,7 +231,11 @@ impl Vehicle {
     pub fn new(address: &str) -> Self {
         Self {
             start: Instant::now(),
-            link: LinkInfo { address: address.to_string(), status: "starting".into(), ..Default::default() },
+            link: LinkInfo {
+                address: address.to_string(),
+                status: "starting".into(),
+                ..Default::default()
+            },
             sysid: 1,
             compid: 1,
             have_heartbeat: false,
@@ -280,6 +295,9 @@ impl Vehicle {
             guided_target: None,
             rc: [0; 8],
             servo: [0; 8],
+            last_touchdown: None,
+            airborne: false,
+            fastest_sink: 0.0,
             log: VecDeque::new(),
             trail: VecDeque::new(),
             history: VecDeque::new(),
@@ -292,7 +310,11 @@ impl Vehicle {
     }
 
     pub fn mode(&self) -> &'static str {
-        if self.have_heartbeat { mode_name(self.custom_mode) } else { "----" }
+        if self.have_heartbeat {
+            mode_name(self.custom_mode)
+        } else {
+            "----"
+        }
     }
 
     /// Average cell voltage, if a battery is reported.
@@ -311,7 +333,11 @@ impl Vehicle {
 
     /// Takes in a message that is about other aircraft, or that other aircraft sent. Returns
     /// whether it was one.
-    pub fn hear_traffic(&mut self, header: mavlink::MavHeader, msg: &mavlink::dialects::ardupilotmega::MavMessage) -> bool {
+    pub fn hear_traffic(
+        &mut self,
+        header: mavlink::MavHeader,
+        msg: &mavlink::dialects::ardupilotmega::MavMessage,
+    ) -> bool {
         use mavlink::dialects::ardupilotmega::MavMessage as M;
         let own = self.sysid;
         let about_others = match msg {
@@ -341,7 +367,8 @@ impl Vehicle {
     }
 
     pub fn flight_secs(&self) -> f32 {
-        self.armed_since.map_or(self.last_flight_secs, |t| t.elapsed().as_secs_f32())
+        self.armed_since
+            .map_or(self.last_flight_secs, |t| t.elapsed().as_secs_f32())
     }
 
     pub fn push_log(&mut self, source: &'static str, severity: u8, text: impl Into<String>) {
@@ -353,7 +380,12 @@ impl Vehicle {
                 return;
             }
         }
-        self.log.push_back(LogLine { time: Instant::now(), severity, source, text });
+        self.log.push_back(LogLine {
+            time: Instant::now(),
+            severity,
+            source,
+            text,
+        });
         while self.log.len() > 400 {
             self.log.pop_front();
         }
@@ -365,6 +397,21 @@ impl Vehicle {
             return None;
         }
         Some(self.sensors_health & bit != 0)
+    }
+
+    /// Note the sink rate on the way down, and keep the one at touchdown: the fastest descent
+    /// in the last 3 m above the ground. Call it with each position report.
+    pub fn track_landing(&mut self) {
+        if self.alt_rel > 3.0 {
+            self.airborne = true;
+            self.fastest_sink = 0.0;
+        } else if self.airborne {
+            self.fastest_sink = self.fastest_sink.max(self.vd);
+            if self.alt_rel < 0.5 {
+                self.last_touchdown = Some(self.fastest_sink);
+                self.airborne = false;
+            }
+        }
     }
 
     pub fn record_sample(&mut self) {
@@ -424,7 +471,42 @@ mod tests {
     }
 
     fn from(system_id: u8) -> MavHeader {
-        MavHeader { system_id, component_id: 1, sequence: 0 }
+        MavHeader {
+            system_id,
+            component_id: 1,
+            sequence: 0,
+        }
+    }
+
+    fn report(v: &mut Vehicle, alt: f32, down: f32) {
+        v.alt_rel = alt;
+        v.vd = down;
+        v.track_landing();
+    }
+
+    #[test]
+    fn a_gentle_touchdown_is_noted_at_its_sink_rate() {
+        let mut v = Vehicle::new("test");
+        for (alt, down) in [(15.0, 1.5), (5.0, 1.5), (2.0, 1.0), (0.8, 0.6), (0.2, 0.4)] {
+            report(&mut v, alt, down);
+        }
+        assert_eq!(v.last_touchdown, Some(1.0));
+    }
+
+    #[test]
+    fn a_fast_descent_near_the_ground_is_a_hard_landing() {
+        let mut v = Vehicle::new("test");
+        for (alt, down) in [(30.0, 10.0), (2.0, 6.0), (0.2, 6.0)] {
+            report(&mut v, alt, down);
+        }
+        assert_eq!(v.last_touchdown, Some(6.0));
+    }
+
+    #[test]
+    fn a_plane_that_never_left_the_ground_has_not_landed() {
+        let mut v = Vehicle::new("test");
+        report(&mut v, 0.0, 0.0);
+        assert_eq!(v.last_touchdown, None);
     }
 
     #[test]
@@ -468,8 +550,22 @@ mod tests {
         };
         let mut mac = [0u8; 20];
         mac[..6].copy_from_slice(&[0x60, 0, 0, 0, 0, 2]);
-        assert!(v.hear_traffic(MavHeader { system_id: 1, component_id: 236, sequence: 0 }, &heard(mac)));
-        assert!(v.hear_traffic(MavHeader { system_id: 1, component_id: 236, sequence: 1 }, &heard([0; 20])));
+        assert!(v.hear_traffic(
+            MavHeader {
+                system_id: 1,
+                component_id: 236,
+                sequence: 0
+            },
+            &heard(mac)
+        ));
+        assert!(v.hear_traffic(
+            MavHeader {
+                system_id: 1,
+                component_id: 236,
+                sequence: 1
+            },
+            &heard([0; 20])
+        ));
         let seen = v.other_aircraft();
         assert_eq!(seen.len(), 1, "{seen:?}");
         assert_eq!(seen[0].source_label(), "RID");

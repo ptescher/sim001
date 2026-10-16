@@ -49,7 +49,10 @@ pub fn pack_meta(name: &str) -> Option<t1s_station::mappack::PackMeta> {
 
 /// Repository root (the sim's crate), next to this crate.
 pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().map(Path::to_path_buf).unwrap_or_default()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default()
 }
 
 fn sim_binary() -> PathBuf {
@@ -62,7 +65,11 @@ fn step(n: usize, total: usize, what: &str) {
 
 fn run(cmd: &mut Command, what: &str) -> Result<(), String> {
     let status = cmd.status().map_err(|e| format!("{what}: {e}"))?;
-    if status.success() { Ok(()) } else { Err(format!("{what} failed ({status})")) }
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("{what} failed ({status})"))
+    }
 }
 
 /// Everything the station needs before it opens windows. Prints progress; long steps (the sim
@@ -78,10 +85,18 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         // Under `cargo run`, $CARGO is the cargo running us; the repo's rust-toolchain.toml
         // pins the same toolchain for the sim.
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-        run(Command::new(cargo).args(["build", "--release"]).current_dir(&root), "building the sim")?;
+        run(
+            Command::new(cargo)
+                .args(["build", "--release"])
+                .current_dir(&root),
+            "building the sim",
+        )?;
     }
     if !sim_binary().exists() {
-        return Err(format!("{} missing after the build", sim_binary().display()));
+        return Err(format!(
+            "{} missing after the build",
+            sim_binary().display()
+        ));
     }
 
     if let Some(name) = &opts.map {
@@ -90,10 +105,21 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
             println!("  maps/{name}/build (present)");
         } else {
             // Downloads USGS lidar + NAIP photos + OSM (a few minutes the first time).
-            println!("  building maps/{name} (USGS 3DEP lidar, NAIP photos, OpenStreetMap): a few minutes the first time");
+            println!(
+                "  building maps/{name} (USGS 3DEP lidar, NAIP photos, OpenStreetMap): a few minutes the first time"
+            );
             let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
             run(
-                Command::new(cargo).args(["run", "--release", "--manifest-path", "tools/mapbuild/Cargo.toml", "--", name]).current_dir(&root),
+                Command::new(cargo)
+                    .args([
+                        "run",
+                        "--release",
+                        "--manifest-path",
+                        "tools/mapbuild/Cargo.toml",
+                        "--",
+                        name,
+                    ])
+                    .current_dir(&root),
                 "building the map pack",
             )?;
         }
@@ -102,7 +128,13 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         if assets.join("terrain_map.png").exists() && assets.join("terrain_map.txt").exists() {
             println!("  {} (present)", assets.display());
         } else {
-            run(Command::new(sim_binary()).arg("--export-map").arg(assets).current_dir(&root), "exporting the terrain map")?;
+            run(
+                Command::new(sim_binary())
+                    .arg("--export-map")
+                    .arg(assets)
+                    .current_dir(&root),
+                "exporting the terrain map",
+            )?;
         }
     }
 
@@ -113,25 +145,52 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
     let have_image = image_id().is_some();
     if have_image {
         // Cached layers make this a few seconds; it picks up changes to t1s.parm / start.sh.
-        run(Command::new("docker").args(["build", "-q", "-t", SITL_IMAGE, "ardupilot"]).current_dir(&root).stdout(Stdio::null()), "updating the SITL image")?;
+        run(
+            Command::new("docker")
+                .args(["build", "-q", "-t", SITL_IMAGE, "ardupilot"])
+                .current_dir(&root)
+                .stdout(Stdio::null()),
+            "updating the SITL image",
+        )?;
         println!("  {SITL_IMAGE} (up to date)");
     } else {
-        println!("  building {SITL_IMAGE} from ardupilot/Dockerfile: first time only, about 15 minutes");
-        run(Command::new("docker").args(["build", "-t", SITL_IMAGE, "ardupilot"]).current_dir(&root), "building the SITL image")?;
+        println!(
+            "  building {SITL_IMAGE} from ardupilot/Dockerfile: first time only, about 15 minutes"
+        );
+        run(
+            Command::new("docker")
+                .args(["build", "-t", SITL_IMAGE, "ardupilot"])
+                .current_dir(&root),
+            "building the SITL image",
+        )?;
     }
 
-    step(5, total, "ArduPlane SITL containers: yours, and one for each computer pilot");
+    step(
+        5,
+        total,
+        "ArduPlane SITL containers: yours, and one for each computer pilot",
+    );
     // ArduPilot's home must be the sim's pilot box: the map's home, else start.sh's default.
     let home = opts.map.as_deref().and_then(pack_meta).map(|m| {
-        (format!("{:.7},{:.7},{:.1},{:.0}", m.home_lat, m.home_lon, m.home_alt, m.launch_heading), m.title)
+        (
+            format!(
+                "{:.7},{:.7},{:.1},{:.0}",
+                m.home_lat, m.home_lon, m.home_alt, m.launch_heading
+            ),
+            m.title,
+        )
     });
     // The computer pilots fly planes like yours, each with an autopilot of its own, so that a
     // game is fair: they take as long to get into the air as you do.
     for instance in 0..=recreation_games::PILOTS.len() {
-        println!("  {}", start_sitl(
+        println!(
+            "  {}",
+            start_sitl(
                 instance,
                 opts.map.as_deref().unwrap_or("alpine"),
-                opts.aircraft.as_deref().unwrap_or(simulation_aircraft::default().id),
+                opts.aircraft
+                    .as_deref()
+                    .unwrap_or(simulation_aircraft::default().id),
                 home.as_ref().map(|h| h.0.as_str()),
             )?
         );
@@ -143,17 +202,31 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
 }
 
 fn image_id() -> Option<String> {
-    let out = Command::new("docker").args(["image", "inspect", "-f", "{{.Id}}", SITL_IMAGE]).output().ok()?;
+    let out = Command::new("docker")
+        .args(["image", "inspect", "-f", "{{.Id}}", SITL_IMAGE])
+        .output()
+        .ok()?;
     let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
     (out.status.success() && !id.is_empty()).then_some(id)
 }
 
 fn docker_up() -> bool {
-    Command::new("docker").arg("info").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+    Command::new("docker")
+        .arg("info")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }
 
 fn ensure_docker() -> Result<(), String> {
-    if Command::new("docker").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_err() {
+    if Command::new("docker")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_err()
+    {
         return Err("the docker command isn't installed: install Docker Desktop (https://www.docker.com/products/docker-desktop/)".into());
     }
     if docker_up() {
@@ -180,20 +253,43 @@ fn ensure_docker() -> Result<(), String> {
 
 /// The container of SITL instance `instance`: 0 is yours, 1 to 3 the computer pilots'.
 fn sitl_container(instance: usize) -> String {
-    if instance == 0 { SITL_CONTAINER.to_string() } else { format!("{SITL_CONTAINER}-{instance}") }
+    if instance == 0 {
+        SITL_CONTAINER.to_string()
+    } else {
+        format!("{SITL_CONTAINER}-{instance}")
+    }
 }
 
 /// The `docker run` arguments for SITL instance `instance` (before the image). Yours puts its
 /// MAVLink on tcp:5760 for the console; a computer pilot's has nobody to talk to, so it publishes
 /// no port. Each keeps its flight logs apart.
-fn sitl_run_args(instance: usize, map: &str, aircraft: &str, home_loc: Option<&str>, logs: &std::path::Path) -> Vec<String> {
+fn sitl_run_args(
+    instance: usize,
+    map: &str,
+    aircraft: &str,
+    home_loc: Option<&str>,
+    logs: &std::path::Path,
+) -> Vec<String> {
     let name = sitl_container(instance);
-    let mut a: Vec<String> = ["run", "-d", "--rm", "--name", &name].iter().map(|s| s.to_string()).collect();
+    let mut a: Vec<String> = ["run", "-d", "--rm", "--name", &name]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     if instance == 0 {
         a.extend(["-p".into(), "5760:5760".into()]);
     }
-    a.extend(["--label".into(), format!("t1s.map={map}"), "--label".into(), format!("t1s.aircraft={aircraft}")]);
-    a.extend(["-e".into(), format!("AIRCRAFT={aircraft}"), "-e".into(), format!("INSTANCE={instance}")]);
+    a.extend([
+        "--label".into(),
+        format!("t1s.map={map}"),
+        "--label".into(),
+        format!("t1s.aircraft={aircraft}"),
+    ]);
+    a.extend([
+        "-e".into(),
+        format!("AIRCRAFT={aircraft}"),
+        "-e".into(),
+        format!("INSTANCE={instance}"),
+    ]);
     if let Some(h) = home_loc {
         a.extend(["-e".into(), format!("HOME_LOC={h}")]);
     }
@@ -204,11 +300,22 @@ fn sitl_run_args(instance: usize, map: &str, aircraft: &str, home_loc: Option<&s
 /// Starts SITL instance `instance`, or reboots it if it's already running: it was flying a
 /// previous sim's aircraft, and ArduPilot's EKF would see the new one jump back to the pilot box.
 /// A container from an older image is replaced, so parameter changes take effect.
-fn start_sitl(instance: usize, map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
+fn start_sitl(
+    instance: usize,
+    map: &str,
+    aircraft: &str,
+    home_loc: Option<&str>,
+) -> Result<String, String> {
     let name = sitl_container(instance);
     let name = name.as_str();
     let running = Command::new("docker")
-        .args(["ps", "--filter", &format!("name=^{name}$"), "--format", "{{.Image}}"])
+        .args([
+            "ps",
+            "--filter",
+            &format!("name=^{name}$"),
+            "--format",
+            "{{.Image}}",
+        ])
         .output()
         .map_err(|e| format!("docker ps: {e}"))?;
     if !String::from_utf8_lossy(&running.stdout).trim().is_empty() {
@@ -225,18 +332,37 @@ fn start_sitl(instance: usize, map: &str, aircraft: &str, home_loc: Option<&str>
         // Its parameters belong to the plane it was started for.
         let same_aircraft = inspect("{{index .Config.Labels \"t1s.aircraft\"}}") == aircraft;
         if same_image && same_map && same_aircraft {
-            run(Command::new("docker").args(["restart", "-t", "1", name]).stdout(Stdio::null()), "restarting SITL")?;
+            run(
+                Command::new("docker")
+                    .args(["restart", "-t", "1", name])
+                    .stdout(Stdio::null()),
+                "restarting SITL",
+            )?;
             return Ok(format!("restarted {name}"));
         }
         println!(
             "  {}: replacing the container",
-            if !same_image { "the SITL image changed" } else if !same_map { "different map" } else { "different aircraft" }
+            if !same_image {
+                "the SITL image changed"
+            } else if !same_map {
+                "different map"
+            } else {
+                "different aircraft"
+            }
         );
     }
     // Gone, stopped, or from an older image.
-    let _ = Command::new("docker").args(["rm", "-f", name]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    let _ = Command::new("docker")
+        .args(["rm", "-f", name])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
     // ArduPilot's flight logs (.BIN) land in logs/sitl/ in the repo, so they outlive the container.
-    let logs = if instance == 0 { repo_root().join("logs/sitl") } else { repo_root().join(format!("logs/sitl/opponent-{instance}")) };
+    let logs = if instance == 0 {
+        repo_root().join("logs/sitl")
+    } else {
+        repo_root().join(format!("logs/sitl/opponent-{instance}"))
+    };
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
     let out = Command::new("docker")
         .args(sitl_run_args(instance, map, aircraft, home_loc, &logs))
@@ -245,21 +371,39 @@ fn start_sitl(instance: usize, map: &str, aircraft: &str, home_loc: Option<&str>
         .map_err(|e| format!("docker run: {e}"))?;
     if out.status.success() {
         Ok(if instance == 0 {
-            format!("started {name} (MAVLink on tcp:5760, flight logs in {})", logs.display())
+            format!(
+                "started {name} (MAVLink on tcp:5760, flight logs in {})",
+                logs.display()
+            )
         } else {
-            format!("started {name} (a computer pilot's autopilot, flight logs in {})", logs.display())
+            format!(
+                "started {name} (a computer pilot's autopilot, flight logs in {})",
+                logs.display()
+            )
         })
     } else {
-        Err(format!("docker run failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
+        Err(format!(
+            "docker run failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ))
     }
 }
 
 /// Starts the sim (release build) in its pane. Its output goes to the terminal.
-pub fn start_sim(opts: &Options, rect: Option<Rect>, home: (f64, f64, f32)) -> Result<Child, String> {
+pub fn start_sim(
+    opts: &Options,
+    rect: Option<Rect>,
+    home: (f64, f64, f32),
+) -> Result<Child, String> {
     let root = repo_root();
     let bin = sim_binary();
     let mut cmd = Command::new(&bin);
-    cmd.current_dir(&root).args(["--ardupilot", "--feed", &opts.feed_port.to_string(), "--exit-with-parent"]);
+    cmd.current_dir(&root).args([
+        "--ardupilot",
+        "--feed",
+        &opts.feed_port.to_string(),
+        "--exit-with-parent",
+    ]);
     if opts.raster {
         cmd.arg("--raster");
     }
@@ -277,17 +421,51 @@ pub fn start_sim(opts: &Options, rect: Option<Rect>, home: (f64, f64, f32)) -> R
     }
     // The console's telemetry comes through the sim's TX15 stand-in, which needs to know where on the earth the pilot box is.
     if let Some(port) = opts.radio_port {
-        cmd.args(["--radio", &port.to_string(), "--home", &format!("{},{},{}", home.0, home.1, home.2)]);
+        cmd.args([
+            "--radio",
+            &port.to_string(),
+            "--home",
+            &format!("{},{},{}", home.0, home.1, home.2),
+        ]);
         if let Some(device) = &opts.tx15_serial {
             cmd.args(["--flight-computer", device]);
         } else if opts.flight_computer {
-            cmd.args(["--flight-computer", &format!("tcp:{UART_PORT}"), "--radio-uart", &format!("tcp:127.0.0.1:{UART_PORT}")]);
+            cmd.args([
+                "--flight-computer",
+                &format!("tcp:{UART_PORT}"),
+                "--radio-uart",
+                &format!("tcp:127.0.0.1:{UART_PORT}"),
+            ]);
         }
     }
     if let Some(r) = rect {
         cmd.args(["--window-rect", &r.to_arg(), "--frameless"]);
     }
-    cmd.spawn().map_err(|e| format!("starting {}: {e}", bin.display()))
+    cmd.spawn()
+        .map_err(|e| format!("starting {}: {e}", bin.display()))
+}
+
+/// The sim this station started, so that every way out of the station stops it.
+static SIM: std::sync::Mutex<Option<Child>> = std::sync::Mutex::new(None);
+
+/// Keep the sim that was started, to stop it when the station ends.
+pub fn keep_sim(child: Child) {
+    *SIM.lock().unwrap() = Some(child);
+}
+
+/// Stop the sim that this station started, if it is still there.
+pub fn stop_sim() {
+    if let Some(mut child) = SIM.lock().unwrap().take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+/// Leave the station with this exit code, and stop the sim first: a console that quits alone
+/// leaves its sim window open on a plane that nobody flies.
+pub fn exit(code: i32) -> ! {
+    stop_sim();
+    std::process::exit(code)
 }
 
 #[cfg(test)]
@@ -305,8 +483,17 @@ mod tests {
         assert!(yours.contains(&"INSTANCE=0".to_string()));
         let kestrel = sitl_run_args(1, "alpine", "t1s-vtol", Some("1,2,3,4"), logs);
         assert!(kestrel.windows(2).any(|w| w == ["--name", "t1s-sitl-1"]));
-        assert!(!kestrel.contains(&"-p".to_string()), "nobody connects to it");
-        assert!(kestrel.contains(&"INSTANCE=1".to_string()) && kestrel.contains(&"HOME_LOC=1,2,3,4".to_string()));
-        assert!(kestrel.contains(&"AIRCRAFT=t1s-vtol".to_string()), "a plane like yours");
+        assert!(
+            !kestrel.contains(&"-p".to_string()),
+            "nobody connects to it"
+        );
+        assert!(
+            kestrel.contains(&"INSTANCE=1".to_string())
+                && kestrel.contains(&"HOME_LOC=1,2,3,4".to_string())
+        );
+        assert!(
+            kestrel.contains(&"AIRCRAFT=t1s-vtol".to_string()),
+            "a plane like yours"
+        );
     }
 }
