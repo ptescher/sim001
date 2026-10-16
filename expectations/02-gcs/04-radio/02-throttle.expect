@@ -10,7 +10,8 @@ Feature: The throttle stick in a hover
     And the plane is on the ground
     When the throttle stick is high
     Then the flight is hovering
-    And the height above home is at least 5 m
+    And the plane is flying
+    And the height above home is at least 15 m
 
   Expectation: A centred throttle stick holds the height
     Given the flight is hovering

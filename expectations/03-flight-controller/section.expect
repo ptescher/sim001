@@ -1,7 +1,7 @@
 # Flying with a flight controller (ANGLE, ACRO). The plain T1-S has none; a plane that does,
-# like the T1-S VTOL, can. The sim's own stick modes for such a plane aren't built yet, so
-# these tests aren't supported yet. See also the ground station, which flies the VTOL with
-# ArduPilot.
+# like the T1-S VTOL, can. The sim's own stick modes are built (src/sim.rs). The tests that need
+# a flight controller run with ArduPilot beside the sim: ardupilot/expect_sim.sh. See also the
+# ground station, which flies the VTOL with ArduPilot and a radio.
 
 Section: Flying with a flight controller
   A plane with a flight controller can help the pilot. The T1-S VTOL has one, and the plain
@@ -9,9 +9,13 @@ Section: Flying with a flight controller
   On a keyboard, M selects the next one. On a radio, the switch you gave to ArduPilot mode
   does it.
 
+  The T1-S VTOL flies with ArduPilot too, and the six buttons on the front of the radio are its
+  flight modes: [[QHOVER]], [[QLOITER]], [[FBWA]], [[CRUISE]], [[AUTO]] and [[QRTL]]. [[The six buttons of the radio]]
+  says what each one does. [[Flying a VTOL with self-levelling]] is a tutorial that uses them.
+
 Vocabulary:
   Phrase: the sim has just started with a flight controller
-    Say: install Rust. Then run `cargo run --release` in the repository. The sim opens at the pilot box with the T1-S VTOL, which has a flight controller. The plane is on the ground, the throttle is closed and the flight mode is MANUAL
+    Say: start the sim with the T1-S VTOL. It opens at the pilot box with the T1-S VTOL, which has a flight controller. The plane is on the ground, the throttle is closed and the flight mode is MANUAL
     Given the flight controller is fitted
     And the throttle is 0 %
     And the pitch stick is centred

@@ -23,6 +23,10 @@ Term: AUTO
 Term: Chase
   The view from just behind the plane, following it.
 
+Term: CRUISE
+  The mode of ArduPilot for forward flight that holds the height and the heading. The sticks steer
+  the plane, and the autopilot does the rest. Use it to travel.
+
 Term: Current item
   The [[mission]] item that the plane flies to in AUTO. The map shows it in magenta. WP1
   sends the plane back to the first item.
@@ -106,6 +110,17 @@ Term: Plan altitude
 Term: Roll stick
   The stick that banks the plane. On the keyboard, A rolls the plane to the left and D rolls
   it to the right.
+
+Term: QHOVER
+  A hover mode of ArduPilot for a [[VTOL]]. The throttle stick sets the climb or the descent. The
+  plane does not hold its place, so the wind moves it.
+
+Term: QLOITER
+  A hover mode of ArduPilot for a [[VTOL]] that also holds the plane at one place. Use it to take
+  off and land.
+
+Term: QRTL
+  The mode of ArduPilot for a [[VTOL]] that flies the plane to [[home]] and lands it straight down.
 
 Term: Rates
   How far the control surfaces move for a movement of the stick. High rates give tight

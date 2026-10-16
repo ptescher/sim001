@@ -1,0 +1,33 @@
+Feature: Forward flight with self-levelling
+  FBWA is the self-levelling mode of the VTOL, and button 3 of the radio selects it. In FBWA,
+  the sticks set the angle of bank and pitch. When you release the sticks, the plane levels
+  its wings and nose by itself. Thus you can learn to fly the plane on its wing, with no
+  risk of a roll-over. From a hover, FBWA also starts the transition: the wing motors tilt
+  forward and the plane speeds up. In FBWA the throttle stick sets the power, so push it all the way up. At cruise speed, the wing needs a little nose up to hold the height: pull the elevator stick back a little.
+
+  Expectation: FBWA changes a hover into forward flight
+    Given the VTOL is hovering over the field
+    When the pilot switches to forward flight
+    Then the flight is cruising
+    And the autopilot mode is FBWA
+    And the height above home is at least 15 m
+
+  Expectation: In FBWA, the aileron stick banks the plane
+    Given the VTOL is cruising in FBWA
+    When the aileron stick is right
+    Then the VTOL's wings are banked
+
+  Expectation: In FBWA, the wings become level again
+    Release the stick, and the plane levels its wings by itself.
+    Given the VTOL is cruising in FBWA
+    And the aileron stick is right
+    And the VTOL's wings are banked
+    When the aileron stick is centred
+    Then the VTOL's wings are level
+
+  Expectation: Button 2 brings the plane out of FBWA and back to a hover
+    Given the VTOL is cruising in FBWA
+    When the pilot switches back to a hover
+    Then the flight is hovering
+    And the autopilot mode is QLOITER
+    And the height above home is at least 15 m

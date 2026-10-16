@@ -12,3 +12,44 @@ Section: Flying with a radio
 Background:
   Given the console is connected to a VTOL on the ground
   And the TX15 is ready
+
+Vocabulary:
+  State: the aileron stick is left | centred | right
+    Set: move the aileron stick {value}: all the way left, in the middle, or all the way right
+    Shows: left: the first number of the RC 1-4 line on the SYSTEMS screen is near 1250
+    Shows: centred: the first number of the RC 1-4 line on the SYSTEMS screen is near 1500
+    Shows: right: the first number of the RC 1-4 line on the SYSTEMS screen is near 1750
+  State: the VTOL's wings are level | banked
+    Shows: level: the horizon in the PFD is flat, and the roll reading is near 0
+    Shows: banked: the horizon in the PFD is tilted, and the roll reading is more than 10° from 0
+  State: the last landing is soft | hard
+    Shows: soft: the plane touches the ground at less than 2 m/s, and the HUD of the sim does not say CRASHED
+    Shows: hard: the plane touches the ground at 2 m/s or more
+
+  Event: the pilot switches to forward flight
+    Say: push the throttle stick all the way up, pull the elevator stick back a little, and press button 3 on the front of the radio. The wing motors tilt forward and the plane speeds up
+  Event: the pilot switches back to a hover
+    Say: centre the elevator stick, put the throttle stick in the middle, and press button 2 on the front of the radio. The plane slows down and the wing motors tilt up
+
+  Event: the pilot switches to QHOVER
+    Say: press button 1 on the front of the radio. The plane stays in the air, and the wind can move it
+  Event: the pilot switches to cruise
+    Say: press button 4 on the front of the radio, with the throttle stick up. The wing motors tilt forward and the plane flies on its wing
+  Event: the pilot sends the plane home
+    Say: press button 6 on the front of the radio. The plane flies to home, and lands there
+
+  Phrase: the VTOL is hovering over the field
+    Say: put the arm switch on, press button 2 and push the throttle stick up. Wait until the plane is 15 m above the field. Keep the throttle stick up
+    Given the vehicle is armed
+    And the autopilot mode is QLOITER
+    And the flight is hovering
+    And the height above home is at least 15 m
+    And the throttle stick is high
+
+  Phrase: the VTOL is cruising in FBWA
+    Say: lift off as above. Push the throttle stick all the way up, pull the elevator stick back a little, and press button 3. The wing motors tilt forward. Wait until the plane flies on its wing
+    Given the vehicle is armed
+    And the autopilot mode is FBWA
+    And the flight is cruising
+    And the height above home is at least 15 m
+    And the throttle stick is high

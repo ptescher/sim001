@@ -1,0 +1,40 @@
+Feature: The six buttons of the radio
+  The six buttons on the front of the radio are the six flight modes that the plane needs.
+  Press the button for the mode that you want:
+
+  1. QHOVER: a hover. The throttle stick sets the climb. The plane drifts with the wind.
+  2. QLOITER: a hover that holds the plane at one place. Use it to take off and land.
+  3. FBWA: forward flight that levels itself. The sticks set the angle of bank and pitch.
+  4. CRUISE: forward flight that holds the height and the heading. Use it to travel.
+  5. AUTO: the plane flies the [[mission]] on the vehicle.
+  6. QRTL: the plane flies to [[home]] and lands there, straight down and softly.
+
+  [[The throttle stick in a hover]] shows QLOITER, [[Forward flight with self-levelling]] shows
+  FBWA and [[Switches]] shows the buttons. Mission flights in AUTO are in [[Flying a mission]].
+
+  Expectation: QHOVER is a hover mode
+    Given the vehicle is armed
+    And the flight is hovering
+    And the height above home is at least 15 m
+    And the throttle stick is high
+    When the pilot switches to QHOVER
+    Then the autopilot mode is QHOVER
+    And the flight is hovering
+
+  Expectation: CRUISE changes a hover into forward flight with the radio
+    Given the vehicle is armed
+    And the flight is hovering
+    And the height above home is at least 15 m
+    And the throttle stick is high
+    When the pilot switches to cruise
+    Then the flight is cruising
+    And the autopilot mode is CRUISE
+
+  Expectation: QRTL brings the plane home and lands it softly
+  A soft landing is one at less than 2 m/s.
+    Given the vehicle is armed
+    And the plane is flying
+    When the pilot sends the plane home
+    Then the autopilot mode is QRTL
+    And the plane is on the ground
+    And the last landing is soft

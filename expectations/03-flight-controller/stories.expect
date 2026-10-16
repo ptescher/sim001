@@ -5,7 +5,8 @@ Story: Learning with self-levelling
 
   In [[ANGLE]], the plane levels its wings when you release the sticks. Thus the plane stays
   under control while you learn. In this tutorial, you select ANGLE, throw the plane and roll
-  it. Then you release the stick, and the wings become level again.
+  it. Then you release the stick, and the wings become level again. The VTOL has the same
+  help in FBWA: see [[Flying a VTOL with self-levelling]].
 
   Scenario: Pick ANGLE mode and throw
     When the pilot changes flight mode

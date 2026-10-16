@@ -21,3 +21,68 @@ Story: Taking off with the TX15
     Then the flight is hovering
     When the throttle stick is low
     Then the plane is on the ground
+
+Story: Flying a VTOL with self-levelling
+  As a pilot learning to fly a VTOL
+  I want the plane to level itself when I let go of the sticks
+  So that I can fly it forward, bring it back to a hover and land it softly while I learn
+
+  This tutorial follows [[Taking off with the TX15]] and uses the same radio. You lift off
+  in QLOITER. Then you press button 3 for FBWA, and the plane flies forward on its wing. In
+  FBWA the plane levels itself, so you bank it with the aileron stick and then let go. At the
+  end you press button 2 to hover again, and you press button 6. The plane flies home and lands softly.
+
+  Scenario: Lift off, fly forward in FBWA, hover again and land softly
+    When the arm switch is on
+    Then the vehicle is armed
+    When the mode switch is QLOITER
+    Then the autopilot mode is QLOITER
+    When the throttle stick is high
+    Then the flight is hovering
+    And the plane is flying
+    And the height above home is at least 15 m
+    When the pilot switches to forward flight
+    Then the flight is cruising
+    And the autopilot mode is FBWA
+    When the aileron stick is right
+    Then the VTOL's wings are banked
+    When the aileron stick is centred
+    Then the VTOL's wings are level
+    When the pilot switches back to a hover
+    Then the flight is hovering
+    When the pilot sends the plane home
+    Then the autopilot mode is QRTL
+    And the plane is on the ground
+    And the last landing is soft
+
+Story: Trying the buttons of the radio
+  As a pilot with a radio
+  I want to try the flight modes on the six buttons
+  So that I know what each mode does before I fly a real flight
+
+  This tutorial uses the same radio as [[Taking off with the TX15]]. You lift off in QLOITER, and
+  then you try the other modes in the air. Button 1 is QHOVER, and the plane drifts with the wind.
+  Button 4 is CRUISE, and the plane flies forward on its wing. Button 6
+  is QRTL, and the plane flies home and lands softly. [[Flying a VTOL with self-levelling]] shows
+  button 3, FBWA.
+
+  Scenario: Lift off, try QHOVER and CRUISE, then fly home
+    When the arm switch is on
+    Then the vehicle is armed
+    When the mode switch is QLOITER
+    Then the autopilot mode is QLOITER
+    When the throttle stick is high
+    Then the flight is hovering
+    And the plane is flying
+    And the height above home is at least 15 m
+    When the pilot switches to QHOVER
+    Then the autopilot mode is QHOVER
+    And the flight is hovering
+    When the pilot switches to cruise
+    Then the flight is cruising
+    And the autopilot mode is CRUISE
+    When the pilot sends the plane home
+    Then the autopilot mode is QRTL
+    And the plane is on the ground
+    And the last landing is soft
+
