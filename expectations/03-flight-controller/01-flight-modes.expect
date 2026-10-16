@@ -3,6 +3,12 @@ Feature: Flight modes
   again. On a keyboard, press M. On a radio, press the button you gave to ArduPilot mode. The
   top line of the HUD shows the mode.
 
+  The T1-S VTOL flies with ArduPilot, and its radio has six modes on six buttons: QHOVER, QLOITER,
+  FBWA, CRUISE, AUTO and QRTL. FBWA is its self-levelling mode, like ANGLE. [[The six buttons of
+  the radio]] says what each one does. Two tutorials fly the VTOL with them: [[Flying a VTOL with
+  self-levelling]] takes off, flies forward in FBWA, and lands softly, and [[Trying the buttons of
+  the radio]] tries the other modes.
+
   Expectation: ANGLE levels the plane for you
     In ANGLE, the sticks set the angle of bank and pitch. When you release the sticks, the
     plane levels its wings and nose. Use this mode when you learn to fly.
