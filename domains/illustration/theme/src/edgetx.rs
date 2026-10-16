@@ -229,4 +229,23 @@ mod tests {
             assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
         }
     }
+
+    /// The T1SFC widget on the radio carries the console's colours as literals (it cannot read this
+    /// crate): they must be the palettes' own.
+    #[test]
+    fn the_flight_display_widget_has_the_palettes_colours() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../teleoperation/edgetx/WIDGETS/T1SFC/main.lua");
+        let lua = std::fs::read_to_string(path).expect("the widget");
+        for (p, table) in [(&NIGHT, "night"), (&DAY, "day")] {
+            let start = lua.find(&format!("  {table} = {{")).unwrap_or_else(|| panic!("no {table} palette in the widget"));
+            let block = &lua[start..lua.len().min(start + 700)];
+            for (role, c) in [
+                ("bg", p.screen), ("panel", p.title), ("text", p.text), ("muted", p.muted), ("ok", p.ok), ("caution", p.caution),
+                ("warning", p.warning), ("marker", p.marker), ("sky", p.sky), ("ground", p.ground),
+            ] {
+                let want = format!("{role} = {{ 0x{:02x}, 0x{:02x}, 0x{:02x} }}", c.r(), c.g(), c.b());
+                assert!(block.contains(&want), "{table}: {want}");
+            }
+        }
+    }
 }

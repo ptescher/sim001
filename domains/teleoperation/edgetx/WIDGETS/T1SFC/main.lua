@@ -210,13 +210,15 @@ local function tick()
   readLine()
 end
 
-local options = {}
+local options = { { "Day", BOOL, 0 } }
 
 local function create(zone, opts)
+  usePalette(opts and opts.Day == 1)
   return { zone = zone, options = opts }
 end
 
 local function update(widget, opts)
+  usePalette(opts and opts.Day == 1)
   widget.options = opts
 end
 
@@ -226,8 +228,24 @@ end
 
 -- Colours. The radio has one custom-colour slot, so a colour is a { r, g, b } table and is put in
 -- the slot just before each draw that uses it.
-local WHITE, GREY, BG, PANEL = { 255, 255, 255 }, { 150, 160, 170 }, { 12, 16, 22 }, { 24, 30, 40 }
-local SKY, EARTH, YELLOW, GREEN, RED, AMBER = { 40, 110, 200 }, { 120, 80, 30 }, { 255, 210, 0 }, { 60, 200, 90 }, { 230, 70, 60 }, { 240, 190, 60 }
+-- The console's palettes (domains/illustration/theme: NIGHT and DAY; a test keeps them equal).
+local PALETTES = {
+  night = { bg = { 0x05, 0x08, 0x06 }, panel = { 0x22, 0x24, 0x1e }, text = { 0xdf, 0xe8, 0xdf }, muted = { 0x91, 0x9c, 0x91 },
+    ok = { 0x4c, 0xff, 0x7a }, caution = { 0xff, 0xb2, 0x1f }, warning = { 0xff, 0x5a, 0x4f }, marker = { 0xff, 0xe1, 0x4d },
+    sky = { 0x0e, 0x2c, 0x4c }, ground = { 0x3b, 0x2a, 0x15 } },
+  day = { bg = { 0xfb, 0xfa, 0xf6 }, panel = { 0xe2, 0xdf, 0xd0 }, text = { 0x1a, 0x1b, 0x17 }, muted = { 0x54, 0x5a, 0x4f },
+    ok = { 0x13, 0x6a, 0x32 }, caution = { 0x7a, 0x4c, 0x00 }, warning = { 0xa8, 0x22, 0x19 }, marker = { 0x8a, 0x6d, 0x00 },
+    sky = { 0x6f, 0x9f, 0xc8 }, ground = { 0x9a, 0x7a, 0x52 } },
+}
+local WHITE = { 255, 255, 255 }     -- lines and marks on the horizon, in either palette
+local BG, PANEL, GREY, TEXT, GREEN, RED, AMBER, SKY, EARTH, YELLOW
+
+local function usePalette(day)
+  local p = day and PALETTES.day or PALETTES.night
+  BG, PANEL, GREY, TEXT, GREEN, RED, AMBER, SKY, EARTH = p.bg, p.panel, p.muted, p.text, p.ok, p.warning, p.caution, p.sky, p.ground
+  YELLOW = { 255, 210, 0 }
+end
+usePalette(false)
 
 local function paint(c)
   lcd.setColor(CUSTOM_COLOR, lcd.RGB(c[1], c[2], c[3]))
@@ -372,12 +390,12 @@ local function drawHud(x, y, w, h)
   tri(cx + math.sin(a) * (r - 8), cy - math.cos(a) * (r - 8),
     cx + math.sin(a - 0.07) * (r - 18), cy - math.cos(a - 0.07) * (r - 18),
     cx + math.sin(a + 0.07) * (r - 18), cy - math.cos(a + 0.07) * (r - 18), YELLOW)
-  roundCorners(x, y, w, h, 14, BG, WHITE)
+  roundCorners(x, y, w, h, 11, BG, TEXT)
 end
 
 local function label(x, y, name, value, unit)
   text(x, y, name, SMLSIZE, GREY)
-  text(x + 50, y - 4, value, MIDSIZE, WHITE)
+  text(x + 50, y - 4, value, MIDSIZE, TEXT)
   if unit then text(x + 50, y + 16, unit, SMLSIZE, GREY) end
 end
 
@@ -388,8 +406,8 @@ local function refresh(widget, event, touchState)
   local live = getTime() - t.last < 100
   fill(z.x, z.y, z.w, z.h, BG)
   -- Top: the flight mode and whether it is armed, the battery, satellites and the link.
-  roundRect(z.x + 2, z.y + 2, z.w - 4, 40, 10, PANEL)
-  text(z.x + 14, z.y + 5, live and t.mode or "NO LINK", DBLSIZE, WHITE)
+  roundRect(z.x + 2, z.y + 2, z.w - 4, 40, 11, PANEL)
+  text(z.x + 14, z.y + 5, live and t.mode or "NO LINK", DBLSIZE, TEXT)
   if live then text(z.x + z.w * 0.34, z.y + 10, t.armed and "ARMED" or "DISARMED", MIDSIZE, t.armed and GREEN or RED) end
   text(z.x + z.w - 14, z.y + 14, string.format("GPS %d  LINK %d%%  %.1fV", t.sats, t.quality, t.volts), SMLSIZE, GREY, RIGHT)
   -- Middle: the horizon, the speeds on its left and the height on its right.
@@ -408,13 +426,13 @@ local function refresh(widget, event, touchState)
   label(hx + hudW + 10, top + hudH * 0.68, "HOME", string.format("%.0f", dist), "m")
   -- The battery, as a bar and the numbers.
   local bx, by = z.x + z.w - 78, top + hudH - 30
-  text(bx, by - 8, string.format("%.1fA  %dmAh", t.amps, t.used), SMLSIZE, WHITE)
-  roundRect(bx, by + 8, 68, 14, 5, GREY)
-  roundRect(bx + 2, by + 10, 64, 10, 4, BG)
+  text(bx, by - 8, string.format("%.1fA  %dmAh", t.amps, t.used), SMLSIZE, TEXT)
+  roundRect(bx, by + 8, 68, 14, 4, GREY)
+  roundRect(bx + 2, by + 10, 64, 10, 3, BG)
   local pct = math.max(0, math.min(100, t.percent))
   if pct > 4 then roundRect(bx + 2, by + 10, 64 * pct / 100, 10, 4, pct > 30 and GREEN or RED) end
   -- Bottom: what ArduPilot said last (PreArm checks, mode changes, failsafes).
-  roundRect(z.x + 2, z.y + z.h - 48, z.w - 4, 46, 10, PANEL)
+  roundRect(z.x + 2, z.y + z.h - 48, z.w - 4, 46, 11, PANEL)
   if #messages == 0 and live then
     text(z.x + 12, z.y + z.h - 45, t.armed and "Armed. ArduPilot's messages show here." or "Disarmed: waiting for ArduPilot's pre-arm checks.", SMLSIZE, GREY)
     text(z.x + 12, z.y + z.h - 32, t.armed and "" or "A failed check shows here in red (PreArm: ...).", SMLSIZE, GREY)
@@ -422,7 +440,7 @@ local function refresh(widget, event, touchState)
   local first = math.max(1, #messages - 2)
   for i = first, #messages do
     local m = messages[i]
-    text(z.x + 12, z.y + z.h - 45 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and RED or (m[1] <= 4 and AMBER or WHITE))
+    text(z.x + 12, z.y + z.h - 45 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and RED or (m[1] <= 4 and AMBER or TEXT))
   end
 end
 
