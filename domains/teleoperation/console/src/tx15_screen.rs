@@ -55,12 +55,31 @@ fn base64(bytes: &[u8]) -> String {
     s
 }
 
+/// A tag without one attribute: ` width="480"` is taken out of `<svg width="480" ...`.
+fn without_attribute(tag: &str, name: &str) -> String {
+    let key = format!(" {name}=\"");
+    match tag.find(&key) {
+        Some(at) => match tag[at + key.len()..].find('"') {
+            Some(end) => format!("{}{}", &tag[..at], &tag[at + key.len() + end + 1..]),
+            None => tag.to_string(),
+        },
+        None => tag.to_string(),
+    }
+}
+
 /// One picture: the TX15's screen (twice its size) above the console's window.
 pub fn composite(console_jpg: &[u8], tx15_svg: &str) -> Option<String> {
     let (w, h) = jpeg_size(console_jpg)?;
     let (sw, sh, margin) = (960u32, 544u32, 24u32);
     let inner = tx15_svg.find("<svg")?;
-    let screen = tx15_svg[inner..].replacen("<svg", &format!("<svg x=\"{}\" y=\"{margin}\" width=\"{sw}\" height=\"{sh}\"", (w.saturating_sub(sw)) / 2), 1);
+    // The screen's own size gives way to the one it has here (an attribute may not appear twice).
+    let tag_end = inner + tx15_svg[inner..].find('>')?;
+    let tag = without_attribute(&without_attribute(&tx15_svg[inner..tag_end], "width"), "height");
+    let screen = format!(
+        "{}{}",
+        tag.replacen("<svg", &format!("<svg x=\"{}\" y=\"{margin}\" width=\"{sw}\" height=\"{sh}\"", (w.saturating_sub(sw)) / 2), 1),
+        &tx15_svg[tag_end..]
+    );
     let total = h + sh + 2 * margin;
     Some(format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 {w} {total}\" width=\"{w}\" height=\"{total}\">\
@@ -94,6 +113,19 @@ mod tests {
         // SOI, a frame header (baseline) 7 high and 5 wide.
         let jpg = [0xFF, 0xD8, 0xFF, 0xC0, 0, 17, 8, 0, 7, 0, 5, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1];
         assert_eq!(jpeg_size(&jpg), Some((5, 7)));
+    }
+
+    #[test]
+    fn the_composite_is_well_formed_where_the_screen_has_a_size_of_its_own() {
+        let jpg = [0xFF, 0xD8, 0xFF, 0xC0, 0, 17, 8, 0, 100, 0, 200, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1];
+        let screen = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 480 272\" width=\"480\" height=\"272\"><text>X</text></svg>";
+        let svg = composite(&jpg, screen).unwrap();
+        for attribute in [" width=\"", " height=\""] {
+            let start = svg.find("<svg x=").unwrap();
+            let tag = &svg[start..start + svg[start..].find('>').unwrap()];
+            assert_eq!(tag.matches(attribute).count(), 1, "{tag}");
+        }
+        assert!(svg.contains("<text>X</text>"));
     }
 
     #[test]

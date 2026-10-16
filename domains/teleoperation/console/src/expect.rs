@@ -796,6 +796,35 @@ impl ConsoleDriver {
     /// switch and the mode switch.
     fn rc_reading(&self, key: &str) -> Result<Value, String> {
         let rc = self.call(|g, _, _| g.vehicle.lock().unwrap().rc)?;
+        // On the serial line the console's RC readback (the RC 1-4 line) comes down through the
+        // flight computer and the TX15 and does not follow the sticks, so the sticks and switches
+        // read where the pilot put them (as the arm switch does with any radio).
+        if self.serial_line && self.radio.connected {
+            let r = &self.radio;
+            return Ok(match key {
+                "throttle stick" => Value::from(if r.throttle < 0.25 {
+                    "low"
+                } else if r.throttle < 0.65 {
+                    "middle"
+                } else {
+                    "high"
+                }),
+                "aileron stick" => Value::from(if r.roll < -0.25 {
+                    "left"
+                } else if r.roll > 0.25 {
+                    "right"
+                } else {
+                    "centred"
+                }),
+                "arm switch" => Value::from(if r.arm { "on" } else { "off" }),
+                _ => Value::from(
+                    *self
+                        .rc_modes
+                        .get(r.mode as usize)
+                        .ok_or("this plane has no mode switch")?,
+                ),
+            });
+        }
         Ok(match key {
             "throttle stick" => Value::from(match rc[2] {
                 0..=1249 => "low",

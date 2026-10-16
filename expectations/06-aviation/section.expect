@@ -16,6 +16,9 @@ Section: The flight computer
   [[MAVLink]] telemetry on to the ground station. The ground station gets no telemetry from
   any other place. The commands of the ground station go the same way in the other direction.
 
+  [[Flying a VTOL with the TX15]] flies a whole flight this way, with the screen of the TX15 beside the
+  console.
+
   Start the simulator with `--flight-computer PORT`. The simulator then ignores the USB
   controller. Only the serial line moves the plane.
 
