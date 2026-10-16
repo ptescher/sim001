@@ -20,3 +20,32 @@ TX15 ◀─CRSF telemetry── flight computer ◀──state, MAVLink── Ar
 In the sim: `--flight-computer tcp:PORT|/dev/ttyX` puts the flight computer on a UART (see
 `src/flight_computer.rs`). `--radio PORT --radio-uart tcp:HOST:PORT` makes the TX15 stand-in
 the other end of that UART, so the ground station only gets what comes down the line.
+
+## A real TX15 on its USB cable
+
+The radio can be the other end of the line too, on its USB cable in serial mode (not as a USB
+game controller). The radio's USB serial port (`VCP`) has to be in the `LUA` mode, because only
+a Lua script can write to it; `CLI` (the default) answers every byte with `Invalid command`. The script
+[t1sfc.lua](../teleoperation/edgetx/SCRIPTS/TELEMETRY/t1sfc.lua) does the radio's part:
+
+- it sends the model's 16 channels as CRSF RC channels, as often as the radio runs it;
+- it reads the telemetry that comes down (attitude, battery, speed, climb, link quality and the
+  flight mode, with `*` after it when the plane is disarmed), and shows it on a telemetry screen;
+- it carries MAVLink for the ground station on its cable: what ArduPilot sends goes up again
+  addressed to the radio (CRSF address `0xEA`), and what the ground station sends comes down
+  addressed to the radio and goes up addressed to the flight controller (`0xC8`).
+
+Set it up once: copy the script to `SCRIPTS/TELEMETRY/` on the SD card, set Hardware, USB Serial
+to LUA, and give a telemetry screen of the model the script (Telemetry, Screen 1, Script, `t1sfc`).
+Then plug the radio in, and start the station with its device:
+
+```bash
+cd gcs && cargo run --release -- --station --tx15-serial /dev/cu.usbmodemXXXX
+```
+
+The sim opens the device (CRSF's 420 000 baud, raw), and says every two seconds how the line is
+doing (`flight computer: link up (… bytes heard, … sent …, quality …)`). The console and the
+sim's ground station port get their MAVLink through the radio, and nothing from ArduPilot directly.
+The test `a_tx15_on_a_serial_device_flies_the_plane_and_carries_the_ground_station` runs the same
+line on a pseudo-terminal, with a radio that does what the script does.
+

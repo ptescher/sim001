@@ -225,11 +225,15 @@ fn main() {
     let autopilot = arg("--autopilot").cloned().unwrap_or_else(|| "127.0.0.1:5760".into());
     // The flight computer: the TX15 on a UART instead of a USB controller, and the plane's
     // MAVLink carried on the same line.
+    let mut ground_station_via_radio = None;
     if let Some(line) = arg("--flight-computer") {
         let cfg = flight_computer::Config { line: line.clone(), autopilot: autopilot.clone(), home };
-        if let Err(e) = flight_computer::spawn(core.clone(), cfg) {
-            eprintln!("--flight-computer {line}: {e}");
-            std::process::exit(1);
+        match flight_computer::spawn(core.clone(), cfg) {
+            Ok(addr) => ground_station_via_radio = addr,
+            Err(e) => {
+                eprintln!("--flight-computer {line}: {e}");
+                std::process::exit(1);
+            }
         }
     }
     if let Some(port) = arg("--radio").and_then(|p| p.parse::<u16>().ok()) {
@@ -243,7 +247,8 @@ fn main() {
                     std::process::exit(1);
                 }
             },
-            None => arg("--radio-upstream").cloned().unwrap_or(autopilot),
+            // On a real TX15 (a serial device), the ground station is served through the radio.
+            None => arg("--radio-upstream").cloned().or(ground_station_via_radio.map(|a| a.to_string())).unwrap_or(autopilot),
         };
         radio::plugin(
             &mut app,

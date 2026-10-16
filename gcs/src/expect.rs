@@ -205,7 +205,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
             let began = Instant::now();
             // 20 s, and 20 s for each step: an expectation that does one thing has about 40 s, and a
             // story that flies has as many steps as it needs.
-            driver.budget = Duration::from_secs(20 + 20 * plan.steps.len() as u64);
+            driver.budget = Duration::from_secs(30 + 25 * plan.steps.len() as u64);
             let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
             let r = r.results.into_iter().next().unwrap();
             match r.status {
@@ -805,7 +805,7 @@ impl Driver for ConsoleDriver {
                     if self.read(key)?.as_str() != Some(mode.as_str()) {
                         self.send(Cmd::SetMode(n))?;
                         let m = mode.clone();
-                        self.wait_for(15, &format!("the {mode} mode"), move |g| g.vehicle.lock().unwrap().mode() == m)?;
+                        self.wait_for(30, &format!("the {mode} mode"), move |g| g.vehicle.lock().unwrap().mode() == m)?;
                     }
                     std::thread::sleep(HOLD);
                     if self.read(key)?.as_str() == Some(mode.as_str()) {

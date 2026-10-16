@@ -32,6 +32,9 @@ pub struct Options {
     /// With the radio: the TX15 stand-in and ArduPilot talk through the sim's flight computer,
     /// on a UART in CRSF, and the console hears only what comes down that line.
     pub flight_computer: bool,
+    /// A real TX15 on its USB cable (a serial device): the sim's flight computer is on that line,
+    /// and the console's telemetry comes through the radio.
+    pub tx15_serial: Option<String>,
 }
 
 /// Where the sim's TX15 stand-in listens.
@@ -275,7 +278,9 @@ pub fn start_sim(opts: &Options, rect: Option<Rect>, home: (f64, f64, f32)) -> R
     // The console's telemetry comes through the sim's TX15 stand-in, which needs to know where on the earth the pilot box is.
     if let Some(port) = opts.radio_port {
         cmd.args(["--radio", &port.to_string(), "--home", &format!("{},{},{}", home.0, home.1, home.2)]);
-        if opts.flight_computer {
+        if let Some(device) = &opts.tx15_serial {
+            cmd.args(["--flight-computer", device]);
+        } else if opts.flight_computer {
             cmd.args(["--flight-computer", &format!("tcp:{UART_PORT}"), "--radio-uart", &format!("tcp:127.0.0.1:{UART_PORT}")]);
         }
     }

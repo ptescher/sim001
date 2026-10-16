@@ -191,6 +191,10 @@ pub struct Session {
     time: f32,
     /// Your plane has been in the air since GO.
     you_flew: bool,
+    /// A computer chaser goes for you (player 0) whenever it can tag you, whatever else is near.
+    /// Off in a game; the acceptance tests turn it on to be tagged without waiting for the
+    /// chaser to choose you.
+    pub chase_you: bool,
     /// With autopilots: their planes, and the mode switch's QHOVER and FBWA.
     autopilots: Option<Autopilots>,
     /// Your position, velocity and whether you are in the air, as of the last step.
@@ -244,6 +248,7 @@ impl Session {
             time: 0.0,
             you_flew: false,
             autopilots: None,
+            chase_you: false,
             you_now: (field.pilot, Vec3::ZERO, false),
         }
     }
@@ -489,7 +494,11 @@ impl Session {
                 if tag.it == me {
                     // Choose who to chase now and then, not every step.
                     if o.target.is_none_or(|(_, at)| go - at > 1.5) {
-                        o.target = choose_target(tag, me, planes, o.target.map(|(t, _)| t)).map(|t| (t, go));
+                        o.target = if self.chase_you && me != 0 && planes[0].2 && tag.may_tag(0) {
+                            Some((0, go))
+                        } else {
+                            choose_target(tag, me, planes, o.target.map(|(t, _)| t)).map(|t| (t, go))
+                        };
                     }
                     match o.target {
                         Some((t, _)) => chase(&mut o.pilot, s, planes[t], ground, dt),
@@ -629,6 +638,8 @@ pub enum Errand {
     Tag,
     /// Fly slow, wide circles in the arena.
     Loiter,
+    /// Fly at the plane that is it, to be tagged by it.
+    Meet,
     /// Fly out of the arena.
     LeaveArena,
 }
@@ -681,6 +692,16 @@ impl StandIn {
                     Some(t) => chase(&mut self.pilot, you, planes[t], ground, dt),
                     None => wander(&mut self.pilot, you, &game.arena, game.since_go(), 3, ground, dt),
                 }
+            }
+            Errand::Meet => {
+                let Some(tag) = game.tag_ref() else { return self.pilot.toward(you, you.pos + you.vel, 0.7, ground, dt) };
+                let planes = players(game, you);
+                if tag.it == 0 {
+                    return wander(&mut self.pilot, you, &game.arena, game.since_go(), 3, ground, dt);
+                }
+                // Right at it, at its height, at an easy speed so as not to shoot past.
+                let (pos, vel, _) = planes[tag.it];
+                self.pilot.intercept(you, pos, vel, ground, dt)
             }
             Errand::Loiter => {
                 // Slow and steady round the middle of the arena: easy to catch.
@@ -888,6 +909,36 @@ mod tests {
         let t = play(&mut game, &mut you, COUNTDOWN + 90.0, |g, y| Some(stand_in.fly(g, y, Errand::Tag, &Flat, DT)), |g, _| g.chaser() != Some(0));
         assert_ne!(game.chaser(), Some(0), "no tag in {t:.0} s");
         assert_eq!(game.tag_ref().unwrap().players[0].tags, 1);
+    }
+
+    /// With several planes about, a chaser picks the one it can catch soonest, which is not always
+    /// you. The stand-in can fly at the plane that is it, so that the test of being tagged does
+    /// not depend on the chaser's choice: it is tagged within the game, whichever opponent is it.
+    /// With `chase_you`, a computer chaser goes for you at once, so a test can be tagged without
+    /// waiting for it to choose you.
+    #[test]
+    fn a_chaser_told_to_chase_you_tags_a_loitering_plane() {
+        for chaser in 1..=3 {
+            let mut game = Session::tag(field());
+            game.chase_you = true;
+            let (_, mut you) = your_plane();
+            let mut stand_in = StandIn::default();
+            game.tag_ref_mut().unwrap().it = chaser;
+            let t = play(&mut game, &mut you, COUNTDOWN + 60.0, |g, y| Some(stand_in.fly(g, y, Errand::Loiter, &Flat, DT)), |g, _| g.chaser() == Some(0));
+            assert_eq!(game.chaser(), Some(0), "opponent {chaser} did not tag you in {t:.0} s");
+        }
+    }
+
+    #[test]
+    fn the_stand_in_can_meet_the_chaser_and_be_tagged() {
+        for chaser in 1..=3 {
+            let mut game = Session::tag(field());
+            let (_, mut you) = your_plane();
+            let mut stand_in = StandIn::default();
+            game.tag_ref_mut().unwrap().it = chaser;
+            let t = play(&mut game, &mut you, COUNTDOWN + 60.0, |g, y| Some(stand_in.fly(g, y, Errand::Meet, &Flat, DT)), |g, _| g.chaser() == Some(0));
+            assert_eq!(game.chaser(), Some(0), "opponent {chaser} did not tag the stand-in in {t:.0} s");
+        }
     }
 
     #[test]

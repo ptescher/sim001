@@ -74,6 +74,10 @@ pub struct FlightComputer {
     window_good: u32,
     quality: u8,
     to_autopilot: Vec<u8>,
+    /// MAVLink that the radio forwarded up for the ground station.
+    to_ground_station: Vec<u8>,
+    /// MAVLink from the ground station, for the radio to carry up to the plane.
+    from_gs: VecDeque<u8>,
     waiting: VecDeque<u8>,
     budget: f32,
     last_send: f64,
@@ -95,6 +99,8 @@ impl FlightComputer {
             window_good: 0,
             quality: 0,
             to_autopilot: vec![],
+            to_ground_station: vec![],
+            from_gs: VecDeque::new(),
             waiting: VecDeque::new(),
             budget: 0.0,
             last_send: 0.0,
@@ -113,6 +119,11 @@ impl FlightComputer {
                         self.last_rc = Some(now);
                         self.window_good += 1;
                     }
+                }
+                // From the radio itself: what it carries for the ground station. From the radio's
+                // module: the ground station's commands, for the autopilot.
+                crsf::TYPE_MAVLINK_ENVELOPE if f.addr == crsf::ADDR_RADIO => {
+                    self.to_ground_station.extend_from_slice(crsf::envelope_data(&f.payload))
                 }
                 crsf::TYPE_MAVLINK_ENVELOPE => self.to_autopilot.extend_from_slice(crsf::envelope_data(&f.payload)),
                 _ => {}
@@ -145,6 +156,19 @@ impl FlightComputer {
     /// MAVLink that the TX15 sent up, for ArduPilot.
     pub fn take_for_autopilot(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.to_autopilot)
+    }
+
+    /// MAVLink that the radio forwarded up, for the ground station.
+    pub fn take_for_ground_station(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.to_ground_station)
+    }
+
+    /// MAVLink from the ground station: it goes down to the radio, which carries it up to the plane.
+    pub fn from_ground_station(&mut self, mavlink: &[u8]) {
+        self.from_gs.extend(mavlink);
+        while self.from_gs.len() > MAX_WAITING {
+            self.from_gs.pop_front();
+        }
     }
 
     /// The bytes to put on the line now. Nothing goes while the link is down. The telemetry
@@ -201,16 +225,19 @@ impl FlightComputer {
         if due(&mut self.timers.link, 0.5) {
             out.extend(crsf::link_stats_frame(&crsf::LinkStats { rssi: 60, quality: self.quality, snr: 10, rf_mode: 6, tx_power_mw_index: 2 }));
         }
-        // MAVLink in the room that is left.
-        while !self.waiting.is_empty() {
-            let n = self.waiting.len().min(crsf::MAX_ENVELOPE_DATA);
-            if self.budget < (n + 5) as f32 {
-                break;
-            }
-            let chunk: Vec<u8> = self.waiting.drain(..n).collect();
-            self.budget -= (n + 5) as f32;
-            for f in crsf::envelopes(crsf::ADDR_TX, &chunk) {
-                out.extend(f);
+        // The ground station's commands first (they are few), then ArduPilot's MAVLink, in the
+        // room that is left.
+        for (queue, addr) in [(&mut self.from_gs, crsf::ADDR_RADIO), (&mut self.waiting, crsf::ADDR_TX)] {
+            while !queue.is_empty() {
+                let n = queue.len().min(crsf::MAX_ENVELOPE_DATA);
+                if self.budget < (n + 5) as f32 {
+                    break;
+                }
+                let chunk: Vec<u8> = queue.drain(..n).collect();
+                self.budget -= (n + 5) as f32;
+                for f in crsf::envelopes(addr, &chunk) {
+                    out.extend(f);
+                }
             }
         }
         out
@@ -290,6 +317,40 @@ mod tests {
         }
         assert!(sent_envelope_bytes <= 11_500, "{sent_envelope_bytes}");
         assert!(sent_envelope_bytes >= 8_000, "{sent_envelope_bytes}");
+    }
+
+    /// The radio carries MAVLink for the ground station, which is on the other end of the same
+    /// cable (a USB serial line): what it forwards up is addressed to the radio, not to the
+    /// flight controller, and goes to the ground station.
+    #[test]
+    fn mavlink_that_the_radio_forwards_goes_to_the_ground_station_not_the_autopilot() {
+        let mut fc = FlightComputer::new();
+        for f in crsf::envelopes(crsf::ADDR_RADIO, b"for the ground station") {
+            fc.from_line(&f, 0.0);
+        }
+        for f in crsf::envelopes(crsf::ADDR_FC, b"for the autopilot") {
+            fc.from_line(&f, 0.0);
+        }
+        assert_eq!(fc.take_for_ground_station(), b"for the ground station");
+        assert_eq!(fc.take_for_autopilot(), b"for the autopilot");
+    }
+
+    /// What the ground station sends goes down the line to the radio, which carries it up to the
+    /// plane.
+    #[test]
+    fn what_the_ground_station_sends_goes_down_to_the_radio() {
+        let mut fc = FlightComputer::new();
+        fc.from_line(&crsf::rc_frame(&[1500; 16]), 0.0);
+        fc.from_ground_station(b"a command");
+        // The line has room once a little time has passed.
+        let bytes = fc.to_line(&Vehicle::default(), 0.3);
+        let mut got = vec![];
+        for f in crsf::Framer::default().push(&bytes) {
+            if f.kind == crsf::TYPE_MAVLINK_ENVELOPE && f.addr == crsf::ADDR_RADIO {
+                got.extend_from_slice(crsf::envelope_data(&f.payload));
+            }
+        }
+        assert_eq!(got, b"a command");
     }
 
     #[test]

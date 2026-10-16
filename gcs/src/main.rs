@@ -45,6 +45,9 @@ t1s_gcs [options]
   --no-radio         with --station: connect to ArduPilot directly, without the TX15 stand-in
   --flight-computer  with --station: the plane's radio goes through the sim's flight computer, on a UART
                      in CRSF, and the console hears only the telemetry that comes down that line
+  --tx15-serial DEV  with --station: a real TX15 on its USB cable (DEV is its serial device, with its
+                     USB serial set to LUA and the t1sfc script running): the sticks, the telemetry and
+                     the console's MAVLink all go through the radio
   --origin LAT,LON[,ALT]  SITL --home = the sim's pilot box (default matches ardupilot/start.sh)
   --assets DIR       output of `t1s_sim --export-map` (default gcs/assets)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../expectations) against this console
@@ -87,6 +90,7 @@ fn main() {
         test_radio: flag("--expect"),
         radio_port,
         flight_computer: radio_port.is_some() && flag("--flight-computer"),
+        tx15_serial: radio_port.and(arg("--tx15-serial")),
     };
     let aircraft = match &opts.aircraft {
         None => simulation_aircraft::default(),

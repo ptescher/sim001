@@ -26,6 +26,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
 # The flight computer between the TX15 and ArduPilot: see domains/avionics.
 avionics_computer = { path = "domains/avionics/computer" }
+avionics_crsf = { path = "domains/avionics/crsf" }
 # What the radios tell the pilot about other aircraft: see domains/communication.
 communication_air = { path = "domains/communication/air" }
 communication_radio = { path = "domains/communication/radio" }

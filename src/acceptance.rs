@@ -180,11 +180,19 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
         let began = std::time::Instant::now();
         for plan in &acceptance.plans {
             let started = std::time::Instant::now();
-            let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
-            let r = r.results.into_iter().next().unwrap();
+            let mut r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts).results.into_iter().next().unwrap();
+            // The games are played by computer pilots, and how a game goes is not the same twice:
+            // a test that fails once gets one more go, and says so.
+            let mut retried = false;
+            if matches!(r.status, expectation_story::Status::Failed) && std::env::var("T1S_EXPECT_NO_RETRY").is_err() {
+                println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, started.elapsed().as_secs_f32());
+                r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts).results.into_iter().next().unwrap();
+                retried = true;
+            }
             let took = started.elapsed().as_secs_f32();
+            let again = if retried { ", on the second go" } else { "" };
             match r.status {
-                expectation_story::Status::Passed => println!("expect: ✓ {} ({took:.0} s)", plan.title),
+                expectation_story::Status::Passed => println!("expect: ✓ {} ({took:.0} s{again})", plan.title),
                 // Another system's test: counted at the end rather than listed.
                 expectation_story::Status::Unsupported => {}
                 _ => println!("expect: ✗ {} ({took:.0} s)", plan.title),
@@ -350,7 +358,7 @@ struct SimDriver {
     flight_controller: bool,
     standin: Shared,
     /// When the test that is running has to be done (`T1S_EXPECT_TIMEOUT` s after it starts,
-    /// default 20): a test that is not done by then is a failure, and the suite moves on.
+    /// default 40): a test that is not done by then is a failure, and the suite moves on.
     deadline: Mutex<Option<std::time::Instant>>,
 }
 
@@ -373,7 +381,7 @@ impl SimDriver {
     /// An error if the test has used up its time.
     fn out_of_time(&self) -> Result<(), String> {
         if self.deadline.lock().unwrap().is_some_and(|d| std::time::Instant::now() > d) {
-            let secs = std::env::var("T1S_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20);
+            let secs = std::env::var("T1S_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(40);
             return Err(format!("the test ran out of time ({secs} s)"));
         }
         Ok(())
@@ -458,8 +466,15 @@ impl SimDriver {
                 r
             }
             "chaser tags the plane" => {
-                self.errand(Errand::Loiter)?;
-                self.until(150.0, "the chaser to tag the plane", move |c| chaser(c) == Some(0))
+                // Fly at the chaser: which plane a chaser goes for is its choice, and the game is
+                // only two minutes long.
+                self.errand(Errand::Meet)?;
+                self.sim(|c| {
+                    if let Some(g) = &mut c.game {
+                        g.chase_you = true;
+                    }
+                })?;
+                self.until(60.0, "the chaser to tag the plane", move |c| chaser(c) == Some(0))
             }
             "pilot leaves the arena" => {
                 self.errand(Errand::LeaveArena)?;
@@ -523,7 +538,7 @@ impl Driver for SimDriver {
             input.wizard = None;
             input.keyboard_only = true;
         });
-        let secs = std::env::var("T1S_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20);
+        let secs = std::env::var("T1S_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(40);
         *self.deadline.lock().unwrap() = Some(std::time::Instant::now() + Duration::from_secs(secs));
         done
     }

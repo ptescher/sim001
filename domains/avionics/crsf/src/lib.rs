@@ -7,6 +7,9 @@
 pub const ADDR_FC: u8 = 0xC8;
 /// The address of the transmitter module in the radio: what the radio sends to.
 pub const ADDR_TX: u8 = 0xEE;
+/// The address of the radio itself (EdgeTX): MAVLink that the radio carries for a ground
+/// station on its USB cable goes to it and comes from it.
+pub const ADDR_RADIO: u8 = 0xEA;
 
 pub const TYPE_GPS: u8 = 0x02;
 pub const TYPE_VARIO: u8 = 0x07;

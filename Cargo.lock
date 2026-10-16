@@ -5479,6 +5479,7 @@ name = "t1s_sim"
 version = "0.1.0"
 dependencies = [
  "avionics_computer",
+ "avionics_crsf",
  "bevy",
  "communication_air",
  "communication_radio",
