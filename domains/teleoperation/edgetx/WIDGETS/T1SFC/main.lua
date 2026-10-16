@@ -177,12 +177,14 @@ end
 
 -- Cut the bytes that came down the cable into frames.
 local function readLine()
-  for _ = 1, 6 do                                       -- the line carries more than one read holds
+  for _ = 1, 3 do                                       -- the line carries more than one read holds
     local got = serialRead(128)
     if not got or #got == 0 then break end
     pending = pending .. got
   end
-  while #pending >= 4 do
+  if #pending > 400 then pending = string.sub(pending, -200) end
+  local budget = 6                                      -- frames per call: a call has a CPU limit
+  while #pending >= 4 and budget > 0 do
     local addr, len = string.byte(pending, 1), string.byte(pending, 2)
     if (addr ~= ADDR_TX and addr ~= ADDR_RADIO and addr ~= ADDR_FC) or len < 2 or len > 62 then
       pending = string.sub(pending, 2)                  -- not a frame start: look from the next byte
@@ -193,6 +195,7 @@ local function readLine()
       if crc8(body, 1) == string.byte(pending, len + 2) then
         handle(addr, string.byte(body, 1), string.sub(body, 2))
         pending = string.sub(pending, len + 3)
+        budget = budget - 1
       else
         pending = string.sub(pending, 2)
       end
@@ -210,16 +213,16 @@ local function tick()
   readLine()
 end
 
-local usePalette                                         -- (below, with the colours)
+local day = false                                       -- the Day option
 local options = { { "Day", BOOL, 0 } }
 
 local function create(zone, opts)
-  usePalette(opts and opts.Day == 1)
+  day = opts and opts.Day == 1
   return { zone = zone, options = opts }
 end
 
 local function update(widget, opts)
-  usePalette(opts and opts.Day == 1)
+  day = opts and opts.Day == 1
   widget.options = opts
 end
 
@@ -255,15 +258,27 @@ local PALETTES = {
   },
 }
 
-local P = PALETTES.night
-local WHITE, BLACK, YELLOW = { 255, 255, 255 }, { 0, 0, 0 }, { 255, 210, 0 }
+local P, builtFor = nil, nil
+local WHITE, BLACK, YELLOW
+local PANEL_R, SCREEN_R, PAD, CONTROL_R = 11, 6, 5, 4
+local lastColor = nil
 
-usePalette = function(day)
-  P = day and PALETTES.day or PALETTES.night
+-- The palette as the radio's colour numbers, made once (and again if the Day option changes).
+local function usePalette()
+  if P and builtFor == day then return end
+  local src = day and PALETTES.day or PALETTES.night
+  P = {}
+  for k, c in pairs(src) do P[k] = lcd.RGB(c[1], c[2], c[3]) end
+  WHITE, BLACK, YELLOW = lcd.RGB(255, 255, 255), lcd.RGB(0, 0, 0), lcd.RGB(255, 210, 0)
+  builtFor = day
 end
 
+-- The radio has one custom-colour slot: a colour goes in it just before a draw that uses it.
 local function paint(c)
-  lcd.setColor(CUSTOM_COLOR, lcd.RGB(c[1], c[2], c[3]))
+  if c ~= lastColor then
+    lcd.setColor(CUSTOM_COLOR, c)
+    lastColor = c
+  end
   return CUSTOM_COLOR
 end
 local function fill(x, y, w, h, c) lcd.drawFilledRectangle(x, y, w, h, paint(c)) end
@@ -298,9 +313,6 @@ local function boxed(x, y, w, h, r, edge, inner)
   roundRect(x + 1, y + 1, w - 2, h - 2, math.max(1, r - 1), inner)
 end
 
--- The console's measures (domains/illustration/theme, geometry): the panel and screen corners, the
--- bezel padding and the corners of buttons and lamps.
-local PANEL_R, SCREEN_R, PAD, CONTROL_R = 11, 6, 5, 4
 
 -- A bezelled monitor with a title strip. Returns where its screen is.
 local function monitor(x, y, w, h, title)
@@ -329,7 +341,7 @@ local function roundCorners(x, y, w, h, r, bg, edge)
     { x + w, y + h, x + w - r, y + h - r, 0, 0.5 * math.pi },
     { x, y + h, x + r, y + h - r, 0.5 * math.pi, math.pi },
   }
-  local steps = 5
+  local steps = 3
   for _, k in ipairs(corners) do
     local ox, oy, cx, cy, a0, a1 = k[1], k[2], k[3], k[4], k[5], k[6]
     local px, py = cx + math.cos(a0) * r, cy + math.sin(a0) * r
@@ -449,6 +461,8 @@ local function systems(x, y, w, h, rows)
 end
 
 local function refresh(widget, event, touchState)
+  usePalette()
+  lastColor = nil
   tick()
   local z = widget.zone
   local t = telemetry
