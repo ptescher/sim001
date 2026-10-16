@@ -777,7 +777,7 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations");
         let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
         let (tx, _rx) = channel();
-        let driver = SimDriver { tx, flight_controller: false };
+        let driver = SimDriver { tx, flight_controller: false, standin: Default::default(), deadline: Mutex::new(None) };
         let v = &a.suite.vocabulary;
         let sim = a.suite.sections.iter().find(|s| s.slug == "sim").expect("a sim section").id;
         let ours = a.suite.subtree(sim);
