@@ -339,7 +339,14 @@ impl SimCore {
         let thr_l = (thr + dt_mix).clamp(0.0, 1.0);
         let thr_r = (thr - dt_mix).clamp(0.0, 1.0);
         // V-tail rudder mix at 50%, as typically set up on the real plane.
-        t1s_ranger::mix(ail.clamp(-1.0, 1.0), ele.clamp(-1.0, 1.0), 0.5 * rud, [thr_l, thr_r])
+        let mut cmd = t1s_ranger::mix(ail.clamp(-1.0, 1.0), ele.clamp(-1.0, 1.0), 0.5 * rud, [thr_l, thr_r]);
+        // A VTOL flown from the sticks is a plane: the wing motors point forward.
+        for m in &self.params.motors {
+            if let Some(t) = m.tilt {
+                cmd.out[t.channel] = 1.0;
+            }
+        }
+        cmd
     }
 
     /// Hand-launch automatically once throttle is held up, like a real throw.
@@ -828,6 +835,23 @@ mod tests {
         assert!((f.roll_limit.to_degrees() - 50.0).abs() < 1e-3);
         assert!((f.pitch_max.to_degrees() - 20.0).abs() < 1e-3, "the later file wins");
         assert!((f.pitch_min.to_degrees() + 25.0).abs() < 1e-3, "ArduPlane's default");
+    }
+
+    /// Flown from the sticks (`--direct`), a VTOL is a plane: its wing motors point forward and
+    /// the lift rotor is off.
+    #[test]
+    fn a_vtol_flown_from_the_sticks_points_its_wing_motors_forward() {
+        let mut c = vtol();
+        c.sticks.throttle = 0.8;
+        let cmd = c.stick_commands(0.01);
+        for m in &c.params.motors {
+            if let Some(t) = m.tilt {
+                assert_eq!(cmd.out[t.channel], 1.0, "tilt output {} is full forward", t.channel);
+            } else {
+                assert_eq!(cmd.out[m.channel], 0.0, "the lift rotor is off");
+            }
+        }
+        assert!(cmd.out[simulation_aircraft::t1s_vtol::MOTOR_LEFT] > 0.7, "the wing motors take the throttle");
     }
 
     fn plain() -> SimCore {

@@ -4,6 +4,8 @@
 #   HOME_LOC  lat,lon,alt,heading (default: CMAC model flying field, Canberra)
 #   AIRCRAFT  the plane t1s_sim flies (default t1s-vtol, the only one with a flight controller):
 #             /<AIRCRAFT>.parm, if there is one, is layered over the T1-S defaults
+#   NOWAIT    1: do not wait for a ground station on the first serial port (the tests of the
+#             sim alone have none). Always so for instances above 0
 #   INSTANCE  0 (default) is the pilot's plane. 1 to 3 are the computer pilots' planes in the
 #             sim's games: SITL -I N sends its physics to port 9002 + 10*N, and since no ground
 #             station connects to one of those, it doesn't wait for one (--serial0 tcp:0)
@@ -18,7 +20,7 @@ DEFAULTS=/ardupilot/Tools/autotest/models/plane.parm,/t1s.parm
 [ -f "/$AIRCRAFT.parm" ] && DEFAULTS="$DEFAULTS,/$AIRCRAFT.parm"
 mkdir -p /sitl && cd /sitl
 SERIAL=()
-[ "$INSTANCE" != 0 ] && SERIAL=(--serial0 tcp:0)
+{ [ "$INSTANCE" != 0 ] || [ "${NOWAIT:-0}" = 1 ]; } && SERIAL=(--serial0 tcp:0)
 echo "ArduPlane SITL $INSTANCE ($AIRCRAFT) -> JSON physics at $SIM_IP:$((9002 + 10 * INSTANCE)), MAVLink on tcp:$((5760 + 10 * INSTANCE))"
 exec /ardupilot/build/sitl/bin/arduplane \
     --model "JSON:$SIM_IP" \

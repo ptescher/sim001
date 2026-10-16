@@ -194,7 +194,7 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
         if let Some(dir) = &docs {
             // Saved as the sim's results, and merged with any other runner's (the ground
             // station's, one day) before the docs are written.
-            match acceptance.publish(dir, "sim", &report) {
+            match acceptance.publish(dir, if flight_controller { "sim-flight-controller" } else { "sim" }, &report) {
                 Ok(_) => println!("expect: wrote the docs to {}", dir.display()),
                 Err(e) => eprintln!("expect: couldn't write the docs to {}: {e}", dir.display()),
             }
@@ -355,6 +355,21 @@ struct SimDriver {
 }
 
 impl SimDriver {
+    /// Waits until the autopilot is stepping the physics (a sim started with `--ardupilot`).
+    fn wait_for_autopilot(&self) -> Result<(), String> {
+        let started = std::time::Instant::now();
+        loop {
+            let (enabled, up) = self.sim(|c| (c.ap.enabled, c.ap.connected && c.ap.frame_rate > 0))?;
+            if !enabled || up {
+                return Ok(());
+            }
+            if started.elapsed() > Duration::from_secs(180) {
+                return Err("ArduPilot never connected: start its SITL container (`ardupilot/run_sitl.sh`)".into());
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
+
     /// An error if the test has used up its time.
     fn out_of_time(&self) -> Result<(), String> {
         if self.deadline.lock().unwrap().is_some_and(|d| std::time::Instant::now() > d) {
@@ -480,6 +495,8 @@ impl Driver for SimDriver {
     fn reset(&mut self) -> Result<(), String> {
         // Getting ready is not the test's time: its clock starts when this is done.
         *self.deadline.lock().unwrap() = None;
+        // With ArduPilot, the plane only moves when its autopilot is there to step the physics.
+        self.wait_for_autopilot()?;
         {
             let mut st = self.standin.lock().unwrap();
             st.errand = None;

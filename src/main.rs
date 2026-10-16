@@ -104,7 +104,11 @@ fn main() {
         }),
     };
     println!("aircraft: {}", aircraft.title);
-    let params = (aircraft.params)();
+    let mut params = (aircraft.params)();
+    // Flown from the sticks (--direct), a plane that starts on the ground is thrown, as the plain T1-S is.
+    if flag("--direct") {
+        params.start = simulation_aircraft::StartStyle::Hand;
+    }
     let ap_port: u16 = args
         .iter()
         .position(|a| a == "--ap-port")
