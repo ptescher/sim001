@@ -17,3 +17,6 @@
 /THEMES/*
 !/THEMES/T1S Day/
 !/THEMES/T1S Night/
+
+# What the radio (or Companion) compiles from the scripts.
+*.luac

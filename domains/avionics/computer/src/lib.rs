@@ -14,7 +14,8 @@
 
 mod handset;
 
-pub use handset::{Handset, Screen};
+mod screen;
+pub use handset::{Handset, Message, Screen, StatusTexts};
 
 use avionics_crsf as crsf;
 use std::collections::VecDeque;

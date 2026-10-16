@@ -33,6 +33,21 @@ struct World {
     autopilot: Parser,
     command_received: bool,
     warm: bool,
+    /// ArduPilot's last STATUSTEXT, sent down the line once the TX15 is talking.
+    message: Option<String>,
+    message_sent: bool,
+}
+
+/// A STATUSTEXT as ArduPilot sends it.
+fn status_text(seq: u8, text: &str) -> Vec<u8> {
+    let mut chars = [0u8; 50];
+    chars[..text.len().min(50)].copy_from_slice(&text.as_bytes()[..text.len().min(50)]);
+    let severity = if text.starts_with("PreArm") || text.starts_with("Failsafe") {
+        MavSeverity::MAV_SEVERITY_CRITICAL
+    } else {
+        MavSeverity::MAV_SEVERITY_INFO
+    };
+    frame(1, 1, seq, &MavMessage::STATUSTEXT(STATUSTEXT_DATA { severity, text: chars.into(), id: 0, chunk_seq: 0 }))
 }
 
 impl World {
@@ -55,6 +70,8 @@ impl World {
             autopilot: Parser::default(),
             command_received: false,
             warm: true,
+            message: None,
+            message_sent: false,
         }
     }
 
@@ -104,6 +121,14 @@ impl World {
                 self.fc.from_autopilot(&frame(1, 1, self.seq, &pos));
             }
         }
+        // What ArduPilot says, once the line is up.
+        if let (Some(text), false) = (&self.message, self.message_sent) {
+            if t > 0.5 {
+                self.seq = self.seq.wrapping_add(1);
+                self.fc.from_autopilot(&status_text(self.seq, text));
+                self.message_sent = true;
+            }
+        }
         // The flight computer to the TX15, and the TX15 to the ground station.
         let down = self.fc.to_line(&self.vehicle, t);
         self.handset.from_line(&down, t);
@@ -139,6 +164,9 @@ impl World {
                 s.armed = self.vehicle.armed;
                 s.volts = self.vehicle.volts;
                 s.roll = self.vehicle.roll.to_degrees();
+                s.airspeed = self.vehicle.airspeed;
+                s.climb = self.vehicle.climb;
+                s.sats = self.vehicle.sats;
             }
         }
     }
@@ -167,7 +195,21 @@ fn driver() -> Bindings<World> {
         .observe("the TX15 screen mode", |w| if w.warm { w.vehicle.mode.clone() } else { w.handset.screen.mode.clone() })
         .observe("the TX15 screen arming", |w| if (if w.warm { w.vehicle.armed } else { w.handset.screen.armed }) { "armed" } else { "disarmed" })
         .observe("the TX15 screen battery", |w| if w.warm { w.vehicle.volts as f64 } else { w.handset.screen.volts as f64 })
-        .observe("the TX15 screen bank", |w| if w.warm { w.vehicle.roll.to_degrees() as f64 } else { w.handset.screen.roll as f64 })
+        .observe("the TX15 screen bank", |w| {
+            // (Degrees to radians and back is not exact: the pilot reads whole tenths.)
+            let deg = if w.warm { w.vehicle.roll.to_degrees() } else { w.handset.screen.roll };
+            (deg as f64 * 10.0).round() / 10.0
+        })
+        .observe("the TX15 screen airspeed", |w| if w.warm { w.vehicle.airspeed as f64 } else { w.handset.screen.airspeed as f64 })
+        .observe("the TX15 screen climb", |w| if w.warm { w.vehicle.climb as f64 } else { w.handset.screen.climb as f64 })
+        .observe("the TX15 screen satellites", |w| if w.warm { w.vehicle.sats as f64 } else { w.handset.screen.sats as f64 })
+        .observe("the TX15 screen message", |w| {
+            if w.warm {
+                w.message.clone().unwrap_or_else(|| "none".into())
+            } else {
+                w.handset.screen.messages.last().map_or("none".to_string(), |m| m.text.clone())
+            }
+        })
         .observe("the TX15 uplink quality", |w| if w.warm { if w.handset.connected() { 100.0 } else { 0.0 } } else { w.handset.quality(w.t) as f64 })
         .observe("the ground station telemetry", |w| {
             if (if w.warm { w.telemetry } else { w.last_heartbeat.is_some_and(|h| w.t - h < 3.0) }) { "flowing" } else { "silent" }
@@ -185,6 +227,13 @@ fn driver() -> Bindings<World> {
         .set("the TX15 screen arming", |w, v| w.vehicle.armed = v.as_str() == Some("armed"))
         .set("the TX15 screen battery", |w, v| w.vehicle.volts = v.as_f64().unwrap() as f32)
         .set("the TX15 screen bank", |w, v| w.vehicle.roll = (v.as_f64().unwrap() as f32).to_radians())
+        .set("the TX15 screen airspeed", |w, v| w.vehicle.airspeed = v.as_f64().unwrap() as f32)
+        .set("the TX15 screen climb", |w, v| w.vehicle.climb = v.as_f64().unwrap() as f32)
+        .set("the TX15 screen satellites", |w, v| w.vehicle.sats = v.as_f64().unwrap() as u8)
+        .set("the TX15 screen message", |w, v| {
+            w.message = v.as_str().filter(|m| *m != "none").map(|m| m.to_string());
+            w.message_sent = false;
+        })
         .set("the ground station telemetry", |w, v| w.telemetry = v.as_str() == Some("flowing"))
         .set("the ground station map distance", |w, v| w.north = v.as_f64().unwrap() as f32)
         .set("the ground station command", |w, v| {
@@ -214,6 +263,8 @@ fn driver() -> Bindings<World> {
         .on("70 seconds pass", |w| w.run(70.0))
         .on_reset(|w| *w = World::new())
         .on_settle(World::settle)
+        // The screen of the TX15, as the widget draws it (WIDGETS/T1SFC).
+        .on_screenshot(|w| expectation_harness::Screenshot::svg(w.handset.screen.to_svg()))
 }
 
 #[test]
@@ -232,4 +283,22 @@ fn every_test_of_the_section_passes() {
     let bad: Vec<_> =
         ran.iter().filter(|(_, r)| r.status != Status::Passed).map(|(p, r)| format!("{}: {:?}", p.title, r.status)).collect();
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
+}
+
+/// The same, with pictures of the TX15's screen. With T1S_DOCS=DIR the results and pictures go
+/// into the project's docs, beside the other runners'.
+#[test]
+fn the_section_documents_itself_with_pictures_of_the_screen() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
+    let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
+    let published = std::env::var("T1S_DOCS").ok().map(std::path::PathBuf::from);
+    let out = published.clone().unwrap_or_else(|| Path::new(env!("CARGO_TARGET_TMPDIR")).join("avionics_docs"));
+    let report = a.run(&mut driver(), &RunOptions { docs_dir: Some(out.clone()), ..Default::default() });
+    if published.is_some() {
+        a.publish(&out, "avionics", &report).unwrap();
+    } else {
+        a.docs(Some(&report)).write(&out).unwrap();
+    }
+    let any = std::fs::read_dir(out.join("screenshots")).unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains("flight-display"));
+    assert!(any, "no pictures of the flight display in {}", out.display());
 }

@@ -4,20 +4,80 @@
 use crate::RC_RATE;
 use avionics_crsf as crsf;
 
-/// What the radio's screen shows from the telemetry.
+/// A line ArduPilot said (a MAVLink STATUSTEXT).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Message {
+    /// MAVLink's severity: 0 is an emergency, 2 critical, 4 a warning, 6 information.
+    pub severity: u8,
+    pub text: String,
+}
+
+/// What the radio's screen shows from the telemetry. See `Screen::to_svg` for how it is drawn.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Screen {
     pub mode: String,
     pub armed: bool,
     pub volts: f32,
     pub amps: f32,
+    pub used_mah: u32,
+    pub percent: u8,
     /// Degrees.
     pub roll: f32,
     pub pitch: f32,
     pub quality: u8,
     pub gps: Option<crsf::Gps>,
+    pub sats: u8,
+    /// Metres a second.
+    pub airspeed: f32,
+    pub ground_speed: f32,
+    pub climb: f32,
+    /// Degrees.
+    pub heading: f32,
+    /// Metres above sea level, and where the plane stood while it was disarmed.
+    pub alt: f32,
+    pub home: Option<(f64, f64, f32)>,
+    /// The newest messages of ArduPilot, oldest first.
+    pub messages: Vec<Message>,
     /// Seconds since the last frame of any kind came down the line.
     pub last_frame: Option<f64>,
+}
+
+/// Reads STATUSTEXT messages out of the MAVLink bytes that come down the line.
+#[derive(Default)]
+pub struct StatusTexts {
+    buf: Vec<u8>,
+}
+
+impl StatusTexts {
+    pub fn push(&mut self, bytes: &[u8]) -> Vec<Message> {
+        self.buf.extend_from_slice(bytes);
+        if self.buf.len() > 600 {
+            self.buf.drain(..self.buf.len() - 300);
+        }
+        let mut out = vec![];
+        loop {
+            let Some(start) = self.buf.iter().position(|&b| b == 0xFD) else {
+                self.buf.clear();
+                return out;
+            };
+            self.buf.drain(..start);
+            if self.buf.len() < 12 {
+                return out;
+            }
+            let len = self.buf[1] as usize;
+            let total = 12 + len + if self.buf[2] & 1 != 0 { 13 } else { 0 };
+            if self.buf.len() < total {
+                return out;
+            }
+            let id = self.buf[7] as u32 | (self.buf[8] as u32) << 8 | (self.buf[9] as u32) << 16;
+            if id == 253 && len >= 2 {
+                let text = &self.buf[11..10 + len];
+                let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+                out.push(Message { severity: self.buf[10], text: String::from_utf8_lossy(&text[..end]).into_owned() });
+            }
+            self.buf.drain(..total);
+        }
+    }
 }
 
 pub struct Handset {
@@ -32,6 +92,7 @@ pub struct Handset {
     pub screen: Screen,
     from_plane: Vec<u8>,
     for_plane: Vec<u8>,
+    texts: StatusTexts,
 }
 
 impl Handset {
@@ -46,6 +107,7 @@ impl Handset {
             screen: Screen::default(),
             from_plane: vec![],
             for_plane: vec![],
+            texts: StatusTexts::default(),
         }
     }
 
@@ -113,9 +175,11 @@ impl Handset {
                     self.screen.mode = text.trim_end_matches('*').to_string();
                 }
                 crsf::TYPE_BATTERY => {
-                    if let Some((v, a, _, _)) = crsf::parse_battery(p) {
+                    if let Some((v, a, used, percent)) = crsf::parse_battery(p) {
                         self.screen.volts = v;
                         self.screen.amps = a;
+                        self.screen.used_mah = used;
+                        self.screen.percent = percent;
                     }
                 }
                 crsf::TYPE_ATTITUDE => {
@@ -124,13 +188,44 @@ impl Handset {
                         self.screen.roll = roll.to_degrees();
                     }
                 }
-                crsf::TYPE_GPS => self.screen.gps = crsf::parse_gps(p),
+                crsf::TYPE_GPS => {
+                    if let Some(g) = crsf::parse_gps(p) {
+                        self.screen.sats = g.sats;
+                        self.screen.ground_speed = g.speed;
+                        self.screen.heading = g.heading;
+                        self.screen.alt = g.alt;
+                        // Home is where the plane stood while it was disarmed.
+                        if !self.screen.armed || self.screen.home.is_none() {
+                            self.screen.home = Some((g.lat, g.lon, g.alt));
+                        }
+                        self.screen.gps = Some(g);
+                    }
+                }
+                crsf::TYPE_AIRSPEED => {
+                    if p.len() >= 2 {
+                        self.screen.airspeed = u16::from_be_bytes([p[0], p[1]]) as f32 / 36.0;
+                    }
+                }
+                crsf::TYPE_VARIO => {
+                    if p.len() >= 2 {
+                        self.screen.climb = i16::from_be_bytes([p[0], p[1]]) as f32 / 10.0;
+                    }
+                }
                 crsf::TYPE_LINK_STATS => {
                     if let Some(s) = crsf::parse_link_stats(p) {
                         self.screen.quality = s.quality;
                     }
                 }
-                crsf::TYPE_MAVLINK_ENVELOPE => self.from_plane.extend_from_slice(crsf::envelope_data(p)),
+                crsf::TYPE_MAVLINK_ENVELOPE => {
+                    let data = crsf::envelope_data(p);
+                    self.from_plane.extend_from_slice(data);
+                    for m in self.texts.push(data) {
+                        self.screen.messages.push(m);
+                        if self.screen.messages.len() > 4 {
+                            self.screen.messages.remove(0);
+                        }
+                    }
+                }
                 _ => {}
             }
         }

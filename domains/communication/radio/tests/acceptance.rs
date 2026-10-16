@@ -206,9 +206,15 @@ fn every_test_of_the_section_passes() {
 fn the_section_documents_itself_with_pictures_of_the_map() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
     let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
-    let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join("communication_docs");
+    // With T1S_DOCS=DIR, the results and pictures go into the project's docs, beside the other runners'.
+    let published = std::env::var("T1S_DOCS").ok().map(std::path::PathBuf::from);
+    let out = published.clone().unwrap_or_else(|| Path::new(env!("CARGO_TARGET_TMPDIR")).join("communication_docs"));
     let report = a.run(&mut driver(), &RunOptions { docs_dir: Some(out.clone()), ..Default::default() });
-    a.docs(Some(&report)).write(&out).unwrap();
+    if published.is_some() {
+        a.publish(&out, "communication", &report).unwrap();
+    } else {
+        a.docs(Some(&report)).write(&out).unwrap();
+    }
     let section = std::fs::read_dir(out.join("screenshots")).unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains("friend"));
     assert!(section, "no pictures of the friend story in {}", out.display());
 }

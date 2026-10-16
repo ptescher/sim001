@@ -96,3 +96,27 @@ Story: Commanding the plane from the ground station
     Given the ground station telemetry is flowing
     When 10 seconds pass
     Then the ground station telemetry rate is at most 4000 bytes per second
+
+Story: Reading the flight display
+  As a pilot with a TX15
+  I want the screen of the TX15 to show the flight as a flight display
+  So that I see the mode, the attitude, the speeds, the battery and what ArduPilot says
+
+  The plane is armed in a left bank, flying at 18 m/s and climbing. A PreArm check has failed
+  earlier. The screen shows all of it at once: the horizon is banked, the mode is big on the
+  top left, and the message is on the bottom.
+
+  Scenario: Armed, banked and climbing
+    Given the TX15 screen mode is QHOVER
+    And the TX15 screen arming is armed
+    And the TX15 screen bank is -20 degrees
+    And the TX15 screen airspeed is 18 m/s
+    And the TX15 screen climb is 2 m/s
+    And the TX15 screen satellites is 12
+    And the TX15 screen message is PreArm: Throttle (RC3) is not neutral
+    When 5 seconds pass
+    Then the TX15 screen mode is QHOVER
+    And the TX15 screen arming is armed
+    And the TX15 screen bank is at most -19 degrees
+    And the TX15 screen airspeed is at least 17.5 m/s
+    And the TX15 screen message is PreArm: Throttle (RC3) is not neutral

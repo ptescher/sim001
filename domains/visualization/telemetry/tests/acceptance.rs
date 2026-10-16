@@ -153,3 +153,14 @@ fn every_test_of_the_section_passes() {
     let bad: Vec<_> = ran.iter().filter(|(_, r)| r.status != Status::Passed).map(|(p, r)| format!("{}: {:?}", p.title, r.status)).collect();
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
 }
+
+/// With T1S_DOCS=DIR, the results go into the project's docs, beside the other runners'.
+#[test]
+fn the_section_publishes_its_results_when_asked() {
+    let Ok(docs) = std::env::var("T1S_DOCS") else { return };
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
+    let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
+    let docs = std::path::PathBuf::from(docs);
+    let report = a.run(&mut driver(), &RunOptions { docs_dir: Some(docs.clone()), ..Default::default() });
+    a.publish(&docs, "visualization", &report).unwrap();
+}
