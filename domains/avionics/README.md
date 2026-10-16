@@ -26,7 +26,7 @@ the other end of that UART, so the ground station only gets what comes down the 
 The radio can be the other end of the line too, on its USB cable in serial mode (not as a USB
 game controller). The radio's USB serial port (`VCP`) has to be in the `LUA` mode, because only
 a Lua script can write to it; `CLI` (the default) answers every byte with `Invalid command`. The script
-[t1sfc.lua](../teleoperation/edgetx/SCRIPTS/TELEMETRY/t1sfc.lua) does the radio's part:
+[the T1SFC widget](../teleoperation/edgetx/WIDGETS/T1SFC/main.lua) does the radio's part (the TX15 is a colour radio, which has no telemetry-script screens, so it is a widget; a widget's background function runs whichever view is up):
 
 - it sends the model's 16 channels as CRSF RC channels, as often as the radio runs it;
 - it reads the telemetry that comes down (attitude, battery, speed, climb, link quality and the
@@ -35,8 +35,9 @@ a Lua script can write to it; `CLI` (the default) answers every byte with `Inval
   addressed to the radio (CRSF address `0xEA`), and what the ground station sends comes down
   addressed to the radio and goes up addressed to the flight controller (`0xC8`).
 
-Set it up once: copy the script to `SCRIPTS/TELEMETRY/` on the SD card, set Hardware, USB Serial
-to LUA, and give a telemetry screen of the model the script (Telemetry, Screen 1, Script, `t1sfc`).
+Set it up once: copy the folder `WIDGETS/T1SFC` to the SD card, set Hardware, USB Serial (VCP) to
+LUA, and put the widget on a main view of the model (Model, Screen setup, a zone, `T1SFC`). When you
+plug the radio in, pick VCP.
 Then plug the radio in, and start the station with its device:
 
 ```bash

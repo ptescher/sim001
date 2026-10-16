@@ -17,6 +17,6 @@ change.
 ## The radio in serial mode
 
 For the flight computer (see [avionics](../avionics/README.md)), the radio's USB serial port has
-to be in the `LUA` mode and `SCRIPTS/TELEMETRY/t1sfc.lua` has to run. The script is tracked here;
+to be in the `LUA` mode and the `T1SFC` widget (`WIDGETS/T1SFC`) has to be on the model's main view. The widget is tracked here;
 Companion's mirror of the SD card holds the rest, which is not.
 

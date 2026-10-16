@@ -1,16 +1,20 @@
--- T1-S flight computer link: the TX15 on its USB cable, in CRSF.
+-- T1-S flight computer link: the TX15 on its USB cable, in CRSF. A widget (the TX15 is a colour
+-- radio, which has no telemetry-script screens).
 --
--- Set Hardware, USB Serial to LUA (the radio's USB serial port, "VCP", has to be in the LUA mode
--- for serialWrite and serialRead). Then give a telemetry screen of the model this script
--- (Telemetry, Screen 1: Script, t1sfc). It runs in the background whatever screen is up.
+-- One-time setup on the radio:
+--   1. Hardware, USB Serial (VCP): LUA. When you plug the radio in, pick VCP.
+--   2. Put this folder (WIDGETS/T1SFC) on the SD card.
+--   3. Model, Screen setup: add a main view with a widget zone and choose T1SFC for it.
+-- It runs in the background whichever view is up (a widget's background function runs always),
+-- but the model has to be the one whose main views hold the widget.
 --
 -- Up the cable (to the sim's flight computer):
---   - the 16 channels of the model, as CRSF RC channels (type 0x16), as often as the radio runs it;
+--   - the 16 channels of the model, as CRSF RC channels (type 0x16);
 --   - the MAVLink telemetry that came down for the ground station, carried on (CRSF envelopes
 --     0xAA from the radio, 0xEA), and the ground station's commands, carried on to the plane
 --     (envelopes to the flight controller, 0xC8).
 -- Down the cable: attitude, battery, GPS, speed, climb, flight mode, link statistics and MAVLink
--- envelopes. The screen shows the first ones.
+-- envelopes. The widget shows the main ones.
 -- See domains/avionics.
 
 local ADDR_FC, ADDR_RADIO, ADDR_TX = 0xC8, 0xEA, 0xEE
@@ -84,7 +88,8 @@ local function handle(addr, kind, payload)
     telemetry.pitch = be16(payload, 1) / 10000 * 57.2958
     telemetry.roll = be16(payload, 3) / 10000 * 57.2958
   elseif kind == T_MODE then
-    local text = string.match(payload, "^[^%z]*")
+    local z = string.find(payload, "\0", 1, true)
+    local text = z and string.sub(payload, 1, z - 1) or payload
     telemetry.armed = string.sub(text, -1) ~= "*"
     telemetry.mode = string.gsub(text, "%*$", "")
   elseif kind == T_LINK and #payload >= 3 then
@@ -127,11 +132,7 @@ local function readLine()
   end
 end
 
-local function init()
-  buildCrc()
-end
-
-local function background()
+local function tick()
   local now = getTime()
   if now >= nextSend then
     serialWrite(channelsFrame())
@@ -140,17 +141,31 @@ local function background()
   readLine()
 end
 
-local function run(event)
-  background()
-  lcd.clear()
-  local live = getTime() - telemetry.last < 100
-  lcd.drawText(2, 2, "T1-S flight computer", MIDSIZE)
-  lcd.drawText(2, 22, live and (telemetry.mode .. (telemetry.armed and "  ARMED" or "  DISARMED")) or "NO TELEMETRY", MIDSIZE)
-  lcd.drawText(2, 44, string.format("BAT %.1f V  %.1f A  %d %%", telemetry.volts, telemetry.amps, telemetry.percent), 0)
-  lcd.drawText(2, 58, string.format("ROLL %d  PITCH %d", telemetry.roll, telemetry.pitch), 0)
-  lcd.drawText(2, 72, string.format("AS %.0f m/s  VS %.1f m/s", telemetry.speed, telemetry.climb), 0)
-  lcd.drawText(2, 86, string.format("LINK %d %%  GCS %d", telemetry.quality, telemetry.forwarded), 0)
-  return 0
+local options = {}
+
+local function create(zone, opts)
+  buildCrc()
+  return { zone = zone, options = opts }
 end
 
-return { init = init, background = background, run = run }
+local function update(widget, opts)
+  widget.options = opts
+end
+
+local function background(widget)
+  tick()
+end
+
+local function refresh(widget, event, touchState)
+  tick()
+  local z = widget.zone
+  local live = getTime() - telemetry.last < 100
+  lcd.drawText(z.x + 4, z.y + 2, "T1-S flight computer", MIDSIZE)
+  lcd.drawText(z.x + 4, z.y + 28, live and (telemetry.mode .. (telemetry.armed and "  ARMED" or "  DISARMED")) or "NO TELEMETRY", MIDSIZE)
+  lcd.drawText(z.x + 4, z.y + 56, string.format("BAT %.1f V  %.1f A  %d %%", telemetry.volts, telemetry.amps, telemetry.percent), 0)
+  lcd.drawText(z.x + 4, z.y + 74, string.format("ROLL %d  PITCH %d", telemetry.roll, telemetry.pitch), 0)
+  lcd.drawText(z.x + 4, z.y + 92, string.format("AS %.0f m/s  VS %.1f m/s", telemetry.speed, telemetry.climb), 0)
+  lcd.drawText(z.x + 4, z.y + 110, string.format("LINK %d %%  GCS %d  FRAMES %d", telemetry.quality, telemetry.forwarded, telemetry.frames), 0)
+end
+
+return { name = "T1SFC", options = options, create = create, update = update, refresh = refresh, background = background }
