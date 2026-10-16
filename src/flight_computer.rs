@@ -206,7 +206,17 @@ pub fn spawn(core: Core, cfg: Config) -> std::io::Result<Option<SocketAddr>> {
             run(&core, &cfg, nonblocking(line), ground_station.as_ref());
             core.lock().unwrap().uart_rc = None;
             if listener.is_none() {
-                return;
+                // A serial device that went away (the radio was unplugged and plugged in again)
+                // is a dead descriptor: open it again when it is back, and say so.
+                println!("flight computer: lost {}; waiting for it to come back", cfg.line);
+                loop {
+                    std::thread::sleep(Duration::from_secs(1));
+                    if let Ok(d) = open_device(&cfg.line) {
+                        println!("flight computer: on {} again", cfg.line);
+                        device = Some(d);
+                        break;
+                    }
+                }
             }
         }
     })?;
