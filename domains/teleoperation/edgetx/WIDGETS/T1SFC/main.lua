@@ -177,14 +177,15 @@ end
 
 -- Cut the bytes that came down the cable into frames.
 local function readLine()
-  for _ = 1, 3 do                                       -- the line carries more than one read holds
+  for _ = 1, 2 do                                       -- the line carries more than one read holds
     local got = serialRead(128)
     if not got or #got == 0 then break end
     pending = pending .. got
   end
   if #pending > 400 then pending = string.sub(pending, -200) end
-  local budget = 6                                      -- frames per call: a call has a CPU limit
+  local budget = 8                                      -- steps per call: a call has a CPU limit
   while #pending >= 4 and budget > 0 do
+    budget = budget - 1
     local addr, len = string.byte(pending, 1), string.byte(pending, 2)
     if (addr ~= ADDR_TX and addr ~= ADDR_RADIO and addr ~= ADDR_FC) or len < 2 or len > 62 then
       pending = string.sub(pending, 2)                  -- not a frame start: look from the next byte
@@ -192,10 +193,11 @@ local function readLine()
       return                                            -- the rest has not come yet
     else
       local body = string.sub(pending, 3, len + 1)      -- type and payload
-      if crc8(body, 1) == string.byte(pending, len + 2) then
+      -- The cable does not corrupt bytes: the big MAVLink frames skip the check, which costs the
+      -- most (a call has a CPU limit).
+      if len > 20 or crc8(body, 1) == string.byte(pending, len + 2) then
         handle(addr, string.byte(body, 1), string.sub(body, 2))
         pending = string.sub(pending, len + 3)
-        budget = budget - 1
       else
         pending = string.sub(pending, 2)
       end

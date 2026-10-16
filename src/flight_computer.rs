@@ -236,7 +236,13 @@ fn connect_autopilot(addr: &str) -> Option<TcpStream> {
 fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpListener>) {
     let mut gs: Option<TcpStream> = None;
     let start = Instant::now();
-    let mut fc = FlightComputer::new();
+    // The widget on the radio decodes this with a small CPU allowance per call: a real radio gets
+    // less MAVLink than the virtual one the tests use.
+    #[cfg(unix)]
+    let on_radio = matches!(line, Line::Device(_));
+    #[cfg(not(unix))]
+    let on_radio = false;
+    let mut fc = FlightComputer::with_mavlink_rate(if on_radio { 1500.0 } else { avionics_computer::MAVLINK_RATE });
     let mut autopilot: Option<TcpStream> = None;
     let mut next_connect = 0.0;
     let mut buf = [0u8; 4096];
