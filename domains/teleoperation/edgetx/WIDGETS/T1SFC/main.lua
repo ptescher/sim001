@@ -444,7 +444,7 @@ local function systems(x, y, w, h, rows)
   for i, r in ipairs(rows) do
     local ry = y + 3 + (i - 1) * rowH
     text(x + 8, ry + (rowH - 14) / 2, r[1], SMLSIZE, P.muted)
-    text(x + w - 8, ry + (rowH - 14) / 2, r[2], SMLSIZE, r[3] or P.ok, RIGHT)
+    text(x + w - 8, ry + (rowH - 14) / 2, r[2], SMLSIZE, telemetry.live and (r[3] or P.ok) or P.faint, RIGHT)
   end
 end
 
@@ -453,6 +453,7 @@ local function refresh(widget, event, touchState)
   local z = widget.zone
   local t = telemetry
   local live = getTime() - t.last < 100
+  t.live = live
   fill(z.x, z.y, z.w, z.h, P.canvas)
   local gap = 4
   local x0, w0 = z.x + gap, z.w - 2 * gap
@@ -477,7 +478,7 @@ local function refresh(widget, event, touchState)
     { "IAS", string.format("%.0f m/s", t.airspeed) },
     { "GS", string.format("%.0f m/s", t.groundspeed) },
     { "HDG", string.format("%03d", math.floor(t.heading)) },
-    { "CLIMB", string.format("%+.1f m/s", t.climb), t.climb < -3 and P.caution or P.ok },
+    { "VS", string.format("%+.1f m/s", t.climb), t.climb < -3 and P.caution or P.ok },
   })
   local hx, hy, hw, hh = monitor(x0 + sideW + gap, py, midW, ph, "ATTITUDE")
   drawHud(hx, hy, hw, hh)
