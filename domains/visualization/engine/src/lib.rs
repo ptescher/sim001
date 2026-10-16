@@ -111,7 +111,11 @@ pub struct EnginePlugin {
 
 impl Default for EnginePlugin {
     fn default() -> Self {
-        Self { raytracing: true, liveries: vec![Color::srgb(1.0, 0.36, 0.05)], tips: vec![] }
+        Self {
+            raytracing: false,
+            liveries: vec![Color::srgb(1.0, 0.36, 0.05)],
+            tips: vec![],
+        }
     }
 }
 
@@ -123,26 +127,28 @@ impl Plugin for EnginePlugin {
         if self.raytracing {
             app.add_plugins((bevy::solari::SolariPlugins, haze::HazePlugin));
         }
-        app.insert_resource(RenderSettings { raytracing: self.raytracing })
-            .insert_resource(Liveries(self.liveries.clone()))
-            .insert_resource(loading::Tips(self.tips.clone()))
-            .insert_resource(ClearColor(Color::BLACK))
-            .insert_resource(GlobalAmbientLight::NONE)
-            .init_resource::<Scene>()
-            .init_resource::<ViewInput>()
-            .add_systems(Startup, (setup, grass::setup_grass))
-            .add_systems(
-                Update,
-                (
-                    model::sync_plane,
-                    field::update_windsock,
-                    scenery::animate_scenery,
-                    camera::update_camera,
-                    grass::stream_grass.run_if(in_state(loading::AppState::Running)),
-                )
-                    .chain()
-                    .in_set(EngineSet::Draw),
-            );
+        app.insert_resource(RenderSettings {
+            raytracing: self.raytracing,
+        })
+        .insert_resource(Liveries(self.liveries.clone()))
+        .insert_resource(loading::Tips(self.tips.clone()))
+        .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(GlobalAmbientLight::NONE)
+        .init_resource::<Scene>()
+        .init_resource::<ViewInput>()
+        .add_systems(Startup, (setup, grass::setup_grass))
+        .add_systems(
+            Update,
+            (
+                model::sync_plane,
+                field::update_windsock,
+                scenery::animate_scenery,
+                camera::update_camera,
+                grass::stream_grass.run_if(in_state(loading::AppState::Running)),
+            )
+                .chain()
+                .in_set(EngineSet::Draw),
+        );
         camera::camera_plugin(app);
         loading::loading_plugin(app);
     }
@@ -158,7 +164,14 @@ fn setup(
     liveries: Res<Liveries>,
     offscreen: Option<Res<camera::UiOffscreen>>,
 ) {
-    field::spawn_world(&mut commands, &mut meshes, &mut materials, &mut images, &mut media, &settings);
+    field::spawn_world(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &mut images,
+        &mut media,
+        &settings,
+    );
     for (i, accent) in liveries.0.iter().take(PLANES).enumerate() {
         model::spawn_plane(&mut commands, &mut meshes, &mut materials, i, *accent);
     }
