@@ -314,6 +314,27 @@ local function drawGround(x, y, w, h, px, py, nx, ny, c)
   end
 end
 
+-- The part of a line inside a box (Liang-Barsky), or nil.
+local function clipLine(x1, y1, x2, y2, bx, by, bw, bh)
+  local t0, t1, dx, dy = 0, 1, x2 - x1, y2 - y1
+  for _, e in ipairs({ { -dx, x1 - bx }, { dx, bx + bw - x1 }, { -dy, y1 - by }, { dy, by + bh - y1 } }) do
+    local p, q = e[1], e[2]
+    if p == 0 then
+      if q < 0 then return nil end
+    else
+      local r = q / p
+      if p < 0 then
+        if r > t1 then return nil end
+        if r > t0 then t0 = r end
+      else
+        if r < t0 then return nil end
+        if r < t1 then t1 = r end
+      end
+    end
+  end
+  return x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy
+end
+
 local function drawHud(x, y, w, h)
   local t = telemetry
   local cx, cy = x + w / 2, y + h / 2
@@ -324,7 +345,8 @@ local function drawHud(x, y, w, h)
   local dx, dy = math.cos(roll), -math.sin(roll)                           -- along the horizon
   local px, py = cx + nx * pitch * k, cy + ny * pitch * k
   drawGround(x, y, w, h, px, py, nx, ny, EARTH)
-  thickLine(px - dx * w, py - dy * w, px + dx * w, py + dy * w, WHITE)
+  local ax, ay, bx, by = clipLine(px - dx * 2 * w, py - dy * 2 * w, px + dx * 2 * w, py + dy * 2 * w, x, y, w, h - 2)
+  if ax then thickLine(ax, ay, bx, by, WHITE) end
   -- Pitch ladder: a line every 10 degrees, near the middle.
   for deg = -20, 20, 10 do
     if deg ~= 0 then
