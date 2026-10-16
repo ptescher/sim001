@@ -238,10 +238,14 @@ mod tests {
         let lua = std::fs::read_to_string(path).expect("the widget");
         for (p, table) in [(&NIGHT, "night"), (&DAY, "day")] {
             let start = lua.find(&format!("  {table} = {{")).unwrap_or_else(|| panic!("no {table} palette in the widget"));
-            let block = &lua[start..lua.len().min(start + 700)];
+            let block = &lua[start..lua.len().min(start + 2200)];
             for (role, c) in [
-                ("bg", p.screen), ("panel", p.title), ("text", p.text), ("muted", p.muted), ("ok", p.ok), ("caution", p.caution),
-                ("warning", p.warning), ("marker", p.marker), ("sky", p.sky), ("ground", p.ground),
+                ("canvas", p.canvas), ("bezel", p.bezel), ("edge", p.bezel_edge), ("screen", p.screen), ("title", p.title),
+                ("control", p.control), ("text", p.text), ("muted", p.muted), ("faint", p.faint), ("ok", p.ok),
+                ("ok_dim", p.ok_dim), ("ok_fill", p.ok_fill), ("caution", p.caution), ("caution_fill", p.caution_fill),
+                ("warning", p.warning), ("warning_fill", p.warning_fill), ("on_warning", p.on_warning),
+                ("lamp_ok", p.lamp_ok), ("lamp_warning", p.lamp_warning), ("off_fill", p.off_fill),
+                ("off_edge", p.off_edge), ("info", p.info), ("marker", p.marker), ("sky", p.sky), ("ground", p.ground),
             ] {
                 let want = format!("{role} = {{ 0x{:02x}, 0x{:02x}, 0x{:02x} }}", c.r(), c.g(), c.b());
                 assert!(block.contains(&want), "{table}: {want}");

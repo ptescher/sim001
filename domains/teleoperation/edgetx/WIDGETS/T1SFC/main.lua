@@ -210,6 +210,7 @@ local function tick()
   readLine()
 end
 
+local usePalette                                         -- (below, with the colours)
 local options = { { "Day", BOOL, 0 } }
 
 local function create(zone, opts)
@@ -226,26 +227,40 @@ local function background(widget)
   tick()
 end
 
--- Colours. The radio has one custom-colour slot, so a colour is a { r, g, b } table and is put in
--- the slot just before each draw that uses it.
--- The console's palettes (domains/illustration/theme: NIGHT and DAY; a test keeps them equal).
+-- Colours: the console's palettes (domains/illustration/theme: NIGHT and DAY; a test keeps them
+-- equal). The radio has one custom-colour slot, so a colour is a { r, g, b } table and is put in the
+-- slot just before each draw that uses it.
 local PALETTES = {
-  night = { bg = { 0x05, 0x08, 0x06 }, panel = { 0x22, 0x24, 0x1e }, text = { 0xdf, 0xe8, 0xdf }, muted = { 0x91, 0x9c, 0x91 },
-    ok = { 0x4c, 0xff, 0x7a }, caution = { 0xff, 0xb2, 0x1f }, warning = { 0xff, 0x5a, 0x4f }, marker = { 0xff, 0xe1, 0x4d },
-    sky = { 0x0e, 0x2c, 0x4c }, ground = { 0x3b, 0x2a, 0x15 } },
-  day = { bg = { 0xfb, 0xfa, 0xf6 }, panel = { 0xe2, 0xdf, 0xd0 }, text = { 0x1a, 0x1b, 0x17 }, muted = { 0x54, 0x5a, 0x4f },
-    ok = { 0x13, 0x6a, 0x32 }, caution = { 0x7a, 0x4c, 0x00 }, warning = { 0xa8, 0x22, 0x19 }, marker = { 0x8a, 0x6d, 0x00 },
-    sky = { 0x6f, 0x9f, 0xc8 }, ground = { 0x9a, 0x7a, 0x52 } },
+  night = {
+    canvas = { 0x1a, 0x1b, 0x17 }, bezel = { 0x2b, 0x2d, 0x26 }, edge = { 0x45, 0x48, 0x3d },
+    screen = { 0x05, 0x08, 0x06 }, title = { 0x22, 0x24, 0x1e }, control = { 0x16, 0x1a, 0x16 },
+    text = { 0xdf, 0xe8, 0xdf }, muted = { 0x91, 0x9c, 0x91 }, faint = { 0x3a, 0x40, 0x3a },
+    ok = { 0x4c, 0xff, 0x7a }, ok_dim = { 0x2a, 0x94, 0x47 }, ok_fill = { 0x14, 0x36, 0x1f },
+    caution = { 0xff, 0xb2, 0x1f }, caution_fill = { 0x3a, 0x2c, 0x08 }, warning = { 0xff, 0x5a, 0x4f },
+    warning_fill = { 0x4a, 0x0f, 0x0c }, on_warning = { 0xff, 0xd0, 0xcc }, lamp_ok = { 0x0c, 0x1f, 0x12 },
+    lamp_warning = { 0x5a, 0x0d, 0x0a }, off_fill = { 0x0c, 0x0f, 0x0c }, off_edge = { 0x1e, 0x22, 0x1e },
+    info = { 0x45, 0xd4, 0xff }, marker = { 0xff, 0xe1, 0x4d }, sky = { 0x0e, 0x2c, 0x4c },
+    ground = { 0x3b, 0x2a, 0x15 },
+  },
+  day = {
+    canvas = { 0xeb, 0xe8, 0xdd }, bezel = { 0xf6, 0xf4, 0xed }, edge = { 0xcf, 0xca, 0xb6 },
+    screen = { 0xfb, 0xfa, 0xf6 }, title = { 0xe2, 0xdf, 0xd0 }, control = { 0xf1, 0xef, 0xe7 },
+    text = { 0x1a, 0x1b, 0x17 }, muted = { 0x54, 0x5a, 0x4f }, faint = { 0xa6, 0xaa, 0x9a },
+    ok = { 0x13, 0x6a, 0x32 }, ok_dim = { 0x5a, 0x9a, 0x6a }, ok_fill = { 0xdc, 0xef, 0xe0 },
+    caution = { 0x7a, 0x4c, 0x00 }, caution_fill = { 0xf5, 0xe5, 0xc2 }, warning = { 0xa8, 0x22, 0x19 },
+    warning_fill = { 0xf7, 0xda, 0xd6 }, on_warning = { 0x7a, 0x12, 0x0c }, lamp_ok = { 0xe3, 0xf2, 0xe6 },
+    lamp_warning = { 0xf3, 0xcf, 0xca }, off_fill = { 0xec, 0xea, 0xe1 }, off_edge = { 0xd8, 0xd4, 0xc4 },
+    info = { 0x08, 0x5d, 0x7b }, marker = { 0x8a, 0x6d, 0x00 }, sky = { 0x6f, 0x9f, 0xc8 },
+    ground = { 0x9a, 0x7a, 0x52 },
+  },
 }
-local WHITE = { 255, 255, 255 }     -- lines and marks on the horizon, in either palette
-local BG, PANEL, GREY, TEXT, GREEN, RED, AMBER, SKY, EARTH, YELLOW
 
-local function usePalette(day)
-  local p = day and PALETTES.day or PALETTES.night
-  BG, PANEL, GREY, TEXT, GREEN, RED, AMBER, SKY, EARTH = p.bg, p.panel, p.muted, p.text, p.ok, p.warning, p.caution, p.sky, p.ground
-  YELLOW = { 255, 210, 0 }
+local P = PALETTES.night
+local WHITE, BLACK, YELLOW = { 255, 255, 255 }, { 0, 0, 0 }, { 255, 210, 0 }
+
+usePalette = function(day)
+  P = day and PALETTES.day or PALETTES.night
 end
-usePalette(false)
 
 local function paint(c)
   lcd.setColor(CUSTOM_COLOR, lcd.RGB(c[1], c[2], c[3]))
@@ -277,6 +292,34 @@ local function roundRect(x, y, w, h, r, c)
   disc(x + w - r - 1, y + h - r - 1, r, c)
 end
 
+-- A box with a one-pixel border, both rounded: the console's panels, buttons and lamps.
+local function boxed(x, y, w, h, r, edge, inner)
+  roundRect(x, y, w, h, r, edge)
+  roundRect(x + 1, y + 1, w - 2, h - 2, math.max(1, r - 1), inner)
+end
+
+-- The console's measures (domains/illustration/theme, geometry): the panel and screen corners, the
+-- bezel padding and the corners of buttons and lamps.
+local PANEL_R, SCREEN_R, PAD, CONTROL_R = 11, 6, 5, 4
+
+-- A bezelled monitor with a title strip. Returns where its screen is.
+local function monitor(x, y, w, h, title)
+  boxed(x, y, w, h, PANEL_R, P.edge, P.bezel)
+  text(x + PAD + 3, y + 3, title, SMLSIZE, P.muted)
+  return x + PAD, y + 19, w - 2 * PAD, h - 19 - PAD
+end
+
+-- An annunciator lamp: "off", "ok", "caution" or "warn".
+local function lamp(x, y, w, h, name, state)
+  local bg, fg, edge = P.off_fill, P.faint, P.off_edge
+  if state == "ok" then bg, fg, edge = P.lamp_ok, P.ok, P.ok_dim
+  elseif state == "active" then bg, fg, edge = P.ok_fill, P.ok, P.ok_dim
+  elseif state == "caution" then bg, fg, edge = P.caution, BLACK, P.caution
+  elseif state == "warn" then bg, fg, edge = P.lamp_warning, WHITE, P.warning end
+  boxed(x, y, w, h, CONTROL_R, edge, bg)
+  text(x + w / 2, y + (h - 14) / 2, name, SMLSIZE, fg, CENTER)
+end
+
 -- Paints the corners of a box outside a quarter circle of radius r in the colour behind it, so what
 -- was drawn square in the box has rounded corners, then draws the rounded outline, thick.
 local function roundCorners(x, y, w, h, r, bg, edge)
@@ -286,7 +329,7 @@ local function roundCorners(x, y, w, h, r, bg, edge)
     { x + w, y + h, x + w - r, y + h - r, 0, 0.5 * math.pi },
     { x, y + h, x + r, y + h - r, 0.5 * math.pi, math.pi },
   }
-  local steps = 6
+  local steps = 5
   for _, k in ipairs(corners) do
     local ox, oy, cx, cy, a0, a1 = k[1], k[2], k[3], k[4], k[5], k[6]
     local px, py = cx + math.cos(a0) * r, cy + math.sin(a0) * r
@@ -299,9 +342,9 @@ local function roundCorners(x, y, w, h, r, bg, edge)
     end
   end
   thickLine(x + r, y, x + w - r, y, edge)
-  thickLine(x + r, y + h, x + w - r, y + h, edge)
+  thickLine(x + r, y + h - 1, x + w - r, y + h - 1, edge)
   thickLine(x, y + r, x, y + h - r, edge)
-  thickLine(x + w, y + r, x + w, y + h - r, edge)
+  thickLine(x + w - 1, y + r, x + w - 1, y + h - r, edge)
 end
 
 local function distanceHome()
@@ -353,16 +396,17 @@ local function clipLine(x1, y1, x2, y2, bx, by, bw, bh)
   return x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy
 end
 
+-- The artificial horizon, on a screen with the console's black edge.
 local function drawHud(x, y, w, h)
   local t = telemetry
   local cx, cy = x + w / 2, y + h / 2
-  fill(x, y, w, h, SKY)
+  fill(x, y, w, h, P.sky)
   local roll, pitch = math.rad(t.roll), -t.pitch                           -- (the radio showed it inverted)
   local k = h / 55                                                         -- pixels a degree
   local nx, ny = math.sin(roll), math.cos(roll)                            -- towards the ground
   local dx, dy = math.cos(roll), -math.sin(roll)                           -- along the horizon
   local px, py = cx + nx * pitch * k, cy + ny * pitch * k
-  drawGround(x, y, w, h, px, py, nx, ny, EARTH)
+  drawGround(x, y, w, h, px, py, nx, ny, P.ground)
   local ax, ay, bx, by = clipLine(px - dx * 2 * w, py - dy * 2 * w, px + dx * 2 * w, py + dy * 2 * w, x, y, w, h - 2)
   if ax then thickLine(ax, ay, bx, by, WHITE) end
   -- Pitch ladder: a line every 10 degrees, near the middle.
@@ -390,13 +434,18 @@ local function drawHud(x, y, w, h)
   tri(cx + math.sin(a) * (r - 8), cy - math.cos(a) * (r - 8),
     cx + math.sin(a - 0.07) * (r - 18), cy - math.cos(a - 0.07) * (r - 18),
     cx + math.sin(a + 0.07) * (r - 18), cy - math.cos(a + 0.07) * (r - 18), YELLOW)
-  roundCorners(x, y, w, h, 11, BG, TEXT)
+  roundCorners(x, y, w, h, SCREEN_R, P.bezel, BLACK)
 end
 
-local function label(x, y, name, value, unit)
-  text(x, y, name, SMLSIZE, GREY)
-  text(x + 50, y - 4, value, MIDSIZE, TEXT)
-  if unit then text(x + 50, y + 16, unit, SMLSIZE, GREY) end
+-- The SYSTEMS list of the console: a muted name on the left, the value on the right.
+local function systems(x, y, w, h, rows)
+  boxed(x, y, w, h, SCREEN_R, BLACK, P.screen)
+  local rowH = (h - 6) / #rows
+  for i, r in ipairs(rows) do
+    local ry = y + 3 + (i - 1) * rowH
+    text(x + 8, ry + (rowH - 14) / 2, r[1], SMLSIZE, P.muted)
+    text(x + w - 8, ry + (rowH - 14) / 2, r[2], SMLSIZE, r[3] or P.ok, RIGHT)
+  end
 end
 
 local function refresh(widget, event, touchState)
@@ -404,43 +453,53 @@ local function refresh(widget, event, touchState)
   local z = widget.zone
   local t = telemetry
   local live = getTime() - t.last < 100
-  fill(z.x, z.y, z.w, z.h, BG)
-  -- Top: the flight mode and whether it is armed, the battery, satellites and the link.
-  roundRect(z.x + 2, z.y + 2, z.w - 4, 40, 11, PANEL)
-  text(z.x + 14, z.y + 5, live and t.mode or "NO LINK", DBLSIZE, TEXT)
-  if live then text(z.x + z.w * 0.34, z.y + 10, t.armed and "ARMED" or "DISARMED", MIDSIZE, t.armed and GREEN or RED) end
-  text(z.x + z.w - 14, z.y + 14, string.format("GPS %d  LINK %d%%  %.1fV", t.sats, t.quality, t.volts), SMLSIZE, GREY, RIGHT)
-  -- Middle: the horizon, the speeds on its left and the height on its right.
-  local top = z.y + 48
-  local hudH = z.h - 48 - 52
-  local hudW = z.w * 0.44
-  local hx = z.x + (z.w - hudW) / 2
-  drawHud(hx, top, hudW, hudH)
-  label(z.x + 8, top + 6, "AS", string.format("%.0f", t.airspeed), "m/s")
-  label(z.x + 8, top + hudH * 0.36, "GS", string.format("%.0f", t.groundspeed), "m/s")
-  label(z.x + 8, top + hudH * 0.68, "HDG", string.format("%03d", math.floor(t.heading)), nil)
+  fill(z.x, z.y, z.w, z.h, P.canvas)
+  local gap = 4
+  local x0, w0 = z.x + gap, z.w - 2 * gap
+  -- The lamps along the top: the mode, armed, GPS, link and battery, as the console shows them.
+  local ly, lh = z.y + gap, 30
+  local modeW = w0 * 0.34
+  local small = (w0 - modeW - 4 * gap) / 4
+  lamp(x0, ly, modeW, lh, live and t.mode or "NO LINK", live and "active" or "warn")
+  lamp(x0 + modeW + gap, ly, small, lh, live and (t.armed and "ARMED" or "DISARMED") or "ARMED", live and (t.armed and "caution" or "off") or "off")
+  lamp(x0 + modeW + gap * 2 + small, ly, small, lh, string.format("GPS %d", t.sats), not live and "off" or (t.sats >= 6 and "ok" or "caution"))
+  lamp(x0 + modeW + gap * 3 + small * 2, ly, small, lh, string.format("LINK %d%%", t.quality), not live and "off" or (t.quality >= 50 and "ok" or "caution"))
+  local low = t.percent < 20
+  lamp(x0 + modeW + gap * 4 + small * 3, ly, small, lh, string.format("%.1fV", t.volts), not live and "off" or (low and "warn" or "ok"))
+  -- Messages along the bottom, in a monitor of their own.
+  local mh = 52
+  local py, ph = ly + lh + gap, z.h - lh - mh - 4 * gap
+  -- The middle: air data on the left, the horizon, the nav data on the right.
+  local sideW = w0 * 0.25
+  local midW = w0 - 2 * sideW - 2 * gap
+  local sx, sy, sw, sh = monitor(x0, py, sideW, ph, "AIR DATA")
+  systems(sx, sy, sw, sh, {
+    { "IAS", string.format("%.0f m/s", t.airspeed) },
+    { "GS", string.format("%.0f m/s", t.groundspeed) },
+    { "HDG", string.format("%03d", math.floor(t.heading)) },
+    { "CLIMB", string.format("%+.1f m/s", t.climb), t.climb < -3 and P.caution or P.ok },
+  })
+  local hx, hy, hw, hh = monitor(x0 + sideW + gap, py, midW, ph, "ATTITUDE")
+  drawHud(hx, hy, hw, hh)
   local home = t.homeAlt or t.alt
-  label(hx + hudW + 10, top + 6, "ALT", string.format("%.0f", t.alt - home), "m")
-  label(hx + hudW + 10, top + hudH * 0.36, "VS", string.format("%+.1f", t.climb), "m/s")
   local dist = distanceHome()
-  label(hx + hudW + 10, top + hudH * 0.68, "HOME", string.format("%.0f", dist), "m")
-  -- The battery, as a bar and the numbers.
-  local bx, by = z.x + z.w - 78, top + hudH - 30
-  text(bx, by - 8, string.format("%.1fA  %dmAh", t.amps, t.used), SMLSIZE, TEXT)
-  roundRect(bx, by + 8, 68, 14, 4, GREY)
-  roundRect(bx + 2, by + 10, 64, 10, 3, BG)
-  local pct = math.max(0, math.min(100, t.percent))
-  if pct > 4 then roundRect(bx + 2, by + 10, 64 * pct / 100, 10, 4, pct > 30 and GREEN or RED) end
-  -- Bottom: what ArduPilot said last (PreArm checks, mode changes, failsafes).
-  roundRect(z.x + 2, z.y + z.h - 48, z.w - 4, 46, 11, PANEL)
+  local nx0 = x0 + sideW + midW + 2 * gap
+  local rx, ry, rw, rh = monitor(nx0, py, sideW, ph, "NAV")
+  systems(rx, ry, rw, rh, {
+    { "ALT", string.format("%.0f m", t.alt - home) },
+    { "HOME", string.format("%.0f m", dist) },
+    { "BATT", string.format("%d%%", t.percent), low and P.warning or P.ok },
+    { "CURR", string.format("%.1f A", t.amps) },
+  })
+  local mx, my, mw, mhh = monitor(x0, py + ph + gap, w0, mh, "MESSAGES")
+  boxed(mx, my, mw, mhh, SCREEN_R, BLACK, P.screen)
   if #messages == 0 and live then
-    text(z.x + 12, z.y + z.h - 45, t.armed and "Armed. ArduPilot's messages show here." or "Disarmed: waiting for ArduPilot's pre-arm checks.", SMLSIZE, GREY)
-    text(z.x + 12, z.y + z.h - 32, t.armed and "" or "A failed check shows here in red (PreArm: ...).", SMLSIZE, GREY)
+    text(mx + 8, my + 3, t.armed and "Armed. ArduPilot's messages show here." or "Disarmed: waiting for ArduPilot's pre-arm checks.", SMLSIZE, P.muted)
   end
-  local first = math.max(1, #messages - 2)
+  local first = math.max(1, #messages - 1)
   for i = first, #messages do
     local m = messages[i]
-    text(z.x + 12, z.y + z.h - 45 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and RED or (m[1] <= 4 and AMBER or TEXT))
+    text(mx + 8, my + 3 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and P.warning or (m[1] <= 4 and P.caution or P.text))
   end
 end
 
