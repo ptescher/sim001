@@ -195,21 +195,6 @@ impl Site<'_> {
         }
     }
 
-    /// The spec file a page comes from, for its footer.
-    fn source(&self, here: Here) -> Option<String> {
-        let s = self.suite();
-        let span = match here {
-            Here::Section(id) => s.section(id).span.clone()?,
-            Here::Feature(f) => s.feature(f).span.clone(),
-            Here::Tutorial(i) | Here::Test(i) => match self.d.plans[i].origin {
-                Origin::Story { story, .. } => s.story(story).span.clone(),
-                Origin::Coverage { target } => s.exp(target).span.clone(),
-            },
-            _ => return None,
-        };
-        Some(span.file.to_string())
-    }
-
     /// The written stories' tests in a section (not the generated ones).
     fn stories_in(&self, id: SectionId) -> Vec<usize> {
         (0..self.d.plans.len())
@@ -251,8 +236,8 @@ impl Site<'_> {
         let mut o = String::from(r#"<nav class="side" aria-label="Contents"><ul class="tree">"#);
         self.nav_section(&mut o, SectionId(0), &open, here);
         o.push_str("</ul><ul class=\"tree extra\"><li class=\"label\">Reference</li>");
-        // The map and the theme are for the people who write the specs: the test report links them.
-        for h in [Here::Glossary, Here::Tests] {
+        // The test report, the map and the theme are for the people who write the specs, not the reader.
+        for h in [Here::Glossary] {
             let (url, name) = self.here_link(h);
             let cur = if h == here { r#" class="current""# } else { "" };
             let _ = write!(o, r#"<li><a href="{url}"{cur}>{name}</a></li>"#);
@@ -355,19 +340,7 @@ impl Site<'_> {
             }
             pager.push_str("</nav>");
         }
-        let footer = match self.source(here) {
-            Some(file) => match self.f.edit_link(&file, 1) {
-                Some((url, shown)) => {
-                    format!(
-                        r#"<footer>Edit this page: <a href="{}"><code>{}</code></a></footer>"#,
-                        esc(&url),
-                        esc(&shown)
-                    )
-                }
-                None => format!("<footer>Edit this page: <code>{}</code></footer>", esc(&file)),
-            },
-            None => String::new(),
-        };
+        let footer = String::new();
         let suite = esc(&self.suite().name);
         let full = if title == self.suite().name { suite.clone() } else { format!("{} · {suite}", esc(title)) };
         format!(

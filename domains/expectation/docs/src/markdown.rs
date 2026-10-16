@@ -94,14 +94,6 @@ fn ref_path(d: &Docs, r: manual::Ref) -> String {
     }
 }
 
-/// A page's last line: which spec file to edit to change it.
-fn foot(o: &mut String, f: &Facts, file: &str) {
-    let _ = match f.edit_link(file, 1) {
-        Some((url, shown)) => writeln!(o, "\n---\n\n*Edit this page: [`{shown}`]({url})*"),
-        None => writeln!(o, "\n---\n\n*Edit this page: `{file}`*"),
-    };
-}
-
 fn exp_link(d: &Docs, e: ExpId, from_subdir: bool) -> String {
     let x = d.suite.exp(e);
     let feature = feature_slug(d.suite, d.suite.feature(x.feature));
@@ -279,8 +271,7 @@ fn tutorial_page(d: &Docs, f: &Facts, i: usize, t: &manual::Tutorial) -> String 
         let _ = writeln!(o, "The user story: {n}\n");
     }
     let _ = writeln!(o, "```gherkin\n{}```\n\n</details>", gherkin(&t.written));
-    if let Origin::Story { story, .. } = plan.origin {
-        foot(&mut o, f, &s.story(story).span.file);
+    if let Origin::Story { .. } = plan.origin {
     }
     o
 }
@@ -362,7 +353,6 @@ fn feature_page(d: &Docs, f: &Facts, fi: usize) -> String {
             if links.is_empty() { "nothing yet".into() } else { links.join(", ") }
         );
     }
-    foot(&mut o, f, &feature.span.file);
     o
 }
 

@@ -86,7 +86,7 @@ Vocabulary:
     Say: press V
 
   Phrase: the sim has just started
-    Say: install Rust. Then run `cargo run --release -- --aircraft t1s-ranger` in the repository. The sim opens at the pilot box with the plain T1-S, which has no flight controller. The plane is in your hand, the throttle is closed and the flight mode is MANUAL
+    Say: start the sim with the T1-S Ranger. It opens at the pilot box with the plain T1-S, which has no flight controller. The plane is in your hand, the throttle is closed and the flight mode is MANUAL
     Given the flight controller is missing
     And the plane is in hand
     And the throttle is 0 %

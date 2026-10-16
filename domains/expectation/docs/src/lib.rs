@@ -162,16 +162,6 @@ fn relative(from: &Path, to: &Path) -> Option<String> {
     Some(if parts.is_empty() { ".".into() } else { parts.join("/") })
 }
 
-impl Facts {
-    /// A link to a suite file from a page `depth` directories below the docs directory, and
-    /// the path to show for it ("expectations/01-sim/stories.expect").
-    fn edit_link(&self, file: &str, depth: usize) -> Option<(String, String)> {
-        let root = self.source.as_ref()?;
-        let shown = root.split('/').filter(|p| *p != ".." && *p != ".").chain(file.split('/')).collect::<Vec<_>>();
-        Some((format!("{}{root}/{file}", "../".repeat(depth)), shown.join("/")))
-    }
-}
-
 /// A feature's slug, unique in the suite: under its section's.
 fn feature_slug(suite: &Suite, f: &Feature) -> String {
     let section = &suite.section(f.section).slug;
