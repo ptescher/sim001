@@ -355,8 +355,8 @@ end
 
 local function label(x, y, name, value, unit)
   text(x, y, name, SMLSIZE, GREY)
-  text(x + 36, y - 4, value, MIDSIZE, WHITE)
-  if unit then text(x + 36, y + 16, unit, SMLSIZE, GREY) end
+  text(x + 50, y - 4, value, MIDSIZE, WHITE)
+  if unit then text(x + 50, y + 16, unit, SMLSIZE, GREY) end
 end
 
 local function refresh(widget, event, touchState)
@@ -366,24 +366,24 @@ local function refresh(widget, event, touchState)
   local live = getTime() - t.last < 100
   fill(z.x, z.y, z.w, z.h, BG)
   -- Top: the flight mode and whether it is armed, the battery, satellites and the link.
-  roundRect(z.x + 2, z.y + 2, z.w - 4, 28, 8, PANEL)
-  text(z.x + 12, z.y + 3, live and t.mode or "NO LINK", DBLSIZE, WHITE)
-  if live then text(z.x + z.w * 0.30, z.y + 6, t.armed and "ARMED" or "DISARMED", MIDSIZE, t.armed and GREEN or RED) end
-  text(z.x + z.w - 12, z.y + 6, string.format("GPS %d  LINK %d%%  %.1fV", t.sats, t.quality, t.volts), SMLSIZE, GREY, RIGHT)
+  roundRect(z.x + 2, z.y + 2, z.w - 4, 40, 10, PANEL)
+  text(z.x + 14, z.y + 5, live and t.mode or "NO LINK", DBLSIZE, WHITE)
+  if live then text(z.x + z.w * 0.34, z.y + 10, t.armed and "ARMED" or "DISARMED", MIDSIZE, t.armed and GREEN or RED) end
+  text(z.x + z.w - 14, z.y + 14, string.format("GPS %d  LINK %d%%  %.1fV", t.sats, t.quality, t.volts), SMLSIZE, GREY, RIGHT)
   -- Middle: the horizon, the speeds on its left and the height on its right.
-  local top = z.y + 34
-  local hudH = z.h - 34 - 48
-  local hudW = z.w * 0.52
+  local top = z.y + 48
+  local hudH = z.h - 48 - 52
+  local hudW = z.w * 0.44
   local hx = z.x + (z.w - hudW) / 2
   drawHud(hx, top, hudW, hudH)
-  label(z.x + 8, top + 8, "AS", string.format("%.0f", t.airspeed), "m/s")
-  label(z.x + 8, top + 56, "GS", string.format("%.0f", t.groundspeed), "m/s")
-  label(z.x + 8, top + 104, "HDG", string.format("%03d", math.floor(t.heading)), nil)
+  label(z.x + 8, top + 6, "AS", string.format("%.0f", t.airspeed), "m/s")
+  label(z.x + 8, top + hudH * 0.36, "GS", string.format("%.0f", t.groundspeed), "m/s")
+  label(z.x + 8, top + hudH * 0.68, "HDG", string.format("%03d", math.floor(t.heading)), nil)
   local home = t.homeAlt or t.alt
-  label(hx + hudW + 10, top + 8, "ALT", string.format("%.0f", t.alt - home), "m")
-  label(hx + hudW + 10, top + 56, "VS", string.format("%+.1f", t.climb), "m/s")
+  label(hx + hudW + 10, top + 6, "ALT", string.format("%.0f", t.alt - home), "m")
+  label(hx + hudW + 10, top + hudH * 0.36, "VS", string.format("%+.1f", t.climb), "m/s")
   local dist = distanceHome()
-  label(hx + hudW + 10, top + 104, "HOME", string.format("%.0f", dist), "m")
+  label(hx + hudW + 10, top + hudH * 0.68, "HOME", string.format("%.0f", dist), "m")
   -- The battery, as a bar and the numbers.
   local bx, by = z.x + z.w - 78, top + hudH - 30
   text(bx, by - 8, string.format("%.1fA  %dmAh", t.amps, t.used), SMLSIZE, WHITE)
@@ -392,11 +392,11 @@ local function refresh(widget, event, touchState)
   local pct = math.max(0, math.min(100, t.percent))
   if pct > 4 then roundRect(bx + 2, by + 10, 64 * pct / 100, 10, 4, pct > 30 and GREEN or RED) end
   -- Bottom: what ArduPilot said last (PreArm checks, mode changes, failsafes).
-  roundRect(z.x + 2, z.y + z.h - 46, z.w - 4, 44, 8, PANEL)
+  roundRect(z.x + 2, z.y + z.h - 48, z.w - 4, 46, 10, PANEL)
   local first = math.max(1, #messages - 2)
   for i = first, #messages do
     local m = messages[i]
-    text(z.x + 12, z.y + z.h - 43 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and RED or (m[1] <= 4 and AMBER or WHITE))
+    text(z.x + 12, z.y + z.h - 45 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and RED or (m[1] <= 4 and AMBER or WHITE))
   end
 end
 
