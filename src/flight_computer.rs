@@ -254,12 +254,19 @@ fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpLis
         if now >= next_report {
             let up = fc.link_up(now);
             if up != was_up || heard > 0 || sent > 0 {
+                let ch = fc.channels(now);
                 println!(
-                    "flight computer: link {} ({} bytes heard, {} sent in the last 2 s, quality {} %)",
+                    "flight computer: link {} ({} bytes heard, {} sent in the last 2 s, quality {} %); roll {} pitch {} throttle {} yaw {} arm {} mode {}",
                     if up { "up" } else { "down" },
                     heard,
                     sent,
-                    fc.quality(now)
+                    fc.quality(now),
+                    ch[0],
+                    ch[1],
+                    ch[2],
+                    ch[3],
+                    ch[4],
+                    ch[7]
                 );
             }
             (was_up, heard, sent, next_report) = (up, 0, 0, now + 2.0);
