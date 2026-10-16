@@ -80,11 +80,26 @@ pub struct FlightComputer {
     /// MAVLink from the ground station, for the radio to carry up to the plane.
     from_gs: VecDeque<u8>,
     waiting: VecDeque<u8>,
+    /// ArduPilot's HEARTBEATs: they go down before the rest, so a busy line still shows a plane.
+    heartbeats: VecDeque<u8>,
     budget: f32,
     last_send: f64,
     mavlink_rate: f32,
     timers: Timers,
+    /// Bytes of ArduPilot's MAVLink that do not make a whole message yet.
+    heard: Vec<u8>,
+    /// The last HEARTBEAT of the autopilot: when it came (a count of them as a clock is not
+    /// needed: the time of the last `from_autopilot`), armed, and the mode.
+    heartbeat: Option<(std::time::Instant, bool, &'static str)>,
 }
+
+/// ArduPlane's custom modes, by number.
+const PLANE_MODES: &[(u32, &str)] = &[
+    (0, "MANUAL"), (1, "CIRCLE"), (2, "STABILIZE"), (3, "TRAINING"), (4, "ACRO"), (5, "FBWA"), (6, "FBWB"),
+    (7, "CRUISE"), (8, "AUTOTUNE"), (10, "AUTO"), (11, "RTL"), (12, "LOITER"), (13, "TAKEOFF"),
+    (14, "AVOID_ADSB"), (15, "GUIDED"), (17, "QSTABILIZE"), (18, "QHOVER"), (19, "QLOITER"), (20, "QLAND"),
+    (21, "QRTL"), (22, "QAUTOTUNE"), (23, "QACRO"), (24, "THERMAL"), (25, "LOITER2QLAND"),
+];
 
 impl FlightComputer {
     pub fn new() -> FlightComputer {
@@ -103,10 +118,63 @@ impl FlightComputer {
             to_ground_station: vec![],
             from_gs: VecDeque::new(),
             waiting: VecDeque::new(),
+            heartbeats: VecDeque::new(),
             budget: 0.0,
             last_send: 0.0,
             mavlink_rate,
             timers: Timers::default(),
+            heard: vec![],
+            heartbeat: None,
+        }
+    }
+
+    /// Armed and the flight mode, from the autopilot's own HEARTBEAT, if one came in the last 3 s.
+    pub fn autopilot_mode(&self) -> Option<(bool, &'static str)> {
+        self.heartbeat.filter(|h| h.0.elapsed().as_secs_f32() < 3.0).map(|h| (h.1, h.2))
+    }
+
+    /// Reads the HEARTBEATs (MAVLink 2 message 0) out of ArduPilot's stream.
+    fn watch_heartbeats(&mut self, bytes: &[u8]) {
+        self.heard.extend_from_slice(bytes);
+        if self.heard.len() > 2000 {
+            let cut = self.heard.len() - 1000;
+            self.heard.drain(..cut);
+        }
+        loop {
+            let Some(s) = self.heard.iter().position(|&b| b == 0xFD) else {
+                self.heard.clear();
+                return;
+            };
+            self.heard.drain(..s);
+            if self.heard.len() < 12 {
+                return;
+            }
+            let len = self.heard[1] as usize;
+            let total = 12 + len + if self.heard[2] & 1 != 0 { 13 } else { 0 };
+            if self.heard.len() < total {
+                return;
+            }
+            let id = self.heard[7] as u32 | (self.heard[8] as u32) << 8 | (self.heard[9] as u32) << 16;
+            let frame: Vec<u8> = self.heard[..total].to_vec();
+            if id == 0 {
+                self.heartbeats.extend(&frame);
+            } else if self.waiting.len() + total <= MAX_WAITING {
+                // Whole messages only: a message cut in the middle is no use to anyone.
+                self.waiting.extend(&frame);
+            }
+            if id == 0 && self.heard[6] == 1 {
+                // The payload of v2 has its trailing zeros cut off.
+                let mut p = [0u8; 9];
+                let n = len.min(9);
+                p[..n].copy_from_slice(&self.heard[10..10 + n]);
+                let (kind, autopilot) = (p[4], p[5]);
+                if kind != 6 && autopilot != 8 {
+                    let custom = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+                    let name = PLANE_MODES.iter().find(|(m, _)| *m == custom).map_or("UNKNOWN", |(_, n)| n);
+                    self.heartbeat = Some((std::time::Instant::now(), p[6] & 0x80 != 0, name));
+                }
+            }
+            self.heard.drain(..total);
         }
     }
 
@@ -148,10 +216,7 @@ impl FlightComputer {
 
     /// MAVLink from ArduPilot, to go down the line when there is room.
     pub fn from_autopilot(&mut self, mavlink: &[u8]) {
-        self.waiting.extend(mavlink);
-        while self.waiting.len() > MAX_WAITING {
-            self.waiting.pop_front();
-        }
+        self.watch_heartbeats(mavlink);
     }
 
     /// MAVLink that the TX15 sent up, for ArduPilot.
@@ -228,7 +293,7 @@ impl FlightComputer {
         }
         // The ground station's commands first (they are few), then ArduPilot's MAVLink, in the
         // room that is left.
-        for (queue, addr) in [(&mut self.from_gs, crsf::ADDR_RADIO), (&mut self.waiting, crsf::ADDR_TX)] {
+        for (queue, addr) in [(&mut self.from_gs, crsf::ADDR_RADIO), (&mut self.heartbeats, crsf::ADDR_TX), (&mut self.waiting, crsf::ADDR_TX)] {
             while !queue.is_empty() {
                 let n = queue.len().min(crsf::MAX_ENVELOPE_DATA);
                 if self.budget < (n + 5) as f32 {

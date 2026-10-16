@@ -177,8 +177,11 @@ end
 
 -- Cut the bytes that came down the cable into frames.
 local function readLine()
-  local got = serialRead(128)
-  if got and #got > 0 then pending = pending .. got end
+  for _ = 1, 6 do                                       -- the line carries more than one read holds
+    local got = serialRead(128)
+    if not got or #got == 0 then break end
+    pending = pending .. got
+  end
   while #pending >= 4 do
     local addr, len = string.byte(pending, 1), string.byte(pending, 2)
     if (addr ~= ADDR_TX and addr ~= ADDR_RADIO and addr ~= ADDR_FC) or len < 2 or len > 62 then
@@ -221,10 +224,66 @@ local function background(widget)
   tick()
 end
 
--- Colours.
-local function color(r, g, b)
-  lcd.setColor(CUSTOM_COLOR, lcd.RGB(r, g, b))
+-- Colours. The radio has one custom-colour slot, so a colour is a { r, g, b } table and is put in
+-- the slot just before each draw that uses it.
+local WHITE, GREY, BG, PANEL = { 255, 255, 255 }, { 150, 160, 170 }, { 12, 16, 22 }, { 24, 30, 40 }
+local SKY, EARTH, YELLOW, GREEN, RED, AMBER = { 40, 110, 200 }, { 120, 80, 30 }, { 255, 210, 0 }, { 60, 200, 90 }, { 230, 70, 60 }, { 240, 190, 60 }
+
+local function paint(c)
+  lcd.setColor(CUSTOM_COLOR, lcd.RGB(c[1], c[2], c[3]))
   return CUSTOM_COLOR
+end
+local function fill(x, y, w, h, c) lcd.drawFilledRectangle(x, y, w, h, paint(c)) end
+local function text(x, y, str, size, c, align) lcd.drawText(x, y, str, size + (align or 0) + paint(c)) end
+local function tri(x1, y1, x2, y2, x3, y3, c) lcd.drawFilledTriangle(x1, y1, x2, y2, x3, y3, paint(c)) end
+local function disc(x, y, r, c) lcd.drawFilledCircle(x, y, r, paint(c)) end
+
+-- A line two pixels thick (the radio's line is one).
+local function thickLine(x1, y1, x2, y2, c)
+  local p = paint(c)
+  lcd.drawLine(x1, y1, x2, y2, SOLID, p)
+  if math.abs(x2 - x1) >= math.abs(y2 - y1) then
+    lcd.drawLine(x1, y1 + 1, x2, y2 + 1, SOLID, p)
+  else
+    lcd.drawLine(x1 + 1, y1, x2 + 1, y2, SOLID, p)
+  end
+end
+
+-- A rectangle with rounded corners, filled.
+local function roundRect(x, y, w, h, r, c)
+  fill(x + r, y, w - 2 * r, h, c)
+  fill(x, y + r, w, h - 2 * r, c)
+  disc(x + r, y + r, r, c)
+  disc(x + w - r - 1, y + r, r, c)
+  disc(x + r, y + h - r - 1, r, c)
+  disc(x + w - r - 1, y + h - r - 1, r, c)
+end
+
+-- Paints the corners of a box outside a quarter circle of radius r in the colour behind it, so what
+-- was drawn square in the box has rounded corners, then draws the rounded outline, thick.
+local function roundCorners(x, y, w, h, r, bg, edge)
+  local corners = {
+    { x, y, x + r, y + r, math.pi, 1.5 * math.pi },
+    { x + w, y, x + w - r, y + r, 1.5 * math.pi, 2 * math.pi },
+    { x + w, y + h, x + w - r, y + h - r, 0, 0.5 * math.pi },
+    { x, y + h, x + r, y + h - r, 0.5 * math.pi, math.pi },
+  }
+  local steps = 6
+  for _, k in ipairs(corners) do
+    local ox, oy, cx, cy, a0, a1 = k[1], k[2], k[3], k[4], k[5], k[6]
+    local px, py = cx + math.cos(a0) * r, cy + math.sin(a0) * r
+    for i = 1, steps do
+      local a = a0 + (a1 - a0) * i / steps
+      local qx, qy = cx + math.cos(a) * r, cy + math.sin(a) * r
+      tri(ox, oy, px, py, qx, qy, bg)
+      thickLine(px, py, qx, qy, edge)
+      px, py = qx, qy
+    end
+  end
+  thickLine(x + r, y, x + w - r, y, edge)
+  thickLine(x + r, y + h, x + w - r, y + h, edge)
+  thickLine(x, y + r, x, y + h - r, edge)
+  thickLine(x + w, y + r, x + w, y + h - r, edge)
 end
 
 local function distanceHome()
@@ -237,7 +296,7 @@ end
 
 -- The ground half of the horizon: the HUD box cut by the horizon line, drawn as triangles.
 -- (px, py) is a point on the line and (nx, ny) points down, towards the ground.
-local function drawGround(x, y, w, h, px, py, nx, ny, flags)
+local function drawGround(x, y, w, h, px, py, nx, ny, c)
   local corners = { { x, y }, { x + w, y }, { x + w, y + h }, { x, y + h } }
   local poly = {}
   for i = 1, 4 do
@@ -251,54 +310,53 @@ local function drawGround(x, y, w, h, px, py, nx, ny, flags)
     end
   end
   for i = 2, #poly - 1 do
-    lcd.drawFilledTriangle(poly[1][1], poly[1][2], poly[i][1], poly[i][2], poly[i + 1][1], poly[i + 1][2], flags)
+    tri(poly[1][1], poly[1][2], poly[i][1], poly[i][2], poly[i + 1][1], poly[i + 1][2], c)
   end
 end
 
 local function drawHud(x, y, w, h)
   local t = telemetry
   local cx, cy = x + w / 2, y + h / 2
-  lcd.drawFilledRectangle(x, y, w, h, color(40, 110, 200))                 -- sky
-  local roll, pitch = math.rad(t.roll), t.pitch
+  fill(x, y, w, h, SKY)
+  local roll, pitch = math.rad(t.roll), -t.pitch                           -- (the radio showed it inverted)
   local k = h / 55                                                         -- pixels a degree
   local nx, ny = math.sin(roll), math.cos(roll)                            -- towards the ground
   local dx, dy = math.cos(roll), -math.sin(roll)                           -- along the horizon
   local px, py = cx + nx * pitch * k, cy + ny * pitch * k
-  drawGround(x, y, w, h, px, py, nx, ny, color(120, 80, 30))
-  lcd.drawLine(px - dx * w, py - dy * w, px + dx * w, py + dy * w, SOLID, color(255, 255, 255))
+  drawGround(x, y, w, h, px, py, nx, ny, EARTH)
+  thickLine(px - dx * w, py - dy * w, px + dx * w, py + dy * w, WHITE)
   -- Pitch ladder: a line every 10 degrees, near the middle.
   for deg = -20, 20, 10 do
     if deg ~= 0 then
       local lx, ly = px - nx * deg * k, py - ny * deg * k
       if lx > x + 30 and lx < x + w - 30 and ly > y + 14 and ly < y + h - 14 then
-        lcd.drawLine(lx - dx * 22, ly - dy * 22, lx + dx * 22, ly + dy * 22, SOLID, color(255, 255, 255))
-        lcd.drawText(lx + dx * 24, ly + dy * 24 - 7, tostring(math.abs(deg)), SMLSIZE + color(255, 255, 255))
+        thickLine(lx - dx * 22, ly - dy * 22, lx + dx * 22, ly + dy * 22, WHITE)
+        text(lx + dx * 24, ly + dy * 24 - 7, tostring(math.abs(deg)), SMLSIZE, WHITE)
       end
     end
   end
   -- The aircraft: a fixed mark in the middle.
-  local yellow = color(255, 210, 0)
-  lcd.drawLine(cx - 34, cy, cx - 10, cy, SOLID, yellow)
-  lcd.drawLine(cx + 10, cy, cx + 34, cy, SOLID, yellow)
-  lcd.drawLine(cx - 10, cy, cx, cy + 8, SOLID, yellow)
-  lcd.drawLine(cx + 10, cy, cx, cy + 8, SOLID, yellow)
+  thickLine(cx - 34, cy, cx - 10, cy, YELLOW)
+  thickLine(cx + 10, cy, cx + 34, cy, YELLOW)
+  thickLine(cx - 10, cy, cx, cy + 8, YELLOW)
+  thickLine(cx + 10, cy, cx, cy + 8, YELLOW)
   -- Roll: a pointer on an arc across the top.
   local r = h / 2 - 6
   for deg = -30, 30, 15 do
     local a = math.rad(deg)
-    lcd.drawLine(cx + math.sin(a) * r, cy - math.cos(a) * r, cx + math.sin(a) * (r - 6), cy - math.cos(a) * (r - 6), SOLID, color(255, 255, 255))
+    thickLine(cx + math.sin(a) * r, cy - math.cos(a) * r, cx + math.sin(a) * (r - 8), cy - math.cos(a) * (r - 8), WHITE)
   end
   local a = -roll
-  lcd.drawFilledTriangle(cx + math.sin(a) * (r - 8), cy - math.cos(a) * (r - 8),
+  tri(cx + math.sin(a) * (r - 8), cy - math.cos(a) * (r - 8),
     cx + math.sin(a - 0.07) * (r - 18), cy - math.cos(a - 0.07) * (r - 18),
-    cx + math.sin(a + 0.07) * (r - 18), cy - math.cos(a + 0.07) * (r - 18), yellow)
-  lcd.drawRectangle(x, y, w, h, color(255, 255, 255))
+    cx + math.sin(a + 0.07) * (r - 18), cy - math.cos(a + 0.07) * (r - 18), YELLOW)
+  roundCorners(x, y, w, h, 14, BG, WHITE)
 end
 
 local function label(x, y, name, value, unit)
-  lcd.drawText(x, y, name, SMLSIZE + color(150, 160, 170))
-  lcd.drawText(x + 36, y - 4, value, MIDSIZE + color(255, 255, 255))
-  if unit then lcd.drawText(x + 36, y + 16, unit, SMLSIZE + color(150, 160, 170)) end
+  text(x, y, name, SMLSIZE, GREY)
+  text(x + 36, y - 4, value, MIDSIZE, WHITE)
+  if unit then text(x + 36, y + 16, unit, SMLSIZE, GREY) end
 end
 
 local function refresh(widget, event, touchState)
@@ -306,41 +364,39 @@ local function refresh(widget, event, touchState)
   local z = widget.zone
   local t = telemetry
   local live = getTime() - t.last < 100
-  local white, grey = color(255, 255, 255), color(150, 160, 170)
-  lcd.drawFilledRectangle(z.x, z.y, z.w, z.h, color(12, 16, 22))
+  fill(z.x, z.y, z.w, z.h, BG)
   -- Top: the flight mode and whether it is armed, the battery, satellites and the link.
-  local armedColor = t.armed and color(60, 200, 90) or color(230, 70, 60)
-  lcd.drawFilledRectangle(z.x, z.y, z.w, 26, color(24, 30, 40))
-  lcd.drawText(z.x + 6, z.y + 2, live and t.mode or "NO LINK", DBLSIZE + white)
-  lcd.drawText(z.x + z.w * 0.30, z.y + 6, live and (t.armed and "ARMED" or "DISARMED") or "", MIDSIZE + armedColor)
-  lcd.drawText(z.x + z.w - 6, z.y + 3, string.format("GPS %d  LINK %d%%  %.1fV", t.sats, t.quality, t.volts), RIGHT + SMLSIZE + grey)
+  roundRect(z.x + 2, z.y + 2, z.w - 4, 28, 8, PANEL)
+  text(z.x + 12, z.y + 3, live and t.mode or "NO LINK", DBLSIZE, WHITE)
+  if live then text(z.x + z.w * 0.30, z.y + 6, t.armed and "ARMED" or "DISARMED", MIDSIZE, t.armed and GREEN or RED) end
+  text(z.x + z.w - 12, z.y + 6, string.format("GPS %d  LINK %d%%  %.1fV", t.sats, t.quality, t.volts), SMLSIZE, GREY, RIGHT)
   -- Middle: the horizon, the speeds on its left and the height on its right.
-  local top = z.y + 30
-  local hudH = z.h - 30 - 44
+  local top = z.y + 34
+  local hudH = z.h - 34 - 48
   local hudW = z.w * 0.52
   local hx = z.x + (z.w - hudW) / 2
   drawHud(hx, top, hudW, hudH)
-  label(z.x + 6, top + 8, "AS", string.format("%.0f", t.airspeed), "m/s")
-  label(z.x + 6, top + 56, "GS", string.format("%.0f", t.groundspeed), "m/s")
-  label(z.x + 6, top + 104, "HDG", string.format("%03d", math.floor(t.heading)), nil)
+  label(z.x + 8, top + 8, "AS", string.format("%.0f", t.airspeed), "m/s")
+  label(z.x + 8, top + 56, "GS", string.format("%.0f", t.groundspeed), "m/s")
+  label(z.x + 8, top + 104, "HDG", string.format("%03d", math.floor(t.heading)), nil)
   local home = t.homeAlt or t.alt
-  label(hx + hudW + 8, top + 8, "ALT", string.format("%.0f", t.alt - home), "m")
-  label(hx + hudW + 8, top + 56, "VS", string.format("%+.1f", t.climb), "m/s")
-  local dist, bearing = distanceHome()
-  label(hx + hudW + 8, top + 104, "HOME", string.format("%.0f", dist), "m")
+  label(hx + hudW + 10, top + 8, "ALT", string.format("%.0f", t.alt - home), "m")
+  label(hx + hudW + 10, top + 56, "VS", string.format("%+.1f", t.climb), "m/s")
+  local dist = distanceHome()
+  label(hx + hudW + 10, top + 104, "HOME", string.format("%.0f", dist), "m")
   -- The battery, as a bar and the numbers.
-  local bx, by = z.x + z.w - 74, top + hudH - 26
-  lcd.drawRectangle(bx, by + 8, 68, 12, grey)
+  local bx, by = z.x + z.w - 78, top + hudH - 30
+  text(bx, by - 8, string.format("%.1fA  %dmAh", t.amps, t.used), SMLSIZE, WHITE)
+  roundRect(bx, by + 8, 68, 14, 5, GREY)
+  roundRect(bx + 2, by + 10, 64, 10, 4, BG)
   local pct = math.max(0, math.min(100, t.percent))
-  lcd.drawFilledRectangle(bx + 1, by + 9, 66 * pct / 100, 10, pct > 30 and color(60, 200, 90) or color(230, 70, 60))
-  lcd.drawText(bx, by - 8, string.format("%.1fA  %dmAh", t.amps, t.used), SMLSIZE + white)
+  if pct > 4 then roundRect(bx + 2, by + 10, 64 * pct / 100, 10, 4, pct > 30 and GREEN or RED) end
   -- Bottom: what ArduPilot said last (PreArm checks, mode changes, failsafes).
-  lcd.drawFilledRectangle(z.x, z.y + z.h - 42, z.w, 42, color(24, 30, 40))
+  roundRect(z.x + 2, z.y + z.h - 46, z.w - 4, 44, 8, PANEL)
   local first = math.max(1, #messages - 2)
   for i = first, #messages do
     local m = messages[i]
-    local c = m[1] <= 3 and color(230, 70, 60) or (m[1] <= 4 and color(240, 190, 60) or white)
-    lcd.drawText(z.x + 6, z.y + z.h - 40 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE + c)
+    text(z.x + 12, z.y + z.h - 43 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and RED or (m[1] <= 4 and AMBER or WHITE))
   end
 end
 

@@ -323,6 +323,12 @@ fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpLis
             c.uart_rc = Some(fc.channels(now));
             vehicle(&c, &cfg.home)
         };
+        // ArduPilot's own heartbeat says the mode best: the console's report only comes when the
+        // ground station is connected and hears it.
+        let mut v = v;
+        if let Some((armed, mode)) = fc.autopilot_mode() {
+            (v.armed, v.mode) = (armed, mode.to_string());
+        }
         let down = fc.to_line(&v, now);
         sent += down.len();
         if !down.is_empty() && !write_all(&mut line, &down) {
