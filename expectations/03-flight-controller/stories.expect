@@ -1,3 +1,25 @@
+Story: Your first hover
+  As a new pilot with a VTOL
+  I want to lift off, hold a hover and bring the plane home to land
+  So that I can fly the T1-S VTOL from the sim alone, with no ground station
+
+  This is the VTOL's [[Your first throw]]. The sim starts ArduPilot for itself, so start the
+  sim with the T1-S VTOL (it is the default plane) and nothing else. The VTOL does not need a
+  throw. You arm it, and it takes off straight up in QHOVER, the first mode of the radio. In
+  this tutorial you lift off, hold the hover, and then you send the plane home. It flies back
+  to the pilot box and lands by itself.
+
+  Scenario: Arm, lift off, hold the hover and bring the plane home
+    Given the autopilot is disarmed
+    When the pilot arms the plane
+    Then the autopilot is armed
+    When the pilot opens the throttle to climb
+    Then the plane is flying
+    When the pilot closes the throttle
+    Then the plane is flying
+    When the pilot sends the plane home
+    Then the plane is on the ground
+
 Story: Learning with self-levelling
   As a pilot learning to fly
   I want the plane to level itself when I let go of the sticks

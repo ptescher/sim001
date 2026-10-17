@@ -4,7 +4,7 @@
 use std::io::Read;
 use std::time::Duration;
 
-const UA: &str = "t1s_sim-mapbuild/0.1 (flight simulator map builder)";
+const UA: &str = "sim001-mapbuild/0.1 (flight simulator map builder)";
 pub const DEM_SERVICE: &str = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage";
 pub const NAIP_SERVICE: &str = "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage";
 const OVERPASS: [&str; 3] = [

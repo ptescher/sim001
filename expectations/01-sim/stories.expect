@@ -6,9 +6,10 @@ Story: Your first throw
   I want to throw the plane by opening the throttle, like at the field
   So that launching in the sim feels like the real thing
 
-  You launch the T1-S by hand. At the field, you hold it up, open the throttle and let it
+  You launch the T1-S Ranger by hand. At the field, you hold it up, open the throttle and let it
   go. The sim works in the same way. In this tutorial, you throw the plane one time. Then
-  you bring it back to your hand, so that you can throw it again.
+  you bring it back to your hand, so that you can throw it again. This tutorial flies the
+  T1-S Ranger. To fly the T1-S VTOL from the sim alone, see [[Your first hover]].
 
   Scenario: Throttle up, then pick it back up
     When the pilot throws the plane with the throttle

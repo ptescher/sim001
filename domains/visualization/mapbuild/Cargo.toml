@@ -2,7 +2,7 @@
 name = "visualization_mapbuild"
 version = "0.1.0"
 edition = "2024"
-description = "Builds real-world map packs for t1s_sim from USGS 3DEP lidar, USGS NAIP imagery and OpenStreetMap"
+description = "Builds real-world map packs for sim001 from USGS 3DEP lidar, USGS NAIP imagery and OpenStreetMap"
 
 [dependencies]
 visualization_mappack = { path = "../mappack" }

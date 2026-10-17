@@ -1,8 +1,8 @@
 #!/bin/bash
-# Runs ArduPlane SITL with the JSON backend pointed at the T1-S sim on the host.
-#   SIM_HOST  where t1s_sim --ardupilot is running (default: Docker Desktop's host alias)
+# Runs ArduPlane SITL with the JSON backend pointed at the SIM001 sim on the host.
+#   SIM_HOST  where sim001 --ardupilot is running (default: Docker Desktop's host alias)
 #   HOME_LOC  lat,lon,alt,heading (default: CMAC model flying field, Canberra)
-#   AIRCRAFT  the plane t1s_sim flies (default t1s-vtol, the only one with a flight controller):
+#   AIRCRAFT  the plane sim001 flies (default t1s-vtol, the only one with a flight controller):
 #             /<AIRCRAFT>.parm, if there is one, is layered over the T1-S defaults
 #   NOWAIT    1: do not wait for a ground station on the first serial port (the tests of the
 #             sim alone have none). Always so for instances above 0

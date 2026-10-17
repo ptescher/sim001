@@ -108,7 +108,7 @@ impl RealSite {
             runway: None,
             water_level,
         };
-        let frac = std::env::var("T1S_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0).clamp(0.0, 1.0);
+        let frac = std::env::var("SIM001_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0).clamp(0.0, 1.0);
         let pack_trees = mappack::read_trees(&dir.join("trees.bin")).map_err(|e| format!("trees.bin: {e}"))?;
         let keep = (pack_trees.len() as f32 * frac) as usize;
         site.trees = pack_trees

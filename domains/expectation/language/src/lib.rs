@@ -2,7 +2,7 @@
 //! expectations and user stories.
 //!
 //! ```text
-//! Suite: The T1-S sim
+//! Suite: SIM001
 //!
 //! Vocabulary:
 //!   State: the aircraft is in hand | flying | crashed

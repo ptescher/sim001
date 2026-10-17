@@ -108,7 +108,7 @@ New or renamed events need the driver to know them. For the sim, add them to `KE
 `src/acceptance.rs`, then:
 
 ```bash
-cargo test --bin t1s_sim the_suite_checks_clean          # the suite checks clean and the driver covers it
+cargo test --bin sim001 the_suite_checks_clean          # the suite checks clean and the driver covers it
 ```
 
 The ground station has no driver yet, so its tests show "Not supported yet" placeholders.

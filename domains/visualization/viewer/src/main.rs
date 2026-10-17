@@ -1,4 +1,4 @@
-//! t1s_view: the simulator's 3D view of a real plane, from its MAVLink telemetry.
+//! sim001_view: the simulator's 3D view of a real plane, from its MAVLink telemetry.
 //!
 //!   cargo run --release -p visualization_viewer -- [options]
 //!
@@ -83,7 +83,7 @@ fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
-            title: format!("T1-S view - {}", terrain::site_title()),
+            title: format!("SIM001 view - {}", terrain::site_title()),
             resolution: WindowResolution::new(1600, 900),
             present_mode: PresentMode::AutoVsync,
             ..default()

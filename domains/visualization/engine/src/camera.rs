@@ -377,9 +377,9 @@ pub fn update_camera(
             75.0
         }
     };
-    // A pinned view (T1S_VIEW, or a capture) wins over the pilot's.
+    // A pinned view (SIM001_VIEW, or a capture) wins over the pilot's.
     let mut target_fov = target_fov;
-    if let Some(v) = pinned.0.or_else(|| std::env::var("T1S_VIEW").ok().and_then(|v| View::parse(&v))) {
+    if let Some(v) = pinned.0.or_else(|| std::env::var("SIM001_VIEW").ok().and_then(|v| View::parse(&v))) {
         *t = v.transform();
         target_fov = v.fov;
         cs.fov = target_fov;
@@ -393,14 +393,14 @@ pub fn update_camera(
 
 /// Solari tuned for an outdoor scene lit by one sun plus the sky. The defaults (8 direct-light
 /// samples, 3 bounces, 15 cm cache cells) target interiors with many lights. Each value can be
-/// overridden with an env var (T1S_DI, T1S_DI2, T1S_BOUNCES, T1S_CELL) for experiments.
+/// overridden with an env var (SIM001_DI, SIM001_DI2, SIM001_BOUNCES, SIM001_CELL) for experiments.
 fn solari_settings() -> SolariLighting {
     let env = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f32>().ok());
     SolariLighting {
-        primary_di_samples: env("T1S_DI").map(|v| v as u32).unwrap_or(2),
-        secondary_di_samples: env("T1S_DI2").map(|v| v as u32).unwrap_or(1),
-        max_bounces: env("T1S_BOUNCES").map(|v| v as u32).unwrap_or(2),
-        world_cache_position_base_cell_size: env("T1S_CELL").unwrap_or(0.4),
+        primary_di_samples: env("SIM001_DI").map(|v| v as u32).unwrap_or(2),
+        secondary_di_samples: env("SIM001_DI2").map(|v| v as u32).unwrap_or(1),
+        max_bounces: env("SIM001_BOUNCES").map(|v| v as u32).unwrap_or(2),
+        world_cache_position_base_cell_size: env("SIM001_CELL").unwrap_or(0.4),
         world_cache_max_gi_ray_distance: 120.0,
         ..SolariLighting::default()
     }

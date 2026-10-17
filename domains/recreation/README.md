@@ -26,8 +26,8 @@ When the station flies your plane (`gcs --station`), the computer pilots fly pla
 each with an ArduPlane SITL of its own, and the computer pilot flies it through a radio, as you
 do with the TX15. So the start-up time is the same for everyone.
 
-- The station starts four SITL containers: `t1s-sitl` (yours, instance 0) and `t1s-sitl-1` to
-  `t1s-sitl-3` for Kestrel, Merlin and Swift. SITL instance N sends its physics to UDP port
+- The station starts four SITL containers: `sim001-sitl` (yours, instance 0) and `sim001-sitl-1` to
+  `sim001-sitl-3` for Kestrel, Merlin and Swift. SITL instance N sends its physics to UDP port
   9002 + 10·N, and the sim has a bridge for each (`src/ardupilot.rs`). Between games their planes
   stand on the field beside the pilot box with their autopilots running.
 - A game starts from cold: every plane on the ground, disarmed, and the countdown starts at once

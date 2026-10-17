@@ -6,7 +6,7 @@
 /SOUNDS/
 /TEMPLATES/
 /WIDGETS/*
-!/WIDGETS/T1SFC/
+!/WIDGETS/SIM001FC/
 /edgetx.sdcard.version
 /IMAGES/*
 !/IMAGES/T1S_*.png
@@ -15,8 +15,8 @@
 /RADIO/*
 !/RADIO/.gitkeep
 /THEMES/*
-!/THEMES/T1S Day/
-!/THEMES/T1S Night/
+!/THEMES/SIM001 Day/
+!/THEMES/SIM001 Night/
 
 # What the radio (or Companion) compiles from the scripts.
 *.luac

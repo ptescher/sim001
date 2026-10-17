@@ -246,9 +246,9 @@ const FRAME: Duration = Duration::from_millis(150);
 const ANSWER: Duration = Duration::from_secs(60);
 
 /// The time the whole run may take: each test's budget and a fresh plane for each, with a margin,
-/// or `T1S_EXPECT_TOTAL` (seconds).
+/// or `SIM001_EXPECT_TOTAL` (seconds).
 fn run_limit(plans: &[expectation_story::Plan]) -> Duration {
-    if let Some(s) = std::env::var("T1S_EXPECT_TOTAL").ok().and_then(|s| s.parse().ok()) {
+    if let Some(s) = std::env::var("SIM001_EXPECT_TOTAL").ok().and_then(|s| s.parse().ok()) {
         return Duration::from_secs(s);
     }
     let tests: u64 = plans.iter().map(|p| test_budget(p) + 120).sum();
@@ -314,7 +314,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     let total = run_limit(&acceptance.plans);
     std::thread::spawn(move || {
         std::thread::sleep(total);
-        eprintln!("expect: the run took more than {} s: stopping (T1S_EXPECT_TOTAL sets the limit)", total.as_secs());
+        eprintln!("expect: the run took more than {} s: stopping (SIM001_EXPECT_TOTAL sets the limit)", total.as_secs());
         crate::station::exit(2);
     });
     std::thread::spawn(move || {
@@ -1496,7 +1496,7 @@ impl Driver for ConsoleDriver {
         let Some(number) = self.with_window(|w, _| crate::screens::window_number(w))? else {
             return Ok(None);
         };
-        let path = std::env::temp_dir().join(format!("t1s_gcs_expect_{}.jpg", std::process::id()));
+        let path = std::env::temp_dir().join(format!("sim001_gcs_expect_{}.jpg", std::process::id()));
         let ok = std::process::Command::new("screencapture")
             .args(["-x", "-o", "-t", "jpg", "-l", &number.to_string()])
             .arg(&path)

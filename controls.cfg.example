@@ -1,4 +1,4 @@
-# T1-S sim controls, an example for the RadioMaster TX15 (EdgeTX, USB joystick mode).
+# SIM001 controls, an example for the RadioMaster TX15 (EdgeTX, USB joystick mode).
 #
 # Copy this file to controls.cfg in the repository (the sim reads it from the directory you run
 # it in, and F2 writes it there). controls.cfg is not committed, because it belongs to one radio.

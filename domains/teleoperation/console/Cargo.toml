@@ -2,7 +2,7 @@
 name = "teleoperation_console"
 version = "0.1.0"
 edition = "2024"
-description = "Ground control station for the T1-S sim + ArduPlane SITL, built on GPUI"
+description = "Ground control station for SIM001 + ArduPlane SITL, built on GPUI"
 
 [dependencies]
 gpui = "0.2.2"
@@ -42,5 +42,5 @@ opt-level = 3
 gpui = { path = "../../../vendor/gpui" }
 
 [[bin]]
-name = "t1s_gcs"
+name = "sim001_gcs"
 path = "src/main.rs"

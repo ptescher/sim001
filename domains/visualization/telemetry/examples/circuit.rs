@@ -1,4 +1,4 @@
-//! A pretend plane for trying `t1s_view` with no plane: it sends MAVLink to UDP port 14550 as
+//! A pretend plane for trying `sim001_view` with no plane: it sends MAVLink to UDP port 14550 as
 //! ArduPilot does, flying circles 80 m across, 40 m up and 100 m north of home.
 //!
 //!   cargo run --release -p visualization_telemetry --example circuit [-- HOST:PORT]

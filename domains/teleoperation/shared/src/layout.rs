@@ -21,7 +21,7 @@ impl Rect {
         self.x + self.w * 0.5
     }
 
-    /// `x,y,w,h`, the form `t1s_sim --window-rect` takes.
+    /// `x,y,w,h`, the form `sim001 --window-rect` takes.
     pub fn to_arg(&self) -> String {
         format!("{:.0},{:.0},{:.0},{:.0}", self.x, self.y, self.w, self.h)
     }

@@ -4,7 +4,7 @@
 # domains/visualization/telemetry/tests/acceptance.rs.
 
 Section: Watching a real plane
-  The 3D view of the simulator can also show a real plane. `t1s_view` listens for the
+  The 3D view of the simulator can also show a real plane. `sim001_view` listens for the
   [[MAVLink]] telemetry of the plane, and it puts the plane in the same scenery as the
   simulator. It does not fly anything. You can watch a flight from the pilot box, from behind
   the plane or from its nose, and a camera system can learn from the same pictures.
@@ -42,7 +42,7 @@ Vocabulary:
     Say: wait 10 seconds
 
   Phrase: the view is listening
-    Say: start `t1s_view`. It listens for MAVLink on UDP port 14550
+    Say: start `sim001_view`. It listens for MAVLink on UDP port 14550
     Given the plane in the view is missing
     And the telemetry is silent
     And the reported distance north of home is 0 m

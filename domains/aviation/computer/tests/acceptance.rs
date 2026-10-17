@@ -263,7 +263,7 @@ fn driver() -> Bindings<World> {
         .on("70 seconds pass", |w| w.run(70.0))
         .on_reset(|w| *w = World::new())
         .on_settle(World::settle)
-        // The screen of the TX15, as the widget draws it (WIDGETS/T1SFC).
+        // The screen of the TX15, as the widget draws it (WIDGETS/SIM001FC).
         .on_screenshot(|w| expectation_harness::Screenshot::svg(w.handset.screen.to_svg()))
 }
 
@@ -285,13 +285,13 @@ fn every_test_of_the_section_passes() {
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
 }
 
-/// The same, with pictures of the TX15's screen. With T1S_DOCS=DIR the results and pictures go
+/// The same, with pictures of the TX15's screen. With SIM001_DOCS=DIR the results and pictures go
 /// into the project's docs, beside the other runners'.
 #[test]
 fn the_section_documents_itself_with_pictures_of_the_screen() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
     let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
-    let published = std::env::var("T1S_DOCS").ok().map(std::path::PathBuf::from);
+    let published = std::env::var("SIM001_DOCS").ok().map(std::path::PathBuf::from);
     let out = published.clone().unwrap_or_else(|| Path::new(env!("CARGO_TARGET_TMPDIR")).join("aviation_docs"));
     let report = a.run(&mut driver(), &RunOptions { docs_dir: Some(out.clone()), ..Default::default() });
     if published.is_some() {

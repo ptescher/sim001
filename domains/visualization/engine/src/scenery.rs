@@ -133,7 +133,7 @@ pub fn spawn_scenery(
             let up = (off.y / 0.7).clamp(0.0, 1.0);
             let sun_shade = (off.normalize_or_zero().dot(sun_dir) * 0.5 + 0.5) * 0.25;
             let k_shade = (up * 0.8 + 0.1 + sun_shade).clamp(0.0, 1.0);
-            let c = Vec3::new(0.52, 0.57, 0.66).lerp(Vec3::new(1.0, 0.99, 0.97), k_shade);
+            let c = Vec3::new(0.72, 0.76, 0.84).lerp(Vec3::new(1.0, 0.99, 0.97), k_shade);
             puffs.push((off * size, r, (h(5) * 3.0) as u32 % 3, [c.x, c.y, c.z, 1.0]));
         }
         let mesh = meshes.add(empty_cloud_mesh());
@@ -144,6 +144,8 @@ pub fn spawn_scenery(
             Transform::from_translation(home),
             // Puffs extend well beyond the mesh's initial (empty) bounds.
             bevy::camera::visibility::NoFrustumCulling,
+            // Thin vapour: it must not throw a hard sun-shadow onto the ground.
+            bevy::light::NotShadowCaster,
         ));
     }
 }

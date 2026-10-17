@@ -3,8 +3,8 @@
 //! The engine draws a [`Scene`] and knows nothing of where it comes from. A source writes it
 //! every frame, before [`EngineSet::Draw`]:
 //!
-//! - the simulator, from its flight model (`t1s_sim`);
-//! - a real plane, from its MAVLink telemetry (`visualization_telemetry`, `t1s_view`).
+//! - the simulator, from its flight model (`sim001`);
+//! - a real plane, from its MAVLink telemetry (`visualization_telemetry`, `sim001_view`).
 //!
 //! The same view serves pilots and camera-based systems, so it aims to look like the real
 //! thing: see the domain's README for the photo comparison.

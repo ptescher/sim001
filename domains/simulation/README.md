@@ -18,9 +18,9 @@ depends on these crates; they depend on nothing but `glam`.
 | Id | What it is |
 | --- | --- |
 | `t1s-vtol` | The default. The T1-S airframe with its two wing motors on tilt servos and a third rotor in the tail, and a flight controller (ArduPilot flies it: `ardupilot/t1s-vtol.parm`). It hovers, transitions to forward flight and back, and lands. The hardware numbers (motors, props, tilt mechanism, weight) are estimates, because HEEWING doesn't publish them |
-| `t1s-ranger` | The plain HEEWING T1-S Ranger: twin tractor motors, V-tail, and only a receiver and two ESCs, so no flight controller. Its numbers are fixed by `t1s_sim --selftest`, whose output must not change when the physics is moved or refactored |
+| `t1s-ranger` | The plain HEEWING T1-S Ranger: twin tractor motors, V-tail, and only a receiver and two ESCs, so no flight controller. Its numbers are fixed by `sim001 --selftest`, whose output must not change when the physics is moved or refactored |
 
-A plane with a flight controller can't be flown by the sim alone, because ArduPilot does the flying. A plane without one has the MANUAL mode only, so the sim's ANGLE and ACRO modes are for planes that have one.
+A plane with a flight controller is flown by ArduPilot. The sim starts one for itself (`src/sitl.rs`: a native build from `ardupilot/build_native.sh`, else the Docker image), or flies beside the station's. A plane without one has the MANUAL mode only, so the sim's ANGLE and ACRO modes are for planes that have one.
 
 ## How a plane is driven
 

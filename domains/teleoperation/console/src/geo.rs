@@ -1,4 +1,4 @@
-//! Local tangent-plane geometry and the terrain map exported by `t1s_sim --export-map`.
+//! Local tangent-plane geometry and the terrain map exported by `sim001 --export-map`.
 //!
 //! Everything on the map is in metres north/east of the *origin*: the `--home` location SITL
 //! was started with, which is exactly the sim's pilot box (the sim reports NED relative to it).

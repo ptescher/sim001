@@ -6,7 +6,8 @@
 # the sim's window aren't supported yet.
 
 Section: Ground control station
-  The ground station flies the plane of the sim through [[ArduPilot]]. You plan a
+  The ground station flies the T1-S VTOL, the default plane of the sim, through [[ArduPilot]].
+  (The plain T1-S Ranger has no flight controller, so it is flown from [[The simulator]].) You plan a
   [[mission]] on a map of the valley, and you write the mission to the plane. Then you arm
   the plane, and you throw it. The ground station talks to ArduPlane with [[MAVLink]], as
   Mission Planner and QGroundControl do.

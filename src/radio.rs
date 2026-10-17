@@ -67,7 +67,7 @@ fn beacon(home: &Position, sysid: u8, name: &str, pos: Vec3, vel: Vec3) -> Beaco
         position: geo(home, pos),
         velocity: [north, east, -vel.y],
         heading: east.atan2(north).to_degrees().rem_euclid(360.0),
-        uas_id: format!("T1S-{}", name.to_uppercase()),
+        uas_id: format!("SIM001-{}", name.to_uppercase()),
         mac: [0x60, 0x3d, 0x26, 0, 0, sysid],
     }
 }
@@ -132,7 +132,7 @@ mod tests {
         assert!((b.position.alt - 112.0).abs() < 1e-3);
         assert_eq!(b.velocity, [20.0, 5.0, -1.0], "north 20, east 5, down -1");
         assert!((b.heading - 14.04).abs() < 0.1, "{}", b.heading);
-        assert_eq!(b.uas_id, "T1S-KESTREL");
+        assert_eq!(b.uas_id, "SIM001-KESTREL");
     }
 
     #[test]

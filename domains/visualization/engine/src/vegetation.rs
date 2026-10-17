@@ -463,7 +463,7 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
     // crowns' shadows everywhere.
     let rt_wood = Vec2::new(t.pos.x, t.pos.z).length() < RT_WOOD_RADIUS;
 
-    let keep = std::env::var("T1S_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
+    let keep = std::env::var("SIM001_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
     if rnd(i as u32, 99) > keep {
         return;
     }

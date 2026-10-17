@@ -1,4 +1,4 @@
-# HEEWING T1-S VTOL (t1s_sim --aircraft t1s-vtol), layered over t1s.parm: a tilt-rotor tri.
+# HEEWING T1-S VTOL (sim001 --aircraft t1s-vtol), layered over t1s.parm: a tilt-rotor tri.
 # Two wing motors on tilt servos and a fixed rear rotor. ArduPilot's Tri frame has Motor 1 front
 # right, Motor 2 front left and Motor 4 at the rear; the wing motors also tilt (Q_TILT_MASK 3).
 Q_ENABLE 1

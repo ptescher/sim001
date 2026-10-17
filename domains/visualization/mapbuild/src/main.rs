@@ -1,4 +1,4 @@
-//! Builds a real-world map pack for t1s_sim.
+//! Builds a real-world map pack for sim001.
 //!
 //!   cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- cypress
 //!
@@ -559,7 +559,7 @@ fn paint_box(lc: &mut GrayImage, s: &Square, b: &PackBox, class: u8) {
 }
 
 /// The ground station's map: the photo itself (it's a real place), a height grid relative to
-/// home, and the georeference, in the same format `t1s_sim --export-map` writes.
+/// home, and the georeference, in the same format `sim001 --export-map` writes.
 fn write_gcs_assets(dir: &Path, meta: &PackMeta, wide: &RgbImage, height_at: &impl Fn(f32, f32) -> f32, runway: Option<&PackBox>) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let px = 2560.min(wide.width());

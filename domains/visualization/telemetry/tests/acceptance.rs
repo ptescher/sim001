@@ -154,10 +154,10 @@ fn every_test_of_the_section_passes() {
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
 }
 
-/// With T1S_DOCS=DIR, the results go into the project's docs, beside the other runners'.
+/// With SIM001_DOCS=DIR, the results go into the project's docs, beside the other runners'.
 #[test]
 fn the_section_publishes_its_results_when_asked() {
-    let Ok(docs) = std::env::var("T1S_DOCS") else { return };
+    let Ok(docs) = std::env::var("SIM001_DOCS") else { return };
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
     let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
     let docs = std::path::PathBuf::from(docs);

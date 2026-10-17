@@ -78,6 +78,8 @@ pub struct ArduPilotLink {
     /// Armed state and mode as the ground station sees them over MAVLink (sent on the sensor
     /// feed link), with when they arrived. JSON SITL doesn't tell the sim either.
     pub gcs: Option<(Instant, bool, String)>,
+    /// ArduPilot says its pre-arm checks pass (its SYS_STATUS), so that it will arm.
+    pub prearm_ok: bool,
 }
 
 impl ArduPilotLink {
@@ -212,6 +214,7 @@ impl SimCore {
                 port: ap_port,
                 status: String::from("waiting for SITL"),
                 gcs: None,
+                prearm_ok: false,
             },
             pid: PidState::default(),
             launch_hold: 0.0,
@@ -599,29 +602,10 @@ pub fn wrap_deg(rad: f32) -> f32 {
     (d % 360.0 + 360.0) % 360.0
 }
 
-/// Why a plane can't be flown as the sim was started, if it can't: a plane with a flight
-/// controller is flown by ArduPilot (the sim's own stick modes are for the plane that hasn't one).
-pub fn cannot_fly(params: &AircraftParams, title: &str, ardupilot: bool) -> Option<String> {
-    (params.flight_controller && !ardupilot).then(|| {
-        format!(
-            "the {title} has a flight controller, and ArduPilot flies it. Start the whole station with `cd domains/teleoperation/console && cargo run --release -- --station`, or fly the plain T1-S, which has none, with `cargo run --release -- --aircraft t1s-ranger`"
-        )
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use recreation_games::{Clock, Kind};
-
-    #[test]
-    fn a_plane_with_a_flight_controller_needs_ardupilot() {
-        let vtol = (simulation_aircraft::find("t1s-vtol").unwrap().params)();
-        let plain = (simulation_aircraft::find("t1s-ranger").unwrap().params)();
-        assert!(cannot_fly(&vtol, "VTOL", false).is_some_and(|m| m.contains("--station") && m.contains("t1s-ranger")));
-        assert!(cannot_fly(&vtol, "VTOL", true).is_none());
-        assert!(cannot_fly(&plain, "T1-S", false).is_none(), "the plain T1-S flies from the keyboard");
-    }
 
     fn vtol() -> SimCore {
         SimCore::new((simulation_aircraft::find("t1s-vtol").unwrap().params)(), vec![], true, 9002)

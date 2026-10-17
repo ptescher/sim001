@@ -50,7 +50,7 @@ fn mix(a: Rgb, b: Rgb) -> Rgb {
 /// The contents of `theme.yml`.
 pub fn theme_yml(p: &Palette, name: &str, info: &str) -> String {
     let mut s = String::from("---\n");
-    let _ = write!(s, "summary:\n  name: {name}\n  author: T1-S sim\n  info: {info}\ncolors:\n");
+    let _ = write!(s, "summary:\n  name: {name}\n  author: SIM001\n  info: {info}\ncolors:\n");
     for (n, c) in colors(p) {
         let _ = writeln!(s, "  {n}: 0x{:06X}", c.0);
     }
@@ -211,9 +211,9 @@ mod tests {
     /// The file starts with `---` and has a summary and all thirteen colours as 0xRRGGBB.
     #[test]
     fn the_theme_file_has_a_summary_and_the_colours() {
-        let y = theme_yml(&NIGHT, "T1S Night", "Night console");
+        let y = theme_yml(&NIGHT, "SIM001 Night", "Night console");
         assert!(y.starts_with("---\n"));
-        assert!(y.contains("summary:\n  name: T1S Night\n"));
+        assert!(y.contains("summary:\n  name: SIM001 Night\n"));
         assert!(y.contains("colors:\n"));
         assert!(y.contains(&format!("  SECONDARY3: 0x{:06X}\n", NIGHT.screen.0)));
         assert_eq!(y.matches("0x").count(), 13);
@@ -222,7 +222,7 @@ mod tests {
     /// The folder holds the theme file and a logo, and the logo is a PNG.
     #[test]
     fn the_folder_has_a_theme_a_logo_and_a_background() {
-        let files = folder(&DAY, "T1S Day", "Day console");
+        let files = folder(&DAY, "SIM001 Day", "Day console");
         let names: Vec<_> = files.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, ["theme.yml", "logo.png", "background.png"]);
         for (_, bytes) in &files[1..] {
@@ -230,11 +230,11 @@ mod tests {
         }
     }
 
-    /// The T1SFC widget on the radio carries the console's colours as literals (it cannot read this
+    /// The SIM001FC widget on the radio carries the console's colours as literals (it cannot read this
     /// crate): they must be the palettes' own.
     #[test]
     fn the_flight_display_widget_has_the_palettes_colours() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../teleoperation/edgetx/WIDGETS/T1SFC/main.lua");
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../teleoperation/edgetx/WIDGETS/SIM001FC/main.lua");
         let lua = std::fs::read_to_string(path).expect("the widget");
         for (p, table) in [(&NIGHT, "night"), (&DAY, "day")] {
             let start = lua.find(&format!("  {table} = {{")).unwrap_or_else(|| panic!("no {table} palette in the widget"));

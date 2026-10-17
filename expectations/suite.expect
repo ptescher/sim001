@@ -6,14 +6,22 @@
 #   cargo run --release -- --expect --docs docs                     run the sim's tests, write docs/
 #   cargo run -p expectation_cli -- docs expectations docs          rewrite docs/ from saved results
 
-Suite: T1-S Ranger
-  This is a flight simulator for the HEEWING T1-S Ranger, a small plane with two motors that
-  you throw by hand. It also has a ground control station that flies the plane with
-  ArduPilot.
+Suite: SIM001
+  SIM001 is a flight simulator for small FPV planes. It supports two planes of the HEEWING
+  T1-S, and both are complete.
 
-  Start with [[The simulator]]. There, you throw the plane and fly it from the keyboard.
-  Then use the [[Ground control station]] to plan missions and fly them. The ground control
-  station runs ArduPlane on the physics of the sim.
+  The T1-S Ranger is the plain plane: two motors, a V-tail, and only a receiver and two ESCs,
+  with no flight controller. You throw it by hand and fly it from the keyboard or a radio,
+  in MANUAL.
+
+  The T1-S VTOL has two tilt-rotors, a rear rotor and a flight controller. ArduPilot flies
+  it, so it takes off and lands vertically, flies missions, and has self-levelling modes. You
+  fly it from the ground control station, with a radio.
+
+  Start with [[The simulator]] to fly either plane by hand: it opens with the Ranger. Use
+  [[Flying with a flight controller]] for the modes that the VTOL adds, and the
+  [[Ground control station]] to plan missions and fly the VTOL with ArduPilot. The ground
+  control station runs ArduPlane on the physics of the sim.
 
 # Both systems fly the same plane, so they share its state.
 Vocabulary:

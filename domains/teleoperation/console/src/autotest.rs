@@ -2,7 +2,7 @@
 //! with the buttons. It uploads a circuit, reads it back, arms, flies AUTO, sends a GUIDED
 //! goto, then RTL, and prints telemetry along the way. The UI stays live throughout.
 //!
-//! With the t1s_sim physics the AUTO takeoff waits for a hand launch: throw it in the sim
+//! With the sim001 physics the AUTO takeoff waits for a hand launch: throw it in the sim
 //! (throttle up or Space) when the log says "waiting for launch".
 
 use crate::geo::Origin;
@@ -113,7 +113,7 @@ fn run(vehicle: &Shared, tx: &Sender<Cmd>, origin: Origin) -> bool {
     }
     say(vehicle, "armed in AUTO: waiting for launch / takeoff".into());
     if !wait(vehicle, 20, |v| v.alt_rel > 3.0 || v.groundspeed > 6.0) {
-        // The t1s_sim hand launch needs a throw, which AUTO waits for. Throw it the way the
+        // The sim001 hand launch needs a throw, which AUTO waits for. Throw it the way the
         // sim does for a pilot: hold throttle up in FBWA (RC override), then hand back to AUTO.
         say(vehicle, "no takeoff: launching in FBWA with RC throttle override".into());
         let _ = tx.send(Cmd::SetMode(mode_number("FBWA").unwrap()));

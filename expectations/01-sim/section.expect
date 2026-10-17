@@ -4,8 +4,10 @@
 # phrases say what the pilot means ("throws the plane"); their Say: lines give the keys.
 
 Section: The simulator
-  Fly the T1-S Ranger from the [[pilot box]] at the field. Throw it, fly it from the
-  keyboard, and pick it up again. Start with [[Your first throw]].
+  Fly a plane of the T1-S from the [[pilot box]] at the field: the plain T1-S Ranger, which
+  is the plane this section is about, or the T1-S VTOL (which needs ArduPilot: see
+  [[Flying with a flight controller]]). The Ranger is hand-launched. Throw it, fly it from
+  the keyboard, and pick it up again. Start with [[Your first throw]].
 
   On the keyboard, W and S move the nose down and up. A and D roll the plane, and Q and E
   move the rudder. Shift opens the throttle and Ctrl closes it. The keys 1 to 5 set the

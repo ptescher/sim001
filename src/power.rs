@@ -87,7 +87,7 @@ mod imp {
         // Holds the inhibitor for as long as this process lives, even if it is killed: the
         // shell polls for its parent (this process, which systemd-inhibit execs the command under).
         let inhibitor = Command::new("systemd-inhibit")
-            .args(["--what=idle:sleep", "--who=t1s_sim", &format!("--why={reason}"), "--mode=block"])
+            .args(["--what=idle:sleep", "--who=sim001", &format!("--why={reason}"), "--mode=block"])
             .args(["sh", "-c", "while kill -0 $PPID 2>/dev/null; do sleep 2; done"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())

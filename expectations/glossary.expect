@@ -49,7 +49,7 @@ Term: GUIDED
 
 Term: Hand launch
   A launch where you throw the plane into the air. The plane does not use a runway. You
-  launch the T1-S in this way, and also the plane in the sim.
+  launch the T1-S Ranger in this way, and also the plane in the sim.
 
 Term: HUD
   The text on the view of the sim. The top line shows the flight mode, the rates and
@@ -144,6 +144,16 @@ Term: Tactical map
 
 Term: Waypoint
   A point that the plane flies to, at a set height. Most items in a mission are waypoints.
+
+Term: T1-S Ranger
+  The plain plane of the sim (`--aircraft t1s-ranger`): two motors, a V-tail, and only a
+  receiver and two ESCs, so it has no flight controller and one flight mode, MANUAL. You
+  throw it by hand and fly it from the keyboard or a radio.
+
+Term: T1-S VTOL
+  The other plane of the sim, and its default (`--aircraft t1s-vtol`): the T1-S airframe with
+  two tilt-rotors and a rear rotor, and a flight controller. ArduPilot flies it, and you fly
+  it from the ground control station.
 
 Term: VTOL
   An aircraft that takes off and lands vertically (Vertical Take-Off and Landing), like a

@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn trees_and_boxes_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("t1s_pack_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sim001_pack_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let trees = vec![PackTree { north: 1.0, east: -2.0, height: 30.0, conifer: true, shade: 3 }];
         write_trees(&dir.join("t.bin"), &trees).unwrap();

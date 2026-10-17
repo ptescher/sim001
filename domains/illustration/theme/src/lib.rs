@@ -1,4 +1,4 @@
-//! The T1-S look, shared by everything with a screen: the ground station (GPUI), the sim's HUD
+//! The SIM001 look, shared by everything with a screen: the ground station (GPUI), the sim's HUD
 //! and overlays (Bevy) and the docs site (CSS).
 //!
 //! It's the ground station's console: near-black screens in olive bezels, phosphor-green

@@ -4,8 +4,8 @@
 # ground station, which flies the VTOL with ArduPilot and a radio.
 
 Section: Flying with a flight controller
-  A plane with a flight controller can help the pilot. The T1-S VTOL has one, and the plain
-  T1-S does not. With a flight controller the sim has three flight modes: MANUAL, [[ANGLE]] and [[ACRO]].
+  A plane with a flight controller can help the pilot. The T1-S VTOL has one, and the T1-S
+  Ranger, which is a plain plane, does not. With a flight controller the sim has three flight modes: MANUAL, [[ANGLE]] and [[ACRO]].
   On a keyboard, M selects the next one. On a radio, the switch you gave to ArduPilot mode
   does it.
 
@@ -22,6 +22,16 @@ Vocabulary:
     And the roll stick is centred
     And the flight mode is MANUAL
     And the sim is running
+
+  Event: the pilot arms the plane
+    Say: press B, the arm switch of ArduPilot
+  Event: the pilot opens the throttle to climb
+    Say: press 4. In the hover modes the middle of the throttle holds the height, and the throttle that you set above it is the climb
+  Event: the pilot sends the plane home
+    Say: press N until the mode is QRTL
+  State: the autopilot is armed | disarmed
+    Shows: armed: the line at the top of the HUD says ARMED
+    Shows: disarmed: the line at the top of the HUD says disarmed
 
 Background:
   Given the sim has just started with a flight controller

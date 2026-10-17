@@ -219,7 +219,7 @@ impl Gcs {
                     .flex()
                     .gap_3()
                     .items_center()
-                    .child(div().text_color(c(WHITE)).child("T1-S RANGER  GROUND CONTROL STATION"))
+                    .child(div().text_color(c(WHITE)).child("SIM001  GROUND CONTROL STATION"))
                     .child(div().text_color(c(GREY)).child("PILOT / PAYLOAD CONSOLE")),
             )
             .child(div().text_color(c(link_col)).child(link_txt))

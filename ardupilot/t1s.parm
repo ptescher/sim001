@@ -1,4 +1,4 @@
-# HEEWING T1-S Ranger for the t1s_sim JSON physics backend.
+# HEEWING T1-S Ranger for the sim001 JSON physics backend.
 # Outputs: aileron (Y-lead to both), V-tail left/right, twin throttles with diff thrust.
 SERVO1_FUNCTION 4
 SERVO2_FUNCTION 79

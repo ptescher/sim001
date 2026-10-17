@@ -1,7 +1,7 @@
 ---
 summary:
-  name: T1S Night
-  author: T1-S sim
+  name: SIM001 Night
+  author: SIM001
   info: The ground station console
 colors:
   PRIMARY1: 0x4CFF7A

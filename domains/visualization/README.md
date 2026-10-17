@@ -4,8 +4,8 @@ The 3D view and the place it shows. The engine draws a **scene** (where each pla
 sits, what its props and control surfaces are doing, and the wind) and knows nothing of where
 the scene comes from. Two sources fill it in:
 
-- **the simulator** (`t1s_sim`), from its flight model, every frame;
-- **a real plane** (`t1s_view`), from its MAVLink telemetry.
+- **the simulator** (`sim001`), from its flight model, every frame;
+- **a real plane** (`sim001_view`), from its MAVLink telemetry.
 
 The view has two jobs: to show a pilot a flight, and to make pictures that a camera-based system
 can learn from. The second asks the view to look like the real world, so it is held up against
@@ -20,7 +20,7 @@ photos (see [Looking like a photo](#looking-like-a-photo)).
 | `visualization_mapbuild` | [mapbuild/](mapbuild) | `mapbuild`: builds a real place's map pack from USGS lidar and imagery and OSM. Excluded from the workspace: it keeps its own lockfile |
 | `visualization_engine` | [engine/](engine) | The Bevy view: terrain, forest, grass, water, clouds, sky and haze, the planes, the cameras (line of sight, chase, nose), the loading screen, and pictures from set views (`capture`). `EnginePlugin`, then fill in `Scene` before `EngineSet::Draw` |
 | `visualization_telemetry` | [telemetry/](telemetry) | A real plane's MAVLink (`HOME_POSITION`, `GLOBAL_POSITION_INT`, `ATTITUDE`) turned into where the view draws it. No Bevy, so it runs in tests. The acceptance test of [Watching a real plane](../../expectations/05-visualization) runs here |
-| `visualization_viewer` | [viewer/](viewer) | `t1s_view`: the engine and the telemetry together, in a window |
+| `visualization_viewer` | [viewer/](viewer) | `sim001_view`: the engine and the telemetry together, in a window |
 
 Each module depends only on the ones above it. The engine depends on `simulation_aircraft` for the
 shape of the plane, and on `simulation_physics` only for the obstacle type.
@@ -31,7 +31,7 @@ shape of the plane, and on `simulation_physics` only for the obstacle type.
 cargo run --release -p visualization_viewer -- --udp 14550
 ```
 
-`t1s_view` listens for MAVLink on UDP port 14550, where ArduPilot and MAVProxy send it by
+`sim001_view` listens for MAVLink on UDP port 14550, where ArduPilot and MAVProxy send it by
 default (or `--tcp ADDR`, such as SITL's spare port `127.0.0.1:5762`). Home is the pilot box:
 the plane's `HOME_POSITION`, or `--home LAT,LON,ALT`, or the map pack's home with `--map NAME`.
 C changes the view and Z switches the auto-zoom, as in the sim.
@@ -52,7 +52,7 @@ cargo run --release -p visualization_viewer -- --capture shots \
 Each `--at NAME=x,agl,z,tx,tagl,tz[,fov]` is a camera (east, height above the ground, south) and
 the point it looks at, with a vertical field of view in degrees. Once the world has loaded, each
 view is held for four seconds so the ray tracer settles, and the 3D view is saved at full
-resolution, with no HUD, as `shots/NAME.png`. The sim's `T1S_VIEW` environment variable pins its
+resolution, with no HUD, as `shots/NAME.png`. The sim's `SIM001_VIEW` environment variable pins its
 camera the same way.
 
 ## Looking like a photo

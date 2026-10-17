@@ -1,5 +1,5 @@
-# ArduPlane SITL for the T1-S sim (JSON physics backend).
-#   docker build -t t1s-ardupilot-sitl ardupilot/
+# ArduPlane SITL for SIM001 (JSON physics backend).
+#   docker build -t sim001-ardupilot-sitl ardupilot/
 #   see ardupilot/run_sitl.sh
 FROM ubuntu:24.04
 

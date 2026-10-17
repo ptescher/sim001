@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of the t1s_sim <-> ArduPlane SITL link.
+"""End-to-end check of the sim001 <-> ArduPlane SITL link.
 
-Run inside the SITL container:  docker exec t1s-sitl python3 /check_link.py
+Run inside the SITL container:  docker exec sim001-sitl python3 /check_link.py
 Waits for the EKF to settle, arms, selects FBWA (the sim's throttle stick then makes
 ArduPilot spool the motors, which hand-launches the plane), then reports telemetry,
 switches to LOITER and reports again.

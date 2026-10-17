@@ -206,8 +206,8 @@ fn every_test_of_the_section_passes() {
 fn the_section_documents_itself_with_pictures_of_the_map() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
     let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
-    // With T1S_DOCS=DIR, the results and pictures go into the project's docs, beside the other runners'.
-    let published = std::env::var("T1S_DOCS").ok().map(std::path::PathBuf::from);
+    // With SIM001_DOCS=DIR, the results and pictures go into the project's docs, beside the other runners'.
+    let published = std::env::var("SIM001_DOCS").ok().map(std::path::PathBuf::from);
     let out = published.clone().unwrap_or_else(|| Path::new(env!("CARGO_TARGET_TMPDIR")).join("communication_docs"));
     let report = a.run(&mut driver(), &RunOptions { docs_dir: Some(out.clone()), ..Default::default() });
     if published.is_some() {

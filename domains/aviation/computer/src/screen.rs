@@ -1,6 +1,6 @@
-//! The screen of the TX15 as a picture: the flight display that the widget `WIDGETS/T1SFC` draws
+//! The screen of the TX15 as a picture: the flight display that the widget `WIDGETS/SIM001FC` draws
 //! (480 x 272): lamps along the top, bezelled monitors for the air data, the horizon and the nav
-//! data, and ArduPilot's messages below, in the console's palettes. The same layout, in Lua, is in `domains/teleoperation/edgetx/WIDGETS/T1SFC/main.lua`; change them together.
+//! data, and ArduPilot's messages below, in the console's palettes. The same layout, in Lua, is in `domains/teleoperation/edgetx/WIDGETS/SIM001FC/main.lua`; change them together.
 
 use crate::handset::Screen;
 use illustration_theme::{NIGHT, Palette, Rgb};

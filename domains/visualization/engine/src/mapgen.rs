@@ -179,7 +179,7 @@ pub fn export(dir: &str) {
     // Georeference: world (+X east, -Z north) relative to home.
     let centre = Vec3::ZERO - Vec3::new(terrain::pilot_pos().x, 0.0, terrain::pilot_pos().z);
     let meta = format!(
-        "# t1s_sim map export. Map centre is given in metres north/east of home (the pilot box).\n\
+        "# sim001 map export. Map centre is given in metres north/east of home (the pilot box).\n\
 size_m={size}\nmap_px={n}\ncentre_north={cn}\ncentre_east={ce}\nheight_n={hn}\n\
 runway_north={rn}\nrunway_east={re}\nrunway_length={rl}\nrunway_width={rw}\nrunway_heading=0\n",
         size = 2.0 * HALF,

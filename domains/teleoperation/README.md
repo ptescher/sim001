@@ -4,9 +4,9 @@ The pilot's end of the link: the TX15 and its EdgeTX settings, and the ground co
 
 | Path | What it holds |
 | --- | --- |
-| [console/](console/README.md) | `teleoperation_console` (binary `t1s_gcs`): the GPUI console with a PFD, a tactical map, mission planning and the sensor feed. Excluded from the workspace: it keeps its own lockfile |
+| [console/](console/README.md) | `teleoperation_console` (binary `sim001_gcs`): the GPUI console with a PFD, a tactical map, mission planning and the sensor feed. Excluded from the workspace: it keeps its own lockfile |
 | [shared/](shared) | `teleoperation_shared`: what the sim and the console both use, the sensor feed wire protocol and the window layout planner. No dependencies |
-| [edgetx/](edgetx) | The radio's SD card as files: `MODELS/` (the T1S VTOL model), an empty `RADIO/` (the radio's own settings folder; the SD card has one) and `THEMES/` (T1S Night and T1S Day, generated from the shared theme by `cargo run -p illustration_theme --example edgetx`) |
+| [edgetx/](edgetx) | The radio's SD card as files: `MODELS/` (the T1S VTOL model), an empty `RADIO/` (the radio's own settings folder; the SD card has one) and `THEMES/` (SIM001 Night and SIM001 Day, generated from the shared theme by `cargo run -p illustration_theme --example edgetx`) |
 
 ## Previewing in EdgeTX Companion
 
@@ -19,6 +19,6 @@ change.
 ## The radio in serial mode
 
 For the flight computer (see [aviation](../aviation/README.md)), the radio's USB serial port has
-to be in the `LUA` mode and the `T1SFC` widget (`WIDGETS/T1SFC`) has to be on the model's main view. The widget is tracked here;
+to be in the `LUA` mode and the `SIM001FC` widget (`WIDGETS/SIM001FC`) has to be on the model's main view. The widget is tracked here;
 Companion's mirror of the SD card holds the rest, which is not.
 

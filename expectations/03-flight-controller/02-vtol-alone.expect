@@ -1,0 +1,34 @@
+Feature: The VTOL on its own
+  The T1-S VTOL needs no ground station. The sim starts ArduPilot for itself, and the keyboard
+  or a radio flies the plane through it: the sticks go to ArduPilot as the radio signals of a
+  real receiver. B is the arm switch and N picks the next mode of the radio, and QHOVER is the
+  first. [[Your first hover]] shows each step.
+
+  Expectation: Arming lets ArduPilot run the motors
+    ArduPilot arms the plane when the arm switch is on and the throttle is closed. The top
+    line of the HUD says ARMED when it has.
+    Given the autopilot is disarmed
+    When the pilot arms the plane
+    Then the autopilot is armed
+
+  Expectation: Opening the throttle lifts the VTOL straight up
+    In QHOVER the plane takes off vertically. There is no throw.
+    Given the autopilot is armed
+    When the pilot opens the throttle to climb
+    Then the plane is flying
+
+  Expectation: Closing the throttle holds the hover
+    In the hover modes the middle of the throttle stick holds the height, and the keyboard
+    sends the middle when the throttle is closed. The plane does not fall.
+    Overrides: A lowered throttle stick brings the plane down
+    Given the autopilot is armed
+    And the plane is flying
+    When the pilot closes the throttle
+    Then the plane is flying
+
+  Expectation: Sending the plane home lands it
+    In QRTL the plane flies back to the pilot box and lands by itself.
+    Given the autopilot is armed
+    And the plane is flying
+    When the pilot sends the plane home
+    Then the plane is on the ground
