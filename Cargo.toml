@@ -4,10 +4,10 @@
 # and domains/visualization/mapbuild keep their own lockfiles and build on their own.
 [workspace]
 members = ["domains/*/*"]
-exclude = ["domains/teleoperation/console", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
+exclude = ["domains/teleoperation/console", "domains/teleoperation/launcher", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
 
 [package]
-name = "t1s_sim"
+name = "sim001"
 version = "0.1.0"
 edition = "2024"
 

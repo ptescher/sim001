@@ -1,0 +1,27 @@
+[package]
+name = "teleoperation_launcher"
+version = "0.1.0"
+edition = "2024"
+description = "SIM001 launcher: set up controllers, render the docs, start the simulator or the whole station. Built on GPUI"
+
+[dependencies]
+gpui = "0.2.2"
+# Lists the USB controllers that are plugged in.
+hidapi = "2"
+# The shared look (the console, the sim's HUD and the docs use it too).
+illustration_theme = { path = "../../illustration/theme" }
+
+# Keep `cargo run` (debug) usable: optimize dependencies.
+[profile.dev.package."*"]
+opt-level = 3
+
+# The same GPUI as the console (one public type; see ../console/Cargo.toml).
+[patch.crates-io]
+gpui = { path = "../../../vendor/gpui" }
+
+[[bin]]
+name = "sim001_launcher"
+path = "src/main.rs"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

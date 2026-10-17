@@ -1,8 +1,8 @@
-# T1-S Ground Control Station
+# SIM001 Ground Control Station
 
 ![The station tiled on one display: console, sensor feed, sim](../../../docs/station_tiled.png)
 
-A [GPUI](https://gpui.rs) ground control station for ArduPlane SITL running on the t1s_sim flight model. The layout follows a fixed-wing UAS console: bezelled screens on a single window.
+A [GPUI](https://gpui.rs) ground control station for ArduPlane SITL running on the sim001 flight model. The layout follows a fixed-wing UAS console: bezelled screens on a single window.
 
 | Screen | What it shows |
 | --- | --- |
@@ -23,11 +23,11 @@ This one command brings up the whole simulator station. It runs every prerequisi
 
 1. **Builds the sim** (`cargo build --release` in the repo root; a no-op when it's up to date). `--no-build` skips it.
 2. **Exports the terrain map** to `domains/teleoperation/console/assets/` if it's missing (about 8 s).
-3. **Starts Docker Desktop** if the daemon isn't running.
+3. **Starts Docker Desktop** if the daemon isn't running. With a native ArduPlane (`ardupilot/build_native.sh`, or an app bundle) it skips steps 3 to 5's Docker work and starts one ArduPlane process per plane instead (yours on tcp:5760, one for each computer pilot), stopped when the console closes.
 4. **Builds the ArduPlane SITL image** from `ardupilot/Dockerfile`. The first time takes about 15 minutes. After that the build is cached, takes seconds, and picks up changes to `t1s.parm`.
 5. **Starts the SITL container**, or reboots it if it's already running, so ArduPilot starts together with the new sim. A container from an older image is replaced so new parameters take effect. ArduPilot's flight logs (`.BIN`, one per boot) are kept in `logs/sitl/` in the repo. Open them in [UAV Log Viewer](https://plot.ardupilot.org) or MAVExplorer.
 
-Then it starts **t1s_sim** as SITL's physics with the sensor feed on and its window placed in its pane, and opens **the console** and **the sensor feed**. `cargo run` builds the GCS itself.
+Then it starts **sim001** as SITL's physics with the sensor feed on and its window placed in its pane, and opens **the console** and **the sensor feed**. `cargo run` builds the GCS itself.
 
 The panes are laid out over your displays (the layout code is in `domains/teleoperation/shared/src/layout.rs`):
 
@@ -47,7 +47,7 @@ Below 1500 pt wide, the console switches to two columns. When the sensor window 
 
 ![Sensor feed looking forward: HUD conformal with the camera picture](../../../docs/sensor_feed.png)
 
-The sim renders a gimballed camera just ahead of and below the nose. It streams the frames over TCP 5600 while a viewer is connected (`t1s_sim --feed`, protocol in `domains/teleoperation/shared/src/feed.rs`). Frames are raw BGRA at 320×240 and up to 30 fps, which suits loopback well. With no viewer connected, the camera renders a tiny frame and nothing is read back. A second ray-traced view is expensive on the GPU, so the feed is small by default; `--feed-size 640x480` gives a sharper image at some cost in frame rate.
+The sim renders a gimballed camera just ahead of and below the nose. It streams the frames over TCP 5600 while a viewer is connected (`sim001 --feed`, protocol in `domains/teleoperation/shared/src/feed.rs`). Frames are raw BGRA at 320×240 and up to 30 fps, which suits loopback well. With no viewer connected, the camera renders a tiny frame and nothing is read back. A second ray-traced view is expensive on the GPU, so the feed is small by default; `--feed-size 640x480` gives a sharper image at some cost in frame rate.
 
 - **Looking straight ahead (FWD):** the flight HUD is drawn over the video. Its pitch scale matches the camera's field of view, so the horizon and flight path marker line up with the picture.
 - **Slewed:** sensor symbology replaces the HUD. You get a reticle, azimuth and elevation scales, the line-of-sight bearing, and the **SPI** (the sensor point of interest: where the line of sight meets the sim's terrain), with coordinates, ground elevation and slant range. The SPI and line of sight also appear on the tactical map.
@@ -85,7 +85,7 @@ Options:
 - `--station`, `--layout single`, `--raytrace`: see above. `--sensor` opens the feed window and `--feed HOST:PORT` sets the feed address.
 - `--expect [SUITE] [--docs DIR]`: runs the acceptance tests in `expectations/` against the console and exits. The driver sends real mouse events into the console window (to where each button is painted) and reads the state back, so it needs a vehicle: use `--station --expect`. With `--docs`, it writes the manual with screenshots (macOS `screencapture`, which needs the Screen Recording permission) and merges the results with the sim's. Tests that need the mission file, terrain check, survey grid, measuring or the sim window stay "not supported yet".
 - `--aircraft ID`: with `--station`, the plane to fly (`t1s-vtol`, the default, or `t1s-ranger`, which has no flight controller and so no station). For a VTOL the console adds the Q modes (QSTABILIZE, QHOVER, QLOITER, QLAND, QRTL) to its mode buttons.
-- `--autotest`: for SITL only. It uploads a circuit, reads it back, arms, flies AUTO, sends a GUIDED goto, then flies RTL, and prints `AUTOTEST PASS/FAIL`. With the t1s_sim physics, AUTO waits for a throw, so if nothing happens for 20 s it launches in FBWA with an RC throttle override and then hands back to AUTO.
+- `--autotest`: for SITL only. It uploads a circuit, reads it back, arms, flies AUTO, sends a GUIDED goto, then flies RTL, and prints `AUTOTEST PASS/FAIL`. With the sim001 physics, AUTO waits for a throw, so if nothing happens for 20 s it launches in FBWA with an RC throttle override and then hands back to AUTO.
 
 ## Using the map
 

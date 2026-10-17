@@ -1,4 +1,4 @@
-//! T1-S ground control station (GPUI) for ArduPlane SITL driven by the t1s_sim physics.
+//! SIM001 ground control station (GPUI) for ArduPlane SITL driven by the sim001 physics.
 //!
 //!   cargo run --release -- --station                      whole station: SITL, sim, feed, console
 //!   cargo run --release                                   console only, tcp:127.0.0.1:5760
@@ -26,10 +26,10 @@ use std::sync::{Arc, Mutex};
 use teleoperation_shared::layout::{self, Mode, Pane, Rect};
 use vehicle::Vehicle;
 
-actions!(t1s_gcs, [Quit]);
+actions!(sim001_gcs, [Quit]);
 
 const HELP: &str = "\
-t1s_gcs [options]
+sim001_gcs [options]
   --station          start everything: builds the sim, exports the map if missing, starts Docker
                      Desktop, builds the SITL image if missing, starts SITL and the sim with the
                      sensor feed, and lays out sim view, sensor feed and console over your displays
@@ -52,7 +52,7 @@ t1s_gcs [options]
                      USB serial set to LUA and the t1sfc script running): the sticks, the telemetry and
                      the console's MAVLink all go through the radio
   --origin LAT,LON[,ALT]  SITL --home = the sim's pilot box (default matches ardupilot/start.sh)
-  --assets DIR       output of `t1s_sim --export-map` (default domains/teleoperation/console/assets)
+  --assets DIR       output of `sim001 --export-map` (default domains/teleoperation/console/assets)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../../../expectations) against this console
                      by clicking it, and exit; needs a vehicle, so use it with --station
   --only TEXT        with --expect: run only the tests whose title contains TEXT
@@ -113,7 +113,7 @@ fn main() {
         flight_computer: radio_port.is_some() && flag("--flight-computer"),
         // The simulated TX15 on the serial line writes its screen here, for the tests to read.
         tx15_screen: (radio_port.is_some() && flag("--flight-computer") && flag("--expect"))
-            .then(|| std::env::temp_dir().join(format!("t1s_tx15_screen_{}.json", std::process::id()))),
+            .then(|| std::env::temp_dir().join(format!("sim001_tx15_screen_{}.json", std::process::id()))),
         tx15_serial: radio_port.and(arg("--tx15-serial")),
     };
     let aircraft = match &opts.aircraft {
@@ -200,7 +200,7 @@ fn main() {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.set_menus(vec![Menu {
-            name: "T1-S Ground Control".into(),
+            name: "SIM001 Ground Control".into(),
             items: vec![MenuItem::action("Quit", Quit)],
         }]);
         let displays = screens::displays(cx);
@@ -246,7 +246,7 @@ fn main() {
             .unwrap_or_else(|| Bounds::centered(None, size(px(1840.0), px(1080.0)), cx));
         let console = cx
             .open_window(
-                window_options("T1-S Ground Control", console_bounds),
+                window_options("SIM001 Ground Control", console_bounds),
                 |window, cx| {
                     screens::hide_window_buttons(window);
                     cx.new(|cx| {
@@ -269,7 +269,7 @@ fn main() {
                 .map(gpui_bounds)
                 .unwrap_or_else(|| Bounds::centered(None, size(px(1280.0), px(760.0)), cx));
             let v = vehicle.clone();
-            cx.open_window(window_options("T1-S Sensor", b), |window, cx| {
+            cx.open_window(window_options("SIM001 Sensor", b), |window, cx| {
                 screens::hide_window_buttons(window);
                 cx.new(|cx| ui::sensor::SensorView::new(sensor, v, origin, cx))
             })
@@ -320,6 +320,9 @@ fn window_options(title: &'static str, bounds: Bounds<gpui::Pixels>) -> WindowOp
 
 /// `domains/teleoperation/console/assets` whether run from the repo root or from the console's directory.
 fn default_assets() -> PathBuf {
+    if let Some(home) = std::env::var_os("SIM001_HOME") {
+        return PathBuf::from(home).join("assets");
+    }
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
     if manifest.exists() {
         manifest

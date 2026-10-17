@@ -1,4 +1,4 @@
-//! HEEWING T1-S Ranger flight simulator.
+//! SIM001 flight simulator.
 //!
 //!   cargo run --release                 rasterized lighting with shadow maps, built-in flight modes
 //!   cargo run --release -- --raytrace   ray-traced lighting (Bevy Solari)
@@ -6,7 +6,7 @@
 //!   cargo run --release -- --selftest   headless flight-model checks
 //!   cargo run --release -- --export-map domains/teleoperation/console/assets   map + heights for the ground station
 //!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
-//!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `t1s_gcs --station`)
+//!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `sim001_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --test-radio                                a TX15 stand-in that the ground station's tests move
 //!   --flight-computer tcp:PORT|DEVICE [--autopilot ADDR] [--tx15-screen FILE]
@@ -26,6 +26,7 @@ mod acceptance;
 use visualization_engine::{camera, loading, mapgen, mesh_util, model, terrain, theme};
 mod test_radio;
 mod ardupilot;
+mod sitl;
 mod flight_computer;
 mod gc_pad;
 mod games;
@@ -77,7 +78,7 @@ fn main() {
     }
     // A real place, from a map pack: must be loaded before anything asks about the ground.
     if let Some(name) = args.iter().position(|a| a == "--map").and_then(|i| args.get(i + 1)) {
-        let maps = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("maps");
+        let maps = sitl::resource_root().join("maps");
         if let Err(e) = terrain::load_site(&maps, name) {
             eprintln!("--map {name}: {e}\nBuild it with: cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- {name}");
             std::process::exit(1);
@@ -115,15 +116,31 @@ fn main() {
         .and_then(|i| args.get(i + 1))
         .and_then(|p| p.parse().ok())
         .unwrap_or(9002);
-    let ap_enabled = flag("--ardupilot");
-    if let Some(why) = sim::cannot_fly(&params, aircraft.title, ap_enabled) {
-        eprintln!("{why}");
-        std::process::exit(1);
-    }
+    // A plane with a flight controller is flown by ArduPilot. With no `--ardupilot` (a SITL that
+    // somebody else runs: the station, ardupilot/run_sitl.sh) the sim starts one for itself.
+    let mut ap_enabled = flag("--ardupilot");
     if ap_enabled && !params.flight_controller {
         eprintln!("--ardupilot: the {} has no flight controller (only a receiver and ESCs), so ArduPilot has nothing to fly", aircraft.title);
         std::process::exit(1);
     }
+    let root_buf = sitl::resource_root();
+    let root = root_buf.as_path();
+    let own_sitl = if params.flight_controller && !ap_enabled {
+        let plan = sitl::plan(root, aircraft.id, sitl::native_binary(root).exists(), sitl::docker_image_exists());
+        match sitl::start(root, plan) {
+            Ok(running) => {
+                ap_enabled = true;
+                sitl::keep(running);
+                true
+            }
+            Err(why) => {
+                eprintln!("the {}: {why}", aircraft.title);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        false
+    };
     let direct = flag("--direct");
     let raytracing = flag("--raytrace");
 
@@ -132,6 +149,9 @@ fn main() {
     if ap_enabled {
         core.lock().unwrap().direct = direct;
         ardupilot::spawn_bridge(core.clone(), ap_port, ardupilot::Plane::Yours);
+        if own_sitl {
+            sitl::watch_heartbeat(core.clone());
+        }
         // Each computer pilot's plane has an autopilot of its own (SITL instances 1 to 3).
         for i in 0..recreation_games::PILOTS.len() {
             let plane = ardupilot::Plane::Opponent(i);
@@ -163,14 +183,14 @@ fn main() {
     let docs = flag("--docs").then(|| value("--docs").unwrap_or_else(|| "docs".into()).into());
     let shots = flag("--shots") || expect.is_some();
     // No sleep while the sim runs (and the OS's gaming mode, where it can be asked for).
-    let _awake = power::keep_awake("T1-S sim is running");
+    let _awake = power::keep_awake("SIM001 is running");
     let mut app = App::new();
     app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             // Keep the window visible during scripted captures (occluded windows aren't presented).
             window_level: if shots { WindowLevel::AlwaysOnTop } else { WindowLevel::Normal },
-            title: format!("HEEWING T1-S Ranger Sim - {}", terrain::site_title()),
+            title: format!("SIM001 - {}", terrain::site_title()),
             resolution: WindowResolution::new(1600, 900),
             present_mode: PresentMode::AutoVsync,
             mode: if flag("--fullscreen") {
@@ -278,9 +298,11 @@ fn main() {
         app.add_plugins(test_radio::plugin);
     }
     if let Some(suite) = expect {
-        acceptance::plugin(&mut app, suite, docs, params.flight_controller);
+        acceptance::plugin(&mut app, suite, docs, params.flight_controller, ap_enabled && !direct);
     }
-    if matches!(app.run(), AppExit::Error(_)) {
+    let exit = app.run();
+    sitl::stop();
+    if matches!(exit, AppExit::Error(_)) {
         std::process::exit(1);
     }
 }

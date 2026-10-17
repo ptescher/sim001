@@ -1,6 +1,6 @@
-# HEEWING T1-S Ranger flight simulator
+# SIM001
 
-A Bevy 0.20 flight simulator for practising with the HEEWING T1-S Ranger twin-motor FPV plane.
+SIM001 is a Bevy 0.20 flight simulator for practising with small FPV planes. It supports two planes of the HEEWING T1-S, and both are complete: the **T1-S Ranger**, a plain twin-motor plane with no flight controller, and the **T1-S VTOL**, with two tilt-rotors, a rear rotor and an ArduPilot flight controller.
 
 - **Rasterized lighting** with shadow maps and a physical sky from Bevy's atmosphere, by default. Add `--raytrace` for optional ray-traced shadows, global illumination and reflections using Bevy Solari. It runs on Apple Silicon M3/M4 through Metal hardware ray tracing.
 - **Flight model:** a 6-DOF model built from strip theory. Each wing section and V-tail panel sees its own airflow, including rotation, prop wash and wing downwash. Stability, stalls, tip stalls, adverse yaw, dihedral effect and V-tail coupling come out of the geometry. The model also includes twin-motor thrust with differential thrust, a 4S LiPo with voltage sag, wind with a boundary-layer profile and turbulence, ground contact, prop strikes, and collisions with trees and buildings.
@@ -11,7 +11,14 @@ A Bevy 0.20 flight simulator for practising with the HEEWING T1-S Ranger twin-mo
 
 There are two planes (`--aircraft`):
 
-- **`t1s-vtol`, the default:** the T1-S VTOL, with two tilt-rotors and a rear rotor, and a flight controller. ArduPilot flies it, so start the whole station, which starts the sim, the ground control console and ArduPilot together:
+- **`t1s-vtol`, the default:** the T1-S VTOL, with two tilt-rotors and a rear rotor, and a flight controller. ArduPilot flies it. The sim starts ArduPilot for itself, so this is all it takes (B arms, N picks the next mode, QHOVER is the first):
+
+  ```bash
+  ardupilot/build_native.sh        # once: builds ArduPlane SITL natively into .ardupilot/ (no Docker)
+  cargo run --release              # the VTOL, with its own ArduPilot
+  ```
+
+  Without a native build the sim uses the Docker image `sim001-ardupilot-sitl` if it is built. For missions and the console, start the whole station, which starts the sim, the ground control console and ArduPilot together:
 
   ```bash
   cd domains/teleoperation/console && cargo run --release -- --station
@@ -25,11 +32,13 @@ There are two planes (`--aircraft`):
   cargo run --release -- --selftest                         # headless flight-model numbers
   ```
 
-Starting the sim alone with the VTOL tells you this and exits.
-
 `rust-toolchain.toml` pins Rust 1.99, which Bevy 0.20 needs. rustup installs it automatically.
 
 **Sleep and gaming mode.** While the sim runs it keeps the computer awake (no display or system sleep): a power assertion on macOS (check with `pmset -g assertions`), `SetThreadExecutionState` on Windows, and `systemd-inhibit` on Linux, where it also asks Feral's GameMode (`gamemoded`) to tune the process if it is installed. The Windows and Linux paths are untested. `--fullscreen` starts borderless full screen, and F11 toggles it. macOS Game Mode can't be switched on from code: macOS turns it on for a full-screen app that its bundle marks as a game, so run `cargo build --release && tools/macos-app.sh && open "target/release/T1-S Sim.app" --args --fullscreen`. On Windows, Game Mode applies to a full-screen game by itself.
+
+## Launcher and app bundle
+
+The launcher ([domains/teleoperation/launcher](domains/teleoperation/launcher/README.md)) sets up your controllers, opens the docs and starts the sim alone or the whole station, with or without ArduPilot. `tools/bundle.sh` packs it with the sim, the ground station, ArduPlane SITL, the maps and the manual into one app: `target/bundle/SIM001.app` on macOS (and a zip), a folder and tar.gz on Linux, a folder and zip on Windows (untested). Build it on the OS you want it for. `controls.cfg` and the flight logs go to the user's data folder (`~/Library/Application Support/SIM001` on macOS). The first run copies `controls.cfg.example` there (a TX15 in joystick mode); the radio wizard replaces it.
 
 ## Real places
 
@@ -53,13 +62,13 @@ The setting is an alpine valley modelled on Rocky Mountain lakes:
 - **Clouds:** a field of fair-weather cumulus, flat-bottomed, out to the horizon. The ray tracer does not see them, so they neither reflect in the lake nor shade the ground.
 - **Haze:** far ridges fade into blue, as through real air. Solari ignores Bevy's `DistanceFog`, so the ray-traced view has its own pass (`domains/visualization/engine/src/haze.rs`).
 
-The 3D view is its own domain, [domains/visualization](domains/visualization/README.md). It can also show a real plane from its MAVLink telemetry (`t1s_view`), and save pictures of the scenery from set views for camera-based systems.
+The 3D view is its own domain, [domains/visualization](domains/visualization/README.md). It can also show a real plane from its MAVLink telemetry (`sim001_view`), and save pictures of the scenery from set views for camera-based systems.
 
 The terrain is 81 chunks with level-of-detail geometry. Each chunk has its own texture, baked at startup (about 10 s, multithreaded) at up to 14 cm/texel around the field. Solari only ray traces Bevy's standard material, so materials are blended in these baked textures rather than in custom shaders.
 
 `vendor/bevy_solari` is Bevy Solari 0.20.0 with one shader change, wired in through `[patch.crates-io]`. Smooth terrain normals can face slightly away from the camera along ridge silhouettes seen at a grazing angle. Stock Solari shades such pixels black, which showed up as flickering dark slivers on distant ridges. The patch in `src/realtime/gbuffer_utils.wesl` bends those normals just enough to face the viewer. It also lifts each shading point off the surface by 0.15% of its distance from the camera. Without that, the coarse distant terrain (metres per triangle) shadows itself, and mountain faces fill with small dark triangles (the "shadow terminator" problem). Close up the lift is millimetres to centimetres, so tree and aircraft shadows are unaffected. Re-apply both changes if you upgrade Bevy.
 
-On a Retina display, ray-tracing cost scales with pixel count. The 3D view therefore renders at a reduced internal resolution and is upscaled, while the HUD stays at full resolution; F5/F6 adjust this. `T1S_TREE_FRAC=0.5` halves the forest if you need more frame rate.
+On a Retina display, ray-tracing cost scales with pixel count. The 3D view therefore renders at a reduced internal resolution and is upscaled, while the HUD stays at full resolution; F5/F6 adjust this. `SIM001_TREE_FRAC=0.5` halves the forest if you need more frame rate.
 
 ## Flying
 
@@ -98,7 +107,7 @@ See [domains/recreation](domains/recreation/README.md).
 
 **P1** zooms the line-of-sight camera (the automatic zoom is off while the knob is mapped), and **P2** picks the view in thirds: line of sight, chase, nose camera.
 
-**The theme.** [domains/teleoperation/edgetx/THEMES](domains/teleoperation/edgetx/THEMES) has the console's colours as two EdgeTX themes, **T1S Night** and **T1S Day**. Copy the folders to the `THEMES` folder of the SD card and choose one under Radio Settings, Themes. They are generated from the shared theme (`cargo run -p illustration_theme --example edgetx -- domains/teleoperation/edgetx/THEMES`).
+**The theme.** [domains/teleoperation/edgetx/THEMES](domains/teleoperation/edgetx/THEMES) has the console's colours as two EdgeTX themes, **SIM001 Night** and **SIM001 Day**. Copy the folders to the `THEMES` folder of the SD card and choose one under Radio Settings, Themes. They are generated from the shared theme (`cargo run -p illustration_theme --example edgetx -- domains/teleoperation/edgetx/THEMES`).
 
 Throttle is absolute, as on the real radio. Rates and expo come from the sim (L toggles rates). The model is a plain AETR plane with no mixing, because the autopilot (or, for the plain T1-S, the sim) does the V-tail mixing. A radio overlay (H) shows the sticks, the arm switch and the lit mode.
 
@@ -125,7 +134,7 @@ Set `gamepad.stick_mode = 1` in `controls.cfg` for Mode 1.
 The sim replaces ArduPilot's built-in plane physics:
 
 ```
-ArduPlane SITL ──servo PWM (UDP 9002)──▶ t1s_sim ──JSON: IMU, attitude, position, airspeed, battery, RC──▶ SITL
+ArduPlane SITL ──servo PWM (UDP 9002)──▶ sim001 ──JSON: IMU, attitude, position, airspeed, battery, RC──▶ SITL
 ```
 
 1. Start the sim as the physics backend:
@@ -171,7 +180,7 @@ In Direct the physics still runs in lockstep with SITL. ArduPilot keeps estimati
 `ardupilot/check_link.py` is an automated end-to-end check. It arms, flies FBWA, then switches to LOITER and reports telemetry:
 
 ```bash
-docker exec t1s-sitl python3 /check_link.py
+docker exec sim001-sitl python3 /check_link.py
 ```
 
 ## Airframe numbers
@@ -201,6 +210,6 @@ tools/docs.sh                                             # every runner in turn
 ardupilot/expect_sim.sh --docs docs                       # the sim's tests for a plane with a flight controller (ArduPilot beside it)
 ```
 
-The domains' own tests (what the radios tell the station, the flight computer and the TX15's screen, the view of a real plane) run with no window, and `T1S_DOCS=docs cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry --test acceptance` puts their results and pictures in the docs beside the others. The TX15's screen is drawn as an SVG from the same layout as its widget. Each runner keeps its own results in `docs/results/`, and the docs merge them. Time limits: `T1S_EXPECT_TIMEOUT` (the sim's, 40 s a test) and `T1S_EXPECT_SPEED` (how much faster than real time the sim runs for them, 8).
+The domains' own tests (what the radios tell the station, the flight computer and the TX15's screen, the view of a real plane) run with no window, and `SIM001_DOCS=docs cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry --test acceptance` puts their results and pictures in the docs beside the others. The TX15's screen is drawn as an SVG from the same layout as its widget. Each runner keeps its own results in `docs/results/`, and the docs merge them. Time limits: `SIM001_EXPECT_TIMEOUT` (the sim's, 40 s a test) and `SIM001_EXPECT_SPEED` (how much faster than real time the sim runs for them, 8).
 
 The run takes a few minutes and keeps the window on top, because screenshots need it visible. Connected controllers are ignored, so the keys behave the same every time. `cargo test` checks the suite without a window. The system behind this is the [expectation](domains/expectation/README.md) domain. The repo is one Cargo workspace laid out as workspace → domain → module (see [domains/README.md](domains/README.md)).

@@ -184,6 +184,8 @@ pub struct PilotInput {
     /// The radio's zoom and view knobs, 0 to 1, if the pilot gave it them.
     pub radio_zoom: Option<f32>,
     pub radio_view: Option<f32>,
+    /// `--calibrate` (from the launcher): open the radio wizard as soon as a controller is there.
+    pub calibrate_on_start: bool,
 }
 
 impl PilotInput {
@@ -210,6 +212,7 @@ impl PilotInput {
             radio_mode: None,
             radio_zoom: None,
             radio_view: None,
+            calibrate_on_start: std::env::args().any(|a| a == "--calibrate"),
         };
         if let Ok(text) = std::fs::read_to_string(CONFIG_PATH) {
             parse_config(&text, &mut s.radio, &mut s.gamepad);
@@ -346,7 +349,7 @@ fn parse_config(text: &str, radio: &mut RadioConfig, pad: &mut GamepadConfig) {
 /// The config file's text.
 fn config_text(radio: &RadioConfig, pad: &GamepadConfig) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "# T1-S sim controls. Re-run the radio wizard with F2.");
+    let _ = writeln!(s, "# SIM001 controls. Re-run the radio wizard with F2.");
     let _ = writeln!(s, "# axis = <axis>, <center>, <scale>   (scale sign = direction)");
     let am = |m: &AxisMap| format!("{}, {:.4}, {:.4}", axis_to_str(m.axis), m.center, m.scale);
     let _ = writeln!(s, "radio.roll = {}", am(&radio.roll));
@@ -545,6 +548,10 @@ pub fn read_input(
     }
 
     // Calibration wizard.
+    if input.calibrate_on_start && chosen.is_some() {
+        input.calibrate_on_start = false;
+        input.actions.push(Action::Calibrate);
+    }
     if input.has(Action::Calibrate) || (input.has(Action::Dismiss) && input.wizard.is_some()) {
         if input.wizard.is_some() {
             input.wizard = None;

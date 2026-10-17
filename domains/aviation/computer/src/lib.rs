@@ -30,6 +30,8 @@ pub const RC_RATE: f64 = 150.0;
 pub const MAVLINK_RATE: f32 = 3000.0;
 /// The most MAVLink that waits to go down. Older telemetry is dropped.
 const MAX_WAITING: usize = 6000;
+/// MAVLink's STATUSTEXT: what ArduPilot says (pre-arm checks, mode changes).
+const MAVLINK_STATUSTEXT: u32 = 253;
 
 /// What the plane reports to the flight computer each time it sends telemetry.
 #[derive(Clone, Debug, Default)]
@@ -85,6 +87,10 @@ pub struct FlightComputer {
     budget: f32,
     last_send: f64,
     mavlink_rate: f32,
+    /// A ground station is connected through the radio: ArduPilot's whole MAVLink goes down for
+    /// it. Without one, only what the radio shows itself (ArduPilot's STATUSTEXT lines) goes down:
+    /// the widget on a real radio has little CPU to decode a stream nobody reads.
+    ground_station: bool,
     timers: Timers,
     /// Bytes of ArduPilot's MAVLink that do not make a whole message yet.
     heard: Vec<u8>,
@@ -122,9 +128,18 @@ impl FlightComputer {
             budget: 0.0,
             last_send: 0.0,
             mavlink_rate,
+            ground_station: true,
             timers: Timers::default(),
             heard: vec![],
             heartbeat: None,
+        }
+    }
+
+    /// Whether a ground station listens through the radio (it does, until told otherwise).
+    pub fn set_ground_station(&mut self, connected: bool) {
+        self.ground_station = connected;
+        if !connected {
+            self.waiting.clear();
         }
     }
 
@@ -158,7 +173,7 @@ impl FlightComputer {
             let frame: Vec<u8> = self.heard[..total].to_vec();
             if id == 0 {
                 self.heartbeats.extend(&frame);
-            } else if self.waiting.len() + total <= MAX_WAITING {
+            } else if (self.ground_station || id == MAVLINK_STATUSTEXT) && self.waiting.len() + total <= MAX_WAITING {
                 // Whole messages only: a message cut in the middle is no use to anyone.
                 self.waiting.extend(&frame);
             }
@@ -417,6 +432,31 @@ mod tests {
             }
         }
         assert_eq!(got, b"a command");
+    }
+
+    #[test]
+    fn without_a_ground_station_only_the_status_text_goes_down() {
+        // A HEARTBEAT (id 0), an ATTITUDE (id 30) and a STATUSTEXT (id 253), MAVLink 2, no signature.
+        let msg = |id: u32, len: u8| -> Vec<u8> {
+            let mut m = vec![0xFD, len, 0, 0, 0, 1, 1, id as u8, (id >> 8) as u8, (id >> 16) as u8];
+            m.extend(vec![0x41; len as usize]);
+            m.extend([0, 0]);
+            m
+        };
+        let mut fc = FlightComputer::new();
+        fc.set_ground_station(false);
+        fc.from_line(&crsf::rc_frame(&[1500; 16]), 0.0);
+        for m in [msg(30, 28), msg(253, 20)] {
+            fc.from_autopilot(&m);
+        }
+        let bytes = fc.to_line(&Vehicle::default(), 0.3);
+        let mut got = vec![];
+        for f in crsf::Framer::default().push(&bytes) {
+            if f.kind == crsf::TYPE_MAVLINK_ENVELOPE {
+                got.extend_from_slice(crsf::envelope_data(&f.payload));
+            }
+        }
+        assert_eq!(got, msg(253, 20), "the attitude is not sent, the text is");
     }
 
     #[test]

@@ -3,8 +3,8 @@
 --
 -- One-time setup on the radio:
 --   1. Hardware, USB Serial (VCP): LUA. When you plug the radio in, pick VCP.
---   2. Put this folder (WIDGETS/T1SFC) on the SD card.
---   3. Model, Screen setup: add a main view with a widget zone and choose T1SFC for it.
+--   2. Put this folder (WIDGETS/SIM001FC) on the SD card.
+--   3. Model, Screen setup: add a main view with a widget zone and choose SIM001FC for it.
 -- It runs in the background whichever view is up (a widget's background function runs always),
 -- but the model has to be the one whose main views hold the widget.
 --
@@ -63,10 +63,13 @@ local function ticks(v)
   return t
 end
 
+local chNames = {}
+for i = 1, 16 do chNames[i] = "ch" .. i end
+
 local function channelsFrame()
   local bytes, acc, bits = {}, 0, 0
   for i = 1, 16 do
-    acc = acc + bit32.lshift(ticks(getValue("ch" .. i)), bits)
+    acc = acc + bit32.lshift(ticks(getValue(chNames[i])), bits)
     bits = bits + 11
     while bits >= 8 do
       bytes[#bytes + 1] = string.char(bit32.band(acc, 0xFF))
@@ -125,7 +128,7 @@ local function readMavlink(data)
   end
 end
 
-local function handle(addr, kind, payload)
+local function handle(addr, kind, payload, raw)
   telemetry.last = getTime()
   telemetry.frames = telemetry.frames + 1
   if kind == T_BATTERY and #payload >= 8 then
@@ -169,47 +172,64 @@ local function handle(addr, kind, payload)
       to = ADDR_FC
     end
     if to then
-      serialWrite(frame(to, T_ENVELOPE, payload))
+      -- The same frame with another address: the checksum covers only the type and the payload,
+      -- so it is not worked out again (that was the dearest thing in the call).
+      serialWrite(string.char(to) .. string.sub(raw, 2))
       telemetry.forwarded = telemetry.forwarded + 1
     end
   end
 end
 
+-- Where the next frame may start: the first of the three addresses at or after byte i.
+local function nextStart(i)
+  local a = string.find(pending, "[\200\234\238]", i)           -- 0xC8, 0xEA, 0xEE
+  return a
+end
+
 -- Cut the bytes that came down the cable into frames.
 local function readLine()
-  for _ = 1, 2 do                                       -- the line carries more than one read holds
+  for _ = 1, 3 do                                       -- the line carries more than one read holds
     local got = serialRead(128)
     if not got or #got == 0 then break end
     pending = pending .. got
   end
-  if #pending > 400 then pending = string.sub(pending, -200) end
-  local budget = 8                                      -- steps per call: a call has a CPU limit
+  -- Far behind: keep the newest bytes, from where a frame may start.
+  if #pending > 1000 then
+    local from = nextStart(#pending - 400) or (#pending + 1)
+    pending = string.sub(pending, from)
+  end
+  local budget = 10                                     -- frames per call: a call has a CPU limit
   while #pending >= 4 and budget > 0 do
-    budget = budget - 1
     local addr, len = string.byte(pending, 1), string.byte(pending, 2)
     if (addr ~= ADDR_TX and addr ~= ADDR_RADIO and addr ~= ADDR_FC) or len < 2 or len > 62 then
-      pending = string.sub(pending, 2)                  -- not a frame start: look from the next byte
+      -- Not a frame start: look for the next possible one in one step.
+      pending = string.sub(pending, nextStart(2) or (#pending + 1))
     elseif #pending < len + 2 then
       return                                            -- the rest has not come yet
     else
+      budget = budget - 1
       local body = string.sub(pending, 3, len + 1)      -- type and payload
       -- The cable does not corrupt bytes: the big MAVLink frames skip the check, which costs the
       -- most (a call has a CPU limit).
       if len > 20 or crc8(body, 1) == string.byte(pending, len + 2) then
-        handle(addr, string.byte(body, 1), string.sub(body, 2))
+        handle(addr, string.byte(body, 1), string.sub(body, 2), string.sub(pending, 1, len + 2))
         pending = string.sub(pending, len + 3)
       else
-        pending = string.sub(pending, 2)
+        pending = string.sub(pending, nextStart(2) or (#pending + 1))
       end
     end
   end
 end
 
+-- How the calls are going, shown at the bottom right: refresh calls, background calls and channel
+-- frames sent in the last second (the PC wants 150 channel frames a second and gives up at a gap of 0.5 s).
+local stats = { refresh = 0, background = 0, sent = 0, shown = "", since = 0 }
 
 local function tick()
   local now = getTime()
   if now >= nextSend then
     serialWrite(channelsFrame())
+    stats.sent = stats.sent + 1
     nextSend = now + 1                                  -- every tick the radio gives us (10 ms)
   end
   readLine()
@@ -230,6 +250,7 @@ local function update(widget, opts)
 end
 
 local function background(widget)
+  stats.background = stats.background + 1
   tick()
 end
 
@@ -266,8 +287,8 @@ local WHITE, BLACK, YELLOW
 local PANEL_R, SCREEN_R, PAD, CONTROL_R = 11, 6, 5, 4
 local lastColor = nil
 
--- Is the radio's theme a light one? Its screen colour (SECONDARY3) is near-white in T1S Day and
--- near-black in T1S Night; the colour is RGB565, so the green field (6 bits) stands for brightness.
+-- Is the radio's theme a light one? Its screen colour (SECONDARY3) is near-white in SIM001 Day and
+-- near-black in SIM001 Night; the colour is RGB565, so the green field (6 bits) stands for brightness.
 -- Older firmware without lcd.getColor keeps the Day option as the only switch.
 local function themeIsLight()
   if not (lcd.getColor and COLOR_THEME_SECONDARY3) then return false end
@@ -312,14 +333,13 @@ local function thickLine(x1, y1, x2, y2, c)
   end
 end
 
--- A rectangle with rounded corners, filled.
+-- A rectangle with rounded corners, filled. Three overlapping rectangles stand for the corner's
+-- curve: circles are the dearest thing the radio draws, and the radio stops a script that takes
+-- too long in one call ("CPU limit").
 local function roundRect(x, y, w, h, r, c)
-  fill(x + r, y, w - 2 * r, h, c)
-  fill(x, y + r, w, h - 2 * r, c)
-  disc(x + r, y + r, r, c)
-  disc(x + w - r - 1, y + r, r, c)
-  disc(x + r, y + h - r - 1, r, c)
-  disc(x + w - r - 1, y + h - r - 1, r, c)
+  local a = math.ceil(r * 0.4)
+  fill(x + a, y, w - 2 * a, h, c)
+  fill(x, y + a, w, h - 2 * a, c)
 end
 
 -- A box with a one-pixel border, both rounded: the console's panels, buttons and lamps.
@@ -348,26 +368,22 @@ local function lamp(x, y, w, h, name, state)
 end
 
 -- Paints the corners of a box outside a quarter circle of radius r in the colour behind it, so what
--- was drawn square in the box has rounded corners, then draws the rounded outline, thick.
+-- was drawn square in the box has rounded corners, then draws the outline. A few rectangles stand
+-- for each corner's curve (see roundRect).
 local function roundCorners(x, y, w, h, r, bg, edge)
-  local corners = {
-    { x, y, x + r, y + r, math.pi, 1.5 * math.pi },
-    { x + w, y, x + w - r, y + r, 1.5 * math.pi, 2 * math.pi },
-    { x + w, y + h, x + w - r, y + h - r, 0, 0.5 * math.pi },
-    { x, y + h, x + r, y + h - r, 0.5 * math.pi, math.pi },
-  }
-  local steps = 3
-  for _, k in ipairs(corners) do
-    local ox, oy, cx, cy, a0, a1 = k[1], k[2], k[3], k[4], k[5], k[6]
-    local px, py = cx + math.cos(a0) * r, cy + math.sin(a0) * r
-    for i = 1, steps do
-      local a = a0 + (a1 - a0) * i / steps
-      local qx, qy = cx + math.cos(a) * r, cy + math.sin(a) * r
-      tri(ox, oy, px, py, qx, qy, bg)
-      thickLine(px, py, qx, qy, edge)
-      px, py = qx, qy
-    end
+  local w0, w1, w2 = math.ceil(r * 0.6), math.ceil(r * 0.33), math.ceil(r * 0.17)
+  local h2 = math.max(1, math.ceil(r * 0.33))
+  local function corner(ox, oy, sx, sy)
+    -- (sx, sy) are 1 or -1: which way into the box the corner lies.
+    local function rect(dx, dy, rw, rh) fill(sx > 0 and ox + dx or ox - dx - rw + 1, sy > 0 and oy + dy or oy - dy - rh + 1, rw, rh, bg) end
+    rect(0, 0, w0, 1)
+    rect(0, 1, w1, 1)
+    rect(0, 2, w2, h2)
   end
+  corner(x, y, 1, 1)
+  corner(x + w - 1, y, -1, 1)
+  corner(x, y + h - 1, 1, -1)
+  corner(x + w - 1, y + h - 1, -1, -1)
   thickLine(x + r, y, x + w - r, y, edge)
   thickLine(x + r, y + h - 1, x + w - r, y + h - 1, edge)
   thickLine(x, y + r, x, y + h - r, edge)
@@ -441,8 +457,7 @@ local function drawHud(x, y, w, h)
     if deg ~= 0 then
       local lx, ly = px - nx * deg * k, py - ny * deg * k
       if lx > x + 30 and lx < x + w - 30 and ly > y + 14 and ly < y + h - 14 then
-        thickLine(lx - dx * 22, ly - dy * 22, lx + dx * 22, ly + dy * 22, WHITE)
-        text(lx + dx * 24, ly + dy * 24 - 7, tostring(math.abs(deg)), SMLSIZE, WHITE)
+        lcd.drawLine(lx - dx * 22, ly - dy * 22, lx + dx * 22, ly + dy * 22, SOLID, paint(WHITE))
       end
     end
   end
@@ -464,7 +479,6 @@ local function drawHud(x, y, w, h)
   roundCorners(x, y, w, h, SCREEN_R, P.bezel, BLACK)
 end
 
--- The SYSTEMS list of the console: a muted name on the left, the value on the right.
 local function systems(x, y, w, h, rows)
   boxed(x, y, w, h, SCREEN_R, BLACK, P.screen)
   local rowH = (h - 6) / #rows
@@ -478,10 +492,16 @@ end
 local function refresh(widget, event, touchState)
   usePalette()
   lastColor = nil
+  stats.refresh = stats.refresh + 1
+  local now0 = getTime()
+  if now0 - stats.since >= 100 then
+    stats.shown = string.format("r%d b%d tx%d", stats.refresh, stats.background, stats.sent)
+    stats.refresh, stats.background, stats.sent, stats.since = 0, 0, 0, now0
+  end
   tick()
   local z = widget.zone
   local t = telemetry
-  local live = getTime() - t.last < 100
+  local live = getTime() - t.last < 200
   t.live = live
   fill(z.x, z.y, z.w, z.h, P.canvas)
   local gap = 4
@@ -531,6 +551,8 @@ local function refresh(widget, event, touchState)
     local m = messages[i]
     text(mx + 8, my + 3 + (i - first) * 13, string.sub(m[2], 1, 60), SMLSIZE, m[1] <= 3 and P.warning or (m[1] <= 4 and P.caution or P.text))
   end
+  text(mx + mw - 6, my + mhh - 15, stats.shown, SMLSIZE, P.faint, RIGHT)
+  tick()                                                -- the drawing took a while: send the channels again now
 end
 
-return { name = "T1SFC", options = options, create = create, update = update, refresh = refresh, background = background }
+return { name = "SIM001FC", options = options, create = create, update = update, refresh = refresh, background = background }

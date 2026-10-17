@@ -268,7 +268,7 @@ fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpLis
     let on_radio = matches!(line, Line::Device(_));
     #[cfg(not(unix))]
     let on_radio = false;
-    let mut fc = FlightComputer::with_mavlink_rate(if on_radio { 1500.0 } else { aviation_computer::MAVLINK_RATE });
+    let mut fc = FlightComputer::with_mavlink_rate(if on_radio { 1000.0 } else { aviation_computer::MAVLINK_RATE });
     let mut autopilot: Option<TcpStream> = None;
     let mut next_connect = 0.0;
     let mut buf = [0u8; 4096];
@@ -349,6 +349,8 @@ fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpLis
                     gs = None;
                 }
             }
+            // Nobody reads ArduPilot's MAVLink without a ground station: send the radio only what it shows.
+            fc.set_ground_station(gs.is_some());
         }
         let v = {
             let mut c = core.lock().unwrap();
@@ -437,7 +439,7 @@ mod tests {
 
     #[test]
     fn the_screen_is_written_for_the_station_as_json_and_a_picture() {
-        let dir = std::env::temp_dir().join(format!("t1s_screen_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sim001_screen_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("tx15.json");
         let mut screen = Screen { mode: "FBWA".into(), armed: true, last_frame: Some(0.0), ..Default::default() };

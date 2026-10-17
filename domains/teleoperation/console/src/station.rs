@@ -2,7 +2,7 @@
 //!
 //! [`prepare`] gets every prerequisite in place first, in the terminal: builds the sim, exports
 //! the terrain map if missing, starts Docker Desktop, builds the ArduPlane SITL image if
-//! missing and (re)starts the SITL container. Then [`start_sim`] starts t1s_sim as SITL's
+//! missing and (re)starts the SITL container. Then [`start_sim`] starts sim001 as SITL's
 //! physics with the sensor feed on, in its pane. The sim stops when the console closes.
 
 use std::path::{Path, PathBuf};
@@ -10,8 +10,8 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use teleoperation_shared::layout::Rect;
 
-const SITL_IMAGE: &str = "t1s-ardupilot-sitl";
-const SITL_CONTAINER: &str = "t1s-sitl";
+const SITL_IMAGE: &str = "sim001-ardupilot-sitl";
+const SITL_CONTAINER: &str = "sim001-sitl";
 
 pub struct Options {
     pub raytrace: bool,
@@ -22,7 +22,7 @@ pub struct Options {
     pub direct: bool,
     /// A real place from `maps/<name>` (None: the procedural Alpine Valley).
     pub map: Option<String>,
-    /// The plane to fly (`t1s_sim --aircraft`); None is the sim's default.
+    /// The plane to fly (`sim001 --aircraft`); None is the sim's default.
     pub aircraft: Option<String>,
     /// The sim takes its radio from the console (`--test-radio`), for acceptance tests.
     pub test_radio: bool,
@@ -51,6 +51,10 @@ pub fn pack_meta(name: &str) -> Option<visualization_mappack::PackMeta> {
 
 /// Repository root (the sim's crate), three levels above this crate (domains/teleoperation/console).
 pub fn repo_root() -> PathBuf {
+    // In an app bundle the launcher says where the resources are (SIM001_HOME).
+    if let Some(home) = std::env::var_os("SIM001_HOME") {
+        return PathBuf::from(home);
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(3)
@@ -58,8 +62,86 @@ pub fn repo_root() -> PathBuf {
         .unwrap_or_default()
 }
 
+/// Where the sim's working files go (controls.cfg, flight logs): the checkout, or the user's data folder in an app bundle.
+fn work_dir() -> PathBuf {
+    std::env::var_os("SIM001_DATA").map(PathBuf::from).unwrap_or_else(repo_root)
+}
+
 fn sim_binary() -> PathBuf {
-    repo_root().join("target/release/t1s_sim")
+    if let Some(bin) = std::env::var_os("SIM001_BIN") {
+        return PathBuf::from(bin).join(if cfg!(windows) { "sim001.exe" } else { "sim001" });
+    }
+    repo_root().join("target/release/sim001")
+}
+
+/// A native ArduPlane SITL (ardupilot/build_native.sh, or the one in an app bundle), if there is one:
+/// the station then needs no Docker.
+pub fn native_arduplane() -> Option<PathBuf> {
+    let name = if cfg!(windows) { "arduplane.exe" } else { "arduplane" };
+    let bundled = std::env::var_os("SIM001_BIN").map(|b| PathBuf::from(b).join(name));
+    let built = repo_root().join(".ardupilot/build/sitl/bin").join(name);
+    [bundled, Some(built)].into_iter().flatten().find(|p| p.exists())
+}
+
+/// The command line of a native ArduPlane for SITL instance `instance` (0 is yours; 1 to 3 are the
+/// computer pilots', whose physics go to port 9002 + 10·N). As ardupilot/start.sh runs it in Docker.
+fn native_sitl_args(instance: usize, aircraft: &str, home_loc: Option<&str>) -> Vec<String> {
+    let root = repo_root();
+    let parm = |name: &str| root.join("ardupilot").join(name);
+    let mut defaults = vec![root.join(".ardupilot/Tools/autotest/models/plane.parm"), parm("t1s.parm")];
+    if parm(&format!("{aircraft}.parm")).exists() {
+        defaults.push(parm(&format!("{aircraft}.parm")));
+    }
+    let defaults: Vec<String> = defaults.iter().map(|p| p.display().to_string()).collect();
+    let mut a: Vec<String> = [
+        "--model",
+        "JSON:127.0.0.1",
+        "--speedup",
+        "1",
+        "--home",
+        home_loc.unwrap_or("-35.363261,149.165230,584,353"),
+        "--defaults",
+    ]
+    .map(String::from)
+    .to_vec();
+    a.push(defaults.join(","));
+    // Nobody connects to a computer pilot's autopilot, so it does not wait for a ground station.
+    if instance != 0 {
+        a.extend(["--serial0".into(), "tcp:0".into()]);
+    }
+    a.push(format!("-I{instance}"));
+    a
+}
+
+/// The native ArduPlanes this station started, stopped when it ends.
+static NATIVE: std::sync::Mutex<Vec<Child>> = std::sync::Mutex::new(Vec::new());
+
+/// Starts SITL instance `instance` as a native process (a fresh one: the ones of an earlier
+/// station are gone, since it stopped them). Its files and flight logs go to its own folder.
+fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
+    let logs = if instance == 0 { work_dir().join("logs/sitl") } else { work_dir().join(format!("logs/sitl/opponent-{instance}")) };
+    std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
+    let child = Command::new(program)
+        .args(native_sitl_args(instance, aircraft, home_loc))
+        .current_dir(&logs)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("starting {}: {e}", program.display()))?;
+    NATIVE.lock().unwrap().push(child);
+    Ok(if instance == 0 {
+        format!("started ArduPlane (MAVLink on tcp:5760, flight logs in {})", logs.display())
+    } else {
+        format!("started a computer pilot's ArduPlane {instance} (flight logs in {})", logs.display())
+    })
+}
+
+fn stop_native() {
+    for mut c in NATIVE.lock().unwrap().drain(..) {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
 }
 
 fn step(n: usize, total: usize, what: &str) {
@@ -141,12 +223,19 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         }
     }
 
+    let native = native_arduplane();
     step(3, total, "Docker");
-    ensure_docker()?;
+    if native.is_some() {
+        println!("  not needed (native ArduPlane)");
+    } else {
+        ensure_docker()?;
+    }
 
-    step(4, total, "ArduPlane SITL image");
+    step(4, total, "ArduPlane SITL");
     let have_image = image_id().is_some();
-    if have_image {
+    if let Some(program) = &native {
+        println!("  {} (native)", program.display());
+    } else if have_image {
         // Cached layers make this a few seconds; it picks up changes to t1s.parm / start.sh.
         run(
             Command::new("docker")
@@ -171,7 +260,7 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
     step(
         5,
         total,
-        "ArduPlane SITL containers: yours, and one for each computer pilot",
+        "ArduPlane SITL: yours, and one for each computer pilot",
     );
     // ArduPilot's home must be the sim's pilot box: the map's home, else start.sh's default.
     let home = opts.map.as_deref().and_then(pack_meta).map(|m| {
@@ -185,18 +274,22 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
     });
     // The computer pilots fly planes like yours, each with an autopilot of its own, so that a
     // game is fair: they take as long to get into the air as you do.
+    let aircraft = opts.aircraft.as_deref().unwrap_or(simulation_aircraft::default().id);
+    if native.is_some() {
+        // A leftover from an earlier station would hold the ports.
+        stop_native();
+    }
     for instance in 0..=recreation_games::PILOTS.len() {
-        println!(
-            "  {}",
-            start_sitl(
+        let started = match &native {
+            Some(program) => start_native(program, instance, aircraft, home.as_ref().map(|h| h.0.as_str()))?,
+            None => start_sitl(
                 instance,
                 opts.map.as_deref().unwrap_or("alpine"),
-                opts.aircraft
-                    .as_deref()
-                    .unwrap_or(simulation_aircraft::default().id),
+                aircraft,
                 home.as_ref().map(|h| h.0.as_str()),
-            )?
-        );
+            )?,
+        };
+        println!("  {started}");
     }
     if let Some((loc, title)) = home {
         println!("  home {loc} ({title})");
@@ -362,9 +455,9 @@ fn start_sitl(
         .status();
     // ArduPilot's flight logs (.BIN) land in logs/sitl/ in the repo, so they outlive the container.
     let logs = if instance == 0 {
-        repo_root().join("logs/sitl")
+        work_dir().join("logs/sitl")
     } else {
-        repo_root().join(format!("logs/sitl/opponent-{instance}"))
+        work_dir().join(format!("logs/sitl/opponent-{instance}"))
     };
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
     let out = Command::new("docker")
@@ -398,10 +491,9 @@ pub fn start_sim(
     rect: Option<Rect>,
     home: (f64, f64, f32),
 ) -> Result<Child, String> {
-    let root = repo_root();
     let bin = sim_binary();
     let mut cmd = Command::new(&bin);
-    cmd.current_dir(&root).args([
+    cmd.current_dir(work_dir()).args([
         "--ardupilot",
         "--feed",
         &opts.feed_port.to_string(),
@@ -461,6 +553,7 @@ pub fn keep_sim(child: Child) {
 
 /// Stop the sim that this station started, if it is still there.
 pub fn stop_sim() {
+    stop_native();
     if let Some(mut child) = SIM.lock().unwrap().take() {
         let _ = child.kill();
         let _ = child.wait();
@@ -481,14 +574,23 @@ mod tests {
     /// Your autopilot talks to the console on tcp:5760. Each computer pilot's is an instance of
     /// its own (so its physics port is 9002 + 10·N), publishes no port, and logs on its own.
     #[test]
+    fn a_native_autopilot_is_an_instance_of_its_own_too() {
+        let yours = native_sitl_args(0, "t1s-vtol", None);
+        assert!(yours.contains(&"-I0".to_string()) && !yours.contains(&"--serial0".to_string()), "yours waits for the console");
+        let kestrel = native_sitl_args(1, "t1s-vtol", Some("1,2,3,4"));
+        assert!(kestrel.windows(2).any(|w| w == ["--serial0", "tcp:0"]) && kestrel.contains(&"-I1".to_string()));
+        assert!(kestrel.windows(2).any(|w| w == ["--home", "1,2,3,4"]));
+    }
+
+    #[test]
     fn each_autopilot_is_a_container_of_its_own() {
         let logs = std::path::Path::new("/logs");
         let yours = sitl_run_args(0, "alpine", "t1s-vtol", None, logs);
-        assert!(yours.windows(2).any(|w| w == ["--name", "t1s-sitl"]));
+        assert!(yours.windows(2).any(|w| w == ["--name", "sim001-sitl"]));
         assert!(yours.windows(2).any(|w| w == ["-p", "5760:5760"]));
         assert!(yours.contains(&"INSTANCE=0".to_string()));
         let kestrel = sitl_run_args(1, "alpine", "t1s-vtol", Some("1,2,3,4"), logs);
-        assert!(kestrel.windows(2).any(|w| w == ["--name", "t1s-sitl-1"]));
+        assert!(kestrel.windows(2).any(|w| w == ["--name", "sim001-sitl-1"]));
         assert!(
             !kestrel.contains(&"-p".to_string()),
             "nobody connects to it"
