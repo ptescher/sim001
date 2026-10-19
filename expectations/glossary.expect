@@ -215,7 +215,7 @@ Term: AGENT mode
   the mode switch on the radio takes the plane out of AGENT mode at once.
 
 Term: Executor
-  The code in the plane that flies an [[agent plan]]: `autonomy_executor`, a Rust library. It
+  The code in the plane that flies an [[agent plan]]: `cognition_executor`, a Rust library. It
   turns the plan into a bank, a pitch and a throttle, 50 times a second. The same code runs in
   ArduPilot, in SITL and in the tests.
 
@@ -301,7 +301,7 @@ Term: Agent status
   them as `plan`, `prim`, `env` and `fall`.
 
 Term: Runner
-  `autonomy_runner`, a program that flies three ArduPlane [[SITL]] planes with no window,
+  `cognition_runner`, a program that flies three ArduPlane [[SITL]] planes with no window,
   faster than real time. With `--agent`, the [[ground control agent]] flies them in a game of
   [[tag]]. With `--console` as well, you send [[agent plan]]s to the first plane after the
   game. Type `plan`, `again`, `mode`, `wait`, `watch`, `status`, `reset` or `quit`.

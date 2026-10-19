@@ -6,7 +6,7 @@
 # C++ compiler (Xcode's command line tools on a Mac).
 #   ardupilot/build_native.sh [AP_REF]      AP_REF is a branch or tag (default: the pinned release)
 #   AP_DIR=.ardupilot-x ardupilot/build_native.sh     build somewhere else (default .ardupilot)
-#   AGENT_EXEC=1 ardupilot/build_native.sh            link the Rust plan executor (domains/autonomy/executor)
+#   AGENT_EXEC=1 ardupilot/build_native.sh            link the Rust plan executor (domains/cognition/executor)
 #                                                      into the AGENT mode; without it the mode is a stub
 set -e
 cd "$(dirname "$0")/.."
@@ -42,19 +42,19 @@ for p in "$ROOT"/ardupilot/patches/*.patch; do
     exit 1
   fi
 done
-# The executor's C ABI has one source of truth, domains/autonomy/executor/include; the AGENT mode
+# The executor's C ABI has one source of truth, domains/cognition/executor/include; the AGENT mode
 # includes this copy of it (with or without AGENT_EXEC: without, mode_agent.cpp stands in a
 # wings-level executor behind the same ABI). It is not in the patch series, so it can't go stale.
-cp "$ROOT/domains/autonomy/executor/include/agent_executor.h" ArduPlane/agent_executor.h
+cp "$ROOT/domains/cognition/executor/include/agent_executor.h" ArduPlane/agent_executor.h
 # Apple's linker refuses the pointers inside this packed struct (they sit unaligned); SITL doesn't
 # need it packed.
 [ "$(uname)" = Darwin ] && sed -i '' 's/^class PACKED AP_FWVersion/class AP_FWVersion/' libraries/AP_Common/AP_FWVersion.h
 if [ "${AGENT_EXEC:-0}" = 1 ]; then
-  (cd "$ROOT" && cargo build --profile embedded -p autonomy_executor --features ffi-static)
+  (cd "$ROOT" && cargo build --profile embedded -p cognition_executor --features ffi-static)
   export CXXFLAGS="${CXXFLAGS:-} -DAP_AGENT_EXEC=1"
-  export LDFLAGS="${LDFLAGS:-} $ROOT/target/embedded/libautonomy_executor.a"
+  export LDFLAGS="${LDFLAGS:-} $ROOT/target/embedded/libcognition_executor.a"
   # waf doesn't track a library passed in LDFLAGS: a newer executor forces the relink
-  if [ build/sitl/bin/arduplane -ot "$ROOT/target/embedded/libautonomy_executor.a" ]; then
+  if [ build/sitl/bin/arduplane -ot "$ROOT/target/embedded/libcognition_executor.a" ]; then
     rm -f build/sitl/bin/arduplane
   fi
 fi

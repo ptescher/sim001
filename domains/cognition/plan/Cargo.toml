@@ -1,0 +1,10 @@
+[package]
+name = "cognition_plan"
+version = "0.1.0"
+edition = "2024"
+description = "Cognition domain: the plan the ground agent sends a plane, its MAVLink encoding, and the C-compatible types the on-board executor takes. No dependencies, no_std-compatible"
+
+[features]
+default = []
+# no_std (the on-board build)
+ffi-static = []

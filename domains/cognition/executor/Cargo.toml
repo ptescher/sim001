@@ -1,0 +1,25 @@
+[package]
+name = "cognition_executor"
+version = "0.1.0"
+edition = "2024"
+description = "Cognition domain: the plan executor that runs on board (no_std, C ABI), shared by the ArduPlane AGENT mode and the training environment"
+
+[lib]
+# rlib for the Rust side (training, tests); staticlib for the C++ side (ArduPilot).
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+cognition_plan = { path = "../plan" }
+
+[features]
+# no_std, with the panic handler a bare staticlib needs. Off for the Rust side, where std brings its own.
+ffi-static = ["cognition_plan/ffi-static"]
+
+[dev-dependencies]
+# The acceptance tests (tests/acceptance.rs): the section "Flying by plan" with no window, the
+# ground's wire format and its scripted brain.
+cognition_agent = { path = "../agent" }
+expectation_harness = { path = "../../expectation/harness" }
+expectation_model = { path = "../../expectation/model" }
+expectation_story = { path = "../../expectation/story" }
+glam = "0.33"

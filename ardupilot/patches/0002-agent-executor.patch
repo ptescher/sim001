@@ -82,7 +82,7 @@ index 6cbeea8..6b8184d 100644
  
  // SIM001: the agent mode. It sets the attitude and the throttle that the stock
  // controllers then fly, as FBWA does, so what it asks for is always an attitude.
-+// The plan executor (domains/autonomy/executor, a Rust static library behind the C ABI
++// The plan executor (domains/cognition/executor, a Rust static library behind the C ABI
 +// in agent_executor.h, copied here by ardupilot/build_native.sh) decides them.
  class ModeAgent : public Mode
  {
@@ -191,7 +191,7 @@ index ae0d062..8872455 100644
 -  Phase 0 stub: wings level, nose at the level pitch, the pilot's throttle. Later the plan
 -  executor sets nav_roll_cd, nav_pitch_cd and the throttle here; the stock stabilisation
 -  flies them, so the agent only ever asks for an attitude.
-+  The plan executor (domains/autonomy/executor, a no_std Rust static library behind the C ABI
++  The plan executor (domains/cognition/executor, a no_std Rust static library behind the C ABI
 +  in agent_executor.h) flies the plan the ground sends. Each step it gets the plane's state,
 +  the plan, the other aircraft and the limits, and it answers with a bank, a pitch and a
 +  throttle. The stock stabilisation flies them, as in FBWA: the agent only ever asks for an
@@ -201,7 +201,7 @@ index ae0d062..8872455 100644
 +  Inputs:
 +  - plan: COMMAND_INT MAV_CMD_USER_1 (31010), only in AGENT mode. param1 primitive, param2 target
 +    (a MAVLink system id), param3 plan id, param4 ttl (s), x/y lat/lon (1e-7 deg), z the altitude
-+    above home and the radius packed in one float (autonomy_plan::wire::WirePlan::to_command).
++    above home and the radius packed in one float (cognition_plan::wire::WirePlan::to_command).
 +  - game: COMMAND_INT MAV_CMD_USER_2 (31011), in any mode: param1 role, param2 time left (s),
 +    param3 the no-tag-back system id. Kept and logged; the C ABI has no slot for it yet.
 +  - tracks: ADSB_VEHICLE, in any mode. The track id is the low byte of ICAO_address (ADSB_VEHICLE
@@ -212,7 +212,7 @@ index ae0d062..8872455 100644
 +
 +  Status, once a second while in AGENT: NAMED_VALUE_INT AG_PLAN (plan id, 0 none), AG_PRIM
 +  (primitive), AG_ENV (envelope interventions since entering) and AG_FALL (the executor's
-+  fallback reason), as in autonomy_plan::status_names.
++  fallback reason), as in cognition_plan::status_names.
   */
  
  #ifndef AP_AGENT_EXEC
@@ -220,7 +220,7 @@ index ae0d062..8872455 100644
  #endif
  
 -#if AP_AGENT_EXEC
--// autonomy_executor, a Rust static library (domains/autonomy/executor/include/agent_executor.h)
+-// cognition_executor, a Rust static library (domains/cognition/executor/include/agent_executor.h)
 +#if !AP_AGENT_EXEC
 +// Built without the executor: a wings-level stand-in with the same ABI, so the mode, its
 +// status and its failsafes work the same. Plans are refused (Refusal::NO_EXECUTOR).
@@ -252,7 +252,7 @@ index ae0d062..8872455 100644
 +static constexpr uint32_t STEP_SLACK_US = 2000;
 +// tracks heard longer ago than this are handed over as invalid
 +static constexpr uint32_t TRACK_TIMEOUT_MS = 10000;
-+// autonomy_plan::wire::to_local's earth radius
++// cognition_plan::wire::to_local's earth radius
 +static constexpr float EARTH_R = 6371000.0f;
 +
 +const AP_Param::GroupInfo ModeAgent::var_info[] = {
@@ -367,7 +367,7 @@ index ae0d062..8872455 100644
 +    return true;
 +}
 +
-+// autonomy_plan::wire::to_local: a flat earth around home. The differences are taken in
++// cognition_plan::wire::to_local: a flat earth around home. The differences are taken in
 +// integer 1e-7 degrees: a float latitude is only good to about half a metre.
 +static void to_local(const Location &home, int32_t lat_e7, int32_t lon_e7, float &north, float &east)
 +{
@@ -383,7 +383,7 @@ index ae0d062..8872455 100644
 +    east = float(dlon) * m_per_e7 * cosf(radians(home.lat * 1.0e-7f));
 +}
 +
-+// autonomy_plan's finite_u16: a finite number in 0..=65535, truncated
++// cognition_plan's finite_u16: a finite number in 0..=65535, truncated
 +static bool finite_u16(float v, uint16_t &out)
 +{
 +    if (!isfinite(v) || v < 0 || v > 65535) {
@@ -679,7 +679,7 @@ index ae0d062..8872455 100644
 +
 +void ModeAgent::send_status()
 +{
-+    // autonomy_plan::status_names
++    // cognition_plan::status_names
 +    send_named_int("AG_PLAN", have_plan ? plan.id : 0);
 +    send_named_int("AG_PRIM", have_plan ? plan.primitive : 0);
 +    send_named_int("AG_ENV", int32_t(interventions));

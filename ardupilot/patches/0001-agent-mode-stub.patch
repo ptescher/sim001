@@ -138,7 +138,7 @@ index 0000000..ae0d062
 +#endif
 +
 +#if AP_AGENT_EXEC
-+// autonomy_executor, a Rust static library (domains/autonomy/executor/include/agent_executor.h)
++// cognition_executor, a Rust static library (domains/cognition/executor/include/agent_executor.h)
 +extern "C" {
 +struct agent_demand { int32_t roll_cd; int32_t pitch_cd; float throttle; };
 +uint32_t agent_exec_abi_version(void);

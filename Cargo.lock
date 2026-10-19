@@ -428,47 +428,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
-name = "autonomy_agent"
-version = "0.1.0"
-dependencies = [
- "autonomy_plan",
- "glam",
- "mavlink",
-]
-
-[[package]]
-name = "autonomy_executor"
-version = "0.1.0"
-dependencies = [
- "autonomy_agent",
- "autonomy_plan",
- "expectation_harness",
- "expectation_model",
- "expectation_story",
- "glam",
-]
-
-[[package]]
-name = "autonomy_plan"
-version = "0.1.0"
-
-[[package]]
-name = "autonomy_runner"
-version = "0.1.0"
-dependencies = [
- "autonomy_agent",
- "autonomy_plan",
- "expectation_harness",
- "expectation_model",
- "expectation_story",
- "glam",
- "recreation_games",
- "simulation_aircraft",
- "simulation_physics",
- "simulation_sitl",
-]
-
-[[package]]
 name = "aviation_computer"
 version = "0.1.0"
 dependencies = [
@@ -2296,6 +2255,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af491d569909a7e4dee0ad7db7f5341fef5c614d5b8ec8cf765732aba3cff681"
 dependencies = [
  "unicode-width",
+]
+
+[[package]]
+name = "cognition_agent"
+version = "0.1.0"
+dependencies = [
+ "cognition_plan",
+ "glam",
+ "mavlink",
+]
+
+[[package]]
+name = "cognition_executor"
+version = "0.1.0"
+dependencies = [
+ "cognition_agent",
+ "cognition_plan",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+ "glam",
+]
+
+[[package]]
+name = "cognition_plan"
+version = "0.1.0"
+
+[[package]]
+name = "cognition_runner"
+version = "0.1.0"
+dependencies = [
+ "cognition_agent",
+ "cognition_plan",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+ "glam",
+ "recreation_games",
+ "simulation_aircraft",
+ "simulation_physics",
+ "simulation_sitl",
 ]
 
 [[package]]

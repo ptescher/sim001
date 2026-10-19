@@ -81,7 +81,7 @@ console's `mavlink` crate has to change.
 | `NAMED_VALUE_FLOAT/INT` + `STATUSTEXT` | Agent status: active plan ID, primitive, policy hash, envelope interventions, the reason for falling back |
 | `COMMAND_ACK` | Plan accepted or rejected (a reason in `result_param2`) |
 
-The vocabulary and its encoding go in a new pure crate, `autonomy_plan`. The ground agent,
+The vocabulary and its encoding go in a new pure crate, `cognition_plan`. The ground agent,
 the console, the training environment and the plane all use the same definitions.
 
 ### MODE_AGENT, the custom ArduPilot code
@@ -105,7 +105,7 @@ the console, the training environment and the plane all use the same definitions
   and reported.
 - **One implementation, not two.** Recommended: write the executor (primitive logic,
   observation building, the MLP forward pass and the envelope) once, as a `no_std` Rust crate
-  (`autonomy_executor`) with a C ABI, and link it into the mode. The training environment
+  (`cognition_executor`) with a C ABI, and link it into the mode. The training environment
   calls the same crate, so there is no drift between the C++ and Rust copies. The risk is
   linking a Rust static library into ArduPilot's waf/ChibiOS build. Phase 0 tries this out;
   if it fails, use a C++ port with shared golden test vectors.
@@ -171,7 +171,7 @@ sampled by prioritised fictitious self-play, so it doesn't collapse into one nar
 strategy. TrueSkill ratings for every snapshot. Every N updates, gate on F1 SITL win rates.
 
 **Training stack.** Recommended: the environment and inference in Rust; PPO in Python
-(PyTorch), through a PyO3 binding (`autonomy_gym`, built with maturin, with a
+(PyTorch), through a PyO3 binding (`cognition_gym`, built with maturin, with a
 PettingZoo-style parallel API), in a separate `training/` folder managed by `uv`. The weights
 are exported to the plane's file format, and a parity test checks the Rust forward pass
 against PyTorch. A training stack in pure Rust (burn or candle) would stay all-Rust, but it
@@ -213,16 +213,16 @@ Planes never touch. The real-world rules are a variant of the referee:
 
 ## Where the code goes
 
-A new domain, `domains/autonomy/`:
+A new domain, `domains/cognition/`:
 
 | Crate | Role | Depends on |
 | --- | --- | --- |
-| `autonomy_plan` | The plan vocabulary, its MAVLink encoding, and the status | nothing |
-| `autonomy_executor` | `no_std` + C ABI: observation, the MLP forward pass, the primitives, the safety envelope | `autonomy_plan` |
-| `autonomy_aplite` | The Rust model of ArduPlane's FBWA path | `simulation_*` |
-| `autonomy_env` | The vectorised multi-agent tag environment (F0), and the headless SITL environment (F1) | the above, `simulation_*`, `recreation_tag`, `communication_air`/`traffic` |
-| `autonomy_gym` | The PyO3 binding | `autonomy_env` |
-| `autonomy_agent` | The ground control agent: its brains (scripted, learned, Claude) and a MAVLink endpoint. The console embeds it, and it also runs on its own | `autonomy_plan`, `communication_traffic` |
+| `cognition_plan` | The plan vocabulary, its MAVLink encoding, and the status | nothing |
+| `cognition_executor` | `no_std` + C ABI: observation, the MLP forward pass, the primitives, the safety envelope | `cognition_plan` |
+| `cognition_aplite` | The Rust model of ArduPlane's FBWA path | `simulation_*` |
+| `cognition_env` | The vectorised multi-agent tag environment (F0), and the headless SITL environment (F1) | the above, `simulation_*`, `recreation_tag`, `communication_air`/`traffic` |
+| `cognition_gym` | The PyO3 binding | `cognition_env` |
+| `cognition_agent` | The ground control agent: its brains (scripted, learned, Claude) and a MAVLink endpoint. The console embeds it, and it also runs on its own | `cognition_plan`, `communication_traffic` |
 
 Elsewhere:
 - `simulation_sitl` (new): the JSON bridge and the multi-instance SITL runner, moved out of
@@ -231,7 +231,7 @@ Elsewhere:
 - `recreation_tag`: the real-world rules variant.
 - `ardupilot/`: the pinned fork, the patches, the MODE_AGENT build, and `t1s-agent.parm`.
 - `training/` (Python): MAPPO, the league, export, and reports.
-- `expectations/07-autonomy/`: the specs, which generate the manual's chapter.
+- `expectations/07-cognition/`: the specs, which generate the manual's chapter.
 
 ## Phases
 
@@ -240,7 +240,7 @@ docs regenerated.
 
 ### Phase 0: Foundations (de-risking)
 
-**Status: mostly done.** Done: `simulation_sitl` (the bridge, lockstep and launcher, with the sim rewired onto it); ArduPilot pinned to `Plane-4.7.2` with a patch series (`ardupilot/patches/`); the AGENT mode (number 50) builds and is entered in SITL; `autonomy_executor` links into it, and SITL logs `Agent: executor ABI 1`, so the Rust-in-ArduPilot approach works on SITL; the executor cross-compiles for Cortex-M7 (`thumbv7em-none-eabihf`); the physics runs at about 8 000× real time on one core. Also done: `autonomy_runner` plays a headless tag game with three real SITL planes at 9.5× real time (the fourth player, you, is not in it). Not done: linking into a ChibiOS board build (needs the Arm GNU toolchain, which is not installed here); the console entering and leaving AGENT; the existing `.ardupilot` build is still the old `master` one until rebuilt with `ardupilot/build_native.sh`.
+**Status: mostly done.** Done: `simulation_sitl` (the bridge, lockstep and launcher, with the sim rewired onto it); ArduPilot pinned to `Plane-4.7.2` with a patch series (`ardupilot/patches/`); the AGENT mode (number 50) builds and is entered in SITL; `cognition_executor` links into it, and SITL logs `Agent: executor ABI 1`, so the Rust-in-ArduPilot approach works on SITL; the executor cross-compiles for Cortex-M7 (`thumbv7em-none-eabihf`); the physics runs at about 8 000× real time on one core. Also done: `cognition_runner` plays a headless tag game with three real SITL planes at 9.5× real time (the fourth player, you, is not in it). Not done: linking into a ChibiOS board build (needs the Arm GNU toolchain, which is not installed here); the console entering and leaving AGENT; the existing `.ardupilot` build is still the old `master` one until rebuilt with `ardupilot/build_native.sh`.
 - Pin ArduPilot to a release tag. Build the fork with a stub `AGENT` mode that flies wings
   level, in SITL.
 - Spike: link a `no_std` Rust static library into the SITL build, and cross-compile it for one
@@ -253,11 +253,11 @@ docs regenerated.
 
 ### Phase 1: The plan protocol and a scripted loop, end to end
 
-**Status: the loop runs; tuning is open.** Done: `autonomy_plan` (plan, `COMMAND_INT` 31010/31011, C ABI v2); `autonomy_executor` (six primitives, the envelope, its own maths, 34 tests with closed loops and soaks, builds for Cortex-M7); the AGENT mode takes plans, `ADSB_VEHICLE` tracks and `AGENT_*` limits, and reports `AG_*` status (patches 0001 and 0002); `autonomy_agent` (scripted brain, MAVLink link); `autonomy_runner --agent` flies three SITL planes by plan at 9.4× real time with every command accepted. Open: in the first full run the envelope intervened on about half the steps and the executor kept falling back to Recovery (the planes fly at 13–19 m, near the 12 m floor and 13 m airspeed floor), so the planes tag little (1 real tag in the run); the console's plan display and override; the envelope expectations (specs); tracks reach the executor but nothing reports their use.
-- `autonomy_plan` and its encoding. Classical primitives in `autonomy_executor` (pursuit by
+**Status: the loop runs; tuning is open.** Done: `cognition_plan` (plan, `COMMAND_INT` 31010/31011, C ABI v2); `cognition_executor` (six primitives, the envelope, its own maths, 34 tests with closed loops and soaks, builds for Cortex-M7); the AGENT mode takes plans, `ADSB_VEHICLE` tracks and `AGENT_*` limits, and reports `AG_*` status (patches 0001 and 0002); `cognition_agent` (scripted brain, MAVLink link); `cognition_runner --agent` flies three SITL planes by plan at 9.4× real time with every command accepted. Open: in the first full run the envelope intervened on about half the steps and the executor kept falling back to Recovery (the planes fly at 13–19 m, near the 12 m floor and 13 m airspeed floor), so the planes tag little (1 real tag in the run); the console's plan display and override; the envelope expectations (specs); tracks reach the executor but nothing reports their use.
+- `cognition_plan` and its encoding. Classical primitives in `cognition_executor` (pursuit by
   the existing L1 and intercept logic, break-away, goto, band) and the full safety envelope.
 - MODE_AGENT runs the executor. The sim feeds `ADSB_VEHICLE` into each SITL from `Air`.
-- `autonomy_agent` with a scripted brain: the existing Kestrel/Merlin/Swift decisions, now
+- `cognition_agent` with a scripted brain: the existing Kestrel/Merlin/Swift decisions, now
   sending plans.
 - The console shows each plane's plan and status, and lets the operator override a plan.
 - **Done when:** four ArduPilot planes play tag in F1, every one of them in AGENT mode under a
@@ -265,9 +265,9 @@ docs regenerated.
   pass as expectations.
 
 ### Phase 2: The fast environment
-- `autonomy_aplite`, calibrated against SITL step responses (these are expectations).
-- `autonomy_env`: vectorised, randomised, with observations through the radios. The F0 and F1
-  backends behind one API. `autonomy_gym` bindings.
+- `cognition_aplite`, calibrated against SITL step responses (these are expectations).
+- `cognition_env`: vectorised, randomised, with observations through the radios. The F0 and F1
+  backends behind one API. `cognition_gym` bindings.
 - **Done when:** a random policy and the scripted brain run in F0 at the budget, and the
   scripted brain's results in F0 and F1 match within tolerance.
 
@@ -305,7 +305,7 @@ Each step gates the next. Each one keeps a safety pilot on the TX15.
 5. Two real planes, in their bands, with virtual touches; then more.
 
 ### Phase 7 (optional): Claude as commander
-A third brain for `autonomy_agent`. Claude gets the tracks and the game state as tools, and
+A third brain for `cognition_agent`. Claude gets the tracks and the game state as tools, and
 issues plans as tool calls, at about 0.2–0.5 Hz. It keeps a short log of its reasons, which
 the console shows, so the operator can read why each plane does what it does. It is good for
 plans you can read and for strategies set in plain language ("pin the leader against the

@@ -67,7 +67,7 @@ BATT_FS_CRT_ACT 2
 RTL_CLIMB_MIN 30
 
 # AGENT mode (50, ardupilot/patches): the executor's envelope. These are also the built-in
-# defaults (autonomy_plan's Limits::default, the T1-S in the 90 m tag arena); a build without
+# defaults (cognition_plan's Limits::default, the T1-S in the 90 m tag arena); a build without
 # the AGENT patches ignores them. The fence is AGENT_FENCE_N/E (centre, m from home) and _R
 # (radius, m; 0: the circle geofence if FENCE_ENABLE has it, else none). CEIL is above home,
 # FLOOR above the ground (m); the slowest airspeed allowed is AIRSPEED_MIN + ASPD_MRG.

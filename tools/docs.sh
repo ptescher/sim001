@@ -10,9 +10,9 @@ cd "$(dirname "$0")/.."
 DOCS="$PWD/docs"
 limit() { secs=$1; shift; perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; }
 echo "== domains with no window"
-SIM001_DOCS="$DOCS" limit 900 cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry -p autonomy_executor --test acceptance
+SIM001_DOCS="$DOCS" limit 900 cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry -p cognition_executor --test acceptance
 echo "== the AGENT mode in ArduPilot SITL (needs .ardupilot-agent or SIM001_BIN; not supported yet without it)"
-SIM001_DOCS="$DOCS" limit 400 cargo test --release -p autonomy_runner --test acceptance || true
+SIM001_DOCS="$DOCS" limit 400 cargo test --release -p cognition_runner --test acceptance || true
 echo "== the sim"
 limit 900 cargo build --release
 limit 480 ./target/release/sim001 --expect --docs "$DOCS" || true

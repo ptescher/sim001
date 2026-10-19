@@ -62,7 +62,7 @@ opt-level = 3
 bevy_solari = { path = "vendor/bevy_solari" }
 
 # The on-board executor as a static library for the ArduPlane fork: no unwinding, small.
-# cargo build --profile embedded -p autonomy_executor --features ffi-static
+# cargo build --profile embedded -p cognition_executor --features ffi-static
 [profile.embedded]
 inherits = "release"
 panic = "abort"
