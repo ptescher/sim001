@@ -5,3 +5,6 @@ edition = "2024"
 description = "Simulation domain: the ArduPilot SITL side, headless. The JSON physics packets, the lockstep exchange, and starting ArduPlane instances (native or Docker)"
 
 [dependencies]
+simulation_aircraft = { path = "../aircraft" }
+simulation_physics = { path = "../physics" }
+glam = "0.33"

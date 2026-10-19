@@ -155,19 +155,7 @@ pub struct OtherLink {
 /// FBWA's limits from the plane's ArduPilot parameter files, layered as ArduPilot layers them
 /// (a later file wins), over ArduPlane's own defaults.
 pub fn fbwa_from_parms(files: &[&str]) -> Fbwa {
-    let get = |name: &str, default: f32| {
-        files
-            .iter()
-            .flat_map(|f| f.lines())
-            .filter_map(|l| {
-                let mut w = l.split_whitespace();
-                (w.next() == Some(name)).then(|| w.next()?.parse::<f32>().ok()).flatten()
-            })
-            .last()
-            .unwrap_or(default)
-            .to_radians()
-    };
-    Fbwa { roll_limit: get("ROLL_LIMIT_DEG", 45.0), pitch_max: get("PTCH_LIM_MAX_DEG", 20.0), pitch_min: get("PTCH_LIM_MIN_DEG", -25.0) }
+    Fbwa::from_parms(files)
 }
 
 /// The T1-S's ArduPilot parameters, as ardupilot/start.sh gives them to SITL.
@@ -538,46 +526,8 @@ fn radio_channels(r: &Radio) -> [u16; 8] {
 /// The JSON sensor packet for ArduPilot's JSON SITL backend: a plane's state, the wind it flies
 /// in, and the RC channels its radio sends.
 fn sitl_json(s: &FlightState, wind: Vec3, rc: &[u16; 8]) -> String {
-    let home_ground = terrain::ground_height(terrain::pilot_pos().x, terrain::pilot_pos().z);
-    // World (+X east, +Y up, -Z north) -> NED.
-    let ned = |v: Vec3| [-v.z, v.x, -v.y];
-    let rel = s.pos - Vec3::new(terrain::pilot_pos().x, home_ground, terrain::pilot_pos().z);
-    let pos = ned(rel);
-    let vel = ned(s.vel);
-    let wind = ned(wind);
-    // Body (Bevy: +X right, +Y up, -Z fwd) -> FRD.
-    let frd = |v: Vec3| [-v.z, v.x, -v.y];
-    let gyro = frd(s.omega);
-    let acc = frd(s.specific_force);
-    // Attitude: body FRD axes expressed in NED.
-    let fwd = ned(s.rot * Vec3::NEG_Z);
-    let right = ned(s.rot * Vec3::X);
-    let down = ned(s.rot * Vec3::NEG_Y);
-    let m = bevy::math::Mat3::from_cols(fwd.into(), right.into(), down.into());
-    let q = bevy::math::Quat::from_mat3(&m).normalize();
-    let mut rc_json = String::new();
-    for (i, v) in rc.iter().enumerate() {
-        if i > 0 {
-            rc_json.push(',');
-        }
-        rc_json.push_str(&format!("\"rc_{}\":{}", i + 1, v));
-    }
-    format!(
-        "\n{{\"timestamp\":{:.6},\"imu\":{{\"gyro\":[{:.6},{:.6},{:.6}],\"accel_body\":[{:.5},{:.5},{:.5}]}},\
-\"position\":[{:.4},{:.4},{:.4}],\"quaternion\":[{:.7},{:.7},{:.7},{:.7}],\"velocity\":[{:.5},{:.5},{:.5}],\
-\"airspeed\":{:.4},\"velocity_wind\":[{:.4},{:.4},{:.4}],\"battery\":{{\"voltage\":{:.3},\"current\":{:.3}}},\
-\"rc\":{{{}}}}}\n",
-        s.time,
-        gyro[0], gyro[1], gyro[2],
-        acc[0], acc[1], acc[2],
-        pos[0], pos[1], pos[2],
-        q.w, q.x, q.y, q.z,
-        vel[0], vel[1], vel[2],
-        s.airspeed,
-        wind[0], wind[1], wind[2],
-        s.voltage, s.current,
-        rc_json
-    )
+    let p = terrain::pilot_pos();
+    simulation_sitl::sensor_json(s, wind, rc, Vec3::new(p.x, terrain::ground_height(p.x, p.z), p.z))
 }
 
 /// Wind at a point: mean wind with a boundary-layer profile plus turbulence.

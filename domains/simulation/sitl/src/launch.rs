@@ -105,20 +105,20 @@ pub fn spawn(dir: &Path, plan: Plan) -> Result<(Child, bool), String> {
     Ok((child, docker))
 }
 
-/// Native ArduPlane instances 0..n, each in its own working directory under `dir`, stopped when
+/// Native ArduPlane instances (SITL `-I`), each in its own working directory under `dir`, stopped when
 /// this is dropped: the planes of a headless game.
 pub struct Fleet {
     children: Vec<Child>,
 }
 
 impl Fleet {
-    pub fn start(root: &Path, dir: &Path, aircraft: &str, n: u16, home: &str, speedup: f32) -> Result<Fleet, String> {
+    pub fn start(root: &Path, dir: &Path, aircraft: &str, instances: std::ops::Range<u16>, home: &str, speedup: f32) -> Result<Fleet, String> {
         let program = native_binary(root);
         if !program.exists() {
             return Err(format!("no native ArduPlane at {}: run ardupilot/build_native.sh", program.display()));
         }
         let mut fleet = Fleet { children: vec![] };
-        for i in 0..n {
+        for i in instances {
             let plan = Plan::Native { program: program.clone(), args: native_instance_args(root, aircraft, i, home, speedup) };
             fleet.children.push(spawn(&dir.join(format!("instance{i}")), plan)?.0);
         }

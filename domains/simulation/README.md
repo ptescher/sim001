@@ -12,7 +12,7 @@ depends on these crates; they depend on nothing but `glam`.
 | `simulation_sitl` | [sitl/](sitl) | ArduPilot SITL with no renderer: the JSON physics packets, the lockstep exchange (`Lockstep`), and starting ArduPlane instances, native or Docker (`launch`, `Fleet`) |
 | `simulation_physics` | [physics/](physics) | The 6-DOF model: strip-theory aerodynamics, propulsion, battery, ground contact, the hand launch and the carry back after a reset. The ground comes in through the `Terrain` trait, so it runs headless |
 
-`simulation_physics` depends on `simulation_aircraft`, never the other way round. `simulation_sitl` depends on neither.
+`simulation_physics` depends on `simulation_aircraft`, never the other way round. `simulation_sitl` depends on both: it encodes a flight state as the sensor packet.
 
 `cargo run --release -p simulation_physics --example throughput` times the flight model: about 3 million steps a second (7 000 to 8 000 times real time at 400 Hz) on one core of an Apple Silicon Mac, over flat ground with no obstacles.
 

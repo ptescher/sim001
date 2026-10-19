@@ -7,8 +7,10 @@
 
 pub mod launch;
 pub mod lockstep;
+pub mod sensors;
 
 pub use lockstep::{Lockstep, Step, dt_for};
+pub use sensors::sensor_json;
 
 const MAGIC_16: u16 = 18458;
 const MAGIC_32: u16 = 29569;

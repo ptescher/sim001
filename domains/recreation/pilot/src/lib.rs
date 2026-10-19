@@ -178,6 +178,26 @@ pub struct Fbwa {
     pub pitch_min: f32,
 }
 
+impl Fbwa {
+    /// FBWA's limits from ArduPilot parameter files, layered as ArduPilot layers them (a later
+    /// file wins), over ArduPlane's own defaults.
+    pub fn from_parms(files: &[&str]) -> Fbwa {
+        let get = |name: &str, default: f32| {
+            files
+                .iter()
+                .flat_map(|f| f.lines())
+                .filter_map(|l| {
+                    let mut w = l.split_whitespace();
+                    (w.next() == Some(name)).then(|| w.next()?.parse::<f32>().ok()).flatten()
+                })
+                .last()
+                .unwrap_or(default)
+                .to_radians()
+        };
+        Fbwa { roll_limit: get("ROLL_LIMIT_DEG", 45.0), pitch_max: get("PTCH_LIM_MAX_DEG", 20.0), pitch_min: get("PTCH_LIM_MIN_DEG", -25.0) }
+    }
+}
+
 /// A computer pilot. It keeps a little memory between steps (what the hands have learnt about
 /// trim, and where on its line it is).
 #[derive(Clone, Debug)]

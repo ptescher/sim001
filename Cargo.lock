@@ -432,6 +432,17 @@ name = "autonomy_executor"
 version = "0.1.0"
 
 [[package]]
+name = "autonomy_runner"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "recreation_games",
+ "simulation_aircraft",
+ "simulation_physics",
+ "simulation_sitl",
+]
+
+[[package]]
 name = "aviation_computer"
 version = "0.1.0"
 dependencies = [
@@ -5336,6 +5347,11 @@ dependencies = [
 [[package]]
 name = "simulation_sitl"
 version = "0.1.0"
+dependencies = [
+ "glam",
+ "simulation_aircraft",
+ "simulation_physics",
+]
 
 [[package]]
 name = "skrifa"
