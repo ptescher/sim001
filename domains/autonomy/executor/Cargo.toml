@@ -8,6 +8,9 @@ description = "Autonomy domain: the plan executor that runs on board (no_std, C 
 # rlib for the Rust side (training, tests); staticlib for the C++ side (ArduPilot).
 crate-type = ["rlib", "staticlib"]
 
+[dependencies]
+autonomy_plan = { path = "../plan" }
+
 [features]
-# The panic handler a bare staticlib needs. Off for the Rust side, where std brings its own.
-ffi-static = []
+# no_std, with the panic handler a bare staticlib needs. Off for the Rust side, where std brings its own.
+ffi-static = ["autonomy_plan/ffi-static"]
