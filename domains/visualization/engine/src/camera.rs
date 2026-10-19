@@ -7,6 +7,7 @@ use bevy::camera::{CameraMainTextureUsages, Exposure};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::AtmosphereEnvironmentMapLight;
 use bevy::pbr::AtmosphereSettings;
+use bevy::post_process::auto_exposure::{AutoExposure, AutoExposureCompensationCurve};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureUsages;
@@ -127,20 +128,38 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
     }
 }
 
+/// Bevy's auto exposure brings the scene's average to 1.0; a camera brings it to mid grey.
+pub const METERING: Handle<AutoExposureCompensationCurve> = bevy::asset::uuid_handle!("6f1d2c3e-7a0b-4b8e-9a51-3c0e2d9b7a14");
+
+/// About 2.5 stops down, at every brightness: the average lands on 18% grey.
+pub fn metering_curve() -> AutoExposureCompensationCurve {
+    let down = -1.5f32;
+    AutoExposureCompensationCurve::from_curve(bevy::curve::cubic_splines::LinearSpline::new([
+        Vec2::new(-8.0, down),
+        Vec2::new(8.0, down),
+    ]))
+    .expect("a flat line is a curve")
+}
+
 /// Sky, exposure, grading and anti-aliasing shared by every camera that renders the scene
 /// (the main view and the aircraft's sensor camera), so they look the same.
 pub fn scene_look() -> impl Bundle {
     (
         AtmosphereSettings::default(),
         AtmosphereEnvironmentMapLight::default(),
+        // Sets the pre-exposure; auto exposure then meters the picture and follows the light.
         Exposure { ev100: 14.0 },
-        Tonemapping::TonyMcMapface,
-        bevy::render::view::ColorGrading {
-            global: bevy::render::view::ColorGradingGlobal { post_saturation: 1.15, ..default() },
-            midtones: bevy::render::view::ColorGradingSection { contrast: 1.12, ..default() },
-            shadows: bevy::render::view::ColorGradingSection { contrast: 1.05, saturation: 1.05, ..default() },
+        AutoExposure {
+            range: -6.0..=6.0,
+            speed_brighten: 1.5,
+            speed_darken: 1.5,
+            compensation_curve: METERING,
             ..default()
         },
+        // A filmic curve and no grading on top: highlights roll off to white as on film or a
+        // sensor, and colours are as lit, not pushed.
+        Tonemapping::AgX,
+        bevy::render::view::ColorGrading::default(),
         // Aerial perspective: far ridges fade into a pale blue haze. Solari does not apply it:
         // ray-traced cameras get `haze::Haze` instead (see `add_raytracing`).
         DistanceFog {
@@ -149,6 +168,7 @@ pub fn scene_look() -> impl Bundle {
             directional_light_exponent: 20.0,
             falloff: FogFalloff::from_visibility_colors(25_000.0, Color::srgb(0.40, 0.48, 0.60), Color::srgb(0.75, 0.83, 0.95)),
         },
+        crate::clouds::Clouds::default(),
         Bloom::NATURAL,
         Msaa::Off,
         TemporalAntiAliasing::default(),
@@ -409,6 +429,23 @@ fn solari_settings() -> SolariLighting {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::render::view::ColorGrading;
+
+    /// The view should look like a camera's picture, not a painting: a filmic curve that rolls
+    /// highlights off towards white, no extra saturation or contrast, and an exposure that
+    /// follows the light.
+    #[test]
+    fn the_scene_looks_like_a_photo() {
+        let mut world = World::new();
+        let e = world.spawn(scene_look()).id();
+        assert_eq!(world.get::<Tonemapping>(e), Some(&Tonemapping::AgX));
+        let g = world.get::<ColorGrading>(e).expect("a colour grading");
+        assert_eq!(g.global.post_saturation, 1.0, "no saturation boost");
+        for s in [&g.shadows, &g.midtones, &g.highlights] {
+            assert_eq!((s.contrast, s.saturation), (1.0, 1.0), "no contrast or saturation boost");
+        }
+        assert!(world.get::<AutoExposure>(e).is_some(), "the exposure follows the light");
+    }
 
     /// P1 zooms the line-of-sight camera: all the way down is the widest view, all the way up the
     /// narrowest, the same range the automatic zoom works in.

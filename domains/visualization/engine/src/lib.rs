@@ -11,6 +11,7 @@
 
 pub mod camera;
 pub mod capture;
+pub mod clouds;
 
 pub mod field;
 pub mod foliage;
@@ -127,6 +128,11 @@ impl Plugin for EnginePlugin {
         if self.raytracing {
             app.add_plugins((bevy::solari::SolariPlugins, haze::HazePlugin));
         }
+        app.add_plugins((bevy::post_process::auto_exposure::AutoExposurePlugin, clouds::CloudsPlugin));
+        app.world_mut()
+            .resource_mut::<Assets<bevy::post_process::auto_exposure::AutoExposureCompensationCurve>>()
+            .insert(&camera::METERING, camera::metering_curve())
+            .expect("the metering curve's handle is free");
         app.insert_resource(RenderSettings {
             raytracing: self.raytracing,
         })
