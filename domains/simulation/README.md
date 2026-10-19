@@ -9,9 +9,12 @@ depends on these crates; they depend on nothing but `glam`.
 | Crate | Path | Role |
 | --- | --- | --- |
 | `simulation_aircraft` | [aircraft/](aircraft) | What a plane is to the physics: lifting surfaces, motors (any number, forward or lift), servo outputs, ground-contact points, mass and battery. One module per plane, and a registry: `find("t1s-ranger")`, picked with `--aircraft` |
+| `simulation_sitl` | [sitl/](sitl) | ArduPilot SITL with no renderer: the JSON physics packets, the lockstep exchange (`Lockstep`), and starting ArduPlane instances, native or Docker (`launch`, `Fleet`) |
 | `simulation_physics` | [physics/](physics) | The 6-DOF model: strip-theory aerodynamics, propulsion, battery, ground contact, the hand launch and the carry back after a reset. The ground comes in through the `Terrain` trait, so it runs headless |
 
-`simulation_physics` depends on `simulation_aircraft`, never the other way round.
+`simulation_physics` depends on `simulation_aircraft`, never the other way round. `simulation_sitl` depends on neither.
+
+`cargo run --release -p simulation_physics --example throughput` times the flight model: about 3 million steps a second (7 000 to 8 000 times real time at 400 Hz) on one core of an Apple Silicon Mac, over flat ground with no obstacles.
 
 ## Planes
 

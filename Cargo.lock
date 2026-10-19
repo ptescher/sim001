@@ -428,6 +428,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "autonomy_executor"
+version = "0.1.0"
+
+[[package]]
 name = "aviation_computer"
 version = "0.1.0"
 dependencies = [
@@ -5286,6 +5290,7 @@ dependencies = [
  "recreation_games",
  "simulation_aircraft",
  "simulation_physics",
+ "simulation_sitl",
  "teleoperation_shared",
  "visualization_engine",
  "visualization_world",
@@ -5327,6 +5332,10 @@ dependencies = [
  "glam",
  "simulation_aircraft",
 ]
+
+[[package]]
+name = "simulation_sitl"
+version = "0.1.0"
 
 [[package]]
 name = "skrifa"

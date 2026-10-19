@@ -1,0 +1,7 @@
+[package]
+name = "simulation_sitl"
+version = "0.1.0"
+edition = "2024"
+description = "Simulation domain: the ArduPilot SITL side, headless. The JSON physics packets, the lockstep exchange, and starting ArduPlane instances (native or Docker)"
+
+[dependencies]

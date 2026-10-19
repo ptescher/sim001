@@ -1,0 +1,13 @@
+[package]
+name = "autonomy_executor"
+version = "0.1.0"
+edition = "2024"
+description = "Autonomy domain: the plan executor that runs on board (no_std, C ABI), shared by the ArduPlane AGENT mode and the training environment"
+
+[lib]
+# rlib for the Rust side (training, tests); staticlib for the C++ side (ArduPilot).
+crate-type = ["rlib", "staticlib"]
+
+[features]
+# The panic handler a bare staticlib needs. Off for the Rust side, where std brings its own.
+ffi-static = []

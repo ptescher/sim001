@@ -16,6 +16,7 @@ teleoperation_shared = { path = "domains/teleoperation/shared" }
 # The flight model and the planes it flies: see domains/simulation.
 simulation_aircraft = { path = "domains/simulation/aircraft" }
 simulation_physics = { path = "domains/simulation/physics" }
+simulation_sitl = { path = "domains/simulation/sitl" }
 # The 3D view and the place it shows: see domains/visualization.
 visualization_engine = { path = "domains/visualization/engine" }
 visualization_world = { path = "domains/visualization/world" }
@@ -59,3 +60,11 @@ opt-level = 3
 # See vendor/bevy_solari/src/realtime/gbuffer_utils.wesl.
 [patch.crates-io]
 bevy_solari = { path = "vendor/bevy_solari" }
+
+# The on-board executor as a static library for the ArduPlane fork: no unwinding, small.
+# cargo build --profile embedded -p autonomy_executor --features ffi-static
+[profile.embedded]
+inherits = "release"
+panic = "abort"
+opt-level = "s"
+lto = true

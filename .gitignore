@@ -44,3 +44,4 @@ maps/*/build/
 # ArduPilot SITL, built natively by ardupilot/build_native.sh
 /.ardupilot/
 /.ardupilot-venv/
+.ardupilot-agent/

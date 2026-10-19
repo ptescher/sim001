@@ -1,0 +1,195 @@
+diff --git a/ArduPlane/GCS_MAVLink_Plane.cpp b/ArduPlane/GCS_MAVLink_Plane.cpp
+index 48abe7b..f31eac7 100644
+--- a/ArduPlane/GCS_MAVLink_Plane.cpp
++++ b/ArduPlane/GCS_MAVLink_Plane.cpp
+@@ -55,6 +55,7 @@ uint8_t GCS_MAVLINK_Plane::base_mode() const
+     case Mode::Number::RTL:
+     case Mode::Number::LOITER:
+     case Mode::Number::THERMAL:
++    case Mode::Number::AGENT:
+     case Mode::Number::AVOID_ADSB:
+     case Mode::Number::GUIDED:
+     case Mode::Number::CIRCLE:
+diff --git a/ArduPlane/GCS_Plane.cpp b/ArduPlane/GCS_Plane.cpp
+index c2cc070..fea8bbf 100644
+--- a/ArduPlane/GCS_Plane.cpp
++++ b/ArduPlane/GCS_Plane.cpp
+@@ -73,6 +73,7 @@ void GCS_Plane::update_vehicle_sensor_status_flags(void)
+     case Mode::Number::LOITER_ALT_QLAND:
+ #endif
+     case Mode::Number::THERMAL:
++    case Mode::Number::AGENT:
+         rate_controlled = true;
+         attitude_stabilized = true;
+         control_sensors_enabled |= MAV_SYS_STATUS_SENSOR_YAW_POSITION;
+diff --git a/ArduPlane/Plane.h b/ArduPlane/Plane.h
+index 9ecb989..a080e26 100644
+--- a/ArduPlane/Plane.h
++++ b/ArduPlane/Plane.h
+@@ -174,6 +174,7 @@ public:
+     friend class ModeTakeoff;
+     friend class ModeThermal;
+     friend class ModeLoiterAltQLand;
++    friend class ModeAgent;
+ #if MODE_AUTOLAND_ENABLED
+     friend class ModeAutoLand;
+ #endif
+@@ -324,6 +325,7 @@ private:
+     ModeQRTL mode_qrtl;
+     ModeQAcro mode_qacro;
+     ModeLoiterAltQLand mode_loiter_qland;
++    ModeAgent mode_agent;
+ #if QAUTOTUNE_ENABLED
+     ModeQAutotune mode_qautotune;
+ #endif  // QAUTOTUNE_ENABLED
+diff --git a/ArduPlane/control_modes.cpp b/ArduPlane/control_modes.cpp
+index 5d07b45..e15000a 100644
+--- a/ArduPlane/control_modes.cpp
++++ b/ArduPlane/control_modes.cpp
+@@ -34,6 +34,9 @@ Mode *Plane::mode_from_mode_num(const enum Mode::Number num)
+     case Mode::Number::AUTOTUNE:
+         ret = &mode_autotune;
+         break;
++    case Mode::Number::AGENT:
++        ret = &mode_agent;
++        break;
+     case Mode::Number::AUTO:
+         ret = &mode_auto;
+         break;
+diff --git a/ArduPlane/events.cpp b/ArduPlane/events.cpp
+index c48b903..48ed782 100644
+--- a/ArduPlane/events.cpp
++++ b/ArduPlane/events.cpp
+@@ -77,6 +77,7 @@ void Plane::rc_failsafe_short_on_event()
+     }
+     case Mode::Number::AVOID_ADSB:
+     case Mode::Number::GUIDED:
++    case Mode::Number::AGENT:
+     case Mode::Number::LOITER:
+     case Mode::Number::THERMAL:
+         if (g.fs_action_short != FS_ACTION_SHORT_BESTGUESS) { // if acton = 0(BESTGUESS) this group of modes take no action
+@@ -198,6 +199,7 @@ void Plane::failsafe_long_on_event(enum failsafe_state fstype, ModeReason reason
+ 
+     case Mode::Number::AVOID_ADSB:
+     case Mode::Number::GUIDED:
++    case Mode::Number::AGENT:
+ 
+         if(g.fs_action_long == FS_ACTION_LONG_PARACHUTE) {
+ #if HAL_PARACHUTE_ENABLED
+diff --git a/ArduPlane/mode.h b/ArduPlane/mode.h
+index 9bae00e..6cbeea8 100644
+--- a/ArduPlane/mode.h
++++ b/ArduPlane/mode.h
+@@ -71,6 +71,9 @@ public:
+         AUTOLAND      = 26,
+ #endif
+ 
++        // SIM001: flown by the on-board agent (ArduPlane/mode_agent.cpp)
++        AGENT         = 50,
++
+     // Mode number 30 reserved for "offboard" for external/lua control.
+     };
+ 
+@@ -326,6 +329,25 @@ private:
+ };
+ 
+ 
++// SIM001: the agent mode. It sets the attitude and the throttle that the stock
++// controllers then fly, as FBWA does, so what it asks for is always an attitude.
++class ModeAgent : public Mode
++{
++public:
++
++    Number mode_number() const override { return Number::AGENT; }
++    const char *name() const override { return "Agent"; }
++    const char *name4() const override { return "AGNT"; }
++
++    // methods that affect movement of the vehicle in this mode
++    void update() override;
++    void run() override;
++
++protected:
++
++    bool _enter() override;
++};
++
+ class ModeAutoTune : public Mode
+ {
+ public:
+diff --git a/ArduPlane/mode_agent.cpp b/ArduPlane/mode_agent.cpp
+new file mode 100644
+index 0000000..ae0d062
+--- /dev/null
++++ b/ArduPlane/mode_agent.cpp
+@@ -0,0 +1,58 @@
++#include "mode.h"
++#include "Plane.h"
++
++/*
++  SIM001 agent mode.
++
++  Phase 0 stub: wings level, nose at the level pitch, the pilot's throttle. Later the plan
++  executor sets nav_roll_cd, nav_pitch_cd and the throttle here; the stock stabilisation
++  flies them, so the agent only ever asks for an attitude.
++ */
++
++#ifndef AP_AGENT_EXEC
++#define AP_AGENT_EXEC 0
++#endif
++
++#if AP_AGENT_EXEC
++// autonomy_executor, a Rust static library (domains/autonomy/executor/include/agent_executor.h)
++extern "C" {
++struct agent_demand { int32_t roll_cd; int32_t pitch_cd; float throttle; };
++uint32_t agent_exec_abi_version(void);
++int32_t agent_exec_step(struct agent_demand *out);
++}
++#endif
++
++bool ModeAgent::_enter()
++{
++#if AP_AGENT_EXEC
++    plane.gcs().send_text(MAV_SEVERITY_INFO, "Agent: executor ABI %u", (unsigned)agent_exec_abi_version());
++#else
++    plane.gcs().send_text(MAV_SEVERITY_INFO, "Agent: stub, wings level");
++#endif
++    return true;
++}
++
++void ModeAgent::update()
++{
++    int32_t roll_cd = 0, pitch_cd = 0;
++#if AP_AGENT_EXEC
++    struct agent_demand d;
++    if (agent_exec_step(&d) == 0) {
++        roll_cd = d.roll_cd;
++        pitch_cd = d.pitch_cd;
++    }
++#endif
++    plane.nav_roll_cd = constrain_int32(roll_cd, -plane.roll_limit_cd, plane.roll_limit_cd);
++    plane.update_load_factor();
++    plane.nav_pitch_cd = pitch_cd;
++    plane.adjust_nav_pitch_throttle();
++    plane.nav_pitch_cd = constrain_int32(plane.nav_pitch_cd, plane.pitch_limit_min*100, plane.aparm.pitch_limit_max.get()*100);
++}
++
++void ModeAgent::run()
++{
++    // Run base class function and then output throttle
++    Mode::run();
++
++    output_pilot_throttle();
++}
+diff --git a/libraries/AP_Common/AP_FWVersion.h b/libraries/AP_Common/AP_FWVersion.h
+index 95a7eb5..8a2d7cc 100644
+--- a/libraries/AP_Common/AP_FWVersion.h
++++ b/libraries/AP_Common/AP_FWVersion.h
+@@ -4,7 +4,7 @@
+ #include <AP_Common/AP_Common.h>
+ #include <AP_HAL/AP_HAL_Boards.h>
+ 
+-class PACKED AP_FWVersion {
++class AP_FWVersion {
+ 
+ public:
+     /**
