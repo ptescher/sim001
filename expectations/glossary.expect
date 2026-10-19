@@ -66,7 +66,8 @@ Term: Line of sight
   calls it LINE OF SIGHT, and the help screen calls it LOS.
 
 Term: LOITER
-  A mode of ArduPilot, and a mission item, that circles a point.
+  A mode of ArduPilot, a mission item and a [[primitive]] of an [[agent plan]], number 6. Each
+  one circles a point. The loiter primitive circles the place where the plane got the plan.
 
 Term: MANUAL
   In the sim, the mode where the sticks move the control surfaces directly. Nothing helps
@@ -102,7 +103,8 @@ Term: Pitch stick
 
 Term: Plan
   The mission that you edit in the ground station. The map shows it as a dashed line. When
-  you upload it, it becomes the mission on the vehicle.
+  you upload it, it becomes the mission on the vehicle. In [[Flying by plan]], a plan is an
+  [[agent plan]].
 
 Term: Plan altitude
   The height above home for new waypoints. It shows between ALT- and ALT+.
@@ -186,14 +188,14 @@ Term: Cut
 
 Term: Tag
   A game where one plane is [[it]] and chases the others. When it touches another plane, that
-  plane is it. T starts one.
+  plane is it. In the simulator, T starts one. The [[runner]] plays one with ArduPilot planes.
 
 Term: It
   The plane that chases the others in a game of [[tag]]. The pilot who is it for the least
   time wins.
 
 Term: Arena
-  The part of the sky for a game of [[tag]]: a circle of 90 m round the centre of the field,
+  The part of the sky for a game of [[tag]]: a circle of 90 m round the centre of the field (the [[arena centre]], for the runner),
   below 60 m. Small cones mark its edge. If you fly out of it, you are [[it]].
 
 Term: Flight computer
@@ -201,3 +203,123 @@ Term: Flight computer
 
 Term: CRSF
   The serial protocol of ExpressLRS radio links. The TX15 and the [[flight computer]] use it on their serial line: channels one way, telemetry and MAVLink the other.
+
+Term: Agent plan
+  What the [[ground control agent]] tells a plane to do for the next few seconds. It has a
+  [[primitive]], a target or a point, a plan id and a time to live. The ground sends it as a
+  MAVLink `COMMAND_INT` with the command 31010. Only a plane in [[AGENT mode]] takes it.
+
+Term: AGENT mode
+  A flight mode of our ArduPlane fork, custom mode 50. In AGENT mode, the [[executor]] flies
+  the [[agent plan]] from the ground. The [[safety envelope]] keeps the plane safe. A change of
+  the mode switch on the radio takes the plane out of AGENT mode at once.
+
+Term: Executor
+  The code in the plane that flies an [[agent plan]]: `autonomy_executor`, a Rust library. It
+  turns the plan into a bank, a pitch and a throttle, 50 times a second. The same code runs in
+  ArduPilot, in SITL and in the tests.
+
+Term: Safety envelope
+  The part of the [[executor]] that checks each demand before the plane flies it. It keeps the
+  plane inside the [[fence]], between the [[floor]] and the [[ceiling]], clear of other aircraft
+  and above the [[stall margin]]. A plan cannot switch it off.
+
+Term: Fence
+  The circle that the [[safety envelope]] keeps the plane inside: a geofence. `AGENT_FENCE_N`
+  and `AGENT_FENCE_E` set its centre in metres from home, and `AGENT_FENCE_R` sets its radius.
+  If `AGENT_FENCE_R` is 0, the circle geofence of ArduPilot is used.
+
+Term: Floor
+  The lowest height above the ground that the [[safety envelope]] allows, set with
+  `AGENT_FLOOR`. Below it, the plane climbs before it flies the plan again. On a flat field,
+  the height above the ground and the height above home are the same.
+
+Term: Ceiling
+  The highest height above home that the [[safety envelope]] allows, set with `AGENT_CEIL`.
+
+Term: Separation
+  The smallest distance to another aircraft that the [[safety envelope]] allows, set with
+  `AGENT_SEP`. The envelope keeps a buffer round it, of at least 3 m. Across or above and
+  below, the larger distance counts.
+
+Term: Stall margin
+  The airspeed that the plane must keep over `AIRSPEED_MIN`, set with `AGENT_ASPD_MRG`. Below
+  `AIRSPEED_MIN` plus this margin, the [[safety envelope]] gets the airspeed back first.
+
+Term: Track
+  Another aircraft as the plane knows it: its id, its position, its velocity and the time
+  since the plane heard it. The ground sends tracks as `ADSB_VEHICLE` messages. The plane
+  ignores a track that it has not heard for 3 s.
+
+Term: Ground control agent
+  The program on the ground that decides an [[agent plan]] for each plane, about once a
+  second. Its brain can be a script, a trained network or a person. The scripted brain plays
+  [[tag]] as the [[computer pilot]]s do.
+
+Term: Primitive
+  The kind of [[agent plan]]: [[pursue]], [[evade]], [[go to]], [[orbit]], [[band]] or
+  [[loiter]]. AG_PRIM gives it as a number from 1 to 6, and 0 for no plan.
+
+Term: Pursue
+  A [[primitive]], number 1: chase the [[track]] that the plan names, and stay on its tail,
+  just outside the [[separation]].
+
+Term: Evade
+  A [[primitive]], number 2: break away from the [[track]] that the plan names. The plane flies
+  fast, away from the threat and 20 m above or below it.
+
+Term: Go to
+  A [[primitive]], number 3: fly to the point of the plan, then circle it.
+
+Term: Orbit
+  A [[primitive]], number 4: circle the point of the plan, at its radius and its altitude.
+
+Term: Band
+  A [[primitive]], number 5: stay between two heights and circle over the arena. The altitude
+  of the plan is the bottom of the band. The radius of the plan is its thickness.
+
+Term: Fallback
+  What the plane does when it cannot fly its [[agent plan]]. AG_FALL tells you why: 1 when the
+  plan ran out or its target went silent, 2 for bad input, 3 for a [[recovery]].
+
+Term: Recovery
+  A [[fallback]], number 3: the plane is below the [[floor]] or the [[stall margin]]. It gets
+  its height or its airspeed back first. Then it flies the plan again.
+
+Term: Intervention
+  A step where the [[safety envelope]] changes what the plan asks for. AG_ENV counts the
+  interventions since the plane entered [[AGENT mode]].
+
+Term: Time to live
+  How long an [[agent plan]] is good for, in seconds, from when the plane gets it. If no new
+  plan comes in this time, the plane circles where it is.
+
+Term: Agent status
+  What a plane in [[AGENT mode]] tells the ground once a second, as four `NAMED_VALUE_INT`
+  messages. AG_PLAN is the id of its plan, AG_PRIM the [[primitive]] of that plan, AG_ENV the
+  count of [[intervention]]s and AG_FALL the [[fallback]]. The console of the [[runner]] shows
+  them as `plan`, `prim`, `env` and `fall`.
+
+Term: Runner
+  `autonomy_runner`, a program that flies three ArduPlane [[SITL]] planes with no window,
+  faster than real time. With `--agent`, the [[ground control agent]] flies them in a game of
+  [[tag]]. With `--console` as well, you send [[agent plan]]s to the first plane after the
+  game. Type `plan`, `again`, `mode`, `wait`, `watch`, `status`, `reset` or `quit`.
+
+Term: Arena centre
+  The centre of the arena of a game of [[tag]] in the [[runner]], and of the [[fence]] of
+  [[AGENT mode]]: 70 m north of home. The arena is 90 m round it. The fence is 85 m round it,
+  so the plane turns back before it leaves the arena.
+
+Term: Game command
+  A MAVLink `COMMAND_INT` with the command 31011 that tells a plane the state of the game of
+  [[tag]]: its role, the time left and the plane that it cannot tag back. A plane takes it in any
+  mode.
+
+Term: COMMAND_ACK
+  The MAVLink reply to a command. `result` is 0 when the plane accepts it, and 2 when the plane
+  refuses it. For an [[agent plan]], `result_param2` gives the reason of a refusal.
+
+Term: EKF
+  The extended Kalman filter of ArduPilot. It estimates the position, the velocity and the
+  attitude of the plane from its sensors.

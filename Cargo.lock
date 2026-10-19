@@ -440,7 +440,12 @@ dependencies = [
 name = "autonomy_executor"
 version = "0.1.0"
 dependencies = [
+ "autonomy_agent",
  "autonomy_plan",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+ "glam",
 ]
 
 [[package]]
@@ -453,6 +458,9 @@ version = "0.1.0"
 dependencies = [
  "autonomy_agent",
  "autonomy_plan",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
  "glam",
  "recreation_games",
  "simulation_aircraft",

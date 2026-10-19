@@ -9,10 +9,13 @@
 //!
 //! `--agent`: once each plane has taken off and is on the wing, the ground control agent
 //! (`autonomy_agent`) switches it to the AGENT mode over MAVLink and flies it with plans, as the
-//! real station will (see `ground.rs`). Needs the fork with the AGENT mode.
+//! real station will (see `ground.rs`). Needs the fork with the AGENT mode. With `--console` as
+//! well, the first plane is yours after the game: send it plans by hand (see `console.rs`).
 
+mod console;
 mod ground;
 
+use autonomy_agent::link::Traffic;
 use glam::Vec3;
 use recreation_games::pilot::Fbwa;
 use recreation_games::{Field, Radio, Session, Surroundings};
@@ -21,6 +24,7 @@ use simulation_physics::{Environment, Flat, FlightState, Phase, Start, step};
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
 use std::net::UdpSocket;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -44,6 +48,7 @@ fn main() {
     let wall_limit: u64 = arg("--timeout").and_then(|s| s.parse().ok()).unwrap_or(600);
     let warmup: f64 = arg("--warmup").and_then(|s| s.parse().ok()).unwrap_or(70.0);
     let agent = args.iter().any(|a| a == "--agent");
+    let console = agent && args.iter().any(|a| a == "--console");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root");
 
     let params = (simulation_aircraft::find("t1s-vtol").unwrap().params)();
@@ -191,6 +196,42 @@ fn main() {
                 for line in ground.verdict() {
                     println!("{line}");
                 }
+                for line in ground.results() {
+                    println!("{line}");
+                }
+                println!("RESULT it={}", g.session.name(tag.it));
+            }
+            drop(g);
+            if let (true, Some(link)) = (console, ground.as_ref().and_then(|gr| gr.link(0))) {
+                let home = ground_home();
+                let now = || world.lock().unwrap().session.opponents[0].state.time;
+                // The first plane goes on hearing the others as ADSB_VEHICLE, twice a second of
+                // their time, until `silent`.
+                let uplink = AtomicBool::new(true);
+                let stop = AtomicBool::new(false);
+                std::thread::scope(|scope| {
+                    scope.spawn(|| {
+                        let names: Vec<&str> = recreation_games::PILOTS.iter().map(|p| p.0).collect();
+                        let mut next = 0.0;
+                        while !stop.load(Ordering::Relaxed) {
+                            let (picture, t) = {
+                                let g = world.lock().unwrap();
+                                (ground::picture(&g.session, (home.0, home.1)), g.session.opponents[0].state.time)
+                            };
+                            if uplink.load(Ordering::Relaxed) && t >= next {
+                                next = t + 0.5;
+                                for c in picture.planes.iter().filter(|c| c.flying && c.id != 1) {
+                                    let name = names.get(c.id as usize - 1).copied().unwrap_or("PLANE");
+                                    let _ = link.send_traffic(&Traffic::from_craft(c, home, name));
+                                }
+                            }
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                    });
+                    console::Console::new(link, (home.0, home.1), &uplink, now)
+                        .run(std::io::stdin().lock(), std::io::stdout().lock());
+                    stop.store(true, Ordering::Relaxed);
+                });
             }
             return;
         }

@@ -6,7 +6,7 @@
 
 use autonomy_agent::link::{Link, LinkState, Traffic};
 use autonomy_agent::{Brain, Craft, GameView, Picture, ScriptedBrain, world_to_ned, world_vel_to_ned};
-use autonomy_plan::{CMD_GAME, CMD_PLAN, WirePlan};
+use autonomy_plan::{CMD_GAME, CMD_PLAN, Primitive, WirePlan};
 use glam::Vec3;
 use recreation_games::Session;
 use simulation_physics::{FlightState, Phase};
@@ -72,6 +72,8 @@ const DECIDE_EVERY: f64 = 1.0;
 const TRAFFIC_EVERY: f64 = 0.5;
 /// Ask for AGENT again if the plane is not in it this long after asking (s, the planes' time).
 const ASK_AGAIN: f64 = 1.0;
+/// `MAV_CMD_DO_SET_MODE`.
+const MAV_CMD_DO_SET_MODE: u16 = 176;
 /// The executor's floor (m above home): `autonomy_plan::Limits::default().floor`.
 const FLOOR: f32 = 12.0;
 
@@ -134,6 +136,8 @@ pub struct Ground {
     home: (f64, f64, f32),
     next_decision: f64,
     next_traffic: f64,
+    /// Pursue plans the brain gave a plane that was not it (in the picture it decided from).
+    pursue_not_it: u32,
 }
 
 impl Ground {
@@ -153,7 +157,14 @@ impl Ground {
                 Seat { name, link, asked: None, asks: 0, in_agent: false, plan: None, send_errors: 0 }
             })
             .collect();
-        Ground { seats, brain: ScriptedBrain::computer_pilots(), home, next_decision: 0.0, next_traffic: 0.0 }
+        Ground {
+            seats,
+            brain: ScriptedBrain::computer_pilots(),
+            home,
+            next_decision: 0.0,
+            next_traffic: 0.0,
+            pursue_not_it: 0,
+        }
     }
 
     /// One look at the game: switch planes on the wing to AGENT, decide and send plans, uplink
@@ -178,6 +189,9 @@ impl Ground {
         if now >= self.next_decision {
             self.next_decision = now + DECIDE_EVERY;
             for order in self.brain.decide(picture) {
+                if order.plan.primitive == Primitive::Pursue && order.plane != picture.game.it {
+                    self.pursue_not_it += 1;
+                }
                 let i = order.plane as usize - 1;
                 let Some(seat) = self.seats.get_mut(i) else { continue };
                 let Some(link) = seat.link.as_ref().filter(|_| on_the_wing[i]) else { continue };
@@ -233,9 +247,37 @@ impl Ground {
             v(st.fallback),
             acks(&s, CMD_PLAN),
             acks(&s, CMD_GAME),
-            acks(&s, 176),
+            acks(&s, MAV_CMD_DO_SET_MODE),
             if s.connected { "" } else { " LINK DOWN" },
         )
+    }
+
+    /// The link to computer pilot `i`'s plane, if it has one.
+    pub fn link(&self, i: usize) -> Option<&Link> {
+        self.seats.get(i).and_then(|s| s.link.as_ref())
+    }
+
+    /// The game's results for a test to read: `RESULT key=value` lines.
+    pub fn results(&self) -> Vec<String> {
+        let states: Vec<LinkState> = self.seats.iter().filter_map(|s| s.link.as_ref()).map(|l| l.state()).collect();
+        let in_agent = self
+            .seats
+            .iter()
+            .filter(|s| s.in_agent || s.link.as_ref().is_some_and(|l| l.mode() == Some(AGENT_MODE)))
+            .count();
+        let refused: u32 = states
+            .iter()
+            .flat_map(|s| s.ack_counts.iter())
+            .filter(|((c, r), _)| [CMD_PLAN, CMD_GAME, MAV_CMD_DO_SET_MODE].contains(c) && *r != 0)
+            .map(|(_, n)| n)
+            .sum();
+        let accepted: u32 = states.iter().map(|s| s.acks_of(CMD_PLAN, 0)).sum();
+        vec![
+            format!("RESULT in_agent={in_agent}"),
+            format!("RESULT refused={refused}"),
+            format!("RESULT plans_accepted={accepted}"),
+            format!("RESULT pursue_not_it={}", self.pursue_not_it),
+        ]
     }
 
     /// Warnings at the end: planes that never went into AGENT, or never reported back a plan.
@@ -255,7 +297,7 @@ impl Ground {
                     "WARNING: {} never went into AGENT (asked {} times; mode acks {})",
                     seat.name,
                     seat.asks,
-                    acks(&s, 176)
+                    acks(&s, MAV_CMD_DO_SET_MODE)
                 ));
             }
             if s.plans_sent > 0 && s.best_plan_echo.is_none_or(|b| b <= 0) {

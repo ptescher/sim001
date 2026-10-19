@@ -14,3 +14,12 @@ autonomy_plan = { path = "../plan" }
 [features]
 # no_std, with the panic handler a bare staticlib needs. Off for the Rust side, where std brings its own.
 ffi-static = ["autonomy_plan/ffi-static"]
+
+[dev-dependencies]
+# The acceptance tests (tests/acceptance.rs): the section "Flying by plan" with no window, the
+# ground's wire format and its scripted brain.
+autonomy_agent = { path = "../agent" }
+expectation_harness = { path = "../../expectation/harness" }
+expectation_model = { path = "../../expectation/model" }
+expectation_story = { path = "../../expectation/story" }
+glam = "0.33"

@@ -1,0 +1,62 @@
+Story: Watching a game of tag by plan
+  As a developer of a ground control agent
+  I want to watch the scripted agent play tag with three real ArduPilot planes
+  So that I have a baseline for my own agent
+
+  The runner starts three ArduPlane SITL planes and plays a game of tag with them. The scripted
+  ground control agent flies every plane by plan in AGENT mode. After the game, you send a plan
+  of your own to the first plane, and you watch its status.
+
+  Scenario: Play and watch
+    When the planes play a game of tag
+    Then the planes in AGENT mode are 3
+    And the refused commands are 0
+    And the reports of the hand-overs are complete
+    When the ground sends a go-to plan
+    Then the reply to the plan is accepted
+    When the operator watches the status for 10 seconds
+    Then the status reports in 10 seconds are between 9 and 11
+
+Story: Sending your first plan
+  As an operator of a plane in AGENT mode
+  I want to send a plan and read the reply
+  So that I know that the plane flies my plan
+
+  You send a go-to plan from the console of the runner. The plane refuses it in FBWA, and it
+  takes it in AGENT mode. Then you send a plan with an error, and a new plan. The reply and
+  the status of the plane tell you what the plane does with each one.
+
+  Scenario: Send a plan
+    Given the flight mode of the plane is FBWA
+    When the ground sends a go-to plan
+    Then the reply to the plan is refused for the mode
+    When the flight mode of the plane is AGENT
+    Then the reported plan is 0
+    When the ground sends a go-to plan
+    Then the reply to the plan is accepted
+    And the reported plan is 1
+    And the reported primitive is go to
+    When the ground sends a malformed plan
+    Then the reply to the plan is refused as malformed
+    And the reported plan is 1
+    When the ground sends an orbit plan
+    Then the reported plan is 2
+    And the reported primitive is orbit
+
+Story: Letting a plan run out
+  As an operator of a plane in AGENT mode
+  I want the plane to stay safe when the plans stop
+  So that a lost link does not send the plane away
+
+  Each plan is good only for its time to live. You send a plan that is good for 5 s, and you
+  send nothing after it. The plane circles where it is and tells you why. A new plan ends the
+  circle.
+
+  Scenario: Let a plan run out
+    When the ground sends a short go-to plan
+    Then the reply to the plan is accepted
+    When the plane flies on for 10 seconds
+    Then the reported fallback is plan expired
+    When the ground sends a go-to plan
+    Then the reported fallback is none or recovery
+    And the reported plan is 2

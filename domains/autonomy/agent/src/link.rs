@@ -201,6 +201,9 @@ pub struct LinkState {
     pub status: AgentStatus,
     /// The latest STATUSTEXTs, oldest first.
     pub texts: Vec<String>,
+    /// How many STATUSTEXTs and how many `AG_PLAN` status reports have come.
+    pub texts_heard: u64,
+    pub status_reports: u64,
     /// The id of the last plan sent, and how many plans have been sent.
     pub last_plan: Option<u16>,
     pub plans_sent: u64,
@@ -247,6 +250,7 @@ impl LinkState {
                 let s = &mut self.status;
                 match name {
                     n if n == status_names::PLAN => {
+                        self.status_reports += 1;
                         s.plan = Some(v.value);
                         self.best_plan_echo = Some(self.best_plan_echo.map_or(v.value, |b| b.max(v.value)));
                     }
@@ -257,6 +261,7 @@ impl LinkState {
                 }
             }
             MavMessage::STATUSTEXT(t) => {
+                self.texts_heard += 1;
                 self.texts.push(t.text.to_str().unwrap_or("").trim_end_matches('\0').to_string());
                 if self.texts.len() > KEEP {
                     self.texts.remove(0);
