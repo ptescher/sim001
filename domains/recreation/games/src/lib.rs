@@ -557,6 +557,12 @@ impl Session {
     pub fn chaser(&self) -> Option<usize> {
         self.tag_ref().map(|t| t.it)
     }
+
+    /// With autopilots: computer pilot `i` has taken off and is flying the game on the wing (in
+    /// FBWA, the transition done). A ground agent takes over from here.
+    pub fn on_the_wing(&self, i: usize) -> bool {
+        self.opponents[i].stage == Stage::Flying
+    }
 }
 
 /// Every player's position, velocity and whether it is in the air (0 is you).
@@ -1141,6 +1147,12 @@ mod tests {
         game.opponents[0].state.on_ground = false;
         let r = game.radio(0, &Flat, DT);
         assert!(r.arm && r.mode == slot("FBWA"), "flies on the wing: {r:?}");
+        assert!(!game.on_the_wing(0), "still in the transition");
+        game.opponents[0].state.airspeed = 18.0;
+        for _ in 0..(3.5 / DT) as usize {
+            game.radio(0, &Flat, DT);
+        }
+        assert!(game.on_the_wing(0), "the transition is done");
     }
 
     /// The planes go back to the host at the end of the game.

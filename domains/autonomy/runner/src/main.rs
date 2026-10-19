@@ -6,12 +6,18 @@
 //! physics and sends back what the pilot's radio says. The game starts after `--warmup` seconds
 //! (70) of the planes' own time, which ArduPilot needs before it will arm. Needs
 //! `ardupilot/build_native.sh`.
+//!
+//! `--agent`: once each plane has taken off and is on the wing, the ground control agent
+//! (`autonomy_agent`) switches it to the AGENT mode over MAVLink and flies it with plans, as the
+//! real station will (see `ground.rs`). Needs the fork with the AGENT mode.
+
+mod ground;
 
 use glam::Vec3;
 use recreation_games::pilot::Fbwa;
 use recreation_games::{Field, Radio, Session, Surroundings};
 use simulation_aircraft::ActuatorCommands;
-use simulation_physics::{Environment, FlightState, Flat, Phase, Start, step};
+use simulation_physics::{Environment, Flat, FlightState, Phase, Start, step};
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
 use std::net::UdpSocket;
 use std::path::PathBuf;
@@ -37,6 +43,7 @@ fn main() {
     let speedup: f32 = arg("--speedup").and_then(|s| s.parse().ok()).unwrap_or(5.0);
     let wall_limit: u64 = arg("--timeout").and_then(|s| s.parse().ok()).unwrap_or(600);
     let warmup: f64 = arg("--warmup").and_then(|s| s.parse().ok()).unwrap_or(70.0);
+    let agent = args.iter().any(|a| a == "--agent");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root");
 
     let params = (simulation_aircraft::find("t1s-vtol").unwrap().params)();
@@ -54,7 +61,8 @@ fn main() {
     let world = Arc::new(Mutex::new(World { session, bench, params: params.clone(), packets: [0; 3], warmup }));
 
     for i in 0..3usize {
-        let sock = UdpSocket::bind(("0.0.0.0", port_for(BASE_PORT, i as u16 + 1))).expect("bind the physics port (is a sim running?)");
+        let sock = UdpSocket::bind(("0.0.0.0", port_for(BASE_PORT, i as u16 + 1)))
+            .expect("bind the physics port (is a sim running?)");
         let w = world.clone();
         std::thread::Builder::new()
             .name(format!("sitl-{}", i + 1))
@@ -73,7 +81,14 @@ fn main() {
     }
 
     let dir = std::env::temp_dir().join("sim001-runner");
-    let fleet = launch::Fleet::start(&root, &dir, "t1s-vtol", 1..4, launch::HOME, speedup);
+    // With the agent, each plane's MAVLink system id is its player number (1 to 3): the id the
+    // others know it by in plans and on the ADS-B uplink (an AGENT plane ignores a track with its
+    // own id, and every SITL is 1 by default).
+    let fleet = if agent {
+        ground::Fleet::start(&root, &dir, speedup)
+    } else {
+        launch::Fleet::start(&root, &dir, "t1s-vtol", 1..4, launch::HOME, speedup).map(ground::Fleet::Stock)
+    };
     let _fleet = match fleet {
         Ok(f) => f,
         Err(e) => {
@@ -82,11 +97,51 @@ fn main() {
         }
     };
     println!("three SITL planes starting at {speedup}x (they need about a minute of their own time before they arm)");
+    let mut ground = agent.then(|| {
+        let names: Vec<&'static str> = recreation_games::PILOTS.iter().map(|p| p.0).collect();
+        let ports: Vec<u16> = (1..4).map(|n| launch::MAVLINK_PORT + 10 * n).collect();
+        let home = autonomy_agent::parse_home(launch::HOME).expect("the SITL home");
+        println!(
+            "--agent: the ground control agent flies the planes once they are on the wing (MAVLink tcp {ports:?})"
+        );
+        ground::Ground::connect(&names, &ports, home)
+    });
 
     let start = Instant::now();
     let mut go_wall: Option<(Instant, f32)> = None;
+    let mut last_report = Instant::now();
+    // Who was it, and everyone's tags: to tell a tag from a plane leaving the arena.
+    let mut was: Option<(usize, Vec<u32>)> = None;
     loop {
-        std::thread::sleep(Duration::from_secs(2));
+        if let Some(ground) = &mut ground {
+            std::thread::sleep(Duration::from_millis(20));
+            let (picture, wing, now) = {
+                let g = world.lock().unwrap();
+                let tag = g.session.tag_ref().unwrap();
+                let tags: Vec<u32> = tag.players.iter().map(|p| p.tags).collect();
+                if let Some((it, before)) = &was
+                    && *it != tag.it
+                {
+                    let (from, to) = (g.session.name(*it), g.session.name(tag.it));
+                    if tags[*it] > before[*it] {
+                        println!("  [game {:>5.1}s] {from} tagged {to}", tag.time);
+                    } else {
+                        println!("  [game {:>5.1}s] {to} left the arena and is it (was {from})", tag.time);
+                    }
+                }
+                was = Some((tag.it, tags));
+                let wing: Vec<bool> = (0..3).map(|i| g.session.on_the_wing(i)).collect();
+                let (lat, lon, _) = ground_home();
+                (ground::picture(&g.session, (lat, lon)), wing, g.session.opponents[0].state.time)
+            };
+            ground.tick(&picture, &wing, now);
+            if last_report.elapsed() < Duration::from_secs(2) {
+                continue;
+            }
+        } else {
+            std::thread::sleep(Duration::from_secs(2));
+        }
+        last_report = Instant::now();
         let g = world.lock().unwrap();
         let tag = g.session.tag_ref().unwrap();
         let clock = format!("{:?}", g.session.clock);
@@ -100,10 +155,25 @@ fn main() {
             .enumerate()
             .map(|(i, o)| {
                 let it = if tag.it == i + 1 { "*" } else { "" };
-                format!("{}{} {:?} {:.0} m {:.0} m/s it {:.0}s tags {}", o.name, it, o.state.phase, o.state.pos.y, o.state.airspeed, tag.players[i + 1].it_time, tag.players[i + 1].tags)
+                format!(
+                    "{}{} {:?} {:.0} m {:.0} m/s it {:.0}s tags {}",
+                    o.name,
+                    it,
+                    o.state.phase,
+                    o.state.pos.y,
+                    o.state.airspeed,
+                    tag.players[i + 1].it_time,
+                    tag.players[i + 1].tags
+                )
             })
             .collect();
         println!("[{:>3}s] {clock} | {} | packets {:?}", start.elapsed().as_secs(), planes.join(" | "), g.packets);
+        if let Some(ground) = &ground {
+            println!("        it: {}", g.session.name(tag.it));
+            for (i, o) in g.session.opponents.iter().enumerate() {
+                println!("        {:<8} {}", o.name, ground.describe(i));
+            }
+        }
         if tag.over() {
             let (t0, g0) = go_wall.unwrap_or((start, 0.0));
             let secs = t0.elapsed().as_secs_f32();
@@ -111,14 +181,32 @@ fn main() {
             for (i, o) in g.session.opponents.iter().enumerate() {
                 println!("  {}: it for {:.1} s, {} tags", o.name, tag.players[i + 1].it_time, tag.players[i + 1].tags);
             }
-            println!("{:.0} s of game in {:.1} s: {:.1}x real time", tag.time - g0, secs, (tag.time - g0) / secs.max(0.001));
+            println!(
+                "{:.0} s of game in {:.1} s: {:.1}x real time",
+                tag.time - g0,
+                secs,
+                (tag.time - g0) / secs.max(0.001)
+            );
+            if let Some(ground) = &ground {
+                for line in ground.verdict() {
+                    println!("{line}");
+                }
+            }
             return;
         }
         if start.elapsed().as_secs() > wall_limit {
             eprintln!("timed out after {wall_limit} s");
+            for line in ground.iter().flat_map(|gr| gr.verdict()) {
+                eprintln!("{line}");
+            }
             std::process::exit(1);
         }
     }
+}
+
+/// SITL's home (latitude, longitude, altitude AMSL): where the pilot box is.
+fn ground_home() -> (f64, f64, f32) {
+    autonomy_agent::parse_home(launch::HOME).expect("the SITL home")
 }
 
 /// One frame of computer pilot `i`'s plane, as the sim's `step_opponent` does it; computer pilot 0

@@ -10,3 +10,6 @@ simulation_physics = { path = "../../simulation/physics" }
 simulation_sitl = { path = "../../simulation/sitl" }
 recreation_games = { path = "../../recreation/games" }
 glam = "0.33"
+# --agent: the ground control agent flies the planes with plans, over MAVLink.
+autonomy_agent = { path = "../agent" }
+autonomy_plan = { path = "../plan" }

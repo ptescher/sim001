@@ -1,0 +1,783 @@
+diff --git a/ArduPlane/GCS_MAVLink_Plane.cpp b/ArduPlane/GCS_MAVLink_Plane.cpp
+index f31eac7..47acc59 100644
+--- a/ArduPlane/GCS_MAVLink_Plane.cpp
++++ b/ArduPlane/GCS_MAVLink_Plane.cpp
+@@ -1029,6 +1029,34 @@ void GCS_MAVLINK_Plane::handle_message(const mavlink_message_t &msg)
+         handle_set_position_target_global_int(msg);
+         break;
+ 
++    // SIM001: the agent's plan and game commands are answered here, not in
++    // handle_command_int_packet, so that the COMMAND_ACK can carry the reason for a
++    // refusal in result_param2 (ModeAgent::Refusal).
++    case MAVLINK_MSG_ID_COMMAND_INT: {
++        mavlink_command_int_t packet;
++        mavlink_msg_command_int_decode(&msg, &packet);
++        if (packet.command != ModeAgent::CMD_PLAN && packet.command != ModeAgent::CMD_GAME) {
++            GCS_MAVLINK::handle_message(msg);
++            break;
++        }
++        ModeAgent::Refusal why = ModeAgent::Refusal::NONE;
++        const MAV_RESULT result = plane.mode_agent.handle_command(packet, why);
++        mavlink_msg_command_ack_send(chan, packet.command, result, 0, int32_t(why), msg.sysid, msg.compid);
++#if HAL_LOGGING_ENABLED
++        AP::logger().Write_Command(packet, msg.sysid, msg.compid, result);
++#endif
++        break;
++    }
++
++    // SIM001: other aircraft for the agent's track table; AP_ADSB still gets them too
++    case MAVLINK_MSG_ID_ADSB_VEHICLE: {
++        mavlink_adsb_vehicle_t packet;
++        mavlink_msg_adsb_vehicle_decode(&msg, &packet);
++        plane.mode_agent.handle_adsb_vehicle(packet);
++        GCS_MAVLINK::handle_message(msg);
++        break;
++    }
++
+     default:
+         GCS_MAVLINK::handle_message(msg);
+         break;
+diff --git a/ArduPlane/Parameters.cpp b/ArduPlane/Parameters.cpp
+index 4532e91..92f6707 100644
+--- a/ArduPlane/Parameters.cpp
++++ b/ArduPlane/Parameters.cpp
+@@ -965,6 +965,10 @@ const AP_Param::Info Plane::var_info[] = {
+     GOBJECT(mode_autoland, "AUTOLAND_", ModeAutoLand),
+ #endif
+ 
++    // @Group: AGENT_
++    // @Path: mode_agent.cpp
++    GOBJECT(mode_agent, "AGENT_", ModeAgent),
++
+ #if AP_PLANE_GLIDER_PULLUP_ENABLED
+     // @Group: PUP_
+     // @Path: pullup.cpp
+diff --git a/ArduPlane/Parameters.h b/ArduPlane/Parameters.h
+index 06066e8..296d74b 100644
+--- a/ArduPlane/Parameters.h
++++ b/ArduPlane/Parameters.h
+@@ -371,6 +371,9 @@ public:
+         k_param_mode_autoland,
+         k_param__gcs,
+ 
++        // SIM001: AGENT_ (mode_agent.cpp), far from upstream's next keys
++        k_param_mode_agent = 400,
++
+     };
+ 
+     AP_Int16 format_version;
+diff --git a/ArduPlane/mode.h b/ArduPlane/mode.h
+index 6cbeea8..6b8184d 100644
+--- a/ArduPlane/mode.h
++++ b/ArduPlane/mode.h
+@@ -12,6 +12,7 @@
+ #include "config.h"
+ #include "pullup.h"
+ #include "systemid.h"
++#include "agent_executor.h"
+ 
+ #ifndef AP_QUICKTUNE_ENABLED
+ #define AP_QUICKTUNE_ENABLED HAL_QUADPLANE_ENABLED
+@@ -331,10 +332,14 @@ private:
+ 
+ // SIM001: the agent mode. It sets the attitude and the throttle that the stock
+ // controllers then fly, as FBWA does, so what it asks for is always an attitude.
++// The plan executor (domains/autonomy/executor, a Rust static library behind the C ABI
++// in agent_executor.h, copied here by ardupilot/build_native.sh) decides them.
+ class ModeAgent : public Mode
+ {
+ public:
+ 
++    ModeAgent();
++
+     Number mode_number() const override { return Number::AGENT; }
+     const char *name() const override { return "Agent"; }
+     const char *name4() const override { return "AGNT"; }
+@@ -343,9 +348,81 @@ public:
+     void update() override;
+     void run() override;
+ 
++    // COMMAND_ACK result_param2 for a plan or game command
++    enum class Refusal : uint8_t {
++        NONE = 0,
++        NOT_IN_AGENT = 1,   // plans are only taken in AGENT mode
++        MALFORMED = 2,      // a field out of range or not finite
++        NO_HOME = 3,        // no home yet, so no local frame
++        NO_EXECUTOR = 4,    // built without the executor (AP_AGENT_EXEC=0)
++    };
++
++    // MAV_CMD_USER_1 (plan) and MAV_CMD_USER_2 (game) as COMMAND_INT; see mode_agent.cpp
++    MAV_RESULT handle_command(const mavlink_command_int_t &packet, Refusal &why);
++    // an ADSB_VEHICLE from the ground's uplink (or a receiver): into the track table
++    void handle_adsb_vehicle(const mavlink_adsb_vehicle_t &packet);
++
++    static constexpr uint16_t CMD_PLAN = 31010;  // MAV_CMD_USER_1
++    static constexpr uint16_t CMD_GAME = 31011;  // MAV_CMD_USER_2
++
++    // var_info for holding parameter information
++    static const struct AP_Param::GroupInfo var_info[];
++
+ protected:
+ 
+     bool _enter() override;
++
++private:
++
++    MAV_RESULT handle_plan(const mavlink_command_int_t &packet, Refusal &why);
++    MAV_RESULT handle_game(const mavlink_command_int_t &packet, Refusal &why);
++    void fill_state(struct agent_state &s, uint32_t now_ms, float dt);
++    void fill_limits(struct agent_limits &l) const;
++    void fill_tracks(uint32_t now_ms);
++    void send_status();
++    bool home_origin(Location &home) const;
++
++    // parameters (AGENT_*)
++    AP_Float fence_n;
++    AP_Float fence_e;
++    AP_Float fence_r;
++    AP_Float ceiling;
++    AP_Float floor;
++    AP_Float separation;
++    AP_Float grace;
++    AP_Float airspeed_margin;
++
++    // the plan, as the executor takes it
++    struct agent_plan plan {};
++    bool have_plan;
++
++    // the state of the game (CMD_GAME); kept and reported, the C ABI has no slot for it yet
++    struct {
++        uint8_t role;        // 0 free, 1 it, 2 runner
++        float time_left;     // s
++        uint8_t no_tag_back; // system id, 0 none
++        uint32_t received_ms;
++    } game {};
++
++    // other aircraft, from ADSB_VEHICLE: id is the low byte of ICAO_address
++    struct TrackEntry {
++        uint8_t id;
++        bool used;
++        uint32_t heard_ms;   // when it arrived
++        uint8_t tslc;        // the sender's time since last communication (s)
++        float pos[3];        // local NED from home (m)
++        float vel[3];        // NED (m/s)
++        char callsign[9];
++    } track_table[AGENT_MAX_TRACKS] {};
++    struct agent_track tracks[AGENT_MAX_TRACKS] {};
++
++    struct agent_demand demand {};
++    uint32_t entered_ms;
++    uint64_t last_step_us;
++    uint32_t last_status_ms;
++    uint32_t interventions;
++    uint8_t last_fallback;
++    bool exec_ok;
+ };
+ 
+ class ModeAutoTune : public Mode
+diff --git a/ArduPlane/mode_agent.cpp b/ArduPlane/mode_agent.cpp
+index ae0d062..8872455 100644
+--- a/ArduPlane/mode_agent.cpp
++++ b/ArduPlane/mode_agent.cpp
+@@ -1,52 +1,569 @@
+ #include "mode.h"
+ #include "Plane.h"
++#include <GCS_MAVLink/GCS.h>
++#include <AC_Fence/AC_Fence.h>
+ 
+ /*
+   SIM001 agent mode.
+ 
+-  Phase 0 stub: wings level, nose at the level pitch, the pilot's throttle. Later the plan
+-  executor sets nav_roll_cd, nav_pitch_cd and the throttle here; the stock stabilisation
+-  flies them, so the agent only ever asks for an attitude.
++  The plan executor (domains/autonomy/executor, a no_std Rust static library behind the C ABI
++  in agent_executor.h) flies the plan the ground sends. Each step it gets the plane's state,
++  the plan, the other aircraft and the limits, and it answers with a bank, a pitch and a
++  throttle. The stock stabilisation flies them, as in FBWA: the agent only ever asks for an
++  attitude, never for the surfaces. TECS does not run; the executor flies the airspeed itself
++  with the throttle and the pitch.
++
++  Inputs:
++  - plan: COMMAND_INT MAV_CMD_USER_1 (31010), only in AGENT mode. param1 primitive, param2 target
++    (a MAVLink system id), param3 plan id, param4 ttl (s), x/y lat/lon (1e-7 deg), z the altitude
++    above home and the radius packed in one float (autonomy_plan::wire::WirePlan::to_command).
++  - game: COMMAND_INT MAV_CMD_USER_2 (31011), in any mode: param1 role, param2 time left (s),
++    param3 the no-tag-back system id. Kept and logged; the C ABI has no slot for it yet.
++  - tracks: ADSB_VEHICLE, in any mode. The track id is the low byte of ICAO_address (ADSB_VEHICLE
++    does not carry the sender's system id), so the ground sets ICAO_address to the opponent's
++    MAVLink system id. Our own system id is ignored. Heard more than TRACK_TIMEOUT_MS ago: invalid.
++  Every command is answered with COMMAND_ACK; a refusal has its reason (ModeAgent::Refusal) in
++  result_param2.
++
++  Status, once a second while in AGENT: NAMED_VALUE_INT AG_PLAN (plan id, 0 none), AG_PRIM
++  (primitive), AG_ENV (envelope interventions since entering) and AG_FALL (the executor's
++  fallback reason), as in autonomy_plan::status_names.
+  */
+ 
+ #ifndef AP_AGENT_EXEC
+ #define AP_AGENT_EXEC 0
+ #endif
+ 
+-#if AP_AGENT_EXEC
+-// autonomy_executor, a Rust static library (domains/autonomy/executor/include/agent_executor.h)
++#if !AP_AGENT_EXEC
++// Built without the executor: a wings-level stand-in with the same ABI, so the mode, its
++// status and its failsafes work the same. Plans are refused (Refusal::NO_EXECUTOR).
+ extern "C" {
+-struct agent_demand { int32_t roll_cd; int32_t pitch_cd; float throttle; };
+-uint32_t agent_exec_abi_version(void);
+-int32_t agent_exec_step(struct agent_demand *out);
++uint32_t agent_exec_abi_version(void) { return AGENT_EXEC_ABI_VERSION; }
++void agent_exec_reset(void) {}
++int32_t agent_exec_step(const struct agent_state *state, const struct agent_plan *plan,
++                        const struct agent_track *tracks, const struct agent_limits *limits,
++                        struct agent_demand *out)
++{
++    (void)plan;
++    (void)tracks;
++    if (state == nullptr || limits == nullptr || out == nullptr) {
++        return -1;
++    }
++    *out = {};
++    out->throttle = -1;
++    return 0;
++}
+ }
+ #endif
+ 
++// the executor runs at most this often (the main loop is 300 Hz on a quadplane, 50 Hz otherwise)
++static constexpr uint32_t STEP_PERIOD_US = 20000;   // 50 Hz
++// a little early is fine, so a 50 Hz main loop with jitter doesn't skip every other step
++static constexpr uint32_t STEP_SLACK_US = 2000;
++// tracks heard longer ago than this are handed over as invalid
++static constexpr uint32_t TRACK_TIMEOUT_MS = 10000;
++// autonomy_plan::wire::to_local's earth radius
++static constexpr float EARTH_R = 6371000.0f;
++
++const AP_Param::GroupInfo ModeAgent::var_info[] = {
++    // @Param: FENCE_N
++    // @DisplayName: Agent fence centre, north
++    // @Description: North of home of the centre of the agent's circular fence. The executor's envelope keeps the plane inside it.
++    // @Units: m
++    // @User: Advanced
++    AP_GROUPINFO("FENCE_N", 1, ModeAgent, fence_n, 0),
++
++    // @Param: FENCE_E
++    // @DisplayName: Agent fence centre, east
++    // @Description: East of home of the centre of the agent's circular fence.
++    // @Units: m
++    // @User: Advanced
++    AP_GROUPINFO("FENCE_E", 2, ModeAgent, fence_e, 0),
++
++    // @Param: FENCE_R
++    // @DisplayName: Agent fence radius
++    // @Description: Radius of the agent's circular fence. 0: use the circle geofence (FENCE_RADIUS, centred on home) if it is enabled, else no fence.
++    // @Units: m
++    // @Range: 0 2000
++    // @User: Advanced
++    AP_GROUPINFO("FENCE_R", 3, ModeAgent, fence_r, 0),
++
++    // @Param: CEIL
++    // @DisplayName: Agent ceiling
++    // @Description: Highest the executor lets the plane fly, above home.
++    // @Units: m
++    // @User: Advanced
++    AP_GROUPINFO("CEIL", 4, ModeAgent, ceiling, 60),
++
++    // @Param: FLOOR
++    // @DisplayName: Agent floor
++    // @Description: Lowest the executor lets the plane fly, above the ground (height above home).
++    // @Units: m
++    // @User: Advanced
++    AP_GROUPINFO("FLOOR", 5, ModeAgent, floor, 12),
++
++    // @Param: SEP
++    // @DisplayName: Agent separation
++    // @Description: The executor never lets the plane come closer than this to a track.
++    // @Units: m
++    // @User: Advanced
++    AP_GROUPINFO("SEP", 6, ModeAgent, separation, 4),
++
++    // @Param: GRACE
++    // @DisplayName: Agent plan grace
++    // @Description: Seconds a plan stays good past its ttl before the executor falls back (0: the ttl is it).
++    // @Units: s
++    // @User: Advanced
++    AP_GROUPINFO("GRACE", 7, ModeAgent, grace, 0),
++
++    // @Param: ASPD_MRG
++    // @DisplayName: Agent stall margin
++    // @Description: The slowest airspeed the executor may fly is AIRSPEED_MIN plus this.
++    // @Units: m/s
++    // @User: Advanced
++    AP_GROUPINFO("ASPD_MRG", 8, ModeAgent, airspeed_margin, 2),
++
++    AP_GROUPEND
++};
++
++ModeAgent::ModeAgent() :
++    Mode()
++{
++    AP_Param::setup_object_defaults(this, var_info);
++}
++
+ bool ModeAgent::_enter()
+ {
++    const uint32_t abi = agent_exec_abi_version();
++    if (abi != AGENT_EXEC_ABI_VERSION) {
++        GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "Agent: executor ABI %u, need %u", (unsigned)abi, (unsigned)AGENT_EXEC_ABI_VERSION);
++        return false;
++    }
++    agent_exec_reset();
++    plan = {};
++    have_plan = false;
++    demand = {};
++    demand.throttle = -1;
++    entered_ms = AP_HAL::millis();
++    last_step_us = 0;
++    last_status_ms = 0;
++    interventions = 0;
++    last_fallback = 0;
++    exec_ok = true;
+ #if AP_AGENT_EXEC
+-    plane.gcs().send_text(MAV_SEVERITY_INFO, "Agent: executor ABI %u", (unsigned)agent_exec_abi_version());
++    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Agent: executor ABI %u", (unsigned)abi);
+ #else
+-    plane.gcs().send_text(MAV_SEVERITY_INFO, "Agent: stub, wings level");
++    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Agent: executor ABI %u (stub, wings level)", (unsigned)abi);
+ #endif
+     return true;
+ }
+ 
+-void ModeAgent::update()
++// home, the origin of the local frame
++bool ModeAgent::home_origin(Location &home) const
+ {
+-    int32_t roll_cd = 0, pitch_cd = 0;
+-#if AP_AGENT_EXEC
+-    struct agent_demand d;
+-    if (agent_exec_step(&d) == 0) {
+-        roll_cd = d.roll_cd;
+-        pitch_cd = d.pitch_cd;
++    if (!ahrs.home_is_set()) {
++        return false;
++    }
++    home = ahrs.get_home();
++    return true;
++}
++
++// autonomy_plan::wire::to_local: a flat earth around home. The differences are taken in
++// integer 1e-7 degrees: a float latitude is only good to about half a metre.
++static void to_local(const Location &home, int32_t lat_e7, int32_t lon_e7, float &north, float &east)
++{
++    const int64_t dlat = int64_t(lat_e7) - home.lat;
++    int64_t dlon = int64_t(lon_e7) - home.lng;
++    if (dlon > 1800000000LL) {
++        dlon -= 3600000000LL;
++    } else if (dlon < -1800000000LL) {
++        dlon += 3600000000LL;
++    }
++    const float m_per_e7 = float(EARTH_R) * radians(1.0e-7f);
++    north = float(dlat) * m_per_e7;
++    east = float(dlon) * m_per_e7 * cosf(radians(home.lat * 1.0e-7f));
++}
++
++// autonomy_plan's finite_u16: a finite number in 0..=65535, truncated
++static bool finite_u16(float v, uint16_t &out)
++{
++    if (!isfinite(v) || v < 0 || v > 65535) {
++        return false;
++    }
++    out = uint16_t(v);
++    return true;
++}
++
++MAV_RESULT ModeAgent::handle_command(const mavlink_command_int_t &packet, Refusal &why)
++{
++    switch (packet.command) {
++    case CMD_PLAN:
++        return handle_plan(packet, why);
++    case CMD_GAME:
++        return handle_game(packet, why);
++    default:
++        return MAV_RESULT_UNSUPPORTED;
++    }
++}
++
++MAV_RESULT ModeAgent::handle_plan(const mavlink_command_int_t &packet, Refusal &why)
++{
++    if (!AP_AGENT_EXEC) {
++        why = Refusal::NO_EXECUTOR;
++        return MAV_RESULT_UNSUPPORTED;
++    }
++    if (plane.control_mode != this) {
++        why = Refusal::NOT_IN_AGENT;
++        return MAV_RESULT_DENIED;
++    }
++    // WirePlan::from_command, and a little stricter: a z that no plan packs to, and a point
++    // off the globe, are refused too
++    uint16_t primitive, target, id;
++    if (!finite_u16(packet.param1, primitive) || primitive > 6 ||
++        !finite_u16(packet.param2, target) ||
++        !finite_u16(packet.param3, id) ||
++        !isfinite(packet.param4) ||
++        !isfinite(packet.z) || packet.z < 0 || packet.z >= 4194304.0f ||
++        packet.x < -900000000 || packet.x > 900000000 ||
++        packet.y < -1800000000 || packet.y > 1800000000) {
++        why = Refusal::MALFORMED;
++        return MAV_RESULT_DENIED;
++    }
++    Location home;
++    if (!home_origin(home)) {
++        why = Refusal::NO_HOME;
++        return MAV_RESULT_TEMPORARILY_REJECTED;
++    }
++    // altitude (-512..511.75 m, 0.25 m steps) and radius (0..1023 m) packed in z
++    const uint32_t v = uint32_t(packet.z);
++    const float alt = float((v >> 10) & 0xFFF) / 4.0f - 512.0f;
++    const float radius = float(v & 0x3FF);
++    float north, east;
++    to_local(home, packet.x, packet.y, north, east);
++
++    // WirePlan::to_plan
++    struct agent_plan p {};
++    p.id = id;
++    p.primitive = uint8_t(primitive);
++    p.target = uint8_t(target);
++    p.point[0] = north;
++    p.point[1] = east;
++    p.point[2] = -alt;
++    p.radius = radius;
++    p.band[0] = alt;
++    p.band[1] = alt + radius;
++    p.ttl = MAX(packet.param4, 0.0f);
++    // the executor adopts it on its next step if the id is new, and keeps it
++    plan = p;
++    have_plan = true;
++#if HAL_LOGGING_ENABLED
++    // @LoggerMessage: AGPL
++    // @Description: SIM001 agent: a plan accepted, in the local frame
++    // @Field: TimeUS: Time since system startup
++    // @Field: Id: plan id
++    // @Field: Prim: primitive
++    // @Field: Tgt: target system id
++    // @Field: PN: point, north of home (m)
++    // @Field: PE: point, east of home (m)
++    // @Field: PD: point, down (m)
++    // @Field: Rad: radius (m)
++    // @Field: BLo: band, lowest (m above home)
++    // @Field: BHi: band, highest (m above home)
++    // @Field: TTL: seconds it is good for
++    AP::logger().Write("AGPL", "TimeUS,Id,Prim,Tgt,PN,PE,PD,Rad,BLo,BHi,TTL", "QHBBfffffff",
++                       AP_HAL::micros64(), p.id, p.primitive, p.target, p.point[0], p.point[1], p.point[2],
++                       p.radius, p.band[0], p.band[1], p.ttl);
++#endif
++    return MAV_RESULT_ACCEPTED;
++}
++
++MAV_RESULT ModeAgent::handle_game(const mavlink_command_int_t &packet, Refusal &why)
++{
++    // WireGame::from_command
++    uint16_t role, no_tag_back;
++    if (!finite_u16(packet.param1, role) || role > 2 ||
++        !isfinite(packet.param2) ||
++        !finite_u16(packet.param3, no_tag_back)) {
++        why = Refusal::MALFORMED;
++        return MAV_RESULT_DENIED;
++    }
++    game.role = uint8_t(role);
++    game.time_left = packet.param2;
++    game.no_tag_back = uint8_t(no_tag_back);
++    game.received_ms = AP_HAL::millis();
++#if HAL_LOGGING_ENABLED
++    // @LoggerMessage: AGME
++    // @Description: SIM001 agent: the state of the game, as the ground sent it
++    // @Field: TimeUS: Time since system startup
++    // @Field: Role: 0 free, 1 it, 2 runner
++    // @Field: Left: seconds left in the game
++    // @Field: NTB: system id that can't be tagged back
++    AP::logger().Write("AGME", "TimeUS,Role,Left,NTB", "QBfB",
++                       AP_HAL::micros64(), game.role, game.time_left, game.no_tag_back);
++#endif
++    return MAV_RESULT_ACCEPTED;
++}
++
++void ModeAgent::handle_adsb_vehicle(const mavlink_adsb_vehicle_t &packet)
++{
++    const uint32_t need = ADSB_FLAGS_VALID_COORDS | ADSB_FLAGS_VALID_ALTITUDE;
++    if ((packet.flags & need) != need) {
++        return;
++    }
++    const uint8_t id = packet.ICAO_address & 0xFF;
++    if (id == gcs().sysid_this_mav()) {
++        // ourselves, echoed back by the ground
++        return;
++    }
++    Location home;
++    if (!home_origin(home)) {
++        return;
++    }
++    const uint32_t now = AP_HAL::millis();
++    // the same aircraft, else a free slot, else the one heard longest ago
++    TrackEntry *slot = nullptr;
++    for (auto &t : track_table) {
++        if (t.used && t.id == id) {
++            slot = &t;
++            break;
++        }
++    }
++    if (slot == nullptr) {
++        for (auto &t : track_table) {
++            if (!t.used || now - t.heard_ms > TRACK_TIMEOUT_MS) {
++                slot = &t;
++                break;
++            }
++        }
++    }
++    if (slot == nullptr) {
++        slot = &track_table[0];
++        for (auto &t : track_table) {
++            if (t.heard_ms < slot->heard_ms) {
++                slot = &t;
++            }
++        }
++    }
++    float north, east;
++    to_local(home, packet.lat, packet.lon, north, east);
++    // ADSB_VEHICLE altitude is above sea level (mm), whatever altitude_type says
++    // (home.alt is above sea level, cm; differences in integers, as above)
++    const float down = -float(int64_t(packet.altitude) - int64_t(home.alt) * 10) * 0.001f;
++    float vn = 0, ve = 0, vd = 0;
++    const uint32_t vel_ok = ADSB_FLAGS_VALID_HEADING | ADSB_FLAGS_VALID_VELOCITY;
++    if ((packet.flags & vel_ok) == vel_ok) {
++        const float hv = packet.hor_velocity * 0.01f;
++        const float hdg = radians(packet.heading * 0.01f);
++        vn = hv * cosf(hdg);
++        ve = hv * sinf(hdg);
++    }
++    if (packet.flags & ADSB_FLAGS_VERTICAL_VELOCITY_VALID) {
++        vd = -packet.ver_velocity * 0.01f;   // ver_velocity is up positive
++    }
++    slot->id = id;
++    slot->used = true;
++    slot->heard_ms = now;
++    slot->tslc = packet.tslc;
++    slot->pos[0] = north;
++    slot->pos[1] = east;
++    slot->pos[2] = down;
++    slot->vel[0] = vn;
++    slot->vel[1] = ve;
++    slot->vel[2] = vd;
++    memset(slot->callsign, 0, sizeof(slot->callsign));
++    memcpy(slot->callsign, packet.callsign, MIN(sizeof(slot->callsign) - 1, sizeof(packet.callsign)));
++#if HAL_LOGGING_ENABLED
++    // @LoggerMessage: AGTK
++    // @Description: SIM001 agent: a track heard (ADSB_VEHICLE), in the local frame
++    // @Field: TimeUS: Time since system startup
++    // @Field: Id: track id (low byte of ICAO_address)
++    // @Field: PN: north of home (m)
++    // @Field: PE: east of home (m)
++    // @Field: PD: down (m)
++    // @Field: VN: velocity north (m/s)
++    // @Field: VE: velocity east (m/s)
++    // @Field: VD: velocity down (m/s)
++    // @Field: Tslc: the sender's time since last contact (s)
++    AP::logger().Write("AGTK", "TimeUS,Id,PN,PE,PD,VN,VE,VD,Tslc", "QBffffffB",
++                       AP_HAL::micros64(), id, north, east, down, vn, ve, vd, packet.tslc);
++#endif
++}
++
++void ModeAgent::fill_tracks(uint32_t now_ms)
++{
++    for (uint8_t i = 0; i < AGENT_MAX_TRACKS; i++) {
++        const TrackEntry &e = track_table[i];
++        agent_track &t = tracks[i];
++        t = {};
++        if (!e.used) {
++            continue;
++        }
++        const uint32_t heard = now_ms - e.heard_ms;
++        t.id = e.id;
++        t.age = heard * 0.001f + e.tslc;
++        t.valid = heard < TRACK_TIMEOUT_MS && t.age * 1000 < TRACK_TIMEOUT_MS;
++        for (uint8_t k = 0; k < 3; k++) {
++            t.pos[k] = e.pos[k];
++            t.vel[k] = e.vel[k];
++        }
++    }
++}
++
++void ModeAgent::fill_limits(struct agent_limits &l) const
++{
++    l = {};
++    l.fence_centre[0] = fence_n;
++    l.fence_centre[1] = fence_e;
++    l.fence_radius = MAX(fence_r.get(), 0.0f);
++#if AP_FENCE_ENABLED
++    const AC_Fence *fence = AP::fence();
++    if (!is_positive(l.fence_radius) && fence != nullptr && (fence->get_enabled_fences() & AC_FENCE_TYPE_CIRCLE)) {
++        // the circle geofence, centred on home
++        l.fence_centre[0] = 0;
++        l.fence_centre[1] = 0;
++        l.fence_radius = fence->get_radius_m();
++    }
++#endif
++    l.ceiling = ceiling;
++    l.floor = floor;
++    l.bank_max = radians(plane.aparm.roll_limit);
++    l.pitch_max = radians(plane.aparm.pitch_limit_max);
++    l.pitch_min = radians(plane.aparm.pitch_limit_min);   // negative, as Limits::default has it
++    l.airspeed_min = plane.aparm.airspeed_min + airspeed_margin;
++    l.airspeed_cruise = plane.aparm.airspeed_cruise;
++    l.airspeed_max = plane.aparm.airspeed_max;
++    l.separation = separation;
++    l.grace = grace;
++}
++
++void ModeAgent::fill_state(struct agent_state &s, uint32_t now_ms, float dt)
++{
++    s = {};
++    // what the EKF doesn't have is NaN: the executor's bad-input fallback takes it from there
++    Vector3f pos, vel;
++    if (!ahrs.get_relative_position_NED_home(pos)) {
++        pos = Vector3f(NAN, NAN, NAN);
+     }
++    if (!ahrs.get_velocity_NED(vel)) {
++        vel = Vector3f(NAN, NAN, NAN);
++    }
++    s.pos[0] = pos.x;
++    s.pos[1] = pos.y;
++    s.pos[2] = pos.z;
++    s.vel[0] = vel.x;
++    s.vel[1] = vel.y;
++    s.vel[2] = vel.z;
++    s.roll = ahrs.get_roll_rad();
++    s.pitch = ahrs.get_pitch_rad();
++    s.yaw = ahrs.get_yaw_rad();
++    // true airspeed: the sensor, or the AHRS's estimate without one; else the ground speed
++    float tas;
++    if (!ahrs.airspeed_TAS(tas)) {
++        tas = vel.length();
++    }
++    s.airspeed = tas;
++    // height above the ground: height above home. The T1-S flies over a flat field, and
++    // the sim's ground is flat; terrain data or a rangefinder would go here.
++    s.agl = -pos.z;
++    s.dt = dt;
++    s.time = (now_ms - entered_ms) * 0.001f;
++}
++
++static void send_named_int(const char *name, int32_t value)
++{
++    mavlink_named_value_int_t packet {};
++    packet.time_boot_ms = AP_HAL::millis();
++    packet.value = value;
++    memcpy(packet.name, name, MIN(strlen(name), (size_t)MAVLINK_MSG_NAMED_VALUE_INT_FIELD_NAME_LEN));
++    gcs().send_to_active_channels(MAVLINK_MSG_ID_NAMED_VALUE_INT, (const char *)&packet);
++}
++
++void ModeAgent::send_status()
++{
++    // autonomy_plan::status_names
++    send_named_int("AG_PLAN", have_plan ? plan.id : 0);
++    send_named_int("AG_PRIM", have_plan ? plan.primitive : 0);
++    send_named_int("AG_ENV", int32_t(interventions));
++    send_named_int("AG_FALL", last_fallback);
++}
++
++void ModeAgent::update()
++{
++    const uint64_t now_us = AP_HAL::micros64();
++    const uint32_t now_ms = AP_HAL::millis();
++
++    if (last_step_us == 0 || now_us - last_step_us + STEP_SLACK_US >= STEP_PERIOD_US) {
++        const float dt = last_step_us == 0 ? STEP_PERIOD_US * 1.0e-6f : (now_us - last_step_us) * 1.0e-6f;
++        last_step_us = now_us;
++
++        struct agent_state state;
++        struct agent_limits limits;
++        fill_state(state, now_ms, dt);
++        fill_tracks(now_ms);
++        fill_limits(limits);
++
++        struct agent_demand d {};
++        if (agent_exec_step(&state, have_plan ? &plan : nullptr, tracks, &limits, &d) == 0) {
++            demand = d;
++            if (!exec_ok) {
++                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Agent: executor back");
++            }
++            exec_ok = true;
++        } else {
++            // never with valid pointers; wings level and the pilot's throttle if it happens
++            demand = {};
++            demand.throttle = -1;
++            demand.fallback = 2;
++            if (exec_ok) {
++                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Agent: executor refused a step");
++            }
++            exec_ok = false;
++        }
++        if (demand.intervened) {
++            interventions++;
++        }
++        if (demand.fallback != last_fallback) {
++            GCS_SEND_TEXT(demand.fallback ? MAV_SEVERITY_WARNING : MAV_SEVERITY_INFO, "Agent: fallback %u", (unsigned)demand.fallback);
++            last_fallback = demand.fallback;
++        }
++#if HAL_LOGGING_ENABLED
++        // @LoggerMessage: AGNT
++        // @Description: SIM001 agent: each executor step
++        // @Field: TimeUS: Time since system startup
++        // @Field: Plan: plan id (0 none)
++        // @Field: Prim: primitive
++        // @Field: Roll: roll demand (cd)
++        // @Field: Pitch: pitch demand (cd)
++        // @Field: Thr: throttle demand (0..1, negative: the pilot's)
++        // @Field: Fall: fallback reason
++        // @Field: Env: envelope interventions since entering AGENT
++        // @Field: NTrk: valid tracks
++        uint8_t ntrk = 0;
++        for (const auto &t : tracks) {
++            ntrk += t.valid;
++        }
++        AP::logger().Write("AGNT", "TimeUS,Plan,Prim,Roll,Pitch,Thr,Fall,Env,NTrk", "QHBiifBIB",
++                           now_us, have_plan ? plan.id : 0, have_plan ? plan.primitive : 0,
++                           demand.roll_cd, demand.pitch_cd, demand.throttle, demand.fallback,
++                           interventions, ntrk);
+ #endif
+-    plane.nav_roll_cd = constrain_int32(roll_cd, -plane.roll_limit_cd, plane.roll_limit_cd);
++    }
++
++    // the attitude, as FBWA: the roll limit and the load-factor (stall) roll limit apply
++    plane.nav_roll_cd = constrain_int32(demand.roll_cd, -plane.roll_limit_cd, plane.roll_limit_cd);
+     plane.update_load_factor();
+-    plane.nav_pitch_cd = pitch_cd;
+-    plane.adjust_nav_pitch_throttle();
++    plane.nav_pitch_cd = demand.pitch_cd;
++    if (!(demand.throttle >= 0)) {
++        // the pilot's throttle: FBWA's nose-down at low throttle (STAB_PITCH_DOWN). Not when the
++        // executor has the throttle: it flies the airspeed with pitch and throttle together.
++        plane.adjust_nav_pitch_throttle();
++    }
+     plane.nav_pitch_cd = constrain_int32(plane.nav_pitch_cd, plane.pitch_limit_min*100, plane.aparm.pitch_limit_max.get()*100);
++
++    if (now_ms - last_status_ms >= 1000 || last_status_ms == 0) {
++        last_status_ms = now_ms;
++        send_status();
++    }
+ }
+ 
+ void ModeAgent::run()
+@@ -54,5 +571,10 @@ void ModeAgent::run()
+     // Run base class function and then output throttle
+     Mode::run();
+ 
+-    output_pilot_throttle();
++    if (demand.throttle >= 0) {
++        // the executor's throttle; THR_MIN/THR_MAX still apply downstream (use_throttle_limits)
++        SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, constrain_float(demand.throttle, 0, 1) * 100.0f);
++    } else {
++        output_pilot_throttle();
++    }
+ }

@@ -20,15 +20,32 @@ fi
 . .ardupilot-venv/bin/activate
 pip install --quiet empy==3.3.4 pexpect future setuptools
 cd "$DIR"
-# Our patch series, in order; one that is already in (the tree is reused) is skipped.
+# Our patch series, in order. A reused tree remembers what it has in .git/sim001-patches (name and
+# hash); a patch already in it is skipped. A tree from before that file: a patch that reverses
+# cleanly is taken as in. A patch that changed since it went in: start from a clean tree
+# (git checkout . && git clean -fd ArduPlane, in $DIR), and it all goes in again.
+STAMP="$(git rev-parse --git-dir)/sim001-patches"
+touch "$STAMP"
 for p in "$ROOT"/ardupilot/patches/*.patch; do
   [ -e "$p" ] || continue
-  if git apply --reverse --check "$p" 2>/dev/null; then
+  entry="$(basename "$p") $(git hash-object "$p")"
+  if grep -qxF "$entry" "$STAMP"; then
     echo "patch already applied: $(basename "$p")"
+  elif git apply --reverse --check "$p" 2>/dev/null; then
+    echo "patch already applied: $(basename "$p")"
+    echo "$entry" >> "$STAMP"
+  elif git apply "$p"; then
+    echo "patch applied: $(basename "$p")"
+    echo "$entry" >> "$STAMP"
   else
-    git apply "$p" && echo "patch applied: $(basename "$p")"
+    echo "patch $(basename "$p") does not apply to $DIR; if an older version of it is in, start from a clean tree" >&2
+    exit 1
   fi
 done
+# The executor's C ABI has one source of truth, domains/autonomy/executor/include; the AGENT mode
+# includes this copy of it (with or without AGENT_EXEC: without, mode_agent.cpp stands in a
+# wings-level executor behind the same ABI). It is not in the patch series, so it can't go stale.
+cp "$ROOT/domains/autonomy/executor/include/agent_executor.h" ArduPlane/agent_executor.h
 # Apple's linker refuses the pointers inside this packed struct (they sit unaligned); SITL doesn't
 # need it packed.
 [ "$(uname)" = Darwin ] && sed -i '' 's/^class PACKED AP_FWVersion/class AP_FWVersion/' libraries/AP_Common/AP_FWVersion.h
@@ -36,6 +53,10 @@ if [ "${AGENT_EXEC:-0}" = 1 ]; then
   (cd "$ROOT" && cargo build --profile embedded -p autonomy_executor --features ffi-static)
   export CXXFLAGS="${CXXFLAGS:-} -DAP_AGENT_EXEC=1"
   export LDFLAGS="${LDFLAGS:-} $ROOT/target/embedded/libautonomy_executor.a"
+  # waf doesn't track a library passed in LDFLAGS: a newer executor forces the relink
+  if [ build/sitl/bin/arduplane -ot "$ROOT/target/embedded/libautonomy_executor.a" ]; then
+    rm -f build/sitl/bin/arduplane
+  fi
 fi
 ./waf configure --board sitl
 ./waf plane
