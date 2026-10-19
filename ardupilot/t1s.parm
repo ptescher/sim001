@@ -72,9 +72,9 @@ RTL_CLIMB_MIN 30
 # (radius, m; 0: the circle geofence if FENCE_ENABLE has it, else none). CEIL is above home,
 # FLOOR above the ground (m); the slowest airspeed allowed is AIRSPEED_MIN + ASPD_MRG.
 # Bank, pitch and airspeed limits come from ROLL_LIMIT_DEG, PTCH_LIM_*_DEG and AIRSPEED_*.
-AGENT_FENCE_N 0
+AGENT_FENCE_N 70
 AGENT_FENCE_E 0
-AGENT_FENCE_R 0
+AGENT_FENCE_R 85
 AGENT_CEIL 60
 AGENT_FLOOR 12
 AGENT_SEP 4

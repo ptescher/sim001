@@ -252,6 +252,8 @@ docs regenerated.
   real time, and the stub mode can be entered and left from the console.
 
 ### Phase 1: The plan protocol and a scripted loop, end to end
+
+**Status: the loop runs; tuning is open.** Done: `autonomy_plan` (plan, `COMMAND_INT` 31010/31011, C ABI v2); `autonomy_executor` (six primitives, the envelope, its own maths, 34 tests with closed loops and soaks, builds for Cortex-M7); the AGENT mode takes plans, `ADSB_VEHICLE` tracks and `AGENT_*` limits, and reports `AG_*` status (patches 0001 and 0002); `autonomy_agent` (scripted brain, MAVLink link); `autonomy_runner --agent` flies three SITL planes by plan at 9.4× real time with every command accepted. Open: in the first full run the envelope intervened on about half the steps and the executor kept falling back to Recovery (the planes fly at 13–19 m, near the 12 m floor and 13 m airspeed floor), so the planes tag little (1 real tag in the run); the console's plan display and override; the envelope expectations (specs); tracks reach the executor but nothing reports their use.
 - `autonomy_plan` and its encoding. Classical primitives in `autonomy_executor` (pursuit by
   the existing L1 and intercept logic, break-away, goto, band) and the full safety envelope.
 - MODE_AGENT runs the executor. The sim feeds `ADSB_VEHICLE` into each SITL from `Air`.
