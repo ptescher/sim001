@@ -432,6 +432,10 @@ name = "autonomy_executor"
 version = "0.1.0"
 
 [[package]]
+name = "autonomy_plan"
+version = "0.1.0"
+
+[[package]]
 name = "autonomy_runner"
 version = "0.1.0"
 dependencies = [
