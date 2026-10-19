@@ -81,6 +81,12 @@ fn main() {
         .collect();
 
     let mut app = App::new();
+    if std::env::var_os("SIM001_FPS").is_some() {
+        app.add_plugins((
+            bevy::diagnostic::FrameTimeDiagnosticsPlugin::default(),
+            bevy::diagnostic::LogDiagnosticsPlugin { filter: Some([bevy::diagnostic::FrameTimeDiagnosticsPlugin::FRAME_TIME].into_iter().collect()), ..default() },
+        ));
+    }
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: format!("SIM001 view - {}", terrain::site_title()),

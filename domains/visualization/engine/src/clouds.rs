@@ -26,14 +26,14 @@ use bevy::render::{
     render_asset::RenderAssets,
     render_resource::{
         BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, CachedRenderPipelineId, ColorTargetState,
-        ColorWrites, Extent3d, FragmentState, LoadOp, Operations, PipelineCache, RenderPassColorAttachment,
+        AddressMode, ColorWrites, Extent3d, FilterMode, FragmentState, LoadOp, Operations, PipelineCache, RenderPassColorAttachment,
         RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages,
         ShaderType, SpecializedRenderPipeline, SpecializedRenderPipelines, StoreOp, TextureDimension, TextureFormat,
-        TextureSampleType, TextureUsages,
+        TextureDescriptor, TextureSampleType, TextureUsages,
         binding_types::{sampler, texture_2d, texture_3d, uniform_buffer},
     },
     renderer::{RenderContext, RenderDevice, ViewQuery},
-    texture::GpuImage,
+    texture::{CachedTexture, GpuImage, TextureCache},
     view::{ExtractedView, ViewDepthStencilTexture, ViewTarget, prepare_view_targets},
 };
 
@@ -85,7 +85,7 @@ impl Default for Clouds {
             // same height, tops a kilometre or so higher, a third of the sky covered.
             base: 1700.0,
             top: 3300.0,
-            coverage: 0.5,
+            coverage: std::env::var("SIM001_CLOUDS").ok().and_then(|v| v.parse().ok()).unwrap_or(0.5),
             sun_dir: crate::field::sun_dir(),
             sun: Vec3::new(5.6, 5.4, 5.0),
             sky_top: Vec3::new(0.34, 0.42, 0.56),
@@ -257,7 +257,7 @@ impl Plugin for CloudsPlugin {
             .add_systems(
                 Render,
                 (
-                    prepare_pipelines.in_set(RenderSystems::Prepare),
+                    (prepare_pipelines, prepare_buffers).in_set(RenderSystems::Prepare),
                     depth_readable.in_set(RenderSystems::PrepareViews).after(prepare_view_targets).ambiguous_with_all(),
                 ),
             )
@@ -280,47 +280,103 @@ fn update_clouds(
     }
 }
 
+/// The march runs at this fraction of the view's size each way, and the result is laid over the
+/// picture at full size: soft cloud needs few pixels, and the march is the cost of the pass.
+const DIVISOR: u32 = 2;
+
 #[derive(Resource)]
 struct CloudsPipeline {
-    layout: BindGroupLayoutDescriptor,
+    march_layout: BindGroupLayoutDescriptor,
+    composite_layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
     fullscreen: FullscreenShader,
     shader: Handle<Shader>,
+    march: CachedRenderPipelineId,
 }
 
-fn init_pipeline(mut commands: Commands, device: Res<RenderDevice>, fullscreen: Res<FullscreenShader>, assets: Res<AssetServer>) {
-    let layout = BindGroupLayoutDescriptor::new(
-        "clouds_layout",
-        &BindGroupLayoutEntries::sequential(
+fn init_pipeline(
+    mut commands: Commands,
+    device: Res<RenderDevice>,
+    fullscreen: Res<FullscreenShader>,
+    assets: Res<AssetServer>,
+    cache: Res<PipelineCache>,
+) {
+    let float = |filterable| texture_2d(TextureSampleType::Float { filterable });
+    let march_layout = BindGroupLayoutDescriptor::new(
+        "clouds_march_layout",
+        &BindGroupLayoutEntries::with_indices(
             ShaderStages::FRAGMENT,
             (
-                texture_2d(TextureSampleType::Float { filterable: true }),
-                texture_2d(TextureSampleType::Float { filterable: false }),
-                sampler(SamplerBindingType::Filtering),
-                texture_3d(TextureSampleType::Float { filterable: true }),
-                sampler(SamplerBindingType::Filtering),
-                uniform_buffer::<Clouds>(true),
+                (1, float(false)),
+                (3, texture_3d(TextureSampleType::Float { filterable: true })),
+                (4, sampler(SamplerBindingType::Filtering)),
+                (5, uniform_buffer::<Clouds>(true)),
             ),
         ),
     );
+    let composite_layout = BindGroupLayoutDescriptor::new(
+        "clouds_composite_layout",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            (
+                (0, float(true)),
+                (1, float(false)),
+                (2, sampler(SamplerBindingType::Filtering)),
+                (3, texture_3d(TextureSampleType::Float { filterable: true })),
+                (4, sampler(SamplerBindingType::Filtering)),
+                (5, uniform_buffer::<Clouds>(true)),
+                (6, float(true)),
+                (7, float(true)),
+            ),
+        ),
+    );
+    let shader = load_embedded_asset!(assets.as_ref(), "clouds.wesl");
+    let march = cache.queue_render_pipeline(RenderPipelineDescriptor {
+        label: Some("clouds_march_pipeline".into()),
+        layout: vec![march_layout.clone()],
+        vertex: fullscreen.to_vertex_state(),
+        fragment: Some(FragmentState {
+            shader: shader.clone(),
+            entry_point: Some("march".into()),
+            targets: vec![
+                Some(ColorTargetState { format: LIGHT_FORMAT, blend: None, write_mask: ColorWrites::ALL }),
+                Some(ColorTargetState { format: DISTANCE_FORMAT, blend: None, write_mask: ColorWrites::ALL }),
+            ],
+            ..default()
+        }),
+        ..default()
+    });
     commands.insert_resource(CloudsPipeline {
-        layout,
-        sampler: device.create_sampler(&SamplerDescriptor::default()),
+        march_layout,
+        composite_layout,
+        sampler: device.create_sampler(&SamplerDescriptor {
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            ..default()
+        }),
         fullscreen: fullscreen.clone(),
-        shader: load_embedded_asset!(assets.as_ref(), "clouds.wesl"),
+        shader,
+        march,
     });
 }
+
+/// The march's output: cloud light with its opacity in alpha, and how far away the cloud is.
+const LIGHT_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+const DISTANCE_FORMAT: TextureFormat = TextureFormat::R16Float;
 
 impl SpecializedRenderPipeline for CloudsPipeline {
     type Key = TextureFormat;
 
     fn specialize(&self, format: TextureFormat) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
-            label: Some("clouds_pipeline".into()),
-            layout: vec![self.layout.clone()],
+            label: Some("clouds_composite_pipeline".into()),
+            layout: vec![self.composite_layout.clone()],
             vertex: self.fullscreen.to_vertex_state(),
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
+                entry_point: Some("composite".into()),
                 targets: vec![Some(ColorTargetState { format, blend: None, write_mask: ColorWrites::ALL })],
                 ..default()
             }),
@@ -331,6 +387,13 @@ impl SpecializedRenderPipeline for CloudsPipeline {
 
 #[derive(Component)]
 struct CloudsPipelineId(CachedRenderPipelineId);
+
+/// The march's half-size results for one view.
+#[derive(Component)]
+struct CloudBuffers {
+    light: CachedTexture,
+    distance: CachedTexture,
+}
 
 fn prepare_pipelines(
     mut commands: Commands,
@@ -345,6 +408,38 @@ fn prepare_pipelines(
     }
 }
 
+fn prepare_buffers(
+    mut commands: Commands,
+    mut textures: ResMut<TextureCache>,
+    device: Res<RenderDevice>,
+    views: Query<(Entity, &ExtractedView), With<Clouds>>,
+) {
+    for (entity, view) in &views {
+        let size = Extent3d {
+            width: view.viewport.z.div_ceil(DIVISOR).max(1),
+            height: view.viewport.w.div_ceil(DIVISOR).max(1),
+            depth_or_array_layers: 1,
+        };
+        let mut texture = |label, format| {
+            textures.get(
+                &device,
+                TextureDescriptor {
+                    label: Some(label),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format,
+                    usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                },
+            )
+        };
+        let buffers = CloudBuffers { light: texture("clouds_light", LIGHT_FORMAT), distance: texture("clouds_distance", DISTANCE_FORMAT) };
+        commands.entity(entity).insert(buffers);
+    }
+}
+
 /// The pass reads the depth buffer.
 fn depth_readable(mut cameras: Query<&mut Camera3d, With<Clouds>>) {
     for mut c in &mut cameras {
@@ -353,7 +448,7 @@ fn depth_readable(mut cameras: Query<&mut Camera3d, With<Clouds>>) {
 }
 
 fn clouds(
-    view: ViewQuery<(&ViewTarget, &CloudsPipelineId, &ViewDepthStencilTexture, &DynamicUniformIndex<Clouds>)>,
+    view: ViewQuery<(&ViewTarget, &CloudsPipelineId, &ViewDepthStencilTexture, &DynamicUniformIndex<Clouds>, &CloudBuffers)>,
     pipeline: Res<CloudsPipeline>,
     cache: Res<PipelineCache>,
     uniforms: Res<ComponentUniforms<Clouds>>,
@@ -361,31 +456,65 @@ fn clouds(
     images: Res<RenderAssets<GpuImage>>,
     mut ctx: RenderContext,
 ) {
-    let (target, id, depth, index) = view.into_inner();
+    let (target, id, depth, index, buffers) = view.into_inner();
     let Some(noise) = noise.and_then(|n| images.get(&n.0)) else { return };
     let Some(depth_view) = depth.attachment.depth_stencil_views().depth_only_view() else { return };
-    let Some(render_pipeline) = cache.get_render_pipeline(id.0) else { return };
+    let (Some(march), Some(composite)) = (cache.get_render_pipeline(pipeline.march), cache.get_render_pipeline(id.0)) else { return };
     let Some(settings) = uniforms.uniforms().binding() else { return };
-    let post = target.post_process_write();
+
+    // March at half size.
     let bind_group = ctx.render_device().create_bind_group(
-        Some("clouds_bind_group"),
-        &cache.get_bind_group_layout(&pipeline.layout),
-        &BindGroupEntries::sequential((post.source, depth_view, &pipeline.sampler, &noise.texture_view, &noise.sampler, settings)),
+        Some("clouds_march_bind_group"),
+        &cache.get_bind_group_layout(&pipeline.march_layout),
+        &BindGroupEntries::with_indices(((1, depth_view), (3, &noise.texture_view), (4, &noise.sampler), (5, settings.clone()))),
     );
-    let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-        label: Some("clouds"),
-        color_attachments: &[Some(RenderPassColorAttachment {
-            view: post.destination,
+    let attachment = |view| {
+        Some(RenderPassColorAttachment {
+            view,
             depth_slice: None,
             resolve_target: None,
             ops: Operations { load: LoadOp::Clear(Default::default()), store: StoreOp::Store },
-        })],
+        })
+    };
+    {
+        let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("clouds_march"),
+            color_attachments: &[attachment(&buffers.light.default_view), attachment(&buffers.distance.default_view)],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_render_pipeline(march);
+        pass.set_bind_group(0, &bind_group, &[index.index()]);
+        pass.draw(0..3, 0..1);
+    }
+
+    // Lay it over the picture at full size.
+    let post = target.post_process_write();
+    let bind_group = ctx.render_device().create_bind_group(
+        Some("clouds_composite_bind_group"),
+        &cache.get_bind_group_layout(&pipeline.composite_layout),
+        &BindGroupEntries::with_indices((
+            (0, post.source),
+            (1, depth_view),
+            (2, &pipeline.sampler),
+            (3, &noise.texture_view),
+            (4, &noise.sampler),
+            (5, settings),
+            (6, &buffers.light.default_view),
+            (7, &buffers.distance.default_view),
+        )),
+    );
+    let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+        label: Some("clouds_composite"),
+        color_attachments: &[attachment(post.destination)],
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    pass.set_render_pipeline(render_pipeline);
+    pass.set_render_pipeline(composite);
     pass.set_bind_group(0, &bind_group, &[index.index()]);
     pass.draw(0..3, 0..1);
 }

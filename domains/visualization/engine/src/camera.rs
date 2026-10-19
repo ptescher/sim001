@@ -253,6 +253,11 @@ fn update_render_scale(
     if rs.scale <= 0.0 {
         // Starting point for ray tracing: about 1600 pixels across.
         rs.scale = (1600.0 / phys.x as f32).clamp(MIN_SCALE, 1.0);
+        // SIM001_SCALE pins it (for timing experiments).
+        if let Some(pinned) = std::env::var("SIM001_SCALE").ok().and_then(|v| v.parse::<f32>().ok()) {
+            rs.scale = pinned.clamp(0.1, 1.0);
+            rs.auto = false;
+        }
     }
     if keys.just_pressed(KeyCode::F5) {
         rs.auto = false;

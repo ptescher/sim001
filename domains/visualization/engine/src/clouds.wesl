@@ -29,12 +29,17 @@ struct Clouds {
 @group(0) @binding(3) var noise: texture_3d<f32>;
 @group(0) @binding(4) var noise_sampler: sampler;
 @group(0) @binding(5) var<uniform> clouds: Clouds;
+// The march's half-size result: cloud light with its opacity in alpha, and how far away it is.
+@group(0) @binding(6) var low_light: texture_2d<f32>;
+@group(0) @binding(7) var low_distance: texture_2d<f32>;
 
 const PI: f32 = 3.14159265;
 // Primary steps through the layer, and steps towards the sun from each.
-const STEPS: i32 = 64;
-const MAX_ITERATIONS: i32 = 192;
-const LIGHT_STEPS: i32 = 6;
+const STEPS: i32 = 48;
+const MAX_ITERATIONS: i32 = 64;
+const LIGHT_STEPS: i32 = 4;
+// The ground reads cloud shadow through fewer steps: shadows are soft.
+const SHADOW_STEPS: i32 = 3;
 const MULTIPLE_SCATTERING: f32 = 2.5;
 // Clouds further than this are lost in the haze anyway.
 const MAX_DISTANCE: f32 = 60000.0;
@@ -113,12 +118,12 @@ fn slab(o: vec3<f32>, d: vec3<f32>) -> vec2<f32> {
 }
 
 // Optical depth of cloud towards the sun from `p`, in steps that grow away from it.
-fn sun_depth(p: vec3<f32>, detail: bool) -> f32 {
+fn sun_depth(p: vec3<f32>, detail: bool, steps: i32) -> f32 {
     let span = slab(p, clouds.sun_dir);
     var t = span.x;
-    var step = (span.y - span.x) / 63.0;
+    var step = (span.y - span.x) / f32((1 << u32(steps)) - 1);
     var tau = 0.0;
-    for (var i = 0; i < LIGHT_STEPS; i++) {
+    for (var i = 0; i < steps; i++) {
         let s = p + clouds.sun_dir * (t + step * 0.5);
         tau += density(s, detail) * clouds.extinction * step;
         t += step;
@@ -144,32 +149,43 @@ fn interleaved_gradient(px: vec2<f32>, frame: u32) -> f32 {
     return fract(52.9829189 * fract(dot(p, vec2<f32>(0.06711056, 0.00583715))));
 }
 
+struct MarchOut {
+    @location(0) light: vec4<f32>,
+    @location(1) distance: f32,
+}
+
+// Where the world is behind the pixel at full-size coordinates `px`: distance from the camera,
+// or MAX_DISTANCE for sky.
+fn scene_distance(px: vec2<i32>, ndc_xy: vec2<f32>) -> f32 {
+    let d = textureLoad(depth, px, 0).x;
+    if d <= 0.0 {
+        return MAX_DISTANCE;
+    }
+    let w = clouds.world_from_clip * vec4<f32>(ndc_xy, d, 1.0);
+    return length(w.xyz / w.w - clouds.camera);
+}
+
+// Marches the cloud layer at half size. The depth limit is the furthest of the four pixels the
+// result will cover, so the composite can cut it back per pixel.
 @fragment
-fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let colour = textureSample(screen, screen_sampler, in.uv);
-    let size = vec2<f32>(textureDimensions(depth));
-    let px = in.uv * size;
-    let d = textureLoad(depth, vec2<i32>(px), 0).x;
+fn march(in: FullscreenVertexOutput) -> MarchOut {
+    let base = vec2<i32>(in.position.xy) * 2;
+    let size = vec2<i32>(textureDimensions(depth));
     let ndc_xy = vec2<f32>(in.uv.x * 2.0 - 1.0, 1.0 - in.uv.y * 2.0);
-    // Reversed infinite depth: 0 is the sky. A point on the near plane gives the direction.
+    var limit = 0.0;
+    for (var k = 0; k < 4; k++) {
+        let q = min(base + vec2<i32>(k & 1, k >> 1), size - vec2<i32>(1));
+        let uv = (vec2<f32>(q) + 0.5) / vec2<f32>(size);
+        limit = max(limit, scene_distance(q, vec2<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0)));
+    }
     let near = clouds.world_from_clip * vec4<f32>(ndc_xy, 1.0, 1.0);
     let dir = normalize(near.xyz / near.w - clouds.camera);
-    var scene = colour.rgb;
-    var limit = MAX_DISTANCE;
-    if d > 0.0 {
-        let w = clouds.world_from_clip * vec4<f32>(ndc_xy, d, 1.0);
-        let p = w.xyz / w.w;
-        limit = length(p - clouds.camera);
-        // The ground in a cloud's shadow keeps only its skylight.
-        let lit = exp(-sun_depth(p, false) * 0.8);
-        scene *= mix(clouds.shadow_floor, 1.0, lit);
-    }
-
+    let px = in.position.xy;
     let span = slab(clouds.camera, dir);
     let t0 = span.x;
     let t1 = min(span.y, limit);
     if t0 >= t1 {
-        return vec4<f32>(scene, colour.a);
+        return MarchOut(vec4<f32>(0.0), 0.0);
     }
     let cos_t = dot(dir, clouds.sun_dir);
     let jitter = interleaved_gradient(px, clouds.frame);
@@ -199,8 +215,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             continue;
         }
         // Finer near the camera, where a step covers more of the picture.
-        let step = clamp(t * 0.004, 12.0, coarse) * (0.75 + 0.5 * jitter);
-        let rho = density(p, true);
+        let step = clamp(t * 0.012, 40.0, coarse) * (0.75 + 0.5 * jitter);
+        let rho = density(p, t < 9000.0);
         if rho <= 0.0 {
             empty++;
             if empty > 6 {
@@ -211,7 +227,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         }
         empty = 0;
         let sigma = rho * clouds.extinction;
-        let tau_sun = sun_depth(p, false);
+        let tau_sun = sun_depth(p, false, LIGHT_STEPS);
         // Light bounced around inside the cloud: each octave sees less of the shadow and
         // scatters less sharply forward (Wrenninge's approximation).
         var sun = 0.0;
@@ -240,11 +256,41 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
     let opacity = 1.0 - transmittance;
     if opacity <= 0.0 {
-        return vec4<f32>(scene, colour.a);
+        return MarchOut(vec4<f32>(0.0), 0.0);
     }
     // Far clouds fade into the haze along the horizon.
     let t_mean = weighted_t / opacity;
     let seen = exp(-air_depth(clouds.camera, dir * t_mean));
     let cloud = light * seen + clouds.haze_color * (1.0 - seen) * opacity;
-    return vec4<f32>(scene * transmittance + cloud, colour.a);
+    return MarchOut(vec4<f32>(cloud, opacity), t_mean);
+}
+
+// Lays the half-size cloud over the picture, and darkens the ground under it.
+@fragment
+fn composite(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let colour = textureSample(screen, screen_sampler, in.uv);
+    if clouds.coverage <= 0.0 {
+        return colour;
+    }
+    let size = vec2<f32>(textureDimensions(depth));
+    let px = vec2<i32>(in.uv * size);
+    let d = textureLoad(depth, px, 0).x;
+    var scene = colour.rgb;
+    var dist = MAX_DISTANCE;
+    if d > 0.0 {
+        let ndc = vec4<f32>(in.uv.x * 2.0 - 1.0, 1.0 - in.uv.y * 2.0, d, 1.0);
+        let w = clouds.world_from_clip * ndc;
+        let p = w.xyz / w.w;
+        dist = length(p - clouds.camera);
+        // The ground in a cloud's shadow keeps only its skylight.
+        let lit = exp(-sun_depth(p, false, SHADOW_STEPS) * 0.8);
+        scene *= mix(clouds.shadow_floor, 1.0, lit);
+    }
+    let cloud = textureSampleLevel(low_light, screen_sampler, in.uv, 0.0);
+    let cloud_t = textureSampleLevel(low_distance, screen_sampler, in.uv, 0.0).x;
+    // Not over something that is nearer than the cloud (a ridge in front of it).
+    if cloud.a <= 0.0 || dist < cloud_t {
+        return vec4<f32>(scene, colour.a);
+    }
+    return vec4<f32>(scene * (1.0 - cloud.a) + cloud.rgb, colour.a);
 }
