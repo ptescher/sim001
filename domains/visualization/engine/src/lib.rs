@@ -15,6 +15,7 @@ pub mod clouds;
 
 pub mod field;
 pub mod foliage;
+pub mod foam;
 pub mod grass;
 pub mod haze;
 pub mod loading;
@@ -182,7 +183,7 @@ fn setup(
         &settings,
     );
     for (i, accent) in liveries.0.iter().take(PLANES).enumerate() {
-        model::spawn_plane(&mut commands, &mut meshes, &mut materials, i, *accent);
+        model::spawn_plane(&mut commands, &mut meshes, &mut materials, &mut images, i, *accent);
     }
     camera::spawn_camera(&mut commands, &settings, &mut images, offscreen.map(|o| *o));
 }

@@ -1,6 +1,7 @@
 //! Procedural 3D model of the HEEWING T1-S Ranger, with moving control surfaces and props.
 
 use simulation_aircraft::t1s_ranger::geom::*;
+use crate::foam::{foam_normal, foam_texture, world_uv, GRAIN_MEAN};
 use crate::mesh_util::{airfoil_panel, cuboid, loft, GeoBuilder, PanelSpec};
 use crate::Scene;
 use bevy::prelude::*;
@@ -80,6 +81,8 @@ pub struct Mats {
     /// The control surfaces: a shade lighter, so their outlines read at a distance.
     surface: Handle<StandardMaterial>,
     accent: Handle<StandardMaterial>,
+    /// The accent colour on the foam itself (wing and tail tips): the same grain, painted.
+    accent_foam: Handle<StandardMaterial>,
     fuselage: Handle<StandardMaterial>,
     carbon: Handle<StandardMaterial>,
     black: Handle<StandardMaterial>,
@@ -95,7 +98,7 @@ pub fn rt(mesh: Handle<Mesh>, mat: Handle<StandardMaterial>, t: Transform) -> im
 
 /// Spawns plane `plane`, with its markings (wing tips, nose stripe, ailerons, ruddervators) in
 /// `accent`.
-pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>, plane: usize, accent: Color) {
+pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>, images: &mut Assets<Image>, plane: usize, accent: Color) {
     let mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32, metal: f32| {
         m.add(StandardMaterial {
             base_color: c,
@@ -106,13 +109,34 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
             ..default()
         })
     };
+    // The foam: grey EPP, matte, with the grain of its beads (see `foam`). The tints say how dark
+    // each part is painted or moulded; the texture carries the speckle.
+    let (grain, grain_normal) = (images.add(foam_texture()), images.add(foam_normal()));
+    // `albedo` is how bright the part is; the grain texture averages `GRAIN_MEAN`, so the colour
+    // is that divided by it.
+    let foam = |m: &mut Assets<StandardMaterial>, albedo: [f32; 3], rough: f32| {
+        let [r, g, b] = albedo.map(|a| a / GRAIN_MEAN);
+        m.add(StandardMaterial {
+            base_color: Color::linear_rgb(r, g, b),
+            base_color_texture: Some(grain.clone()),
+            normal_map_texture: Some(grain_normal.clone()),
+            perceptual_roughness: rough,
+            reflectance: 0.3,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        })
+    };
+    let accent_linear = accent.to_linear();
     let m = Mats {
-        // Matte charcoal paint, close to the real plane's: dark, soft, a little sheen.
-        foam_top: mat(materials, Color::srgb(0.32, 0.33, 0.36), 0.5, 0.0),
-        foam_bottom: mat(materials, Color::srgb(0.27, 0.28, 0.30), 0.55, 0.0),
-        surface: mat(materials, Color::srgb(0.40, 0.41, 0.44), 0.48, 0.0),
+        // Grey EPP: the wing and tail shells darker below than above, the control surfaces a
+        // shade lighter so their outlines read at a distance.
+        foam_top: foam(materials, [0.18, 0.18, 0.19], 0.88),
+        foam_bottom: foam(materials, [0.15, 0.15, 0.158], 0.9),
+        surface: foam(materials, [0.22, 0.22, 0.23], 0.86),
         accent: mat(materials, accent, 0.45, 0.0),
-        fuselage: mat(materials, Color::srgb(0.30, 0.31, 0.34), 0.46, 0.0),
+        accent_foam: foam(materials, [accent_linear.red * 0.8, accent_linear.green * 0.8, accent_linear.blue * 0.8], 0.8),
+        fuselage: foam(materials, [0.17, 0.17, 0.18], 0.86),
         carbon: mat(materials, Color::srgb(0.04, 0.042, 0.048), 0.3, 0.2),
         black: mat(materials, Color::srgb(0.02, 0.02, 0.024), 0.5, 0.0),
         metal: mat(materials, Color::srgb(0.30, 0.30, 0.33), 0.28, 1.0),
@@ -127,7 +151,7 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
     };
 
     // Fuselage: a broad, flat-topped pod that the wing blends into, with a chin camera.
-    let pod = meshes.add(loft(
+    let pod = meshes.add(world_uv(loft(
         &[
             (NOSE_Z, 0.006, 0.006, 0.002),
             (NOSE_Z + 0.008, 0.030, 0.024, 0.004),
@@ -142,7 +166,7 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         0.0,
         36,
         false,
-    ));
+    )));
     add(&mut children, commands, (pod, m.fuselage.clone(), Transform::IDENTITY));
     // Carbon tail boom, with the accent collar where it meets the pod.
     let boom = meshes.add(loft(&[(0.14, 0.0095, 0.0095, 0.024), (TAIL_END_Z, 0.0075, 0.0075, 0.028)], 0.0, 16, true));
@@ -185,8 +209,8 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
                 camber: 0.03,
                 origin: Vec3::ZERO,
             });
-            add(&mut children, commands, (meshes.add(top), m.foam_top.clone(), Transform::IDENTITY));
-            add(&mut children, commands, (meshes.add(bot), m.foam_bottom.clone(), Transform::IDENTITY));
+            add(&mut children, commands, (meshes.add(world_uv(top)), m.foam_top.clone(), Transform::IDENTITY));
+            add(&mut children, commands, (meshes.add(world_uv(bot)), m.foam_bottom.clone(), Transform::IDENTITY));
         }
         // Wingtip accent, top and bottom (a plane seen from the field is mostly underside).
         let (tip_top, tip_bot) = airfoil_panel(&PanelSpec {
@@ -201,8 +225,8 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
             camber: 0.03,
             origin: Vec3::ZERO,
         });
-        add(&mut children, commands, (meshes.add(tip_top), m.accent.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(tip_bot), m.accent.clone(), Transform::from_translation(-up * 0.0060)));
+        add(&mut children, commands, (meshes.add(world_uv(tip_top)), m.accent_foam.clone(), Transform::IDENTITY));
+        add(&mut children, commands, (meshes.add(world_uv(tip_bot)), m.accent_foam.clone(), Transform::from_translation(-up * 0.0060)));
 
         // Aileron, hinged at its leading edge.
         let hx = 1.0 - AILERON_CHORD_FRAC;
@@ -231,8 +255,8 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
                 Visibility::default(),
             ))
             .id();
-        let t = commands.spawn(rt(meshes.add(top), m.surface.clone(), Transform::IDENTITY)).id();
-        let b = commands.spawn(rt(meshes.add(bot), m.surface.clone(), Transform::IDENTITY)).id();
+        let t = commands.spawn(rt(meshes.add(world_uv(top)), m.surface.clone(), Transform::IDENTITY)).id();
+        let b = commands.spawn(rt(meshes.add(world_uv(bot)), m.surface.clone(), Transform::IDENTITY)).id();
         commands.entity(pivot).add_children(&[t, b]);
         children.push(pivot);
 
@@ -285,11 +309,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
             })
         };
         let (top, bot) = panel(0.0, STAB_HALF_SPAN, 0.0, hx, 0.0, Vec3::ZERO);
-        add(&mut children, commands, (meshes.add(top), m.foam_top.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(bot), m.foam_bottom.clone(), Transform::IDENTITY));
+        add(&mut children, commands, (meshes.add(world_uv(top)), m.foam_top.clone(), Transform::IDENTITY));
+        add(&mut children, commands, (meshes.add(world_uv(bot)), m.foam_bottom.clone(), Transform::IDENTITY));
         let (cap_top, cap_bot) = panel(STAB_HALF_SPAN - 0.04, STAB_HALF_SPAN, 0.0, hx - 0.01, 0.0025, Vec3::ZERO);
-        add(&mut children, commands, (meshes.add(cap_top), m.accent.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(cap_bot), m.accent.clone(), Transform::from_xyz(0.0, -0.005, 0.0)));
+        add(&mut children, commands, (meshes.add(world_uv(cap_top)), m.accent_foam.clone(), Transform::IDENTITY));
+        add(&mut children, commands, (meshes.add(world_uv(cap_bot)), m.accent_foam.clone(), Transform::from_xyz(0.0, -0.005, 0.0)));
         let hinge_root = le(0.004) + Vec3::Z * hx * chord(0.004);
         let hinge_tip = le(STAB_HALF_SPAN) + Vec3::Z * hx * chord(STAB_HALF_SPAN);
         let (top, bot) = airfoil_panel(&PanelSpec {
@@ -311,8 +335,8 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         let pivot = commands
             .spawn((ControlSurfaceVis { plane, drive: Drive::Elevator, axis }, Transform::from_translation(hinge_root), Visibility::default()))
             .id();
-        let t = commands.spawn(rt(meshes.add(top), m.surface.clone(), Transform::IDENTITY)).id();
-        let b = commands.spawn(rt(meshes.add(bot), m.surface.clone(), Transform::IDENTITY)).id();
+        let t = commands.spawn(rt(meshes.add(world_uv(top)), m.surface.clone(), Transform::IDENTITY)).id();
+        let b = commands.spawn(rt(meshes.add(world_uv(bot)), m.surface.clone(), Transform::IDENTITY)).id();
         commands.entity(pivot).add_children(&[t, b]);
         children.push(pivot);
     }
@@ -337,11 +361,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
             })
         };
         let (top, bot) = panel(0.0, FIN_HEIGHT, 0.0, hx, 0.0, Vec3::ZERO);
-        add(&mut children, commands, (meshes.add(top), m.foam_top.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(bot), m.foam_top.clone(), Transform::IDENTITY));
+        add(&mut children, commands, (meshes.add(world_uv(top)), m.foam_top.clone(), Transform::IDENTITY));
+        add(&mut children, commands, (meshes.add(world_uv(bot)), m.foam_top.clone(), Transform::IDENTITY));
         let (cap_a, cap_b) = panel(FIN_HEIGHT - 0.04, FIN_HEIGHT, 0.0, hx - 0.01, 0.0025, Vec3::ZERO);
-        add(&mut children, commands, (meshes.add(cap_a), m.accent.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(cap_b), m.accent.clone(), Transform::from_xyz(-0.005, 0.0, 0.0)));
+        add(&mut children, commands, (meshes.add(world_uv(cap_a)), m.accent_foam.clone(), Transform::IDENTITY));
+        add(&mut children, commands, (meshes.add(world_uv(cap_b)), m.accent_foam.clone(), Transform::from_xyz(-0.005, 0.0, 0.0)));
         let hinge_root = le(0.004) + Vec3::Z * hx * chord(0.004);
         let hinge_tip = le(FIN_HEIGHT) + Vec3::Z * hx * chord(FIN_HEIGHT);
         let (a, b) = panel(0.006, FIN_HEIGHT - 0.002, hx + 0.006, 1.0, 0.0, hinge_root);
@@ -352,8 +376,8 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
                 Visibility::default(),
             ))
             .id();
-        let ta = commands.spawn(rt(meshes.add(a), m.surface.clone(), Transform::IDENTITY)).id();
-        let tb = commands.spawn(rt(meshes.add(b), m.surface.clone(), Transform::IDENTITY)).id();
+        let ta = commands.spawn(rt(meshes.add(world_uv(a)), m.surface.clone(), Transform::IDENTITY)).id();
+        let tb = commands.spawn(rt(meshes.add(world_uv(b)), m.surface.clone(), Transform::IDENTITY)).id();
         commands.entity(pivot).add_children(&[ta, tb]);
         children.push(pivot);
     }
