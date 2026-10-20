@@ -28,6 +28,9 @@ pub fn pages(d: &Docs, f: &Facts) -> Vec<Page> {
             pages.push(Page { path: format!("tutorials/{}.md", d.plans[i].slug), content: tutorial_page(d, f, i, &t) });
         }
     }
+    for i in 0..d.outline.map_or(0, |o| o.pages.len()) {
+        pages.push(Page { path: format!("manual/{}.md", d.outline.unwrap().pages[i].slug), content: authored_page(d, i) });
+    }
     for feature in &d.suite.features {
         let path = format!("features/{}.md", feature_slug(d.suite, feature));
         pages.push(Page { path, content: feature_page(d, f, feature.id.0 as usize) });
@@ -91,6 +94,7 @@ fn ref_path(d: &Docs, r: manual::Ref) -> String {
         }
         manual::Ref::Tutorial(i) => format!("tutorials/{}.md", d.plans[i].slug),
         manual::Ref::Term(t) => format!("glossary.md#{}", s.glossary[t].slug),
+        manual::Ref::Page(i) => format!("manual/{}.md", d.outline.map_or("", |o| o.pages[i].slug.as_str())),
     }
 }
 
@@ -155,8 +159,62 @@ fn index(d: &Docs) -> String {
         "There is also an [HTML version](site/index.html) of this manual. The [glossary](glossary.md) explains \
          its terms, and the [test report](tests.md) shows the results of the last test run.\n"
     );
-    for section in s.sections.iter().skip(1) {
-        let depth = s.chain(section.id).len().min(4);
+    // With an outline: a contents list first, then the chapters in the outline's order under
+    // the heading of their part. Without one, the sections in the suite's own order.
+    let mut order: Vec<(Option<usize>, &expectation_model::Section)> = vec![];
+    if let Some(outline) = d.outline {
+        let _ = writeln!(o, "## Contents\n");
+        for part in &outline.parts {
+            let _ = writeln!(o, "**{}**\n", part.name);
+            for item in &part.items {
+                match *item {
+                    crate::outline::Item::Section(id) => {
+                        let sec = s.section(id);
+                        let about = paragraphs(&sec.description).into_iter().next().unwrap_or_default();
+                        let _ = writeln!(
+                            o,
+                            "- [{}](README.md#{}): {}",
+                            sec.name,
+                            expectation_model::text::slug(&sec.name),
+                            manual::plain(&crate::outline::first_sentence(&about))
+                        );
+                    }
+                    crate::outline::Item::Page(i) => {
+                        let page = &outline.pages[i];
+                        let _ = writeln!(o, "- [{}](manual/{}.md): {}", page.title, page.slug, prose(d, &page.about(), false));
+                    }
+                }
+            }
+            if part.name == "Reference" {
+                let _ = writeln!(o, "- [Glossary](glossary.md): What the words in this manual mean.");
+            }
+            o.push('\n');
+        }
+        for (p, part) in outline.parts.iter().enumerate() {
+            for item in &part.items {
+                if let crate::outline::Item::Section(id) = *item {
+                    // Depth first, as the suite lists them.
+                    let mut stack = vec![id];
+                    while let Some(x) = stack.pop() {
+                        order.push((Some(p), s.section(x)));
+                        stack.extend(s.section(x).children.iter().rev());
+                    }
+                }
+            }
+        }
+    } else {
+        order = s.sections.iter().skip(1).map(|x| (None, x)).collect();
+    }
+    let mut last_part = None;
+    for (part, section) in order {
+        if let (Some(p), Some(outline)) = (part, d.outline)
+            && last_part != Some(p)
+        {
+            last_part = Some(p);
+            let _ = writeln!(o, "## {}\n", outline.parts[p].name);
+        }
+        let bump = usize::from(d.outline.is_some());
+        let depth = (s.chain(section.id).len() + bump).min(5);
         let _ = writeln!(o, "{} {}\n", "#".repeat(depth), section.name);
         for p in paragraphs(&section.description) {
             let _ = writeln!(o, "{}\n", prose(d, &p, false));
@@ -208,6 +266,30 @@ fn index(d: &Docs) -> String {
             }
             o.push('\n');
         }
+    }
+    o
+}
+
+/// A hand-written page: its Markdown, with `[[links]]` made into links and a way back.
+fn authored_page(d: &Docs, i: usize) -> String {
+    let outline = d.outline.expect("hand-written pages come from the outline");
+    let page = &outline.pages[i];
+    let mut o = format!(
+        "{GENERATED}\n\n[{}](../README.md) › {}\n\n",
+        d.suite.name,
+        outline.parts[page.part].name
+    );
+    let mut in_code = false;
+    for line in page.source.lines() {
+        if line.starts_with("```") {
+            in_code = !in_code;
+            o.push_str(line);
+        } else if in_code {
+            o.push_str(line);
+        } else {
+            o.push_str(&prose(d, line, true));
+        }
+        o.push('\n');
     }
     o
 }

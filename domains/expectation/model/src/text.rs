@@ -108,6 +108,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn list_items_stay_apart() {
+        let lines: Vec<String> = ["Pick one.", "", "1. First", "  more", "2. Second", "", "After."]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(paragraphs(&lines), ["Pick one.", "1. First   more", "2. Second", "After."]);
+    }
+
+    #[test]
     fn keys_ignore_case_spacing_and_articles() {
         assert_eq!(key("  The   Aircraft is In Hand. "), "aircraft is in hand");
         assert_eq!(key("an event"), "event");

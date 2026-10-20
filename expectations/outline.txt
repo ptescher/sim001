@@ -1,0 +1,29 @@
+# The order of the manual. Each Part is a group of chapters in the navigation; a Section is a
+# top-level directory of this suite (the name in its `Section:` line), and a Page is a
+# hand-written file in manual/. [desktop] keeps a page out of the other platforms' manuals.
+# A top-level section that no part names goes into a last part, "More".
+
+Part: Getting started
+  Page: installing [desktop]
+  Page: the-launcher [desktop]
+  Page: controls [desktop]
+
+Part: Flying by hand
+  Section: The simulator
+  Section: Flying with a flight controller
+
+Part: The ground station
+  Section: Ground control station
+  Page: ground-station-screens [desktop]
+
+Part: Beyond the cockpit
+  Section: Other aircraft
+  Section: The flight computer
+  Section: Watching a real plane
+  Section: Flying by plan
+
+Part: Reference
+  Page: places-and-scenery [desktop]
+  Page: command-line [desktop]
+  Page: airframe [desktop]
+  Page: troubleshooting [desktop]

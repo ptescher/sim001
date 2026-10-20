@@ -21,6 +21,7 @@ mod html;
 mod manual;
 mod map;
 mod markdown;
+pub mod outline;
 mod voice;
 
 use expectation_graph::Analysis;
@@ -39,6 +40,9 @@ pub struct Docs<'a> {
     /// The other platforms' docs (when the suite has several), so each page can offer the same
     /// page there. Their trees are `platforms/<name>/` (the default platform's is the root).
     pub siblings: &'a [Sibling],
+    /// The manual's parts and hand-written pages. Set by the docs themselves from the suite's
+    /// `outline.txt`; leave it `None`.
+    pub outline: Option<&'a outline::Outline>,
 }
 
 /// The pages of the same manual for another platform.
@@ -131,10 +135,12 @@ impl Docs<'_> {
 
     /// The pages, with `source` the suite's directory relative to the docs directory.
     fn pages_with(&self, source: Option<String>) -> Vec<Page> {
-        let mut facts = Facts::new(self);
+        let outline = outline::of(self);
+        let docs = Docs { outline: outline.as_ref(), ..*self };
+        let mut facts = Facts::new(&docs);
         facts.source = source;
-        let mut pages = markdown::pages(self, &facts);
-        pages.extend(html::pages(self, &facts));
+        let mut pages = markdown::pages(&docs, &facts);
+        pages.extend(html::pages(&docs, &facts));
         pages
     }
 }

@@ -303,6 +303,8 @@ pub enum Ref {
     Tutorial(usize),
     /// A glossary term.
     Term(usize),
+    /// A hand-written page of the outline.
+    Page(usize),
 }
 
 /// What `[[name]]` refers to: a section, feature, expectation, story or glossary term with
@@ -310,6 +312,9 @@ pub enum Ref {
 pub fn find(d: &Docs, name: &str) -> Option<Ref> {
     let s = d.suite;
     let is = |n: &str| n.eq_ignore_ascii_case(name.trim());
+    if let Some(i) = d.outline.and_then(|o| o.pages.iter().position(|p| is(&p.title))) {
+        return Some(Ref::Page(i));
+    }
     if let Some(t) = s.glossary.iter().position(|t| is(&t.name)) {
         return Some(Ref::Term(t));
     }
@@ -386,6 +391,8 @@ pub enum Reading {
     Section(SectionId),
     Tutorial(usize),
     Feature(FeatureId),
+    /// A hand-written page of the outline.
+    Page(usize),
 }
 
 pub fn reading_order(d: &Docs) -> Vec<Reading> {
@@ -403,7 +410,20 @@ pub fn reading_order(d: &Docs) -> Vec<Reading> {
         }
     }
     let mut out = vec![];
-    walk(d, SectionId(0), &mut out);
+    let Some(outline) = d.outline else {
+        walk(d, SectionId(0), &mut out);
+        return out;
+    };
+    // The suite's own page, then each part's chapters and pages in the outline's order.
+    out.push(Reading::Section(SectionId(0)));
+    for part in &outline.parts {
+        for item in &part.items {
+            match *item {
+                crate::outline::Item::Section(id) => walk(d, id, &mut out),
+                crate::outline::Item::Page(i) => out.push(Reading::Page(i)),
+            }
+        }
+    }
     out
 }
 

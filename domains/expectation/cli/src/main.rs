@@ -130,6 +130,7 @@ fn docs(dir: &str, out: &str) {
             report: Some(report),
             suite_dir: Some(Path::new(dir)),
             siblings,
+            outline: None,
         };
         let tree = match &names[i] {
             Some(n) if i > 0 => Path::new(out).join("platforms").join(n.to_lowercase()),
@@ -140,7 +141,7 @@ fn docs(dir: &str, out: &str) {
     let all: Vec<expectation_docs::Sibling> = (0..manuals.len())
         .map(|i| {
             let (c, report) = &manuals[i];
-            expectation_docs::Docs { suite: &c.suite, analysis: &c.analysis, plans: &c.plans, report: Some(report), suite_dir: None, siblings: &[] }
+            expectation_docs::Docs { suite: &c.suite, analysis: &c.analysis, plans: &c.plans, report: Some(report), suite_dir: None, siblings: &[], outline: None }
                 .sibling()
         })
         .collect();

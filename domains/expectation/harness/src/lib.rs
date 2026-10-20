@@ -114,6 +114,7 @@ impl Acceptance {
             report,
             suite_dir: self.dir.as_deref(),
             siblings: &[],
+            outline: None,
         }
     }
 

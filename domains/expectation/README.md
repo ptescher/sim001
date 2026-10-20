@@ -318,6 +318,15 @@ The Markdown has the same pages: `README.md` (the overview), `tutorials/`, `feat
 `vocabulary.md`. Pages read in order: each section, then its tutorials, its topics and its
 subsections. Each page's footer names the spec file to edit to change it.
 
+**The outline.** A suite can have an `outline.txt` beside its sections. It groups the
+top-level sections into **parts** (the navigation's labels and the README's contents), sets
+the order the reader meets them in (and so the previous and next links), and places
+**hand-written pages** among them: Markdown files in `manual/` (install, controls,
+reference, troubleshooting) with `[[links]]` into the generated pages and `[desktop]` to keep a
+page out of another platform's manual. The sections themselves stay where they are, because
+their setups inherit from their parents. A top-level section no part names goes into a last
+part, "More", with a warning. Without an `outline.txt` the manual follows the sections.
+
 ## Writing specs
 
 The project skill [writing-specs](../../.claude/skills/writing-specs/SKILL.md) walks through

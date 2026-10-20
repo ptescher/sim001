@@ -23,6 +23,8 @@ pub fn esc(s: &str) -> String {
 enum Here {
     Section(SectionId),
     Feature(FeatureId),
+    /// A hand-written page of the outline.
+    Page(usize),
     /// A written story, as a tutorial.
     Tutorial(usize),
     /// Any test's report (stories and generated ones).
@@ -50,6 +52,9 @@ pub fn pages(d: &Docs, f: &Facts) -> Vec<Page> {
             path: format!("site/{}", site.section_url(section.id)),
             content: site.section_page(section.id),
         });
+    }
+    for i in 0..d.outline.map_or(0, |o| o.pages.len()) {
+        pages.push(Page { path: format!("site/{}", site.page_url(i)), content: site.authored_page(i) });
     }
     for feature in &s.features {
         pages.push(Page {
@@ -128,6 +133,15 @@ impl Site<'_> {
         format!(r#"<a href="{}">{}</a>"#, esc(&self.test_url(i)), esc(&self.d.plans[i].title))
     }
 
+    fn page_url(&self, i: usize) -> String {
+        format!("page-{}.html", self.outline().pages[i].slug)
+    }
+
+    /// The outline; only called when there are hand-written pages to link to.
+    fn outline(&self) -> &crate::outline::Outline {
+        self.d.outline.expect("hand-written pages come from the outline")
+    }
+
     fn section_link(&self, id: SectionId) -> String {
         format!(r#"<a href="{}">{}</a>"#, esc(&self.section_url(id)), esc(&self.suite().section(id).name))
     }
@@ -161,6 +175,7 @@ impl Site<'_> {
                 manual::Reading::Section(id) => Here::Section(id),
                 manual::Reading::Tutorial(i) => Here::Tutorial(i),
                 manual::Reading::Feature(f) => Here::Feature(f),
+                manual::Reading::Page(i) => Here::Page(i),
             })
             .collect()
     }
@@ -192,6 +207,7 @@ impl Site<'_> {
             manual::Ref::Exp(e) => self.exp_url(e),
             manual::Ref::Tutorial(i) => self.tutorial_url(i),
             manual::Ref::Term(t) => format!("glossary.html#{}", self.suite().glossary[t].slug),
+            manual::Ref::Page(i) => self.page_url(i),
         }
     }
 
@@ -210,6 +226,7 @@ impl Site<'_> {
         match h {
             Here::Section(id) => (self.section_url(id), self.suite().section(id).name.clone()),
             Here::Feature(id) => (self.feature_url(id), self.suite().feature(id).name.clone()),
+            Here::Page(i) => (self.page_url(i), self.outline().pages[i].title.clone()),
             Here::Tutorial(i) => (self.tutorial_url(i), self.short_title(i)),
             Here::Test(i) => (self.test_url(i), self.d.plans[i].title.clone()),
             Here::Tests => ("tests.html".into(), "Test report".into()),
@@ -235,14 +252,14 @@ impl Site<'_> {
             self.section_of(here).map(|s| self.suite().chain(s).iter().map(|x| x.id).collect()).unwrap_or_default();
         let mut o = String::from(r#"<nav class="side" aria-label="Contents"><ul class="tree">"#);
         self.nav_section(&mut o, SectionId(0), &open, here);
-        o.push_str("</ul><ul class=\"tree extra\"><li class=\"label\">Reference</li>");
-        // The test report, the map and the theme are for the people who write the specs, not the reader.
-        for h in [Here::Glossary] {
-            let (url, name) = self.here_link(h);
-            let cur = if h == here { r#" class="current""# } else { "" };
-            let _ = write!(o, r#"<li><a href="{url}"{cur}>{name}</a></li>"#);
+        o.push_str("</ul>");
+        if self.d.outline.is_none() {
+            o.push_str("<ul class=\"tree extra\"><li class=\"label\">Reference</li>");
+            // The test report, the map and the theme are for the people who write the specs, not the reader.
+            o.push_str(&self.glossary_link(here));
+            o.push_str("</ul>");
         }
-        o.push_str("</ul></nav>");
+        o.push_str("</nav>");
         o
     }
 
@@ -281,6 +298,9 @@ impl Site<'_> {
             self.nav_section(&mut inner, c, open, here);
         }
         if s.parent.is_none() {
+            if self.d.outline.is_some() {
+                inner = self.nav_parts(open, here);
+            }
             let _ = write!(o, r#"<li class="root">{title}<ul>{inner}</ul></li>"#);
         } else {
             let is_open = if open.contains(&id) { " open" } else { "" };
@@ -291,12 +311,58 @@ impl Site<'_> {
         }
     }
 
+    fn glossary_link(&self, here: Here) -> String {
+        let (url, name) = self.here_link(Here::Glossary);
+        let cur = if here == Here::Glossary { r#" class="current""# } else { "" };
+        format!(r#"<li><a href="{url}"{cur}>{name}</a></li>"#)
+    }
+
+    /// The outline's parts in the navigation: a label for each, then its chapters and pages.
+    fn nav_parts(&self, open: &[SectionId], here: Here) -> String {
+        let outline = self.outline();
+        let mut o = String::new();
+        for part in &outline.parts {
+            let _ = write!(o, r#"<li class="label">{}</li>"#, esc(&part.name));
+            for item in &part.items {
+                match *item {
+                    crate::outline::Item::Section(id) => self.nav_section(&mut o, id, open, here),
+                    crate::outline::Item::Page(i) => {
+                        let cur = if here == Here::Page(i) { r#" class="current""# } else { "" };
+                        let _ = write!(
+                            o,
+                            r#"<li><a href="{}"{cur}>{}</a></li>"#,
+                            esc(&self.page_url(i)),
+                            esc(&outline.pages[i].title)
+                        );
+                    }
+                }
+            }
+            if part.name == "Reference" {
+                o.push_str(&self.glossary_link(here));
+            }
+        }
+        o
+    }
+
     fn crumbs(&self, here: Here) -> String {
         let mut parts: Vec<String> = vec![];
+        if let (Here::Page(i), Some(o)) = (here, self.d.outline) {
+            let part = &o.parts[o.pages[i].part];
+            return format!(
+                r#"<p class="crumbs">{} <span>›</span> {}</p>"#,
+                self.section_link(SectionId(0)),
+                esc(&part.name)
+            );
+        }
         if let Some(sec) = self.section_of(here) {
             for s in self.suite().chain(sec) {
                 if here != Here::Section(s.id) {
                     parts.push(self.section_link(s.id));
+                }
+                if let (None, Some(o)) = (s.parent, self.d.outline)
+                    && let Some(part) = o.part_of(self.suite(), sec)
+                {
+                    parts.push(esc(&o.parts[part].name));
                 }
             }
         } else {
@@ -524,6 +590,9 @@ impl Site<'_> {
     fn section_page(&self, id: SectionId) -> String {
         let s = self.suite();
         let section = s.section(id);
+        if section.parent.is_none() && self.d.outline.is_some() {
+            return self.home_page();
+        }
         let mut o = format!("<h1>{}</h1>", esc(&section.name));
         for p in &paragraphs(&section.description) {
             let _ = write!(o, "<p class=\"lede\">{}</p>", self.prose(p));
@@ -1042,6 +1111,137 @@ impl Site<'_> {
 }
 
 impl Site<'_> {
+    /// The front page of a manual with an outline: what the product is, then the parts.
+    fn home_page(&self) -> String {
+        let s = self.suite();
+        let outline = self.outline();
+        let root = s.section(SectionId(0));
+        let mut o = format!("<h1>{}</h1>", esc(&root.name));
+        for p in &paragraphs(&root.description) {
+            let _ = write!(o, "<p class=\"lede\">{}</p>", self.prose(p));
+        }
+        for part in &outline.parts {
+            let _ = write!(o, "<h2>{}</h2><div class=\"cards\">", esc(&part.name));
+            for item in &part.items {
+                let (url, name, about) = match *item {
+                    crate::outline::Item::Section(id) => {
+                        let sec = s.section(id);
+                        let about = paragraphs(&sec.description).into_iter().next().unwrap_or_default();
+                        (self.section_url(id), sec.name.clone(), manual::plain(&about))
+                    }
+                    crate::outline::Item::Page(i) => {
+                        (self.page_url(i), outline.pages[i].title.clone(), manual::plain(&outline.pages[i].about()))
+                    }
+                };
+                let _ = write!(
+                    o,
+                    r#"<a class="card" href="{}"><strong>{}</strong><span>{}</span></a>"#,
+                    esc(&url),
+                    esc(&name),
+                    esc(&about)
+                );
+            }
+            o.push_str("</div>");
+        }
+        self.page(Here::Section(SectionId(0)), &root.name, &o)
+    }
+
+    /// A hand-written page: its Markdown laid out. Headings, paragraphs, lists, tables and
+    /// code blocks; `code`, **bold** and `[[links]]` in the text.
+    fn authored_page(&self, i: usize) -> String {
+        let page = &self.outline().pages[i];
+        let mut o = format!("<h1>{}</h1>", esc(&page.title));
+        let lines: Vec<&str> = page.source.lines().collect();
+        let mut n = 0;
+        let mut para: Vec<&str> = vec![];
+        let flush = |o: &mut String, para: &mut Vec<&str>| {
+            if !para.is_empty() {
+                let _ = write!(o, "<p>{}</p>", self.rich(&para.join(" ")));
+                para.clear();
+            }
+        };
+        let is_ol = |l: &str| {
+            let d = l.chars().take_while(char::is_ascii_digit).count();
+            d > 0 && l[d..].starts_with(". ")
+        };
+        while n < lines.len() {
+            let line = lines[n];
+            if line.starts_with("```") {
+                flush(&mut o, &mut para);
+                let mut code = String::new();
+                n += 1;
+                while n < lines.len() && !lines[n].starts_with("```") {
+                    code.push_str(lines[n]);
+                    code.push('\n');
+                    n += 1;
+                }
+                let _ = write!(o, "<pre><code>{}</code></pre>", esc(&code));
+            } else if let Some(h) = line.strip_prefix("### ") {
+                flush(&mut o, &mut para);
+                let _ = write!(o, "<h3>{}</h3>", self.rich(h));
+            } else if let Some(h) = line.strip_prefix("## ") {
+                flush(&mut o, &mut para);
+                let _ = write!(o, "<h2>{}</h2>", self.rich(h));
+            } else if line.starts_with("# ") {
+                // The title, already shown.
+            } else if line.starts_with('|') {
+                flush(&mut o, &mut para);
+                let mut rows: Vec<Vec<&str>> = vec![];
+                while n < lines.len() && lines[n].starts_with('|') {
+                    let cells: Vec<&str> = lines[n].trim().trim_matches('|').split('|').map(str::trim).collect();
+                    if !cells.iter().all(|c| c.chars().all(|ch| ch == '-' || ch == ':')) {
+                        rows.push(cells);
+                    }
+                    n += 1;
+                }
+                n -= 1;
+                o.push_str("<table>");
+                for (r, row) in rows.iter().enumerate() {
+                    let tag = if r == 0 { "th" } else { "td" };
+                    o.push_str("<tr>");
+                    for c in row {
+                        let _ = write!(o, "<{tag}>{}</{tag}>", self.rich(c));
+                    }
+                    o.push_str("</tr>");
+                }
+                o.push_str("</table>");
+            } else if line.starts_with("- ") || is_ol(line) {
+                flush(&mut o, &mut para);
+                let ordered = is_ol(line);
+                o.push_str(if ordered { "<ol>" } else { "<ul>" });
+                while n < lines.len() && (lines[n].starts_with("- ") || is_ol(lines[n]) || lines[n].starts_with("  ")) {
+                    let l = lines[n];
+                    if l.starts_with("  ") {
+                        // A continuation of the item above.
+                        o.truncate(o.len() - "</li>".len());
+                        let _ = write!(o, " {}</li>", self.rich(l.trim()));
+                    } else {
+                        let text = if ordered { &l[l.find(". ").unwrap() + 2..] } else { &l[2..] };
+                        let _ = write!(o, "<li>{}</li>", self.rich(text));
+                    }
+                    n += 1;
+                }
+                n -= 1;
+                o.push_str(if ordered { "</ol>" } else { "</ul>" });
+            } else if line.trim().is_empty() {
+                flush(&mut o, &mut para);
+            } else {
+                para.push(line.trim());
+            }
+            n += 1;
+        }
+        flush(&mut o, &mut para);
+        self.page(Here::Page(i), &page.title, &o)
+    }
+
+    /// Text with **bold**, `code` and `[[links]]`.
+    fn rich(&self, text: &str) -> String {
+        text.split("**")
+            .enumerate()
+            .map(|(k, seg)| if k % 2 == 1 { format!("<strong>{}</strong>", self.prose(seg)) } else { self.prose(seg) })
+            .collect()
+    }
+
     /// The terms the manual uses, defined.
     fn glossary_page(&self) -> String {
         let s = self.suite();
