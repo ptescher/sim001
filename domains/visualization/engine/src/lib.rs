@@ -19,6 +19,7 @@ pub mod grass;
 pub mod haze;
 pub mod loading;
 pub mod mapgen;
+pub mod meadow;
 pub mod mesh_util;
 pub mod model;
 pub mod rocks;
