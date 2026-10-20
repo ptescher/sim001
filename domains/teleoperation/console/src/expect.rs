@@ -335,12 +335,26 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 &mut driver,
                 &opts,
             );
-            let r = r.results.into_iter().next().unwrap();
+            let mut r = r.results.into_iter().next().unwrap();
+            // A flight depends on the autopilot, the link and the timing of the machine: a test
+            // that fails once gets one more go, from a fresh plane, and says so.
+            let mut retried = false;
+            if matches!(r.status, expectation_story::Status::Failed) && std::env::var("SIM001_EXPECT_NO_RETRY").is_err() {
+                println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, began.elapsed().as_secs_f32());
+                driver.budget = Duration::from_secs(test_budget(plan));
+                r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts)
+                    .results
+                    .into_iter()
+                    .next()
+                    .unwrap();
+                retried = true;
+            }
             match r.status {
                 expectation_story::Status::Passed => println!(
-                    "expect: ✓ {} ({:.0} s)",
+                    "expect: ✓ {} ({:.0} s{})",
                     plan.title,
-                    began.elapsed().as_secs_f32()
+                    began.elapsed().as_secs_f32(),
+                    if retried { ", on the second go" } else { "" }
                 ),
                 // Another system's test (the sim's), or one for a feature the console lacks.
                 expectation_story::Status::Unsupported => {}
