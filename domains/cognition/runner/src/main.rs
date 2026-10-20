@@ -161,12 +161,14 @@ fn main() {
             .map(|(i, o)| {
                 let it = if tag.it == i + 1 { "*" } else { "" };
                 format!(
-                    "{}{} {:?} {:.0} m {:.0} m/s it {:.0}s tags {}",
+                    "{}{} {:?} {:.0} m {:.0} m/s {:.0} A {:.0} mAh it {:.0}s tags {}",
                     o.name,
                     it,
                     o.state.phase,
                     o.state.pos.y,
                     o.state.airspeed,
+                    o.state.current,
+                    o.state.used_mah,
                     tag.players[i + 1].it_time,
                     tag.players[i + 1].tags
                 )

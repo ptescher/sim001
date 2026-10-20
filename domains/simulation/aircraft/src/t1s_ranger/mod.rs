@@ -150,6 +150,7 @@ pub fn params() -> AircraftParams {
         contacts,
         servo_rate: 600.0 * DEG,
         battery_cells: 4.0,
+        battery_hv: false,
         battery_capacity_mah: 1800.0,
         battery_resistance: 0.055,
         start: crate::StartStyle::Hand,

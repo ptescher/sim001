@@ -224,6 +224,8 @@ pub struct AircraftParams {
     pub contacts: Vec<ContactPoint>,
     pub servo_rate: f32,
     pub battery_cells: f32,
+    /// High-voltage LiPo cells (LiHV): 4.35 V full instead of 4.2 V.
+    pub battery_hv: bool,
     pub battery_capacity_mah: f32,
     pub battery_resistance: f32,
     pub start: StartStyle,

@@ -54,10 +54,11 @@ Q_VELZ_MAX 250
 Q_PILOT_SPD_UP 200
 Q_PILOT_SPD_DN 120
 
-# 4S 2200 mAh pack. The voltage failsafes are off: under a hard climb the pack sags below the
-# T1-S's 13.6 V for a moment, which isn't an empty battery. The capacity ones stay.
-BATT_CAPACITY 2200
-BATT_LOW_MAH 550
-BATT_CRT_MAH 220
+# HEEWING's Hunter 4S HV 3850 mAh pack (20C, LiHV: 4.35 V a cell full). The voltage failsafes
+# are off: under a hard climb the pack sags below the T1-S's 13.6 V for a moment, which isn't an
+# empty battery. The capacity ones stay, at 20 % and 8 %.
+BATT_CAPACITY 3850
+BATT_LOW_MAH 770
+BATT_CRT_MAH 310
 BATT_LOW_VOLT 0
 BATT_CRT_VOLT 0

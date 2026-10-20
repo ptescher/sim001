@@ -599,8 +599,8 @@ impl Session {
                 v.sensors_enabled = s.onboard_control_sensors_enabled.bits();
                 v.sensors_health = s.onboard_control_sensors_health.bits();
                 v.batt_v = s.voltage_battery as f32 * 1e-3;
-                // A full LiPo cell is 4.2 V, so this never undercounts a charged pack.
-                let cells = (v.batt_v / 4.25).ceil() as u8;
+                // A full LiHV cell is 4.35 V (a plain LiPo cell 4.2 V), so this never undercounts a charged pack.
+                let cells = (v.batt_v / 4.4).ceil() as u8;
                 v.batt_cells = v.batt_cells.max(cells);
                 v.batt_a = if s.current_battery >= 0 {
                     s.current_battery as f32 * 0.01

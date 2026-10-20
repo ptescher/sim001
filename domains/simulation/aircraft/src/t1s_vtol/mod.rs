@@ -95,7 +95,9 @@ pub fn params() -> AircraftParams {
     p.mass = 1.10;
     p.inertia = Vec3::new(0.0226, 0.0376, 0.0170);
     p.fuselage_cda += Vec3::new(0.0, 0.004, 0.002);
-    p.battery_capacity_mah = 2200.0;
+    // HEEWING's Hunter 4S HV pack: 3850 mAh, 20C, 265 g, LiHV cells (3.85 V nominal, 4.35 V full).
+    p.battery_capacity_mah = 3850.0;
+    p.battery_hv = true;
     p.battery_resistance = 0.05;
     p.start = StartStyle::Ground { rest_height: 0.07 };
     p.flight_controller = true;
