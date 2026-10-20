@@ -79,20 +79,25 @@ Vocabulary:
   State: the ground station telemetry rate is 0..10000 bytes per second
     Shows: {value}: the telemetry that reaches the ground station in one second
 
+  # The setup in one line, so the manual can tell the reader what to do.
+  Phrase: the TX15 is connected and the plane is at rest
+    Say: connect the TX15 to the flight computer with the sticks centred, the throttle stick all the way down and the arm switch off. Start the simulator with --flight-computer PORT. Wait until the screen of the TX15 shows MANUAL and DISARMED
+    Given the TX15 is connected
+    And the TX15 roll stick is 0 %
+    And the TX15 pitch stick is 0 %
+    And the TX15 throttle stick is 0 %
+    And the TX15 arm switch is off
+    And the corrupted frames are 0 %
+    And the TX15 screen mode is MANUAL
+    And the TX15 screen arming is disarmed
+    And the TX15 screen battery is 12 V
+    And the TX15 screen bank is 0 degrees
+    And the TX15 screen airspeed is 0 m/s
+    And the TX15 screen climb is 0 m/s
+    And the TX15 screen satellites is 12
+    And the TX15 screen message is none
+    And the ground station telemetry is silent
+    And the ground station map distance is 0 m
+
 Background:
-  Given the TX15 is connected
-  And the TX15 roll stick is 0 %
-  And the TX15 pitch stick is 0 %
-  And the TX15 throttle stick is 0 %
-  And the TX15 arm switch is off
-  And the corrupted frames are 0 %
-  And the TX15 screen mode is MANUAL
-  And the TX15 screen arming is disarmed
-  And the TX15 screen battery is 12 V
-  And the TX15 screen bank is 0 degrees
-  And the TX15 screen airspeed is 0 m/s
-  And the TX15 screen climb is 0 m/s
-  And the TX15 screen satellites is 12
-  And the TX15 screen message is none
-  And the ground station telemetry is silent
-  And the ground station map distance is 0 m
+  Given the TX15 is connected and the plane is at rest

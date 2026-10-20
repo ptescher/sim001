@@ -1,6 +1,6 @@
 Feature: The six buttons of the radio
   The six buttons on the front of the radio are the six flight modes that the plane needs.
-  Press the button for the mode that you want:
+  Press one button to choose the flight mode.
 
   1. QHOVER: a hover. The throttle stick sets the climb. The plane drifts with the wind.
   2. QLOITER: a hover that holds the plane at one place. Use it to take off and land.

@@ -161,7 +161,7 @@ ArduPlane SITL ──servo PWM (UDP 9002)──▶ sim001 ──JSON: IMU, attit
 
 ![Station tiled on one display](docs/station_tiled.png)
 
-`domains/teleoperation/console/` is a GPUI ground station built for this sim. It has a HUD-style PFD and a tactical map drawn on an orthophoto of the sim's own terrain. It also has mission planning and upload, GUIDED fly-to, caution/warning annunciators, trend charts and the autopilot message log. See [gcs/README.md](gcs/README.md).
+`domains/teleoperation/console/` is a GPUI ground station built for this sim. It has a HUD-style PFD and a tactical map drawn on an orthophoto of the sim's own terrain. It also has mission planning and upload, GUIDED fly-to, caution/warning annunciators, trend charts and the autopilot message log. See the [console README](domains/teleoperation/console/README.md).
 
 ```bash
 cd domains/teleoperation/console && cargo run --release -- --station

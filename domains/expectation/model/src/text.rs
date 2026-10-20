@@ -35,7 +35,27 @@ pub fn slug(s: &str) -> String {
 
 /// Description lines as paragraphs: lines joined with spaces, an empty line between paragraphs.
 pub fn paragraphs(lines: &[String]) -> Vec<String> {
-    lines.split(|l| l.is_empty()).map(|p| p.join(" ")).filter(|p| !p.is_empty()).collect()
+    let mut out: Vec<String> = vec![];
+    for block in lines.split(|l| l.is_empty()) {
+        let mut para: Vec<&str> = vec![];
+        // A list item (`1. text` or `- text`) is its own paragraph, so a list stays a list.
+        for line in block {
+            if is_list_item(line) && !para.is_empty() {
+                out.push(para.join(" "));
+                para.clear();
+            }
+            para.push(line);
+        }
+        if !para.is_empty() {
+            out.push(para.join(" "));
+        }
+    }
+    out
+}
+
+fn is_list_item(line: &str) -> bool {
+    let digits = line.chars().take_while(char::is_ascii_digit).count();
+    line.starts_with("- ") || (digits > 0 && line[digits..].starts_with(". "))
 }
 
 /// "a", "a and b", "a, b and c".

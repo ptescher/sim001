@@ -58,9 +58,35 @@ pub struct Page {
 pub const NOT_SUPPORTED: &str = "site/assets/not-supported.svg";
 pub const NO_SCREENSHOT: &str = "site/assets/no-screenshot.svg";
 
+/// Removes the pages an earlier run wrote that this one did not: a renamed feature or story
+/// would otherwise leave its old page in the manual's folders.
+fn prune(dir: &Path, written: &[PathBuf]) -> std::io::Result<()> {
+    let kinds: [(&str, &str, &[&str]); 4] = [
+        ("features", "md", &[""]),
+        ("tutorials", "md", &[""]),
+        ("tests", "md", &[""]),
+        ("site", "html", &["feature-", "section-", "test-", "tutorial-"]),
+    ];
+    for (sub, ext, prefixes) in kinds {
+        let Ok(entries) = std::fs::read_dir(dir.join(sub)) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let ours = path.is_file()
+                && path.extension().is_some_and(|e| e == ext)
+                && prefixes.iter().any(|p| name.starts_with(p));
+            if ours && !written.contains(&path) {
+                std::fs::remove_file(&path)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl Docs<'_> {
-    /// Write the Markdown pages and the HTML site under `dir`. Pages for stories or features
-    /// that no longer exist are left alone; the caller owns the directory.
+    /// Write the Markdown pages and the HTML site under `dir`. Pages of stories or features
+    /// that no longer exist are removed (only the generated kinds, in the folders this writes
+    /// to); other files in the directory are left alone.
     pub fn write(&self, dir: &Path) -> std::io::Result<Vec<PathBuf>> {
         // A screenshot the results name but the directory doesn't have (an interrupted run
         // cleared it) is a placeholder, not a broken image.
@@ -87,6 +113,7 @@ impl Docs<'_> {
             std::fs::write(&path, page.content)?;
             written.push(path);
         }
+        prune(dir, &written)?;
         Ok(written)
     }
 
