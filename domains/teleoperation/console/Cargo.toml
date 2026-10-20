@@ -42,6 +42,8 @@ opt-level = 3
 # See vendor/gpui/src/window.rs.
 [patch.crates-io]
 gpui = { path = "../../../vendor/gpui" }
+# xattr 0.2.3 with ENODATA for ENOATTR on Linux (vendor/xattr/src/sys/mod.rs): it does not build there otherwise.
+xattr = { path = "../../../vendor/xattr" }
 
 [[bin]]
 name = "sim001_gcs"
