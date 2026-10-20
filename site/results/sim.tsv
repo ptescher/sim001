@@ -13,7 +13,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.98251795768738	-
+check	1	n:99.97397065162659	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -55,7 +55,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97658133506775	-
+check	1	n:99.97875690460205	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -89,7 +89,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.9622642993927	-
+check	1	n:99.9678909778595	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -97,7 +97,7 @@ step	1	passed	1	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back
 check	1	e:flying	-
 step	2	passed	1	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back-up/02.jpg	-
 check	1	n:0	-
-step	3	passed	8	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back-up/03.jpg	-
+step	3	passed	9	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back-up/03.jpg	-
 check	1	e:in hand	-
 plan	sim--watching-from-every-view--throw-it-then-step-through-the-views	passed	e5226fec772a793d
 step	0	passed	1	screenshots/sim--watching-from-every-view--throw-it-then-step-through-the-views/00.jpg	-
@@ -113,7 +113,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.96995329856873	-
+check	1	n:99.97232556343079	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -139,7 +139,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97606873512268	-
+check	1	n:99.98416304588318	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -163,7 +163,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97488856315613	-
+check	1	n:99.97163414955139	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -191,7 +191,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.96511340141296	-
+check	1	n:99.95900988578796	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -378,7 +378,7 @@ step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, ar
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
-plan	sim--coverage--space-throws-the-plane	failed	b07455ecdd3895f3
+plan	sim--coverage--space-throws-the-plane	passed	b07455ecdd3895f3
 step	0	passed	1	screenshots/sim--coverage--space-throws-the-plane/00.jpg	-
 check	1	n:0	-
 check	1	e:centred	-
@@ -392,12 +392,12 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.96825456619263	-
+check	1	n:99.97190833091736	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
-step	1	failed	101	screenshots/sim--coverage--space-throws-the-plane/01.jpg	-
-check	0	e:crashed	-
+step	1	passed	1	screenshots/sim--coverage--space-throws-the-plane/01.jpg	-
+check	1	e:flying	-
 plan	sim--coverage--a-pause-holds-the-plane-in-your-hand	passed	9985bebeeb73e035
 step	0	passed	1	screenshots/sim--coverage--a-pause-holds-the-plane-in-your-hand/00.jpg	-
 check	1	n:0	-
@@ -412,7 +412,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.98125433921814	-
+check	1	n:99.97849464416504	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -434,7 +434,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97829794883728	-
+check	1	n:99.97218251228333	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -456,7 +456,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97816681861877	-
+check	1	n:99.97199773788452	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -476,7 +476,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97789859771729	-
+check	1	n:99.97191429138184	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -496,7 +496,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97782707214355	-
+check	1	n:99.97186660766602	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -518,7 +518,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.976646900177	-
+check	1	n:99.97251629829407	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -538,7 +538,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97680187225342	-
+check	1	n:99.9724805355072	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -560,7 +560,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.9782145023346	-
+check	1	n:99.97276067733765	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -580,7 +580,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97273087501526	-
+check	1	n:99.972665309906	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -602,12 +602,12 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97227191925049	-
+check	1	n:99.9723494052887	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
 step	1	passed	1	screenshots/sim--coverage--v-fits-a-fresh-battery/01.jpg	-
-check	1	n:99.99172687530518	-
+check	1	n:99.99079704284668	-
 plan	sim--recreation--coverage--the-key-of-the-game-stops-it	passed	0f9643c6879ff348
 step	0	passed	1	screenshots/sim--recreation--coverage--the-key-of-the-game-stops-it/00.jpg	-
 check	1	n:0	-
@@ -622,7 +622,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.96348023414612	-
+check	1	n:99.97174143791199	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -649,7 +649,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97830986976624	-
+check	1	n:99.9724268913269	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -688,7 +688,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.98149275779724	-
+check	1	n:99.97372627258301	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -730,7 +730,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.9565601348877	-
+check	1	n:99.96705055236816	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -764,7 +764,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.95831847190857	-
+check	1	n:99.96399283409119	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
