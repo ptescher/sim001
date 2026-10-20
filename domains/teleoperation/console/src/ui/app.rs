@@ -236,7 +236,7 @@ impl Gcs {
     }
 
     fn command_panel(&mut self, v: &Vehicle, cx: &mut Context<Self>) -> Div {
-        let confirming = self.arm_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(3));
+        let confirming = self.arm_confirm.is_some_and(|t| t.elapsed() < ARM_CONFIRM);
         if !confirming {
             self.arm_confirm = None;
         }
@@ -256,28 +256,34 @@ impl Gcs {
         // A disarm ArduPilot refused (it thinks it's flying) can be forced with a second click.
         let force = v.armed && self.disarm_at.is_some_and(|t| (1..8).contains(&t.elapsed().as_secs()));
         let arm = if v.armed {
-            button("disarm", if force { "FORCE DISARM" } else { "DISARM" }, Style::Danger).on_click(cx.listener(move |this, _, _, _| {
-                if force {
-                    this.disarm_at = None;
-                    this.send(Cmd::ForceDisarm);
-                } else {
-                    this.disarm_at = Some(Instant::now());
-                    this.send(Cmd::Arm(false));
+            button("disarm", if force { "FORCE DISARM" } else { "DISARM" }, Style::Danger).on_click(cx.listener(move |this, _, _, cx| {
+                match disarm_click(&mut this.disarm_at, Instant::now()) {
+                    Disarm::Force => this.send(Cmd::ForceDisarm),
+                    Disarm::Ask => this.send(Cmd::Arm(false)),
                 }
-            }))
-        } else if confirming {
-            button("arm", "CONFIRM ARM", Style::Danger).on_click(cx.listener(|this, _, _, _| {
-                this.arm_confirm = None;
-                this.send(Cmd::Arm(true));
+                cx.notify();
             }))
         } else {
-            let (text, style) = if not_ready_reason.is_some() { ("ARM: NOT READY", Style::Normal) } else { ("ARM", Style::Caution) };
-            button("arm", text, style).on_click(cx.listener(|this, _, _, _| this.arm_confirm = Some(Instant::now())))
+            let (text, style) = if confirming {
+                ("CONFIRM ARM", Style::Danger)
+            } else if not_ready_reason.is_some() {
+                ("ARM: NOT READY", Style::Normal)
+            } else {
+                ("ARM", Style::Caution)
+            };
+            button("arm", text, style).on_click(cx.listener(|this, _, _, cx| {
+                if arm_click(&mut this.arm_confirm, Instant::now()) {
+                    this.send(Cmd::Arm(true));
+                }
+                cx.notify();
+            }))
         };
         // A VTOL takes off straight up, to the plan altitude.
         let takeoff = self.vtol.then(|| {
             button("vtol-tkof", "VTOL TKOF", Style::Normal).on_click(cx.listener(move |this, _, _, _| {
-                if armed {
+                // Whether it is armed now, not when the screen was last drawn: a console that is slow
+                // to redraw would refuse a take-off for an arm it had not drawn yet.
+                if this.vehicle.lock().unwrap().armed {
                     this.send(Cmd::Takeoff { alt: this.map.plan_alt });
                 } else {
                     this.log(4, "Arm the vehicle first: VTOL TKOF lifts an armed VTOL straight up");
@@ -286,13 +292,11 @@ impl Gcs {
         });
         let rebooting = self.reboot_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(3));
         let reboot = button("reboot", if rebooting { "CONFIRM REBOOT" } else { "REBOOT FC" }, if rebooting { Style::Danger } else { Style::Normal })
-            .on_click(cx.listener(move |this, _, _, _| {
-                if rebooting {
-                    this.reboot_confirm = None;
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if arm_click(&mut this.reboot_confirm, Instant::now()) {
                     this.send(Cmd::Reboot);
-                } else {
-                    this.reboot_confirm = Some(Instant::now());
                 }
+                cx.notify();
             }));
         let hint = if confirming || rebooting {
             div().text_color(c(GREY)).child("click again within 3 s")
@@ -314,6 +318,7 @@ impl Gcs {
                 (m, if active { Style::Active } else { Style::Normal })
             };
             button(SharedString::from(format!("mode-{m}")), label, style).on_click(cx.listener(move |this, _, _, _| {
+                let no_mission = this.vehicle.lock().unwrap().mission.len() <= 1;
                 if m == "AUTO" && no_mission && !this.auto_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(4)) {
                     this.auto_confirm = Some(Instant::now());
                     this.log(4, "No mission on the vehicle: AUTO would go straight to RTL. Plan one (PLAN, +TKOF, UPLOAD), or click AUTO again to do it anyway");
@@ -726,6 +731,78 @@ impl Render for Gcs {
             .text_color(c(WHITE))
             .child(top)
             .child(body)
+    }
+}
+
+/// A click on ARM: the first asks for confirmation, a second within `ARM_CONFIRM` sends the arm. Decided from
+/// the state when the click lands, not from what the screen showed when it was last drawn: a
+/// console that is slow to redraw (or a click that comes at once) must not turn two clicks into
+/// two first clicks.
+const ARM_CONFIRM: Duration = Duration::from_secs(3);
+
+fn arm_click(confirm: &mut Option<Instant>, now: Instant) -> bool {
+    if confirm.is_some_and(|t| now.saturating_duration_since(t) < ARM_CONFIRM) {
+        *confirm = None;
+        true
+    } else {
+        *confirm = Some(now);
+        false
+    }
+}
+
+/// A click on DISARM: the first asks the autopilot to disarm; if it is still armed a second, between
+/// 1 and 8 s later (it refused, thinking it is flying), forces it. Decided when the click lands.
+#[derive(Debug, PartialEq)]
+enum Disarm {
+    Ask,
+    Force,
+}
+
+fn disarm_click(at: &mut Option<Instant>, now: Instant) -> Disarm {
+    let force = at.is_some_and(|t| (1..8).contains(&now.saturating_duration_since(t).as_secs()));
+    if force {
+        *at = None;
+        Disarm::Force
+    } else {
+        *at = Some(now);
+        Disarm::Ask
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_disarm_that_was_refused_is_forced_by_a_second_click_a_little_later() {
+        let now = Instant::now();
+        let mut at = None;
+        assert_eq!(disarm_click(&mut at, now), Disarm::Ask);
+        assert_eq!(disarm_click(&mut at, now + Duration::from_millis(300)), Disarm::Ask, "too soon: it is the same click");
+        assert_eq!(disarm_click(&mut at, now + Duration::from_secs(3)), Disarm::Force);
+        assert!(at.is_none());
+        assert_eq!(disarm_click(&mut at, now + Duration::from_secs(20)), Disarm::Ask);
+        assert_eq!(disarm_click(&mut at, now + Duration::from_secs(40)), Disarm::Ask, "too late");
+    }
+
+    #[test]
+    fn a_second_click_arms_whatever_was_drawn_between() {
+        let now = Instant::now();
+        let mut confirm = None;
+        assert!(!arm_click(&mut confirm, now), "the first click only asks");
+        assert!(confirm.is_some());
+        assert!(arm_click(&mut confirm, now + Duration::from_millis(5)), "the second, at once, arms");
+        assert!(confirm.is_none(), "and the confirmation is spent");
+        assert!(!arm_click(&mut confirm, now + Duration::from_millis(10)), "a third starts again");
+    }
+
+    #[test]
+    fn a_confirmation_that_has_waited_too_long_is_gone() {
+        let now = Instant::now();
+        let mut confirm = None;
+        assert!(!arm_click(&mut confirm, now));
+        assert!(!arm_click(&mut confirm, now + Duration::from_secs(4)), "after 3 s it asks again");
+        assert!(arm_click(&mut confirm, now + Duration::from_secs(5)));
     }
 }
 

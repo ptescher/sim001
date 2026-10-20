@@ -121,7 +121,9 @@ fn native_sitl_args(instance: usize, aircraft: &str, home_loc: Option<&str>) -> 
 }
 
 /// The native ArduPlanes this station started, stopped when it ends.
-static NATIVE: std::sync::Mutex<Vec<Child>> = std::sync::Mutex::new(Vec::new());
+static NATIVE: std::sync::Mutex<Vec<(usize, Child)>> = std::sync::Mutex::new(Vec::new());
+/// Set when the station is stopping them, so that the watcher does not start them again.
+static STOPPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Starts SITL instance `instance` as a native process (a fresh one: the ones of an earlier
 /// station are gone, since it stopped them). Its files and flight logs go to its own folder.
@@ -152,7 +154,8 @@ fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Optio
     if let Ok(Some(status)) = child.try_wait() {
         return Err(format!("ArduPlane {instance} exited right away ({status}); is its MAVLink port already taken?"));
     }
-    NATIVE.lock().unwrap().push(child);
+    NATIVE.lock().unwrap().push((instance, child));
+    watch_native(program, aircraft, home_loc);
     Ok(if instance == 0 {
         format!("started ArduPlane (MAVLink on tcp:5760, flight logs in {})", logs.display())
     } else {
@@ -171,8 +174,87 @@ fn process_log(dir: &Path) -> std::io::Result<(Stdio, Stdio)> {
     Ok((Stdio::from(log), Stdio::from(err)))
 }
 
+/// A panic ArduPlane has printed since its last start (the last `--- started` line), if it has.
+fn panic_since_start(log: &Path) -> Option<String> {
+    let lines = teleoperation_core::debug::tail_lines(log, 400);
+    let since = lines.iter().rposition(|l| l.starts_with("--- started") || l.starts_with("--- exited")).map_or(0, |i| i + 1);
+    lines[since..].iter().find(|l| l.starts_with("PANIC")).cloned()
+}
+
+/// The folder an instance runs in: its logs, flight logs and what it prints.
+fn logs_folder(instance: usize) -> PathBuf {
+    if instance == 0 { work_dir().join("logs/sitl") } else { work_dir().join(format!("logs/sitl/opponent-{instance}")) }
+}
+
+/// Starts again any of `children` that has exited, each in its own folder: the log gets a line that
+/// it died, and what is said is returned. (ArduPlane panics now and then as it comes up, and a
+/// station with no autopilot waits for ever.)
+fn restart_dead(children: &mut Vec<(usize, Child)>, folder_of: impl Fn(usize) -> PathBuf, mut respawn: impl FnMut(usize) -> Result<Child, String>) -> Vec<String> {
+    use std::io::Write;
+    let mut said = vec![];
+    for (instance, child) in children.iter_mut() {
+        let log_path = folder_of(*instance).join("arduplane.log");
+        // A panic since the last start: it may be hung rather than gone, so make it gone.
+        let panicked = panic_since_start(&log_path);
+        let status = match (child.try_wait(), &panicked) {
+            (Ok(Some(status)), _) => status.to_string(),
+            (_, Some(_)) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                "panicked".to_string()
+            }
+            _ => continue,
+        };
+        if let Ok(mut log) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+            let _ = writeln!(log, "--- exited ({status}) ---");
+        }
+        match respawn(*instance) {
+            Ok(new) => {
+                *child = new;
+                said.push(format!("ArduPlane {instance} exited ({status}); started it again"));
+            }
+            Err(e) => said.push(format!("ArduPlane {instance} exited ({status}) and would not start again: {e}")),
+        }
+    }
+    said
+}
+
+/// Watches the autopilots this station started, and starts one again that dies, for as long as it runs.
+fn watch_native(program: &Path, aircraft: &str, home_loc: Option<&str>) {
+    static WATCHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if WATCHING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    STOPPING.store(false, std::sync::atomic::Ordering::SeqCst);
+    let (program, aircraft, home_loc) = (program.to_path_buf(), aircraft.to_string(), home_loc.map(str::to_string));
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        if STOPPING.load(std::sync::atomic::Ordering::SeqCst) {
+            WATCHING.store(false, std::sync::atomic::Ordering::SeqCst);
+            return;
+        }
+        let mut children = NATIVE.lock().unwrap();
+        let said = restart_dead(&mut children, logs_folder, |instance| {
+            let logs = logs_folder(instance);
+            let (out, err) = process_log(&logs).map_err(|e| e.to_string())?;
+            Command::new(&program)
+                .args(native_sitl_args(instance, &aircraft, home_loc.as_deref()))
+                .current_dir(&logs)
+                .stdin(Stdio::null())
+                .stdout(out)
+                .stderr(err)
+                .spawn()
+                .map_err(|e| e.to_string())
+        });
+        for line in said {
+            eprintln!("station: {line}");
+        }
+    });
+}
+
 fn stop_native() {
-    for mut c in NATIVE.lock().unwrap().drain(..) {
+    STOPPING.store(true, std::sync::atomic::Ordering::SeqCst);
+    for (_, mut c) in NATIVE.lock().unwrap().drain(..) {
         let _ = c.kill();
         let _ = c.wait();
     }
@@ -630,6 +712,65 @@ mod tests {
         let text = std::fs::read_to_string(dir.join("arduplane.log")).unwrap();
         assert!(text.contains("ArduPlane says hello"), "{text}");
         assert_eq!(text.matches("--- started ").count(), 2, "{text}");
+    }
+
+    /// An autopilot that dies (ArduPlane panics now and then as it comes up) is started again,
+    /// and the log says so; one that is running is left alone, and so is the next of another instance.
+    #[test]
+    fn an_autopilot_that_died_is_started_again_and_one_that_runs_is_left_alone() {
+        let dir = std::env::temp_dir().join(format!("sim001-supervise-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut children: Vec<(usize, Child)> = vec![
+            (0, Command::new("true").spawn().unwrap()),
+            (1, Command::new("sleep").arg("30").spawn().unwrap()),
+        ];
+        let running_pid = children[1].1.id();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let mut respawned = vec![];
+        let said = restart_dead(&mut children, |_| dir.clone(), |instance| {
+            respawned.push(instance);
+            Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string())
+        });
+        assert_eq!(respawned, vec![0]);
+        assert_eq!(said.len(), 1);
+        assert!(said[0].contains("ArduPlane 0") && said[0].contains("exited") && said[0].contains("again"), "{said:?}");
+        assert_eq!(children[1].1.id(), running_pid, "the one that was running is the same one");
+        assert!(children[0].1.try_wait().unwrap().is_none(), "the new one runs");
+        // The log has a line that says it died.
+        let log = std::fs::read_to_string(dir.join("arduplane.log")).unwrap_or_default();
+        assert!(log.contains("--- exited"), "{log}");
+        // Nothing dead, nothing done.
+        assert!(restart_dead(&mut children, |_| dir.clone(), |_| panic!("nothing is dead")).is_empty());
+        for (_, c) in &mut children {
+            let _ = c.kill();
+        }
+    }
+
+    /// ArduPlane that panics does not always exit: it can hang with its panic on screen, and a station
+    /// that waits for its heartbeat waits for ever. A panic in the output since the last start is as
+    /// good as an exit: the autopilot is stopped and started again.
+    #[test]
+    fn an_autopilot_that_panicked_and_hung_is_stopped_and_started_again() {
+        let dir = std::env::temp_dir().join(format!("sim001-panic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("arduplane.log"), "--- started 1 ---\nSetting SIM_SPEEDUP=1.0\nPANIC: Should not be called on invalid location\nRunning: sh dumpstack.sh 1\n").unwrap();
+        let hung = Command::new("sleep").arg("30").spawn().unwrap();
+        let hung_pid = hung.id();
+        let mut children = vec![(0, hung)];
+        let said = restart_dead(&mut children, |_| dir.clone(), |_| Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string()));
+        assert_eq!(said.len(), 1);
+        assert!(said[0].contains("panicked") && said[0].contains("again"), "{said:?}");
+        assert_ne!(children[0].1.id(), hung_pid);
+        let log = std::fs::read_to_string(dir.join("arduplane.log")).unwrap();
+        assert!(log.contains("--- exited (panicked"), "{log}");
+        // A panic of an earlier start, with a start since, is history.
+        std::fs::write(dir.join("arduplane.log"), "--- started 1 ---\nPANIC: old\n--- exited (killed) ---\n--- started 2 ---\nStarting SITL\n").unwrap();
+        assert!(restart_dead(&mut children, |_| dir.clone(), |_| panic!("it is fine")).is_empty());
+        for (_, c) in &mut children {
+            let _ = c.kill();
+        }
     }
 
     #[test]
