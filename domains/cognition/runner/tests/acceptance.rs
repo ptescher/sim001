@@ -6,13 +6,15 @@
 //!
 //! It needs the AGENT build: `SIM001_BIN` (a directory with `arduplane`), else
 //! `.ardupilot-agent/build/sitl/bin` (`AP_DIR=.ardupilot-agent AGENT_EXEC=1
-//! ardupilot/build_native.sh`). Without it every test is "not supported yet". The SITL instances
+//! ardupilot/build_native.sh`). The harness asks for it as the service `ardupilot-agent`: without it
+//! every test is "not supported yet", with how to build it. The SITL instances
 //! use fixed ports (5770-5790, 9012-9032), so nothing else may run SITL at the same time; this is
 //! the only test here, so cargo runs it alone. A game and the tests take about 90 s.
 //!
 //! What this driver cannot see (where the plane flies) the windowless driver measures, in
 //! `domains/cognition/executor/tests/acceptance.rs`. Where both run a test, the docs show this one.
 
+use expectation_harness::service::{Present, Services};
 use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screenshot};
 use expectation_model::{Event, Value, Variable};
 use expectation_story::Status;
@@ -40,6 +42,16 @@ fn agent_build() -> Result<PathBuf, String> {
             dir.display()
         ))
     }
+}
+
+/// The AGENT build as a service of the run: there or not, and how to build it when it is not.
+fn agent_service() -> Present {
+    let dir = match std::env::var_os("SIM001_BIN") {
+        Some(d) => PathBuf::from(d),
+        None => root().join(".ardupilot-agent/build/sitl/bin"),
+    };
+    Present::new("ardupilot-agent", &dir.join("arduplane"))
+        .hint("build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN")
 }
 
 /// A parameter of `ardupilot/t1s.parm`, which the runner gives every plane as its defaults.
@@ -418,10 +430,11 @@ impl Driver for Sitl {
         Ok(Some(Screenshot::svg(terminal(&self.transcript))))
     }
 
+    fn needs(&self) -> Vec<String> {
+        vec!["ardupilot-agent".into()]
+    }
+
     fn supports(&self, need: Need<'_>) -> bool {
-        if self.build.is_err() {
-            return false;
-        }
         match need {
             Need::Arrange(v) => ARRANGED.iter().any(|s| is(v, s)),
             Need::Set(v) => is(v, "the flight mode of the plane"),
@@ -464,11 +477,12 @@ fn the_section_runs_in_sitl() {
     let section = a.suite.sections.iter().find(|s| s.slug == "cognition").expect("an cognition section").id;
     let ours = a.suite.subtree(section);
     let mut driver = Sitl::new();
-    if let Err(why) = &driver.build {
+    let mut services = Services::new().with(agent_service());
+    if let Some(why) = services.missing(&["ardupilot-agent"]).first() {
         println!("not supported yet: {why}");
     }
     let published = std::env::var("SIM001_DOCS").ok().map(PathBuf::from);
-    let report = a.run(&mut driver, &RunOptions { docs_dir: published.clone(), ..Default::default() });
+    let report = a.run_with(&mut driver, &RunOptions { docs_dir: published.clone(), ..Default::default() }, &mut services);
     drop(driver);
     if let Some(out) = &published {
         a.publish(out, "cognition-sitl", &report).unwrap();

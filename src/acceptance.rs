@@ -157,7 +157,7 @@ struct Standin {
 type Shared = Arc<Mutex<Standin>>;
 
 /// Load and check the suite before anything opens, then start the runner thread.
-pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_controller: bool, ardupilot_flying: bool) {
+pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_controller: bool, ardupilot_flying: bool, services: expectation_harness::service::Services) {
     // ArduPilot steps the physics in real time, so what the tests wait for can't run any faster.
     let speed: f32 = if ardupilot_flying { 1.0 } else { 8.0 };
     let scale = TimeScale(std::env::var("SIM001_EXPECT_SPEED").ok().and_then(|v| v.parse().ok()).unwrap_or(speed).clamp(1.0, 20.0));
@@ -186,20 +186,21 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
     install_standin(&app.world().resource::<SharedSim>().0, standin.clone());
 
     std::thread::spawn(move || {
-        let mut driver = SimDriver { tx, flight_controller, ardupilot_flying, standin, deadline: Mutex::new(None) };
+        let mut services = services;
+        let mut driver = SimDriver { tx, flight_controller, ardupilot_flying, standin, deadline: Mutex::new(None), needs: if services.is_empty() { vec![] } else { vec!["ardupilot".to_string()] } };
         let opts = RunOptions { docs_dir: docs.clone(), patience: 100 };
         let mut report = expectation_story::Report::default();
         let began = std::time::Instant::now();
         for plan in &acceptance.plans {
             let started = std::time::Instant::now();
-            let mut r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts).results.into_iter().next().unwrap();
+            let mut r = expectation_harness::run::run_with(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts, &mut services).results.into_iter().next().unwrap();
             // The games are played by computer pilots, and how a game goes is not the same twice:
             // a test that fails once gets one more go, and says so.
             let mut retried = false;
             say_what_ardupilot_did(&driver, &r);
             if matches!(r.status, expectation_story::Status::Failed) && std::env::var("SIM001_EXPECT_NO_RETRY").is_err() {
                 println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, started.elapsed().as_secs_f32());
-                r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts).results.into_iter().next().unwrap();
+                r = expectation_harness::run::run_with(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts, &mut services).results.into_iter().next().unwrap();
                 retried = true;
                 say_what_ardupilot_did(&driver, &r);
             }
@@ -367,6 +368,8 @@ fn jpeg(image: &Image) -> Shot {
 }
 
 struct SimDriver {
+    /// The external services it needs (ArduPilot, for a plane with a flight controller).
+    needs: Vec<String>,
     tx: Sender<Request>,
     /// The plane has a flight controller (`--aircraft`).
     flight_controller: bool,
@@ -550,6 +553,15 @@ fn on_off(on: bool, yes: &'static str, no: &'static str) -> Value {
 }
 
 impl Driver for SimDriver {
+    fn needs(&self) -> Vec<String> {
+        self.needs.clone()
+    }
+
+    /// Flown by ArduPilot, a test starts on a fresh one: disarmed, on the ground, its estimators at rest.
+    fn fresh(&self) -> Vec<String> {
+        if self.ardupilot_flying { self.needs.clone() } else { vec![] }
+    }
+
     /// Back to the Background: in hand, sticks centred, MANUAL, high rates, differential
     /// thrust on, line of sight with auto-zoom, no help, running, a full battery. Controllers
     /// are ignored from here on, so a connected gamepad can't change what the keys do.
@@ -558,7 +570,7 @@ impl Driver for SimDriver {
         *self.deadline.lock().unwrap() = None;
         // With ArduPilot flying the plane, a test starts on a fresh one: disarmed, on the ground.
         if self.ardupilot_flying {
-            crate::sitl::restart()?;
+            // (The harness has started ArduPilot afresh, see `fresh`.)
             self.sim(|c| {
                 c.ap.connected = false;
                 c.ap.gcs = None;
@@ -916,7 +928,7 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations");
         let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
         let (tx, _rx) = channel();
-        let driver = SimDriver { tx, flight_controller: false, ardupilot_flying: false, standin: Default::default(), deadline: Mutex::new(None) };
+        let driver = SimDriver { tx, flight_controller: false, ardupilot_flying: false, standin: Default::default(), deadline: Mutex::new(None), needs: vec![] };
         let v = &a.suite.vocabulary;
         let sim = a.suite.sections.iter().find(|s| s.slug == "sim").expect("a sim section").id;
         let ours = a.suite.subtree(sim);

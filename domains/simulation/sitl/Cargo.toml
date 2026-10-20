@@ -7,4 +7,5 @@ description = "Simulation domain: the ArduPilot SITL side, headless. The JSON ph
 [dependencies]
 simulation_aircraft = { path = "../aircraft" }
 simulation_physics = { path = "../physics" }
+expectation_service = { path = "../../expectation/service" }
 glam = "0.33"

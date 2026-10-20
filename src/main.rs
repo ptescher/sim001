@@ -125,6 +125,15 @@ fn main() {
     }
     let root_buf = sitl::resource_root();
     let root = root_buf.as_path();
+    // The acceptance tests ask for ArduPilot as a service (see `acceptance`): the harness starts and stops
+    // it, the sim only connects, as it does to a SITL that somebody else runs.
+    let services = std::sync::Mutex::new(expectation_harness::service::Services::new());
+    let mut ap_by_service = false;
+    if flag("--expect") && params.flight_controller && !ap_enabled {
+        ap_enabled = true;
+        ap_by_service = true;
+        services.lock().unwrap().add(simulation_sitl::service::ardupilot(root, aircraft.id, &sitl::data_dir(root).join("logs/sitl")));
+    }
     let own_sitl = if params.flight_controller && !ap_enabled {
         let plan = sitl::plan(root, aircraft.id, sitl::native_binary(root).exists(), sitl::docker_image_exists());
         match sitl::start(root, plan) {
@@ -149,7 +158,7 @@ fn main() {
     if ap_enabled {
         core.lock().unwrap().direct = direct;
         ardupilot::spawn_bridge(core.clone(), ap_port, ardupilot::Plane::Yours);
-        if own_sitl {
+        if own_sitl || ap_by_service {
             sitl::watch_heartbeat(core.clone());
         }
         // Each computer pilot's plane has an autopilot of its own (SITL instances 1 to 3).
@@ -298,7 +307,7 @@ fn main() {
         app.add_plugins(test_radio::plugin);
     }
     if let Some(suite) = expect {
-        acceptance::plugin(&mut app, suite, docs, params.flight_controller, ap_enabled && !direct);
+        acceptance::plugin(&mut app, suite, docs, params.flight_controller, ap_enabled && !direct, services.into_inner().unwrap());
     }
     let exit = app.run();
     sitl::stop();

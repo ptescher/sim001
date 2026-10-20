@@ -30,6 +30,8 @@ pub struct Bindings<W> {
     settle: Option<Action<W>>,
     advance: Option<Advancer<W>>,
     screenshot: Option<Shooter<W>>,
+    needs: Vec<String>,
+    fresh: Vec<String>,
 }
 
 impl<W> Bindings<W> {
@@ -44,7 +46,21 @@ impl<W> Bindings<W> {
             settle: None,
             advance: None,
             screenshot: None,
+            needs: vec![],
+            fresh: vec![],
         }
+    }
+
+    /// The services to start afresh before each test (a subset of those it needs).
+    pub fn fresh(mut self, services: &[&str]) -> Self {
+        self.fresh = services.iter().map(|s| s.to_string()).collect();
+        self
+    }
+
+    /// The external services these bindings need (see [`crate::service`]).
+    pub fn needs(mut self, services: &[&str]) -> Self {
+        self.needs = services.iter().map(|s| s.to_string()).collect();
+        self
     }
 
     /// How to read a state. Subjects match the vocabulary ignoring case and a leading "the".
@@ -97,6 +113,14 @@ fn unbound(what: &str, name: &str) -> String {
 }
 
 impl<W> Driver for Bindings<W> {
+    fn needs(&self) -> Vec<String> {
+        self.needs.clone()
+    }
+
+    fn fresh(&self) -> Vec<String> {
+        self.fresh.clone()
+    }
+
     fn reset(&mut self) -> Result<(), String> {
         if let Some(f) = &mut self.reset {
             f(&mut self.world);

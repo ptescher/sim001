@@ -37,10 +37,40 @@ events, so expectations can be compared mechanically. The domain uses that to:
 | `expectation_graph` | [graph/](graph) | Conflicts, override precedence, the flow DAG, Mermaid and DOT export |
 | `expectation_story` | [story/](story) | Stories → acceptance-test plans, coverage, results and verdicts |
 | `expectation_docs` | [docs/](docs) | The manual, as an HTML site and Markdown, from all of the above |
+| `expectation_service` | [service/](service) | The external things a run needs (a flight controller, a database, a container): started once, stopped after, and "not supported yet" with how to get them when they can't be had. No dependencies |
 | `expectation_harness` | [harness/](harness) | The `Driver` trait, closure `Bindings`, the runner, and the `Acceptance` pipeline |
 | `expectation_cli` | [cli/](cli) | The `expectation` command: `check`, `graph`, `plan`, `docs` |
 
 There are no external dependencies.
+
+## External services
+
+Tests sometimes need something that is not part of the system under test: ArduPilot to fly a
+plane, a database, a container. The harness treats that as a **service**, so no test, driver or
+script has to start it:
+
+```rust
+let mut services = Services::new()
+    .with(simulation_sitl::service::ardupilot(root, "t1s-vtol", &work))   // native build, else Docker
+    .with(Docker::new("database", "postgres:16").port(5432, 55432)        // a database is a container
+        .env("POSTGRES_PASSWORD", "test").ready(Ready::Tcp(55432)));
+let mut driver = Bindings::new(world).needs(&["ardupilot", "database"]).fresh(&["ardupilot"]);
+let report = acceptance.run_with(&mut driver, &RunOptions::default(), &mut services);
+```
+
+- **Needs.** A driver says what it needs (`Driver::needs`). Before a plan the runner makes sure
+  each is up: one that is up stays, one that died is started again. All stop when `services`
+  is dropped, the last started first.
+- **Fresh.** What a test leaves behind (a flight controller armed by the last one) is cleared
+  by naming the service in `Driver::fresh`: it is started afresh before each test that runs.
+- **Not supported yet, not failed.** A service that can't run here (no Docker, no build) makes
+  its plans "not supported yet", and the reason says how to get it. Plans the driver can't run
+  anyway start nothing.
+- **Providers.** `Command` (a program, ready when a port answers), `Docker` (a container, its
+  image built from a directory when it isn't there, Docker Desktop woken on a Mac), `Present`
+  (a build or a file that must be there), and `Fallback` (the first of several ways that is
+  available: a native build, else a container). A port that something else already holds is an
+  error, not a ready service: what answers there is a leftover of an earlier run.
 
 ## Platforms
 

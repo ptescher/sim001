@@ -10,3 +10,4 @@ expectation_language = { path = "../language" }
 expectation_graph = { path = "../graph" }
 expectation_story = { path = "../story" }
 expectation_docs = { path = "../docs" }
+expectation_service = { path = "../service" }

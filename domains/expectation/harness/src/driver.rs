@@ -57,6 +57,19 @@ impl std::fmt::Display for Need<'_> {
 /// and the runner keeps observing until a step's checks hold or its patience runs out, so
 /// "Then the aircraft is flying" means *eventually*, as it would for a person watching.
 pub trait Driver {
+    /// The external services this driver needs for its tests (see [`crate::service`]): a flight
+    /// controller, a database. The runner starts them before a plan, and when one cannot be had
+    /// here the plans are "not supported yet", with what to do about it.
+    fn needs(&self) -> Vec<String> {
+        vec![]
+    }
+
+    /// The services that must be started afresh before each test (a flight controller the last
+    /// test armed): a subset of [`Driver::needs`].
+    fn fresh(&self) -> Vec<String> {
+        vec![]
+    }
+
     /// Put the system in its starting state (what the Background describes), before each test.
     fn reset(&mut self) -> Result<(), String> {
         Ok(())

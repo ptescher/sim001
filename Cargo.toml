@@ -3,7 +3,7 @@
 # See domains/README.md. The sim (this package) predates the layout. domains/teleoperation/console
 # and domains/visualization/mapbuild keep their own lockfiles and build on their own.
 [workspace]
-members = ["domains/*/*"]
+members = ["domains/*/*", "tools/tasks"]
 exclude = ["domains/teleoperation/console", "domains/teleoperation/launcher", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
 
 [package]
@@ -39,6 +39,7 @@ illustration_theme = { path = "domains/illustration/theme" }
 expectation_harness = { path = "domains/expectation/harness" }
 expectation_model = { path = "domains/expectation/model" }
 expectation_story = { path = "domains/expectation/story" }
+expectation_service = { path = "domains/expectation/service" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 hidapi = "2"

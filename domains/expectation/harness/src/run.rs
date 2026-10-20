@@ -1,6 +1,7 @@
 //! Running plans against a driver.
 
 use crate::driver::{Driver, Need, Progress};
+use crate::service::Services;
 use expectation_model::{Suite, Trigger};
 use expectation_story::{Check, CheckResult, Plan, PlanResult, Report, Status, StepResult};
 use std::path::PathBuf;
@@ -23,6 +24,28 @@ pub fn run(suite: &Suite, plans: &[Plan], driver: &mut dyn Driver, opts: &RunOpt
     Report { results: plans.iter().map(|p| run_plan(suite, p, driver, opts)).collect() }
 }
 
+/// As [`run`], with what the driver needs from outside started before each plan: a service that
+/// is up stays, one that died is started again, and when one cannot be had the plan is not
+/// supported yet, with what to do about it.
+pub fn run_with(suite: &Suite, plans: &[Plan], driver: &mut dyn Driver, opts: &RunOptions, services: &mut Services) -> Report {
+    let needs = driver.needs();
+    let names: Vec<&str> = needs.iter().map(String::as_str).collect();
+    let fresh = driver.fresh();
+    let fresh: Vec<&str> = fresh.iter().map(String::as_str).collect();
+    let results = plans
+        .iter()
+        .map(|plan| match unsupported(suite, plan, driver).map_or_else(|| services.restart(&fresh).and_then(|()| services.start(&names)), |_| Ok(())) {
+            Ok(()) => run_plan(suite, plan, driver, opts),
+            Err(why) => {
+                let mut r = PlanResult::with(Status::Unsupported, plan);
+                r.start.error = Some(format!("It needs {why}."));
+                r
+            }
+        })
+        .collect();
+    Report { results }
+}
+
 fn needs<'a>(suite: &'a Suite, plan: &Plan) -> Vec<Need<'a>> {
     let v = &suite.vocabulary;
     let mut out: Vec<Need> = plan.start.vars().map(|x| Need::Arrange(v.var(x))).collect();
@@ -36,20 +59,8 @@ fn needs<'a>(suite: &'a Suite, plan: &Plan) -> Vec<Need<'a>> {
     out
 }
 
-fn run_plan(suite: &Suite, plan: &Plan, driver: &mut dyn Driver, opts: &RunOptions) -> PlanResult {
-    let failed = |error: String| StepResult {
-        status: Status::Failed,
-        checks: vec![],
-        screenshot: None,
-        error: Some(error),
-        polls: 0,
-    };
-    let skip_all = |start: StepResult| PlanResult {
-        status: Status::Failed,
-        start,
-        steps: plan.steps.iter().map(|_| StepResult::skipped()).collect(),
-    };
-
+/// A plan the driver cannot run yet is not run and not failed: the result says what it lacks.
+fn unsupported(suite: &Suite, plan: &Plan, driver: &dyn Driver) -> Option<PlanResult> {
     let mut missing: Vec<String> =
         needs(suite, plan).into_iter().filter(|n| !driver.supports(*n)).map(|n| n.to_string()).collect();
     for (x, c) in plan.start.iter() {
@@ -70,6 +81,26 @@ fn run_plan(suite: &Suite, plan: &Plan, driver: &mut dyn Driver, opts: &RunOptio
             shown.push(format!("{} more things", missing.len() - 3));
         }
         r.start.error = Some(format!("The driver can't {} yet.", expectation_model::text::join_and(&shown)));
+        return Some(r);
+    }
+    None
+}
+
+fn run_plan(suite: &Suite, plan: &Plan, driver: &mut dyn Driver, opts: &RunOptions) -> PlanResult {
+    let failed = |error: String| StepResult {
+        status: Status::Failed,
+        checks: vec![],
+        screenshot: None,
+        error: Some(error),
+        polls: 0,
+    };
+    let skip_all = |start: StepResult| PlanResult {
+        status: Status::Failed,
+        start,
+        steps: plan.steps.iter().map(|_| StepResult::skipped()).collect(),
+    };
+
+    if let Some(r) = unsupported(suite, plan, driver) {
         return r;
     }
 

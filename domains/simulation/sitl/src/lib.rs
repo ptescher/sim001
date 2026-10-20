@@ -7,6 +7,7 @@
 
 pub mod launch;
 pub mod lockstep;
+pub mod service;
 pub mod sensors;
 
 pub use lockstep::{Lockstep, Step, dt_for};

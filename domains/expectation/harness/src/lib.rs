@@ -12,6 +12,8 @@
 pub mod bindings;
 pub mod driver;
 pub mod run;
+/// The external services a run needs: see the crate.
+pub use expectation_service as service;
 
 pub use bindings::Bindings;
 pub use driver::{Driver, Need, Progress, Screenshot};
@@ -104,6 +106,11 @@ impl Acceptance {
 
     pub fn run(&self, driver: &mut dyn Driver, opts: &RunOptions) -> Report {
         run::run(&self.suite, &self.plans, driver, opts)
+    }
+
+    /// As [`Acceptance::run`], with what the driver needs from outside started first (see [`service`]).
+    pub fn run_with(&self, driver: &mut dyn Driver, opts: &RunOptions, services: &mut service::Services) -> Report {
+        run::run_with(&self.suite, &self.plans, driver, opts, services)
     }
 
     pub fn docs<'a>(&'a self, report: Option<&'a Report>) -> Docs<'a> {

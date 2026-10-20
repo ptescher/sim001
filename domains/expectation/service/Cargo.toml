@@ -1,0 +1,7 @@
+[package]
+name = "expectation_service"
+version = "0.1.0"
+edition = "2024"
+description = "Expectation domain: the external services a test run needs (a flight controller, a database, a container): started once, stopped after, and 'not supported yet' with how to get them when they can't be had"
+
+[dependencies]
