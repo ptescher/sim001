@@ -116,7 +116,7 @@ impl RealSite {
             .take(keep)
             .map(|t| {
                 let (x, z) = (t.east, -t.north);
-                Tree { pos: Vec3::new(x, site.height(x, z), z), height: t.height, conifer: t.conifer, shade: t.shade }
+                Tree { pos: Vec3::new(x, site.height(x, z), z), height: t.height, conifer: t.conifer, shade: t.shade, dead: false }
             })
             .collect();
         site.buildings = mappack::read_boxes(&dir.join("buildings.txt"))

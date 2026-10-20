@@ -197,6 +197,13 @@ const RT_WOOD_RADIUS: f32 = 400.0;
 
 /// Generated trees are built at these heights and instanced with a scale factor.
 const SPRUCE_REF: f32 = 20.0;
+/// How much light leaves pass through, as emission in nits (full sun on a leaf is about 5000).
+const LEAF_GLOW: f32 = 2500.0;
+const SAPLING_REF: f32 = 4.0;
+const SHRUB_REF: f32 = 1.5;
+/// How many different trees of each kind are grown; instances pick one by index.
+const SPRUCE_VARIANTS: u32 = 10;
+const ASPEN_VARIANTS: u32 = 6;
 const ASPEN_REF: f32 = 14.0;
 
 /// CPU-side vegetation assets, built on a background thread while the loading screen shows.
@@ -210,6 +217,10 @@ pub struct VegetationBuild {
     aspen_gen: Vec<(Mesh, Mesh)>,
     spruce_mid: Vec<(Mesh, Mesh)>,
     aspen_mid: Vec<(Mesh, Mesh)>,
+    snag_gen: Vec<(Mesh, Mesh)>,
+    snag_mid: Vec<(Mesh, Mesh)>,
+    sapling_gen: Vec<(Mesh, Mesh)>,
+    shrub_gen: Vec<(Mesh, Mesh)>,
     spruce_solid: Vec<Mesh>,
     aspen_solid: Vec<Mesh>,
     aspen_trunk: Mesh,
@@ -229,6 +240,10 @@ pub struct VegetationHandles {
     /// The same trees with a tenth of the branches, for the middle distance.
     spruce_mid: Vec<(Handle<Mesh>, Handle<Mesh>)>,
     aspen_mid: Vec<(Handle<Mesh>, Handle<Mesh>)>,
+    snag_gen: Vec<(Handle<Mesh>, Handle<Mesh>)>,
+    snag_mid: Vec<(Handle<Mesh>, Handle<Mesh>)>,
+    sapling_gen: Vec<(Handle<Mesh>, Handle<Mesh>)>,
+    shrub_gen: Vec<(Handle<Mesh>, Handle<Mesh>)>,
     spruce_solid: Vec<Handle<Mesh>>,
     aspen_solid: Vec<Handle<Mesh>>,
     aspen_trunk: Handle<Mesh>,
@@ -240,10 +255,14 @@ pub struct VegetationHandles {
     /// shadowed gaps between branches, so it is darker than the crown it stands in for.
     spruce_proxy_mats: Vec<Handle<StandardMaterial>>,
     aspen_solid_mats: Vec<Handle<StandardMaterial>>,
+    /// The aspen crowns as the ray tracer sees them: the same colours, and no glow.
+    aspen_proxy_mats: Vec<Handle<StandardMaterial>>,
     spray_mats: Vec<Handle<StandardMaterial>>,
     leaf_mats: Vec<Handle<StandardMaterial>>,
     bark: Handle<StandardMaterial>,
     aspen_bark: Handle<StandardMaterial>,
+    /// Weathered grey wood for dead trees.
+    snag_bark: Handle<StandardMaterial>,
 }
 
 /// Pure CPU work: textures, tree meshes and boulder placement. `step` reports progress.
@@ -260,11 +279,15 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         let t = crate::treegen::generate_lod(sp, seed, h, lod);
         (t.wood, t.foliage)
     };
-    let spruce_gen: Vec<_> = (0..4).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Full)).collect();
-    let aspen_gen: Vec<_> = (0..4).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Full)).collect();
+    let spruce_gen: Vec<_> = (0..SPRUCE_VARIANTS).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Full)).collect();
+    let aspen_gen: Vec<_> = (0..ASPEN_VARIANTS).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Full)).collect();
     // The same seeds, so that a tree keeps its shape as it comes closer.
-    let spruce_mid: Vec<_> = (0..4).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Mid)).collect();
-    let aspen_mid: Vec<_> = (0..4).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Mid)).collect();
+    let spruce_mid: Vec<_> = (0..SPRUCE_VARIANTS).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Mid)).collect();
+    let aspen_mid: Vec<_> = (0..ASPEN_VARIANTS).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Mid)).collect();
+    let snag_gen: Vec<_> = (0..4).map(|s| grow(Species::Snag, 31 + s, SPRUCE_REF, Lod::Full)).collect();
+    let snag_mid: Vec<_> = (0..4).map(|s| grow(Species::Snag, 31 + s, SPRUCE_REF, Lod::Mid)).collect();
+    let sapling_gen: Vec<_> = (0..6).map(|s| grow(Species::Spruce, 71 + s, SAPLING_REF, Lod::Low)).collect();
+    let shrub_gen: Vec<_> = (0..6).map(|s| grow(Species::Shrub, 91 + s, SHRUB_REF, Lod::Low)).collect();
     let spruce_solid: Vec<_> = (0..5).map(spruce_foliage).collect();
     // Far crowns are seen from 200 m out: a coarse icosphere per blob is plenty.
     let aspen_solid: Vec<_> = (0..4).map(|s| lumpy(100 + s, 6, Vec3::new(0.45, 0.9, 0.45), 0.42, 0.25, None, 1)).collect();
@@ -354,6 +377,10 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         aspen_gen,
         spruce_mid,
         aspen_mid,
+        snag_gen,
+        snag_mid,
+        sapling_gen,
+        shrub_gen,
         spruce_solid,
         aspen_solid,
         aspen_trunk,
@@ -377,10 +404,22 @@ pub fn upload_vegetation(
     let mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32| {
         m.add(StandardMaterial { base_color: c, perceptual_roughness: rough, reflectance: 0.3, ..default() })
     };
+    // The solid crowns seen far away let the sun through as the cards do.
+    let glow = std::env::var("SIM001_LEAF_GLOW").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(LEAF_GLOW);
+    let lit_mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32| {
+        let l = c.to_linear();
+        m.add(StandardMaterial {
+            base_color: c,
+            emissive: LinearRgba::rgb(l.red * glow, l.green * glow, l.blue * glow),
+            perceptual_roughness: rough,
+            reflectance: 0.3,
+            ..default()
+        })
+    };
     // Solid crowns: used far away (raster) and as the ray-tracing proxy (shadows/reflections).
     let spruce_solid_mats: Vec<_> = [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
         .iter()
-        .map(|&(r, g, b)| mat(materials, Color::linear_rgb(r, g, b), 0.85))
+        .map(|&(r, g, b)| lit_mat(materials, Color::linear_rgb(r, g, b), 0.85))
         .collect();
     let spruce_proxy_mats: Vec<_> = [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
         .iter()
@@ -388,12 +427,22 @@ pub fn upload_vegetation(
         .collect();
     let aspen_solid_mats: Vec<_> = [(0.060, 0.120, 0.028), (0.078, 0.135, 0.030), (0.050, 0.100, 0.026)]
         .iter()
+        .map(|&(r, g, b)| lit_mat(materials, Color::linear_rgb(r, g, b), 0.75))
+        .collect();
+    let aspen_proxy_mats: Vec<_> = [(0.060, 0.120, 0.028), (0.078, 0.135, 0.030), (0.050, 0.100, 0.026)]
+        .iter()
         .map(|&(r, g, b)| mat(materials, Color::linear_rgb(r, g, b), 0.75))
         .collect();
     // Near: alpha-cut foliage cards with painted needles / leaves (raster only).
     let card_mat = |m: &mut Assets<StandardMaterial>, tex: Handle<Image>, tint: Vec3| {
+        // Leaves and needles pass some of the sun's light through: the side of a crown in its own
+        // shadow is not black but glows, dimly, in the leaves' colour. (The ray tracer's
+        // stand-ins for the crowns block the sun completely, so the glow is added here.)
+        let glow = std::env::var("SIM001_LEAF_GLOW").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(LEAF_GLOW);
         m.add(StandardMaterial {
             base_color: Color::linear_rgb(tint.x, tint.y, tint.z),
+            emissive: LinearRgba::rgb(tint.x * glow, tint.y * glow, tint.z * glow),
+            emissive_texture: Some(tex.clone()),
             base_color_texture: Some(tex),
             alpha_mode: AlphaMode::Mask(0.5),
             // Bent normals are authored per vertex; keep them on both sides.
@@ -419,8 +468,18 @@ pub fn upload_vegetation(
             ..default()
         })
     };
-    let bark = bark_mat(materials, images.add(b.bark_tex));
+    let bark_image = images.add(b.bark_tex);
+    let bark = bark_mat(materials, bark_image.clone());
     let aspen_bark = bark_mat(materials, images.add(b.aspen_bark_tex));
+    // Dead wood is silver-grey, bleached by sun and snow.
+    let snag_bark = materials.add(StandardMaterial {
+        base_color: Color::linear_rgb(0.34, 0.32, 0.30),
+        base_color_texture: Some(bark_image),
+        perceptual_roughness: 0.95,
+        reflectance: 0.2,
+        uv_transform: bevy::math::Affine2::from_scale(Vec2::new(2.0, 10.0)),
+        ..default()
+    });
 
     // Boulders.
     let granite = images.add(b.granite_tex);
@@ -446,6 +505,10 @@ pub fn upload_vegetation(
         spruce_gen: b.spruce_gen.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
         aspen_gen: b.aspen_gen.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
         spruce_mid: b.spruce_mid.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
+        snag_gen: b.snag_gen.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
+        snag_mid: b.snag_mid.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
+        sapling_gen: b.sapling_gen.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
+        shrub_gen: b.shrub_gen.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
         aspen_mid: b.aspen_mid.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
         spruce_solid: b.spruce_solid.into_iter().map(|m| meshes.add(m)).collect(),
         aspen_solid: b.aspen_solid.into_iter().map(|m| meshes.add(m)).collect(),
@@ -456,10 +519,12 @@ pub fn upload_vegetation(
         spruce_solid_mats,
         spruce_proxy_mats,
         aspen_solid_mats,
+        aspen_proxy_mats,
         spray_mats,
         leaf_mats,
         bark,
         aspen_bark,
+        snag_bark,
     }
 }
 
@@ -469,6 +534,13 @@ pub fn upload_vegetation(
 pub fn tree_ranges() -> [bevy::camera::visibility::VisibilityRange; 4] {
     use bevy::camera::visibility::VisibilityRange as R;
     [R::abrupt(0.0, 140.0), R::abrupt(140.0, 700.0), R::abrupt(700.0, 1000.0), R::abrupt(1000.0, 1.0e7)]
+}
+
+impl VegetationHandles {
+    /// The materials of everything the crowns put into the ray-traced scene.
+    pub fn ray_traced_materials(&self) -> Vec<Handle<StandardMaterial>> {
+        self.spruce_proxy_mats.iter().chain(&self.aspen_proxy_mats).cloned().collect()
+    }
 }
 
 /// Spawns one tree (wood + foliage cards near, solid crown far, ray-tracing proxy).
@@ -481,6 +553,8 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
     // crowns' shadows everywhere.
     let rt_wood = Vec2::new(t.pos.x, t.pos.z).length() < RT_WOOD_RADIUS;
 
+    // SIM001_PROXY=0 leaves the crowns out of the ray-traced scene (for looking at what they do).
+    let proxies = std::env::var("SIM001_PROXY").map_or(true, |v| v != "0");
     let keep = std::env::var("SIM001_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
     if rnd(i as u32, 99) > keep {
         return;
@@ -490,6 +564,21 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
     let tilt = Quat::from_rotation_x((rnd(i as u32, 8) - 0.5) * 0.06) * Quat::from_rotation_z((rnd(i as u32, 9) - 0.5) * 0.06);
     let base = t.pos - Vec3::Y * 0.3;
     let shade = t.shade as usize;
+    if t.conifer && t.dead {
+        // A snag: bare trunk and stubs, with nothing out past the mid range (a few pixels).
+        let k = h / SPRUCE_REF;
+        let gen_tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(k));
+        let (wood, cards) = &v.snag_gen[i % v.snag_gen.len()];
+        if rt_wood {
+            commands.spawn((RaytracingMesh3d(wood.clone()), MeshMaterial3d(v.snag_bark.clone()), gen_tf));
+        }
+        commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(v.snag_bark.clone()), gen_tf, near.clone()));
+        commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(v.spray_mats[shade % 4].clone()), gen_tf, near));
+        let (mid_wood, mid_cards) = &v.snag_mid[i % v.snag_mid.len()];
+        commands.spawn((Mesh3d(mid_wood.clone()), MeshMaterial3d(v.snag_bark.clone()), gen_tf, mid.clone()));
+        commands.spawn((Mesh3d(mid_cards.clone()), MeshMaterial3d(v.spray_mats[shade % 4].clone()), gen_tf, mid));
+        return;
+    }
     if t.conifer {
         // Narrow spires, as subalpine fir and Engelmann spruce grow where the snow is deep.
         let w = h * (0.55 + 0.3 * rnd(i as u32, 11));
@@ -511,7 +600,9 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         commands.spawn((Mesh3d(v.spruce_distant.clone()), MeshMaterial3d(solid_mat.clone()), tf, distant));
         // Ray-tracing proxy for the needle mass: a smooth cone a bit inside the visible crown.
         let proxy = tf.with_scale(Vec3::new(w * 0.62, h * 0.92, w * 0.62));
-        commands.spawn((RaytracingMesh3d(v.spruce_proxy.clone()), MeshMaterial3d(v.spruce_proxy_mats[shade % 4].clone()), proxy));
+        if proxies {
+            commands.spawn((RaytracingMesh3d(v.spruce_proxy.clone()), MeshMaterial3d(v.spruce_proxy_mats[shade % 4].clone()), proxy));
+        }
     } else {
         let h = h * 0.8;
         let (wood, cards) = &v.aspen_gen[i % v.aspen_gen.len()];
@@ -534,13 +625,39 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         commands.spawn((Mesh3d(solid.clone()), MeshMaterial3d(solid_mat.clone()), canopy, far));
         commands.spawn((Mesh3d(v.aspen_distant.clone()), MeshMaterial3d(solid_mat.clone()), canopy, distant));
         let proxy = canopy.with_scale(canopy.scale * 0.75);
-        commands.spawn((RaytracingMesh3d(solid), MeshMaterial3d(solid_mat), proxy));
+        if proxies {
+            commands.spawn((RaytracingMesh3d(solid), MeshMaterial3d(v.aspen_proxy_mats[shade % 3].clone()), proxy));
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The ray tracer treats a glowing mesh in its scene as a light and spends the sun's samples
+    /// on it, which darkens everything else: so nothing the crowns put in the ray-traced scene
+    /// may glow. (The glow that stands for light through leaves is on the drawn crowns only.)
+    #[test]
+    fn what_the_ray_tracer_sees_of_a_tree_does_not_glow() {
+        let mut meshes = Assets::<Mesh>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut images = Assets::<Image>::default();
+        let mut commands_world = World::new();
+        let mut queue = bevy::ecs::world::CommandQueue::default();
+        let mut commands = Commands::new(&mut queue, &commands_world);
+        let handles = upload_vegetation(build_vegetation(|_| {}), &mut commands, &mut meshes, &mut materials, &mut images);
+        queue.apply(&mut commands_world);
+        let ray_traced = handles.ray_traced_materials();
+        assert!(!ray_traced.is_empty());
+        for h in ray_traced {
+            let m = materials.get(&h).expect("a material");
+            assert_eq!(m.emissive, LinearRgba::BLACK, "a ray-traced crown glows");
+        }
+        // And the drawn crowns do glow: that is the light through the leaves.
+        let drawn = materials.get(&handles.leaf_mats[0]).expect("leaf");
+        assert!(drawn.emissive.green > 0.0, "the leaves let no light through");
+    }
 
     /// Each version of a tree takes over where the one before it leaves off, with no band in
     /// which both are drawn (a cross-fade is dithered, and the temporal accumulation turns that
@@ -559,4 +676,34 @@ mod tests {
         assert!(ranges[0].end_margin.end >= 100.0 && ranges[0].end_margin.end <= 200.0, "the full tree is for the near range");
         assert!(ranges[1].end_margin.end > 400.0, "the mid tree reaches well out");
     }
+}
+
+/// Spawns one sapling or shrub: raster only, drawn out to a couple of hundred metres.
+pub fn spawn_plant(commands: &mut Commands, v: &VegetationHandles, i: usize, p: &terrain::Plant) {
+    use bevy::camera::visibility::VisibilityRange;
+    // SIM001_PLANT_FRAC keeps only a share of the saplings and shrubs (for timing).
+    let keep = std::env::var("SIM001_PLANT_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
+    if rnd(i as u32, 98) > keep {
+        return;
+    }
+    let yaw = Quat::from_rotation_y(rnd(i as u32, 17) * TAU);
+    let tilt = Quat::from_rotation_x((rnd(i as u32, 18) - 0.5) * 0.12) * Quat::from_rotation_z((rnd(i as u32, 19) - 0.5) * 0.12);
+    let base = p.pos - Vec3::Y * 0.1;
+    let shade = p.shade as usize;
+    let (wood, cards) = match p.kind {
+        terrain::PlantKind::Sapling => &v.sapling_gen[i % v.sapling_gen.len()],
+        terrain::PlantKind::Shrub => &v.shrub_gen[i % v.shrub_gen.len()],
+    };
+    let (reference, reach) = match p.kind {
+        terrain::PlantKind::Sapling => (SAPLING_REF, 220.0),
+        terrain::PlantKind::Shrub => (SHRUB_REF, 160.0),
+    };
+    let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(p.height / reference));
+    let range = VisibilityRange::abrupt(0.0, reach);
+    let (wood_mat, card_mat) = match p.kind {
+        terrain::PlantKind::Sapling => (v.bark.clone(), v.spray_mats[shade % 4].clone()),
+        terrain::PlantKind::Shrub => (v.aspen_bark.clone(), v.leaf_mats[shade % 3].clone()),
+    };
+    commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(wood_mat), tf, range.clone()));
+    commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(card_mat), tf, range));
 }

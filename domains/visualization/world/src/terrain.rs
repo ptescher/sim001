@@ -201,6 +201,25 @@ pub struct Tree {
     pub height: f32,
     pub conifer: bool,
     pub shade: u8,
+    /// A conifer that is dead and still standing.
+    pub dead: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlantKind {
+    /// A young conifer, a few metres tall.
+    Sapling,
+    /// A low thicket (willow, juniper).
+    Shrub,
+}
+
+/// Something growing under, between and beside the trees.
+#[derive(Clone, Copy, Debug)]
+pub struct Plant {
+    pub pos: Vec3,
+    pub height: f32,
+    pub kind: PlantKind,
+    pub shade: u8,
 }
 
 /// Deterministic tree scatter. Keeps the field, runway approaches and lake clear.
@@ -249,19 +268,71 @@ pub fn trees() -> Vec<Tree> {
             }
             let hill_bonus = smoothstep(450.0, 900.0, r) * 0.35;
             let thin_near_line = smoothstep(treeline - 60.0, treeline, h) * 0.5;
-            if hash(ix * 31 + 7, iz * 17 + 3) > forest_density(x, z) + hill_bonus - thin_near_line {
+            // Woods grow in stands of 30 m or so with openings between them, not evenly.
+            let stand = (fbm(x / 34.0 + 11.0, z / 34.0 - 5.0, 2) - 0.5) * 0.9;
+            if hash(ix * 31 + 7, iz * 17 + 3) > forest_density(x, z) + hill_bonus - thin_near_line + stand {
                 continue;
             }
             let near_line = 1.0 - smoothstep(treeline - 80.0, treeline, h) * 0.45;
-            let height = (13.0 + hash(ix + 77, iz - 33) * 13.0) * near_line;
+            // The trees of a stand are of an age: tall in an old stand, short in a young one.
+            let age = fbm(x / 75.0 - 30.0, z / 75.0 + 12.0, 2);
+            let height = (10.0 + 18.0 * smoothstep(0.25, 0.75, age)) * (0.82 + 0.36 * hash(ix + 77, iz - 33)) * near_line;
             // Subalpine fir and spruce, with a few aspen groves in the lower, gentler ground.
             let aspen_zone = ((1.0 - smoothstep(300.0, 700.0, r)) * 0.45 + fbm(x / 120.0, z / 120.0, 2) * 0.25 - 0.45).max(0.0);
-            out.push(Tree {
-                pos: Vec3::new(x, h, z),
-                height,
-                conifer: hash(ix - 5, iz + 9) > aspen_zone,
-                shade: (hash(ix + 2, iz + 2) * 4.0) as u8,
-            });
+            let conifer = hash(ix - 5, iz + 9) > aspen_zone;
+            // A few stand dead, more where the trees are hardest pressed.
+            let dead = conifer && hash(ix * 5 + 1, iz * 11 + 7) < 0.025 + 0.07 * smoothstep(treeline - 90.0, treeline, h);
+            out.push(Tree { pos: Vec3::new(x, h, z), height, conifer, shade: (hash(ix + 2, iz + 2) * 4.0) as u8, dead });
+        }
+    }
+    out
+}
+
+/// Young conifers and shrubs: among the trees and along the edges of the woods, thickets by the
+/// lake, and a few in the open. Deterministic, like the trees.
+pub fn undergrowth() -> Vec<Plant> {
+    if real().is_some() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let spacing = 6.0;
+    let max_r = 800.0;
+    let n = (max_r / spacing) as i32;
+    for ix in -n..=n {
+        for iz in -n..=n {
+            let x = (ix as f32 + hash(ix * 5 + 3, iz * 9 + 1) - 0.5) * spacing;
+            let z = (iz as f32 + hash(ix * 11 + 8, iz * 3 + 6) - 0.5) * spacing;
+            let r = (x * x + z * z).sqrt();
+            if r > max_r || r < 150.0 || (x.abs() < 40.0 && r < 400.0) {
+                continue;
+            }
+            let h = ground_height(x, z);
+            let slope = 1.0 - ground_normal(x, z).y;
+            if h <= WATER_LEVEL + 0.2 || slope > 0.5 {
+                continue;
+            }
+            let lake = lake_factor(x, z);
+            let roll = hash(ix * 19 + 4, iz * 23 + 9);
+            let treeline = 215.0 + 35.0 * gradient_noise(x / 180.0, z / 180.0);
+            let wood = forest_density(x, z) + (fbm(x / 34.0 + 11.0, z / 34.0 - 5.0, 2) - 0.5) * 0.9;
+            let shade = (hash(ix + 6, iz + 6) * 4.0) as u8;
+            // Willow and juniper thickets round the lake, in clumps.
+            if lake > 1.0 && lake < 1.9 && fbm(x / 22.0, z / 22.0, 2) > 0.45 && roll < 0.35 {
+                out.push(Plant { pos: Vec3::new(x, h, z), height: 0.9 + 1.4 * hash(ix + 40, iz - 3), kind: PlantKind::Shrub, shade });
+                continue;
+            }
+            if lake < 1.2 || h > treeline {
+                continue;
+            }
+            // Saplings thicken where the woods are, and thin out into the meadow.
+            let sapling_odds = ((wood + 0.35) * 0.32).clamp(0.0, 0.3);
+            if roll < sapling_odds {
+                let young = hash(ix + 91, iz + 17);
+                out.push(Plant { pos: Vec3::new(x, h, z), height: 1.5 + 3.8 * young * young, kind: PlantKind::Sapling, shade });
+            } else if wood > -0.2 && wood < 0.3 && roll > 0.93 {
+                // Juniper and the like along the woods' edges.
+                out.push(Plant { pos: Vec3::new(x, h, z), height: 0.7 + 1.6 * hash(ix + 5, iz + 55), kind: PlantKind::Shrub, shade });
+            }
         }
     }
     out
@@ -335,4 +406,97 @@ impl simulation_physics::Terrain for WorldTerrain {
 pub fn start() -> simulation_physics::Start {
     let p = pilot_pos();
     simulation_physics::Start { pos: Vec3::new(p.x - 0.5, ground_height(p.x, p.z), p.z - 0.6), heading: launch_heading() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn grid(points: impl Iterator<Item = (f32, f32, usize)>, cell: f32) -> HashMap<(i32, i32), Vec<(f32, f32, usize)>> {
+        let mut g: HashMap<(i32, i32), Vec<(f32, f32, usize)>> = HashMap::new();
+        for p in points {
+            g.entry(((p.0 / cell).floor() as i32, (p.1 / cell).floor() as i32)).or_default().push(p);
+        }
+        g
+    }
+
+    /// Trees near one another are alike in height, as the trees of one stand are the same age,
+    /// where uniformly random heights would make every neighbour a stranger.
+    #[test]
+    fn woods_grow_in_stands() {
+        let trees = trees();
+        assert!(trees.len() > 5_000, "{} trees", trees.len());
+        let g = grid(trees.iter().enumerate().map(|(i, t)| (t.pos.x, t.pos.z, i)), 25.0);
+        let (mut near, mut n) = (0.0f64, 0u32);
+        for (i, t) in trees.iter().enumerate().step_by(7) {
+            let cell = ((t.pos.x / 25.0).floor() as i32, (t.pos.z / 25.0).floor() as i32);
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    for &(x, z, j) in g.get(&(cell.0 + dx, cell.1 + dz)).into_iter().flatten() {
+                        if j != i && (x - t.pos.x).hypot(z - t.pos.z) < 20.0 {
+                            near += (trees[j].height - t.height).abs() as f64;
+                            n += 1;
+                        }
+                    }
+                }
+            }
+        }
+        // Random pairs: the same trees against ones a long way off.
+        let far: f64 = trees.iter().step_by(7).enumerate().map(|(k, t)| (trees[(k * 7 + trees.len() / 2) % trees.len()].height - t.height).abs() as f64).sum::<f64>()
+            / trees.iter().step_by(7).count() as f64;
+        let near = near / n.max(1) as f64;
+        assert!(near < far * 0.8, "neighbours differ by {near:.2} m, strangers by {far:.2} m");
+    }
+
+    /// Here and there a conifer is dead and still standing, more of them where the trees are
+    /// hardest pressed, near the treeline.
+    #[test]
+    fn a_few_conifers_are_dead() {
+        let trees = trees();
+        let conifers: Vec<_> = trees.iter().filter(|t| t.conifer).collect();
+        let dead = conifers.iter().filter(|t| t.dead).count() as f32 / conifers.len() as f32;
+        assert!(dead > 0.01 && dead < 0.06, "{:.1}% of the conifers are dead", dead * 100.0);
+        assert!(trees.iter().all(|t| t.conifer || !t.dead), "an aspen is not a snag");
+        let high: Vec<_> = conifers.iter().filter(|t| t.pos.y > 150.0).collect();
+        let low: Vec<_> = conifers.iter().filter(|t| t.pos.y < 60.0).collect();
+        let share = |v: &[&&Tree]| v.iter().filter(|t| t.dead).count() as f32 / v.len().max(1) as f32;
+        assert!(share(&high) > share(&low), "no more dead trees near the treeline ({} against {})", share(&high), share(&low));
+    }
+
+    /// Young trees and shrubs grow among the big ones and at the edges of the woods, not in the
+    /// middle of the meadow, and never on the runway or in the lake.
+    #[test]
+    fn saplings_and_shrubs_grow_at_the_edges_of_woods() {
+        let plants = undergrowth();
+        assert!(plants.len() > 2_000 && plants.len() < 20_000, "{} plants", plants.len());
+        for p in &plants {
+            let (lo, hi) = match p.kind {
+                PlantKind::Sapling => (1.2, 5.5),
+                PlantKind::Shrub => (0.6, 2.5),
+            };
+            assert!(p.height >= lo && p.height <= hi, "{:?} is {} m tall", p.kind, p.height);
+            assert!(p.pos.y > WATER_LEVEL, "a plant in the lake at {:?}", p.pos);
+            let r = p.pos.x.hypot(p.pos.z);
+            assert!(!(p.pos.x.abs() < 40.0 && r < 400.0), "a plant in the runway corridor at {:?}", p.pos);
+            assert!(r >= 150.0, "a plant on the flying field at {:?}", p.pos);
+        }
+        assert!(plants.iter().any(|p| p.kind == PlantKind::Sapling) && plants.iter().any(|p| p.kind == PlantKind::Shrub));
+        let trees = trees();
+        let g = grid(trees.iter().enumerate().map(|(i, t)| (t.pos.x, t.pos.z, i)), 30.0);
+        let near_tree = |x: f32, z: f32| {
+            let cell = ((x / 30.0).floor() as i32, (z / 30.0).floor() as i32);
+            (-1..=1).any(|dx| (-1..=1).any(|dz| g.get(&(cell.0 + dx, cell.1 + dz)).into_iter().flatten().any(|&(tx, tz, _)| (tx - x).hypot(tz - z) < 25.0)))
+        };
+        let saplings: Vec<_> = plants.iter().filter(|p| p.kind == PlantKind::Sapling).collect();
+        let among = saplings.iter().filter(|p| near_tree(p.pos.x, p.pos.z)).count() as f32 / saplings.len() as f32;
+        assert!(among > 0.7, "only {:.0}% of the saplings are near a tree", among * 100.0);
+    }
+
+    #[test]
+    fn the_undergrowth_is_the_same_every_time() {
+        let (a, b) = (undergrowth(), undergrowth());
+        assert_eq!(a.len(), b.len());
+        assert!(a.iter().zip(&b).take(200).all(|(p, q)| p.pos == q.pos && p.height == q.height));
+    }
 }

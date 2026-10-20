@@ -5,7 +5,7 @@
 use crate::theme::{P, color};
 use crate::camera::RenderScale;
 use simulation_physics::Obstacle;
-use crate::terrain::{self, Tree};
+use crate::terrain::{self, Plant, Tree};
 use crate::terrain_render;
 use crate::vegetation::{self, VegetationBuild, VegetationHandles};
 use crate::Obstacles;
@@ -24,6 +24,7 @@ pub enum AppState {
 pub struct WorldBuild {
     terrain: Vec<(Mesh, Image)>,
     trees: Vec<Tree>,
+    plants: Vec<Plant>,
     obstacles: Vec<Obstacle>,
     vegetation: VegetationBuild,
 }
@@ -39,9 +40,9 @@ enum Phase {
     /// Background generation running.
     Generating,
     /// Uploading terrain chunks to the GPU, a texel budget per frame.
-    Uploading { terrain: Vec<(Mesh, Image)>, total: usize, trees: Vec<Tree>, vegetation: Option<VegetationBuild> },
+    Uploading { terrain: Vec<(Mesh, Image)>, total: usize, trees: Vec<Tree>, plants: Vec<Plant>, vegetation: Option<VegetationBuild> },
     /// Spawning trees in batches.
-    Planting { trees: Vec<Tree>, handles: VegetationHandles, next: usize },
+    Planting { trees: Vec<Tree>, plants: Vec<Plant>, handles: VegetationHandles, next: usize },
     /// Camera on behind the overlay so pipelines compile and the BVH builds.
     WarmingUp { since: Instant, frames: u32 },
     /// Overlay fading out.
@@ -90,6 +91,7 @@ fn start_loading(mut commands: Commands) {
             };
             set(0.01, &format!("Surveying {}", terrain::site_title()));
             let trees = terrain::trees();
+            let plants = terrain::undergrowth();
             let obstacles = terrain::obstacles(&trees, &terrain::buildings());
             set(0.06, "Baking terrain");
             let terrain = terrain_render::build_terrain(|done, total| {
@@ -103,7 +105,7 @@ fn start_loading(mut commands: Commands) {
             let mut g = worker.lock().unwrap();
             g.fraction = 0.88;
             g.stage = "Uploading to the GPU".into();
-            g.result = Some(WorldBuild { terrain, trees, obstacles, vegetation });
+            g.result = Some(WorldBuild { terrain, trees, plants, obstacles, vegetation });
         })
         .expect("spawn world generation thread");
 
@@ -134,11 +136,12 @@ fn advance_loading(
                     terrain: build.terrain.into_iter().rev().collect(),
                     total,
                     trees: build.trees,
+                    plants: build.plants,
                     vegetation: Some(build.vegetation),
                 };
             }
         }
-        Phase::Uploading { terrain, total, trees, vegetation } => {
+        Phase::Uploading { terrain, total, trees, plants, vegetation } => {
             // ~6 Mtexels per frame keeps upload hitches small (the centre chunk goes alone).
             let mut budget: u64 = 6_000_000;
             let mut batch = Vec::new();
@@ -156,22 +159,26 @@ fn advance_loading(
             if terrain.is_empty() {
                 let handles = vegetation::upload_vegetation(vegetation.take().unwrap(), &mut commands, &mut meshes, &mut materials, &mut images);
                 set_stage(&loading.shared, 0.90, "Planting the forest");
-                loading.phase = Phase::Planting { trees: std::mem::take(trees), handles, next: 0 };
+                loading.phase = Phase::Planting { trees: std::mem::take(trees), plants: std::mem::take(plants), handles, next: 0 };
             }
         }
-        Phase::Planting { trees, handles, next } => {
-            let end = (*next + TREES_PER_FRAME).min(trees.len());
+        Phase::Planting { trees, plants, handles, next } => {
+            let total = trees.len() + plants.len();
+            let end = (*next + TREES_PER_FRAME).min(total);
             for i in *next..end {
-                vegetation::spawn_tree(&mut commands, handles, i, &trees[i]);
+                match trees.get(i) {
+                    Some(tree) => vegetation::spawn_tree(&mut commands, handles, i, tree),
+                    None => vegetation::spawn_plant(&mut commands, handles, i, &plants[i - trees.len()]),
+                }
             }
             *next = end;
             set_stage(
                 &loading.shared,
-                0.90 + 0.06 * end as f32 / trees.len().max(1) as f32,
-                &format!("Planting the forest  {end}/{}", trees.len()),
+                0.90 + 0.06 * end as f32 / total.max(1) as f32,
+                &format!("Planting the forest  {end}/{total}"),
             );
-            if end >= trees.len() {
-                info!("spawned {} trees", trees.len());
+            if end >= total {
+                info!("spawned {} trees and {} saplings and shrubs", trees.len(), plants.len());
                 commands.insert_resource(handles.clone());
                 render_scale.suspended = false;
                 set_stage(&loading.shared, 0.97, "Warming up the ray tracer");
