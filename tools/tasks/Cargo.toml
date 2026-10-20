@@ -1,0 +1,12 @@
+[package]
+name = "sim001_tasks"
+version = "0.1.0"
+edition = "2024"
+description = "The project's chores, in Rust (no shell scripts): run every acceptance runner and write the manual, and pack the manual's results and screenshots for GitHub Pages"
+
+[[bin]]
+name = "tasks"
+path = "src/main.rs"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

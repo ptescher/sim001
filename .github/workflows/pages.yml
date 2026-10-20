@@ -1,6 +1,6 @@
 # Publishes the landing page (site/) and the manual (generated from expectations/) to GitHub Pages.
 # The tests can't run in CI (Docker, ArduPilot, a GPU), so the manual shows the results of the last local
-# run: tools/docs.sh, then tools/pack-docs.sh, then commit site/results and site/screenshots.
+# run: `tasks docs`, then `tasks pack-docs` (cargo run --release -p sim001_tasks --), then commit site/results and site/screenshots.
 name: Pages
 
 on:
@@ -28,7 +28,7 @@ jobs:
           toolchain: "1.99.0"
       - uses: Swatinem/rust-cache@v2
       - name: Generate the manual
-        # the test results and screenshots come from the last local run (tools/pack-docs.sh)
+        # the test results and screenshots come from the last local run (`tasks pack-docs`)
         run: |
           mkdir out
           cp -r site/results site/screenshots out/

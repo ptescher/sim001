@@ -392,7 +392,7 @@ impl Launcher {
                 .child(note(if layout().bundled() {
                     "The manual in this app was rendered from the specs and test results when the app was built."
                 } else {
-                    "Renders the manual (docs/ and the HTML site) from the specs in expectations/ and the last saved test results. tools/docs.sh also re-runs every test first."
+                    "Renders the manual (docs/ and the HTML site) from the specs in expectations/ and the last saved test results. `tasks docs` also re-runs every test first."
                 }))
                 .child(
                     row()
@@ -408,7 +408,12 @@ impl Launcher {
                         })))
                         .children((!layout().bundled()).then(|| {
                             button("rerun", "RE-RUN TESTS + RENDER", Style::Caution).on_click(cx.listener(|this, _, _, cx| {
-                                this.run("Tests and docs", "tools/docs.sh", vec!["--no-station".into()], layout().home.clone());
+                                this.run(
+                                    "Tests and docs",
+                                    "cargo",
+                                    ["run", "--release", "-p", "sim001_tasks", "--", "docs", "--no-station"].map(String::from).to_vec(),
+                                    layout().home.clone(),
+                                );
                                 cx.notify();
                             }))
                         })),

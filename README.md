@@ -206,8 +206,9 @@ cargo run --release -- --expect                           # run the tests in the
 cargo run --release -- --expect --docs docs               # ...and rewrite docs/ from the results
 (cd domains/teleoperation/console && cargo run --release -- --station --expect --docs ../../../docs)   # the same for the console (needs Docker)
 cargo run -p expectation_cli -- docs expectations docs    # rewrite docs/ from the saved results
-tools/docs.sh                                             # every runner in turn, with a time limit on each, then the docs
-ardupilot/expect_sim.sh --docs docs                       # the sim's tests for a plane with a flight controller (ArduPilot beside it)
+cargo run --release -p sim001_tasks -- docs                # every runner in turn, with a time limit on each, then the docs
+cargo run --release -p sim001_tasks -- pack-docs          # the manual's results and screenshots, packed into site/ for Pages
+cargo run --release -- --aircraft t1s-vtol --direct --expect --docs docs   # the sim's tests for a plane with a flight controller (ArduPilot beside it)
 ```
 
 The domains' own tests (what the radios tell the station, the flight computer and the TX15's screen, the view of a real plane) run with no window, and `SIM001_DOCS=docs cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry --test acceptance` puts their results and pictures in the docs beside the others. The TX15's screen is drawn as an SVG from the same layout as its widget. Each runner keeps its own results in `docs/results/`, and the docs merge them. Time limits: `SIM001_EXPECT_TIMEOUT` (the sim's, 40 s a test) and `SIM001_EXPECT_SPEED` (how much faster than real time the sim runs for them, 8).

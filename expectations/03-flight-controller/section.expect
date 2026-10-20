@@ -1,6 +1,6 @@
 # Flying with a flight controller (ANGLE, ACRO). The plain T1-S has none; a plane that does,
 # like the T1-S VTOL, can. The sim's own stick modes are built (src/sim.rs). The tests that need
-# a flight controller run with ArduPilot beside the sim: ardupilot/expect_sim.sh. See also the
+# a flight controller run with ArduPilot beside the sim: `--aircraft t1s-vtol --direct --expect`. See also the
 # ground station, which flies the VTOL with ArduPilot and a radio.
 
 Section: Flying with a flight controller

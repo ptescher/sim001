@@ -2,7 +2,7 @@
 #   git tag v0.1.0 && git push origin v0.1.0
 # The tag must match the version in Cargo.toml. The bundle holds the launcher, the sim, the ground
 # station, ArduPlane SITL, the maps and the manual (rendered from site/results and site/screenshots,
-# the results of the last local run: see tools/pack-docs.sh).
+# the results of the last local run: see `tasks pack-docs`).
 name: Release
 
 on:
