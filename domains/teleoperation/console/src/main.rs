@@ -43,7 +43,7 @@ sim001_gcs [options]
   --sensor           open the sensor feed window (sim already running with --feed)
   --feed HOST:PORT   sensor feed address (default 127.0.0.1:5600)
   --connect ADDR     MAVLink, any rust-mavlink address (default tcpout:127.0.0.1:5760; with
-                     --station the sim's TX15 stand-in, tcpout:127.0.0.1:5770)
+                     --station the sim's TX15 stand-in, tcpout:127.0.0.1:5750)
   --no-radio         with --station: connect to ArduPilot directly, without the TX15 stand-in
   --flight-computer  with --station: the plane's radio goes through the sim's flight computer, on a UART
                      in CRSF, and the console hears only the telemetry that comes down that line

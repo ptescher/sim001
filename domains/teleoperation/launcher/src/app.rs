@@ -68,6 +68,8 @@ fn screen(title: &'static str, body: impl IntoElement) -> Div {
     div()
         .flex()
         .flex_col()
+        .flex_1()
+        .min_h(px(0.0))
         .gap(px(4.0))
         .bg(c(BEZEL))
         .border_1()
@@ -79,6 +81,9 @@ fn screen(title: &'static str, body: impl IntoElement) -> Div {
             div()
                 .flex()
                 .flex_col()
+                .flex_1()
+                .min_h(px(0.0))
+                .overflow_hidden()
                 .gap_2()
                 .p_3()
                 .bg(c(SCREEN))
@@ -562,8 +567,8 @@ impl Render for Launcher {
                     .flex_1()
                     .gap(px(GAP))
                     .min_h(px(0.0))
-                    .child(div().flex().flex_col().gap(px(GAP)).w(px(520.0)).child(launch).child(ctrl))
-                    .child(div().flex().flex_col().gap(px(GAP)).flex_1().min_w(px(0.0)).child(docs).child(log)),
+                    .child(div().flex().flex_col().gap(px(GAP)).w(px(520.0)).child(div().flex().flex_col().flex_none().child(launch)).child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(ctrl)))
+                    .child(div().flex().flex_col().gap(px(GAP)).flex_1().min_w(px(0.0)).child(div().flex().flex_col().flex_none().child(docs)).child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(log))),
             )
     }
 }

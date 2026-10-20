@@ -1,5 +1,5 @@
 #!/bin/bash
-# Bundles the launcher, the sim, the ground station, ArduPlane SITL, the maps and the docs into one
+# Bundles the launcher, the sim, the viewer, the tag runner, the expectation tool, the map builder, the ground station, ArduPlane SITL, the maps and the docs into one
 # app. Build it on the OS you want it for.
 #   tools/bundle.sh [--no-build] [--no-docs]
 #     macOS    target/bundle/SIM001.app, and SIM001-macos.zip beside it
@@ -26,15 +26,18 @@ case "$(uname -s)" in
 esac
 
 if [ $build = 1 ]; then
-  echo "== building the sim, the console and the launcher"
-  cargo build --release
+  echo "== building the sim, the viewer, the tag runner, the expectation tool, the map builder, the console and the launcher"
+  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation_cli
+  (cd domains/visualization/mapbuild && cargo build --release)
   (cd domains/teleoperation/console && cargo build --release)
   (cd domains/teleoperation/launcher && cargo build --release)
 fi
 SIM=target/release/sim001$exe
 GCS=domains/teleoperation/console/target/release/sim001_gcs$exe
 LAUNCHER=domains/teleoperation/launcher/target/release/sim001_launcher$exe
-for f in "$SIM" "$GCS" "$LAUNCHER"; do [ -x "$f" ] || { echo "missing $f (build first)" >&2; exit 1; }; done
+# The other programs: the viewer of a real plane, the tag runner, the expectation tool, the map builder.
+EXTRA="target/release/sim001_view$exe target/release/cognition_runner$exe target/release/expectation$exe domains/visualization/mapbuild/target/release/mapbuild$exe"
+for f in "$SIM" "$GCS" "$LAUNCHER" $EXTRA; do [ -x "$f" ] || { echo "missing $f (build first)" >&2; exit 1; }; done
 
 # The console's terrain map of the Alpine Valley comes from the sim.
 if [ ! -f domains/teleoperation/console/assets/terrain_map.png ]; then
@@ -55,6 +58,7 @@ esac
 mkdir -p "$BIN" "$RES"
 
 cp "$LAUNCHER" "$BIN/"; cp "$SIM" "$BIN/"; cp "$GCS" "$BIN/"
+for f in $EXTRA; do cp "$f" "$BIN/"; done
 if [ -x .ardupilot/build/sitl/bin/arduplane$exe ]; then
   cp .ardupilot/build/sitl/bin/arduplane$exe "$BIN/"
   mkdir -p "$RES/.ardupilot/Tools/autotest/models"
@@ -73,7 +77,7 @@ for m in maps/*/; do
   [ -d "$m/build" ] && rsync -a --exclude cache "$m/build" "$RES/maps/$n/"
 done
 cp maps/README.md "$RES/maps/" 2>/dev/null || true
-mkdir -p "$RES/ardupilot"; cp ardupilot/* "$RES/ardupilot/"
+mkdir -p "$RES/ardupilot"; find ardupilot -maxdepth 1 -type f -exec cp {} "$RES/ardupilot/" \;
 rsync -a --exclude results docs/ "$RES/docs/"
 rsync -a domains/teleoperation/console/assets/ "$RES/assets/"
 cp controls.cfg.example "$RES/"
@@ -82,6 +86,7 @@ echo "SIM001 $(git describe --always --dirty 2>/dev/null || echo dev)" > "$RES/s
 
 case $os in
   macos)
+    cp domains/teleoperation/launcher/icon/sim001.icns "$RES/SIM001.icns"
     cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -91,6 +96,7 @@ case $os in
 	<key>CFBundleDisplayName</key><string>SIM001</string>
 	<key>CFBundleIdentifier</key><string>dev.t1s.sim.launcher</string>
 	<key>CFBundleExecutable</key><string>sim001_launcher</string>
+	<key>CFBundleIconFile</key><string>SIM001</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleVersion</key><string>1</string>
 	<key>CFBundleShortVersionString</key><string>0.1.0</string>

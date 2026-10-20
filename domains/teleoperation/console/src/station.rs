@@ -39,10 +39,11 @@ pub struct Options {
     pub tx15_serial: Option<String>,
 }
 
-/// Where the sim's TX15 stand-in listens.
-pub const RADIO_PORT: u16 = 5770;
+/// Where the sim's TX15 stand-in listens. Below 5760: ArduPlane SITL instance N takes 5760 + 10·N (and the
+/// ports after it for its other UARTs), so a computer pilot's plane would answer on 5770.
+pub const RADIO_PORT: u16 = 5750;
 /// Where the sim's flight computer listens for the TX15 (a virtual UART), with `--flight-computer`.
-pub const UART_PORT: u16 = 5771;
+pub const UART_PORT: u16 = 5751;
 
 /// The map pack's metadata (home position etc.), if `name` has been built.
 pub fn pack_meta(name: &str) -> Option<visualization_mappack::PackMeta> {
@@ -121,7 +122,18 @@ static NATIVE: std::sync::Mutex<Vec<Child>> = std::sync::Mutex::new(Vec::new());
 fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
     let logs = if instance == 0 { work_dir().join("logs/sitl") } else { work_dir().join(format!("logs/sitl/opponent-{instance}")) };
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
-    let child = Command::new(program)
+    // An earlier Docker run of the same instance keeps tcp:5760 (and the JSON port) published, so the
+    // native one would fail to bind and exit without a word.
+    let container = if instance == 0 { SITL_CONTAINER.to_string() } else { format!("{SITL_CONTAINER}-{instance}") };
+    let _ = Command::new("docker").args(["rm", "-f", &container]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    // And an ArduPlane of this instance left behind by an earlier station that did not get to stop it.
+    let _ = Command::new("pkill")
+        .args(["-f", &format!("arduplane --model JSON:.* -I{instance}$")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let mut child = Command::new(program)
         .args(native_sitl_args(instance, aircraft, home_loc))
         .current_dir(&logs)
         .stdin(Stdio::null())
@@ -129,6 +141,10 @@ fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Optio
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("starting {}: {e}", program.display()))?;
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    if let Ok(Some(status)) = child.try_wait() {
+        return Err(format!("ArduPlane {instance} exited right away ({status}); is its MAVLink port already taken?"));
+    }
     NATIVE.lock().unwrap().push(child);
     Ok(if instance == 0 {
         format!("started ArduPlane (MAVLink on tcp:5760, flight logs in {})", logs.display())
