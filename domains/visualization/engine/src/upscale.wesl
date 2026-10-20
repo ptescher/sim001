@@ -126,9 +126,6 @@ fn upscale(in: FullscreenVertexOutput) -> Output {
         past += sample_history(vec2(p12.x, p12.y)) * w12.x * w12.y;
         past += sample_history(vec2(p3.x, p12.y)) * w3.x * w12.y;
         past += sample_history(vec2(p12.x, p3.y)) * w12.x * w3.y;
-        past = ycocg_to_rgb(clip_towards_aabb_center(rgb_to_ycocg(past), mean - u.tune.w * deviation, mean + u.tune.w * deviation));
-        // `filtered` is in YCoCg too: put both in RGB to blend.
-        let now = ycocg_to_rgb(filtered);
 
         // How long the picture has held still here: the longer, the less of the new frame.
         confidence = textureSampleLevel(history, linear_sampler, uv, 0.0).a;
@@ -138,7 +135,26 @@ fn upscale(in: FullscreenVertexOutput) -> Output {
         } else {
             confidence = 1.0;
         }
+        // The history may stray far from the neighbourhood only where nothing moves (it is
+        // averaging noise there); where things change, it is held to what is seen nearby, which
+        // is what stops a moving thing leaving a trail.
+        let still = saturate((confidence - 1.0) / 6.0);
+        let gamma = mix(1.0, u.tune.w, still);
+        let before = rgb_to_ycocg(past);
+        let after = clip_towards_aabb_center(before, mean - gamma * deviation, mean + gamma * deviation);
+        // How far the history had to be pulled back says how wrong it was: take more of the new frame.
+        let pulled = length((before - after) * vec3(2.0, 1.0, 1.0));
+        past = ycocg_to_rgb(after);
+        // `filtered` is in YCoCg too: put both in RGB to blend.
+        let now = ycocg_to_rgb(filtered);
+
         var factor = clamp(1.0 / confidence, MIN_BLEND, u.tune.z);
+        factor = min(factor + saturate(pulled * 4.0) * 0.4, 1.0);
+        // Where the history and the new frame disagree by more than noise could (what a spinning
+        // blade uncovered, which the neighbourhood is too wide to catch), trust the new frame.
+        let disagreement = length((rgb_to_ycocg(past) - filtered) * vec3(2.0, 1.0, 1.0));
+        let noise = length(deviation * vec3(2.0, 1.0, 1.0));
+        factor = max(factor, saturate((disagreement - 0.1 - 3.0 * noise) * 4.0) * 0.6);
         // Nothing to go on from outside the picture.
         if any(saturate(history_uv) != history_uv) {
             factor = 1.0;
