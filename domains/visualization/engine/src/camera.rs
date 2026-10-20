@@ -437,24 +437,47 @@ pub fn update_camera(
     }
 }
 
+/// ReSTIR shares light samples between pixels and frames. It costs about 40% more per frame and
+/// removes the speckle on shaded surfaces, which is worth more than the pixels it costs when the
+/// resolution is made up by the upscaler. SIM001_RESTIR=0 turns it off.
+fn restir_enabled(setting: Option<&str>) -> bool {
+    setting != Some("0")
+}
+
 /// Solari tuned for an outdoor scene lit by one sun plus the sky. The defaults (8 direct-light
 /// samples, 3 bounces, 15 cm cache cells) target interiors with many lights. Each value can be
 /// overridden with an env var (SIM001_DI, SIM001_DI2, SIM001_BOUNCES, SIM001_CELL) for experiments.
 fn solari_settings() -> SolariLighting {
     let env = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f32>().ok());
+    let defaults = SolariLighting::default();
     SolariLighting {
+        restir: restir_enabled(std::env::var("SIM001_RESTIR").ok().as_deref()),
         primary_di_samples: env("SIM001_DI").map(|v| v as u32).unwrap_or(2),
         secondary_di_samples: env("SIM001_DI2").map(|v| v as u32).unwrap_or(1),
         max_bounces: env("SIM001_BOUNCES").map(|v| v as u32).unwrap_or(2),
         world_cache_position_base_cell_size: env("SIM001_CELL").unwrap_or(0.4),
+        world_cache_max_temporal_samples: env("SIM001_WC_TEMPORAL").unwrap_or(defaults.world_cache_max_temporal_samples),
+        world_cache_direct_light_sample_count: env("SIM001_WC_DI").map(|v| v as u32).unwrap_or(defaults.world_cache_direct_light_sample_count),
+        world_cache_cell_updates_soft_target: env("SIM001_WC_UPDATES").map(|v| v as u32).unwrap_or(defaults.world_cache_cell_updates_soft_target),
         world_cache_max_gi_ray_distance: 120.0,
-        ..SolariLighting::default()
+        ..defaults
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The ray tracer's samples are few, and without ReSTIR (which shares them between pixels and
+    /// frames) the shade of a wall or a wing is binary noise: each pixel sees the bright sky or
+    /// does not. It is on unless asked off.
+    #[test]
+    fn the_ray_tracer_shares_its_samples_unless_asked_not_to() {
+        assert!(restir_enabled(None));
+        assert!(restir_enabled(Some("1")));
+        assert!(!restir_enabled(Some("0")));
+        assert!(restir_enabled(Some("on")), "anything but 0 leaves it on");
+    }
     use bevy::render::view::ColorGrading;
 
     /// The view should look like a camera's picture, not a painting: a filmic curve that rolls

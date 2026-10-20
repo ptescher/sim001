@@ -142,18 +142,21 @@ fn upscale(in: FullscreenVertexOutput) -> Output {
         let gamma = mix(1.0, u.tune.w, still);
         let before = rgb_to_ycocg(past);
         let after = clip_towards_aabb_center(before, mean - gamma * deviation, mean + gamma * deviation);
-        // How far the history had to be pulled back says how wrong it was: take more of the new frame.
+        // How far the history had to be pulled back, against how much the neighbourhood varies
+        // (the noise): the history of a noisy patch is often a little outside the box, and that
+        // is no reason to forget it, but a history many times further out than the noise was
+        // a different picture.
+        let noise = length(deviation * vec3(2.0, 1.0, 1.0)) + 0.02;
         let pulled = length((before - after) * vec3(2.0, 1.0, 1.0));
         past = ycocg_to_rgb(after);
         // `filtered` is in YCoCg too: put both in RGB to blend.
         let now = ycocg_to_rgb(filtered);
 
         var factor = clamp(1.0 / confidence, MIN_BLEND, u.tune.z);
-        factor = min(factor + saturate(pulled * 4.0) * 0.4, 1.0);
+        factor = min(factor + saturate(pulled / noise - 1.0) * 0.4, 1.0);
         // Where the history and the new frame disagree by more than noise could (what a spinning
         // blade uncovered, which the neighbourhood is too wide to catch), trust the new frame.
         let disagreement = length((rgb_to_ycocg(past) - filtered) * vec3(2.0, 1.0, 1.0));
-        let noise = length(deviation * vec3(2.0, 1.0, 1.0));
         factor = max(factor, saturate((disagreement - 0.1 - 3.0 * noise) * 4.0) * 0.6);
         // Nothing to go on from outside the picture.
         if any(saturate(history_uv) != history_uv) {
