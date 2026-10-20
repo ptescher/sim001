@@ -208,6 +208,8 @@ pub struct VegetationBuild {
     granite_tex: Image,
     spruce_gen: Vec<(Mesh, Mesh)>,
     aspen_gen: Vec<(Mesh, Mesh)>,
+    spruce_mid: Vec<(Mesh, Mesh)>,
+    aspen_mid: Vec<(Mesh, Mesh)>,
     spruce_solid: Vec<Mesh>,
     aspen_solid: Vec<Mesh>,
     aspen_trunk: Mesh,
@@ -224,6 +226,9 @@ pub struct VegetationBuild {
 pub struct VegetationHandles {
     spruce_gen: Vec<(Handle<Mesh>, Handle<Mesh>)>,
     aspen_gen: Vec<(Handle<Mesh>, Handle<Mesh>)>,
+    /// The same trees with a tenth of the branches, for the middle distance.
+    spruce_mid: Vec<(Handle<Mesh>, Handle<Mesh>)>,
+    aspen_mid: Vec<(Handle<Mesh>, Handle<Mesh>)>,
     spruce_solid: Vec<Handle<Mesh>>,
     aspen_solid: Vec<Handle<Mesh>>,
     aspen_trunk: Handle<Mesh>,
@@ -250,12 +255,16 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
     let bark_tex = foliage::bark_spruce_texture();
     let aspen_bark_tex = foliage::bark_aspen_texture();
     step("Growing spruce and aspen");
-    let grow = |sp, seed, h| {
-        let t = crate::treegen::generate(sp, seed, h);
+    use crate::treegen::{Lod, Species};
+    let grow = |sp, seed, h, lod| {
+        let t = crate::treegen::generate_lod(sp, seed, h, lod);
         (t.wood, t.foliage)
     };
-    let spruce_gen: Vec<_> = (0..4).map(|s| grow(crate::treegen::Species::Spruce, 11 + s, SPRUCE_REF)).collect();
-    let aspen_gen: Vec<_> = (0..4).map(|s| grow(crate::treegen::Species::Aspen, 51 + s, ASPEN_REF)).collect();
+    let spruce_gen: Vec<_> = (0..4).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Full)).collect();
+    let aspen_gen: Vec<_> = (0..4).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Full)).collect();
+    // The same seeds, so that a tree keeps its shape as it comes closer.
+    let spruce_mid: Vec<_> = (0..4).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Mid)).collect();
+    let aspen_mid: Vec<_> = (0..4).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Mid)).collect();
     let spruce_solid: Vec<_> = (0..5).map(spruce_foliage).collect();
     // Far crowns are seen from 200 m out: a coarse icosphere per blob is plenty.
     let aspen_solid: Vec<_> = (0..4).map(|s| lumpy(100 + s, 6, Vec3::new(0.45, 0.9, 0.45), 0.42, 0.25, None, 1)).collect();
@@ -343,6 +352,8 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         granite_tex,
         spruce_gen,
         aspen_gen,
+        spruce_mid,
+        aspen_mid,
         spruce_solid,
         aspen_solid,
         aspen_trunk,
@@ -434,6 +445,8 @@ pub fn upload_vegetation(
     VegetationHandles {
         spruce_gen: b.spruce_gen.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
         aspen_gen: b.aspen_gen.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
+        spruce_mid: b.spruce_mid.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
+        aspen_mid: b.aspen_mid.into_iter().map(|(w, f)| (meshes.add(w), meshes.add(f))).collect(),
         spruce_solid: b.spruce_solid.into_iter().map(|m| meshes.add(m)).collect(),
         aspen_solid: b.aspen_solid.into_iter().map(|m| meshes.add(m)).collect(),
         aspen_trunk: meshes.add(b.aspen_trunk),
@@ -450,15 +463,20 @@ pub fn upload_vegetation(
     }
 }
 
+/// Where each version of a tree is drawn (metres from the camera): the full tree, a reduced one,
+/// a solid crown, and a plain cone. They hand over without a fade: a cross-fade is dithered, and
+/// the temporal accumulation turns that into a see-through tree.
+pub fn tree_ranges() -> [bevy::camera::visibility::VisibilityRange; 4] {
+    use bevy::camera::visibility::VisibilityRange as R;
+    [R::abrupt(0.0, 140.0), R::abrupt(140.0, 700.0), R::abrupt(700.0, 1000.0), R::abrupt(1000.0, 1.0e7)]
+}
+
 /// Spawns one tree (wood + foliage cards near, solid crown far, ray-tracing proxy).
 pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &terrain::Tree) {
-    use bevy::camera::visibility::VisibilityRange;
     use bevy::solari::prelude::RaytracingMesh3d;
-    // LOD switch distances (metres), each with a dithered cross-fade band. The full trees
-    // are 6-20k triangles each and every camera draws them, so they stop at ~200 m.
-    let near = VisibilityRange { start_margin: 0.0..0.0, end_margin: 160.0..220.0, use_aabb: false };
-    let far = VisibilityRange { start_margin: 160.0..220.0, end_margin: 850.0..1000.0, use_aabb: false };
-    let distant = VisibilityRange { start_margin: 850.0..1000.0, end_margin: 1.0e7..1.0e7, use_aabb: false };
+    // The full trees are 6-20k triangles each and every camera draws them, so they stop at 140 m;
+    // a reduced tree (a few hundred triangles) carries on to 700 m, then a solid crown.
+    let [near, mid, far, distant] = tree_ranges();
     // Branch shadows only matter close to where the aircraft flies; the proxies carry the
     // crowns' shadows everywhere.
     let rt_wood = Vec2::new(t.pos.x, t.pos.z).length() < RT_WOOD_RADIUS;
@@ -483,6 +501,9 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         }
         commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(v.bark.clone()), gen_tf, near.clone()));
         commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(v.spray_mats[shade % 4].clone()), gen_tf, near));
+        let (mid_wood, mid_cards) = &v.spruce_mid[i % v.spruce_mid.len()];
+        commands.spawn((Mesh3d(mid_wood.clone()), MeshMaterial3d(v.bark.clone()), gen_tf, mid.clone()));
+        commands.spawn((Mesh3d(mid_cards.clone()), MeshMaterial3d(v.spray_mats[shade % 4].clone()), gen_tf, mid));
         let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::new(w, h, w));
         let solid = v.spruce_solid[i % v.spruce_solid.len()].clone();
         let solid_mat = v.spruce_solid_mats[shade % 4].clone();
@@ -500,6 +521,9 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         }
         commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(v.aspen_bark.clone()), gen_tf, near.clone()));
         commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(v.leaf_mats[shade % 3].clone()), gen_tf, near));
+        let (mid_wood, mid_cards) = &v.aspen_mid[i % v.aspen_mid.len()];
+        commands.spawn((Mesh3d(mid_wood.clone()), MeshMaterial3d(v.aspen_bark.clone()), gen_tf, mid.clone()));
+        commands.spawn((Mesh3d(mid_cards.clone()), MeshMaterial3d(v.leaf_mats[shade % 3].clone()), gen_tf, mid));
         let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(h));
         commands.spawn((Mesh3d(v.aspen_trunk.clone()), MeshMaterial3d(v.aspen_bark.clone()), tf, far.clone()));
         let canopy = Transform::from_translation(base + Vec3::Y * h * 0.68)
@@ -511,5 +535,28 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         commands.spawn((Mesh3d(v.aspen_distant.clone()), MeshMaterial3d(solid_mat.clone()), canopy, distant));
         let proxy = canopy.with_scale(canopy.scale * 0.75);
         commands.spawn((RaytracingMesh3d(solid), MeshMaterial3d(solid_mat), proxy));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each version of a tree takes over where the one before it leaves off, with no band in
+    /// which both are drawn (a cross-fade is dithered, and the temporal accumulation turns that
+    /// into a see-through tree).
+    #[test]
+    fn the_tree_versions_hand_over_without_a_cross_fade() {
+        let ranges = tree_ranges();
+        assert_eq!(ranges.len(), 4, "full, mid, far, distant");
+        assert_eq!(ranges[0].start_margin.start, 0.0);
+        for pair in ranges.windows(2) {
+            assert_eq!(pair[0].end_margin.end, pair[1].start_margin.start, "no gap or overlap");
+        }
+        for r in &ranges {
+            assert!(r.is_abrupt(), "{:?} fades", (&r.start_margin, &r.end_margin));
+        }
+        assert!(ranges[0].end_margin.end >= 100.0 && ranges[0].end_margin.end <= 200.0, "the full tree is for the near range");
+        assert!(ranges[1].end_margin.end > 400.0, "the mid tree reaches well out");
     }
 }
