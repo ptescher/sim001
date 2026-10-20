@@ -1,4 +1,5 @@
 Section: Flying with a radio
+  On: desktop
   The T1-S VTOL flies with a radio. A RadioMaster TX15 (or another EdgeTX radio) in USB
   joystick mode gives the sim the sticks and the switches. The sim sends them to ArduPilot
   as the radio signals of a real receiver, so the plane reacts as it does with the real

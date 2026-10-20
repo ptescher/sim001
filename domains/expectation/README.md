@@ -42,6 +42,46 @@ events, so expectations can be compared mechanically. The domain uses that to:
 
 There are no external dependencies.
 
+## Platforms
+
+One suite can describe a system that exists on several platforms (the desktop console and the
+iOS app do the same job). Everything written plainly is true on every platform. Where one
+differs, the suite says so, and each platform reads the suite as its own:
+
+```gherkin
+Vocabulary:
+  # The first is the default: plain lines are about it.
+  Platform: desktop | iOS
+
+  Event: the operator arms the vehicle
+    Say: press ARM
+    Say[iOS]: tap ARM           # how the docs tell an iOS reader to do it
+  State: the home position is set | not set
+    Shows[iOS]: set: the HOME badge turns green   # replaces the plain Shows lines
+
+  Phrase: the console is connected to a plane on the ground
+    Given the map tool is pan
+  Phrase[iOS]: the console is connected to a plane on the ground
+    Given the link is connected                    # a start that iOS can reach
+
+Section: Planning a mission
+  On: desktop                   # also under a Feature, Expectation or Story
+```
+
+- `Say[P]:`, `Set[P]:` and `Shows[P]:` replace the plain line for platform `P`.
+- `Phrase[P]:` replaces the plain phrase of the same name for `P`.
+- `On: desktop, iOS` says the section (the whole directory), feature, expectation or story
+  is only about those platforms. Use it for what a platform does not have. An exception to
+  an expectation that is not on a platform is dropped there.
+- Tag only the platforms that differ from the default. A name that is not declared is an error.
+
+`expectation check` checks every platform. A driver reads the suite for its platform
+(`Acceptance::load_for(dir, "iOS")`) and runs its tests; its results are its own
+(`results/gcs@iOS.tsv`), apart from those of runners that are the same everywhere (`sim.tsv`).
+`expectation docs` writes one manual per platform, the default at the root and the others
+under `platforms/<name>/`, and every HTML page has a Platform dropdown that opens the same page
+in the other manual.
+
 ## The language
 
 A suite is every `*.expect` file under a directory. The format is line oriented like

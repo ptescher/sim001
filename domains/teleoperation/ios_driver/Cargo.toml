@@ -1,0 +1,14 @@
+[package]
+name = "teleoperation_ios_driver"
+version = "0.1.0"
+edition = "2024"
+description = "Runs the expectation suite against the iOS ground station in the Simulator: state through the app's control server, touches and screenshots through an XCUITest bridge"
+
+[dependencies]
+expectation_harness = { path = "../../expectation/harness" }
+expectation_model = { path = "../../expectation/model" }
+expectation_story = { path = "../../expectation/story" }
+
+[[bin]]
+name = "sim001_ios_expect"
+path = "src/main.rs"

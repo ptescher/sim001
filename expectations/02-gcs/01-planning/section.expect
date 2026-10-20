@@ -1,4 +1,5 @@
 Section: Planning a mission
+  On: desktop
   A [[mission]] is the list of items that the autopilot flies in [[AUTO]]: waypoints,
   loiters, a takeoff, a landing or a return home. You draw it on the [[tactical map]] as a
   [[plan]] with the PLAN tool. Then you write it to the vehicle with UPLOAD. These pages

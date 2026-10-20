@@ -5582,8 +5582,18 @@ dependencies = [
  "raw-window-handle",
  "recreation_games",
  "simulation_aircraft",
+ "teleoperation_core",
  "teleoperation_shared",
  "visualization_mappack",
+]
+
+[[package]]
+name = "teleoperation_core"
+version = "0.1.0"
+dependencies = [
+ "communication_telemetry",
+ "communication_traffic",
+ "mavlink",
 ]
 
 [[package]]

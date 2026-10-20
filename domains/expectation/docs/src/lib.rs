@@ -36,6 +36,16 @@ pub struct Docs<'a> {
     pub report: Option<&'a Report>,
     /// Where the suite's files are, so each page can link to the one to edit.
     pub suite_dir: Option<&'a Path>,
+    /// The other platforms' docs (when the suite has several), so each page can offer the same
+    /// page there. Their trees are `platforms/<name>/` (the default platform's is the root).
+    pub siblings: &'a [Sibling],
+}
+
+/// The pages of the same manual for another platform.
+pub struct Sibling {
+    pub platform: String,
+    /// Its HTML pages, relative to its tree: `site/feature-x.html`.
+    pub pages: std::collections::HashSet<String>,
 }
 
 pub struct Page {
@@ -82,6 +92,14 @@ impl Docs<'_> {
 
     pub fn pages(&self) -> Vec<Page> {
         self.pages_with(None)
+    }
+
+    /// This manual's HTML pages, for the other platforms' dropdowns.
+    pub fn sibling(&self) -> Sibling {
+        Sibling {
+            platform: self.suite.platform.clone().unwrap_or_default(),
+            pages: self.pages().into_iter().map(|p| p.path).filter(|p| p.ends_with(".html")).collect(),
+        }
     }
 
     /// The pages, with `source` the suite's directory relative to the docs directory.

@@ -18,6 +18,10 @@ pub struct RawFile {
     pub features: Vec<RawFeature>,
     pub stories: Vec<RawStory>,
     pub terms: Vec<RawTerm>,
+    /// `Platform: desktop | iOS`: the platforms the suite is run on, the first the default.
+    pub platforms: Vec<(String, Span)>,
+    /// `On:` under a `Section:`: the platforms the whole file is about.
+    pub on: Option<Vec<(String, Span)>>,
 }
 
 /// `Term: <name>` and its definition.
@@ -36,6 +40,18 @@ pub struct RawDecl {
     pub span: Span,
     pub say: Option<(String, Span)>,
     pub shows: Vec<(String, Span)>,
+    /// `Say[iOS]:`, `Set[iOS]:` and `Shows[iOS]:`: what differs on another platform.
+    pub variants: Vec<Variant>,
+}
+
+/// A line that applies to one platform only: `Say[iOS]: tap ARM`.
+#[derive(Debug)]
+pub struct Variant {
+    pub platform: String,
+    /// Which line it is: `Say:`/`Set:` replace, `Shows:` replace all of a state's.
+    pub shows: bool,
+    pub text: String,
+    pub span: Span,
 }
 
 /// `Phrase: <name>`, its `Say:` and its steps.
@@ -45,6 +61,9 @@ pub struct RawPhrase {
     pub span: Span,
     pub say: Option<(String, Span)>,
     pub steps: Vec<RawStep>,
+    /// `Phrase[iOS]:`: the version of the phrase for that platform.
+    pub platform: Option<(String, Span)>,
+    pub variants: Vec<Variant>,
 }
 
 #[derive(Debug)]
@@ -65,6 +84,7 @@ pub struct RawStep {
 pub struct RawFeature {
     pub name: String,
     pub span: Span,
+    pub on: Option<Vec<(String, Span)>>,
     pub description: Vec<String>,
     pub expectations: Vec<RawExpectation>,
 }
@@ -73,6 +93,7 @@ pub struct RawFeature {
 pub struct RawExpectation {
     pub name: String,
     pub span: Span,
+    pub on: Option<Vec<(String, Span)>>,
     pub description: Vec<String>,
     pub steps: Vec<RawStep>,
     pub overrides: Vec<(String, Span)>,
@@ -84,6 +105,7 @@ pub struct RawExpectation {
 pub struct RawStory {
     pub name: String,
     pub span: Span,
+    pub on: Option<Vec<(String, Span)>>,
     pub narrative: Vec<String>,
     pub description: Vec<String>,
     pub scenarios: Vec<RawScenario>,
@@ -121,6 +143,16 @@ enum Block {
 }
 
 const HEADERS: &[&str] = &["Vocabulary:", "Background:", "Feature:", "Expectation:", "Story:", "Scenario:", "Term:"];
+
+/// `Say: …` or `Say[iOS]: …`: the platform tag, if any, and the text after the colon.
+fn tagged<'a>(line: &'a str, word: &str) -> Option<(Option<String>, &'a str)> {
+    let rest = line.strip_prefix(word)?;
+    if let Some(rest) = rest.strip_prefix(':') {
+        return Some((None, rest));
+    }
+    let (tag, rest) = rest.strip_prefix('[')?.split_once("]:")?;
+    Some((Some(tag.trim().to_string()), rest))
+}
 
 fn step_keyword(line: &str) -> Option<(Keyword, &str)> {
     let (word, rest) = line.split_once(char::is_whitespace)?;
@@ -184,7 +216,7 @@ pub fn parse(file: &str, text: &str, diags: &mut Vec<Diagnostic>) -> RawFile {
                 "Vocabulary:" => Block::Vocabulary,
                 "Background:" => Block::Background,
                 "Feature:" => {
-                    out.features.push(RawFeature { name: title, span, description: vec![], expectations: vec![] });
+                    out.features.push(RawFeature { name: title, span, on: None, description: vec![], expectations: vec![] });
                     Block::Feature
                 }
                 "Expectation:" => match out.features.last_mut() {
@@ -192,6 +224,7 @@ pub fn parse(file: &str, text: &str, diags: &mut Vec<Diagnostic>) -> RawFile {
                         f.expectations.push(RawExpectation {
                             name: title,
                             span,
+                            on: None,
                             description: vec![],
                             steps: vec![],
                             overrides: vec![],
@@ -212,6 +245,7 @@ pub fn parse(file: &str, text: &str, diags: &mut Vec<Diagnostic>) -> RawFile {
                     out.stories.push(RawStory {
                         name: title,
                         span,
+                        on: None,
                         narrative: vec![],
                         description: vec![],
                         scenarios: vec![],
@@ -240,54 +274,109 @@ pub fn parse(file: &str, text: &str, diags: &mut Vec<Diagnostic>) -> RawFile {
             continue;
         }
 
-        if let Some((prefix, rest)) =
-            ["State:", "Event:", "Phrase:"].iter().find_map(|p| Some((*p, line.strip_prefix(p)?)))
-        {
-            let decl = RawDecl { text: rest.trim().to_string(), span: span.clone(), say: None, shows: vec![] };
+        if let Some(rest) = line.strip_prefix("Platform:") {
+            if block != Block::Vocabulary {
+                diags.push(Diagnostic::error("syntax", "`Platform:` belongs in a Vocabulary block").at(&span, ""));
+            }
+            out.platforms.extend(rest.split('|').map(|p| (p.trim().to_string(), span.clone())).filter(|(p, _)| !p.is_empty()));
+            continue;
+        }
+        if let Some((prefix, tag, rest)) = ["State", "Event", "Phrase"].iter().find_map(|p| {
+            let (tag, rest) = tagged(line, p)?;
+            Some((*p, tag, rest))
+        }) {
+            let decl = RawDecl { text: rest.trim().to_string(), span: span.clone(), say: None, shows: vec![], variants: vec![] };
             if !matches!(block, Block::Vocabulary | Block::Phrase) {
                 diags.push(
-                    Diagnostic::error("syntax", format!("`{prefix}` belongs in a Vocabulary block")).at(&span, ""),
+                    Diagnostic::error("syntax", format!("`{prefix}:` belongs in a Vocabulary block")).at(&span, ""),
                 );
-            } else if prefix == "State:" {
+            } else if prefix != "Phrase" && tag.is_some() {
+                diags.push(Diagnostic::error("syntax", format!("`{prefix}:` has no platform variants: tag its `Say:` or `Shows:` lines instead")).at(&span, ""));
+            } else if prefix == "State" {
                 out.states.push(decl);
                 last = Last::State;
                 block = Block::Vocabulary;
-            } else if prefix == "Event:" {
+            } else if prefix == "Event" {
                 out.events.push(decl);
                 last = Last::Event;
                 block = Block::Vocabulary;
             } else {
-                out.phrases.push(RawPhrase { name: decl.text, span, say: None, steps: vec![] });
+                out.phrases.push(RawPhrase {
+                    name: decl.text,
+                    span: span.clone(),
+                    say: None,
+                    steps: vec![],
+                    platform: tag.map(|t| (t, span)),
+                    variants: vec![],
+                });
                 last = Last::Phrase;
                 block = Block::Phrase;
             }
             continue;
         }
 
-        if let Some(rest) = line.strip_prefix("Shows:") {
-            match (block, last, out.states.last_mut()) {
-                (Block::Vocabulary, Last::State, Some(d)) => d.shows.push((rest.trim().to_string(), span)),
+        if let Some(rest) = line.strip_prefix("On:") {
+            let on: Vec<(String, Span)> = rest.split(',').map(|p| (p.trim().to_string(), span.clone())).filter(|(p, _)| !p.is_empty()).collect();
+            let slot = match block {
+                Block::Section => Some(&mut out.on),
+                Block::Feature => out.features.last_mut().map(|f| &mut f.on),
+                Block::Expectation => out.features.last_mut().and_then(|f| f.expectations.last_mut()).map(|e| &mut e.on),
+                Block::Story => out.stories.last_mut().map(|s| &mut s.on),
+                _ => None,
+            };
+            match slot {
+                Some(slot) if !on.is_empty() => *slot = Some(on),
+                Some(_) => diags.push(Diagnostic::error("syntax", "`On:` needs platforms: `On: iOS` or `On: desktop, iOS`").at(&span, "")),
+                None => diags.push(
+                    Diagnostic::error("syntax", "`On:` goes right under a Section, Feature, Expectation or Story")
+                        .at(&span, ""),
+                ),
+            }
+            continue;
+        }
+
+        if let Some((tag, rest)) = tagged(line, "Shows") {
+            match (block, last, out.states.last_mut(), tag) {
+                (Block::Vocabulary, Last::State, Some(d), None) => d.shows.push((rest.trim().to_string(), span)),
+                (Block::Vocabulary, Last::State, Some(d), Some(platform)) => {
+                    d.variants.push(Variant { platform, shows: true, text: rest.trim().to_string(), span })
+                }
                 _ => diags.push(
                     Diagnostic::error("syntax", "`Shows:` goes right under the `State:` it describes").at(&span, ""),
                 ),
             }
             continue;
         }
-        if let Some((prefix, rest)) = ["Say:", "Set:"].iter().find_map(|p| Some((*p, line.strip_prefix(p)?))) {
+        if let Some((prefix, tag, rest)) = ["Say", "Set"].iter().find_map(|p| {
+            let (tag, rest) = tagged(line, p)?;
+            Some((*p, tag, rest))
+        }) {
             let said = Some((rest.trim().to_string(), span.clone()));
-            let target = match (block, last, prefix) {
-                (Block::Vocabulary, Last::State, "Set:") => out.states.last_mut().map(|d| &mut d.say),
-                (Block::Vocabulary, Last::Event, "Say:") => out.events.last_mut().map(|d| &mut d.say),
-                (Block::Phrase, _, "Say:") => out.phrases.last_mut().map(|p| &mut p.say),
-                _ => None,
-            };
-            match target {
-                Some(t) => *t = said,
-                None => diags.push(
-                    Diagnostic::error("syntax", format!("`{prefix}` goes right under the thing it describes"))
+            let ok = matches!((block, last, prefix), (Block::Vocabulary, Last::State, "Set") | (Block::Vocabulary, Last::Event, "Say") | (Block::Phrase, _, "Say"));
+            if !ok {
+                diags.push(
+                    Diagnostic::error("syntax", format!("`{prefix}:` goes right under the thing it describes"))
                         .at(&span, "")
                         .help("`Set:` under a `State:`, and `Say:` under an `Event:` or a `Phrase:`"),
-                ),
+                );
+                continue;
+            }
+            if let Some(platform) = tag {
+                let variant = Variant { platform, shows: false, text: rest.trim().to_string(), span };
+                match (block, last) {
+                    (Block::Phrase, _) => out.phrases.last_mut().unwrap().variants.push(variant),
+                    (_, Last::State) => out.states.last_mut().unwrap().variants.push(variant),
+                    _ => out.events.last_mut().unwrap().variants.push(variant),
+                }
+                continue;
+            }
+            let target = match (block, last) {
+                (Block::Phrase, _) => out.phrases.last_mut().map(|p| &mut p.say),
+                (_, Last::State) => out.states.last_mut().map(|d| &mut d.say),
+                _ => out.events.last_mut().map(|d| &mut d.say),
+            };
+            if let Some(t) = target {
+                *t = said;
             }
             continue;
         }

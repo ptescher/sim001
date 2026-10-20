@@ -19,6 +19,9 @@ Section: Ground control station
   [[From plan to flight]].
 
 Vocabulary:
+  # The suite is about the desktop console, and the iOS app does the same job. Lines tagged
+  # [iOS] are what differs there; see domains/expectation/README.md, "Platforms".
+  Platform: desktop | iOS
   State: the link is connected | lost
   State: the vehicle is disarmed | armed
     Shows: armed: the ARMED annunciator lights up
@@ -57,6 +60,7 @@ Vocabulary:
     Shows: stays the same: the solid line of the mission on the vehicle does not change
   State: the home position is set | not set
     Shows: set: the map marks home where the plane was armed
+    Shows[iOS]: set: the HOME badge turns green
   State: the waypoints are unchecked | clear of the terrain | too low somewhere
     Shows: clear of the terrain: each waypoint is above the ground below it
   State: the mission file is missing | up to date | out of date
@@ -97,8 +101,10 @@ Vocabulary:
     Say: press WP1
   Event: the operator arms the vehicle
     Say: press ARM. Then press CONFIRM ARM in three seconds or less
+    Say[iOS]: tap ARM. Then tap CONFIRM ARM in three seconds or less
   Event: the operator disarms the vehicle
     Say: press DISARM
+    Say[iOS]: tap DISARM
   Event: the operator switches to AUTO
     Say: press AUTO
   Event: the operator switches to AUTO anyway
@@ -131,6 +137,13 @@ Vocabulary:
     And the measured distance is hidden
     And the plane is on the ground
     And the vehicle's current item is 0
+
+  Phrase[iOS]: the console is connected to a plane on the ground
+    Say: install the app on an iPhone or in the Simulator, and start ArduPlane [[SITL]] on your Mac (`ardupilot/run_sitl.sh`). Open the app. It connects to the plane on `tcp:5760`. The plane is on the ground and disarmed, in MANUAL, with home set. Wait until the ARM button shows ARM
+    Given the link is connected
+    And the vehicle is disarmed
+    And the autopilot mode is MANUAL
+    And the home position is set
 
   Phrase: the operator plans two waypoints
     Say: click the map at two points over the valley floor near home
@@ -215,10 +228,13 @@ Vocabulary:
     Say: press VTOL TKOF. The plane climbs straight up to the plan altitude
   Event: the operator switches to forward flight
     Say: press CRUISE. The wing motors tilt forward and the plane speeds up
+    Say[iOS]: tap CRUISE. The wing motors tilt forward and the plane speeds up
   Event: the operator switches to hover
     Say: press QLOITER. The plane slows down and the wing motors tilt up
+    Say[iOS]: tap QLOITER. The plane slows down and the wing motors tilt up
   Event: the operator lands vertically
     Say: press QLAND. The plane comes down straight and stops its motors
+    Say[iOS]: tap QLAND. The plane comes down straight and stops its motors
 
   Phrase: the console is connected to a VTOL on the ground
     Say: the station flies the T1-S VTOL, the default plane, with its two tilt-rotors and its rear rotor. The console shows the Q modes (QHOVER, QLOITER, QLAND and QRTL) with the other modes. Wait until the ARM button shows ARM, not ARM: NOT READY

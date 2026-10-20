@@ -1,4 +1,5 @@
 Section: Flying a VTOL
+  On: desktop
   A [[VTOL]] takes off and lands straight up, like a copter, and flies forward on its wing,
   like a plane. The T1-S VTOL has two [[tilt-rotor]] motors on the wing and a third rotor in
   the tail. In a hover the two wing motors point up, and the three rotors hold the plane in

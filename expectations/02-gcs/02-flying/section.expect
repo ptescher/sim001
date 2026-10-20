@@ -1,4 +1,5 @@
 Section: Flying a mission
+  On: desktop
   In AUTO, ArduPlane flies the items of the mission in order. After the last item, it
   decides where to go. It also decides when the mission starts again from the first item.
 

@@ -5,6 +5,7 @@
 # screen to a file that the console's driver reads (--tx15-screen).
 
 Section: The TX15 on the serial line
+  On: desktop
   On the real plane, the TX15 is not a USB game controller. It sends its sticks and switches to
   the [[flight computer]] on a serial line, in the protocol of ExpressLRS. The flight computer
   gives ArduPilot the radio channels. ArduPilot sends its state back on the same line, and the

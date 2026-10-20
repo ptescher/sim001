@@ -323,6 +323,29 @@ impl Site<'_> {
         format!("{} tests: {}", r.results.len(), parts.join(" · "))
     }
 
+    /// The dropdown that moves to the same page of another platform's manual (or its first
+    /// page, if it has none like it). Nothing when the suite has one platform.
+    fn platform_picker(&self, file: &str) -> String {
+        let s = self.suite();
+        let Some(current) = s.platform.as_deref().filter(|_| s.platforms.len() > 1) else { return String::new() };
+        let root = |p: &str| if s.platforms[0] == p { String::new() } else { format!("platforms/{}/", p.to_lowercase()) };
+        // From site/ up to the docs directory.
+        let up = "../".repeat(root(current).matches('/').count() + 1);
+        let mut o = String::from(r#"<label class="platform">Platform <select aria-label="Platform" onchange="location.href=this.value">"#);
+        for p in &s.platforms {
+            let target = format!("site/{file}");
+            let page = if p == current || self.d.siblings.iter().find(|x| x.platform == *p).is_some_and(|x| x.pages.contains(&target)) {
+                file
+            } else {
+                "index.html"
+            };
+            let href = if p == current { file.to_string() } else { format!("{up}{}site/{page}", root(p)) };
+            let _ = write!(o, r#"<option value="{}"{}>{}</option>"#, esc(&href), if p == current { " selected" } else { "" }, esc(p));
+        }
+        o.push_str("</select></label>");
+        o
+    }
+
     fn page(&self, here: Here, title: &str, body: &str) -> String {
         let order = self.reading_order();
         let pos = order.iter().position(|h| *h == here);
@@ -341,6 +364,7 @@ impl Site<'_> {
             pager.push_str("</nav>");
         }
         let footer = String::new();
+        let platforms = self.platform_picker(&self.here_link(here).0);
         let suite = esc(&self.suite().name);
         let full = if title == self.suite().name { suite.clone() } else { format!("{} · {suite}", esc(title)) };
         format!(
@@ -354,7 +378,7 @@ impl Site<'_> {
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-<header class="top"><a class="brand" href="index.html">{suite}</a></header>
+<header class="top"><a class="brand" href="index.html">{suite}</a>{platforms}</header>
 <div class="layout">
 {}
 <main>
@@ -1153,6 +1177,8 @@ h1, h2, h3, header.top, nav.side, .badge, .crumbs, figcaption, dl.meta dt, nav.p
 
 header.top { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; padding: 11px 22px; background: var(--title); border-bottom: 1px solid var(--bezel-edge); }
 header.top .brand { font-weight: 700; color: var(--text); font-size: 16px; letter-spacing: .02em; }
+header.top .platform { margin-left: auto; color: var(--muted); font-size: 13px; }
+header.top .platform select { margin-left: 6px; font: inherit; color: var(--text); background: var(--panel, transparent); border: 1px solid var(--bezel-edge); border-radius: 4px; padding: 2px 6px; }
 header.top .summary { color: var(--muted); font-size: 13px; }
 
 .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); }

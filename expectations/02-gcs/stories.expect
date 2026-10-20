@@ -1,4 +1,5 @@
 Story: From plan to flight
+  On: desktop
   As a pilot at the field
   I want to plan a mission, upload it and throw the plane into it
   So that it flies the mission on its own

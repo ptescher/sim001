@@ -5575,6 +5575,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "teleoperation_core"
+version = "0.1.0"
+dependencies = [
+ "communication_telemetry",
+ "communication_traffic",
+ "mavlink",
+]
+
+[[package]]
+name = "teleoperation_ios"
+version = "0.1.0"
+dependencies = [
+ "teleoperation_core",
+]
+
+[[package]]
+name = "teleoperation_ios_driver"
+version = "0.1.0"
+dependencies = [
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+]
+
+[[package]]
 name = "teleoperation_shared"
 version = "0.1.0"
 

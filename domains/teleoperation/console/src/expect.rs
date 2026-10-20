@@ -276,7 +276,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
         serial_line,
         tx15_screen,
     } = config;
-    let mut acceptance = match Acceptance::load(&suite) {
+    let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
         Ok(a) => a.with_coverage(),
         Err(e) => {
             eprint!("{e}");

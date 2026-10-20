@@ -30,6 +30,7 @@
 //! [`load_dir`] reads every `*.expect` file under a directory into one suite;
 //! [`load_sources`] does the same from strings.
 
+mod lens;
 mod parse;
 mod resolve;
 pub mod step;
@@ -56,8 +57,14 @@ impl Loaded {
     }
 }
 
-/// Parse named sources, in order, as one suite.
+/// Parse named sources, in order, as one suite (for its default platform).
 pub fn load_sources(name: &str, sources: &[(&str, &str)]) -> Loaded {
+    load_sources_for(name, sources, None)
+}
+
+/// As [`load_sources`], read for `platform` (see `lens`): its variants replace the plain lines
+/// and what is `On:` elsewhere is left out. `None` is the default platform.
+pub fn load_sources_for(name: &str, sources: &[(&str, &str)], platform: Option<&str>) -> Loaded {
     let mut diags = vec![];
     let mut suite = Suite { name: name.to_string(), ..Suite::default() };
     let mut files = vec![];
@@ -67,6 +74,7 @@ pub fn load_sources(name: &str, sources: &[(&str, &str)]) -> Loaded {
         files.push(raw);
         suite.sources.insert((*file).into(), text.to_string());
     }
+    (suite.platforms, suite.platform) = lens::apply(&mut files, platform, &mut diags);
     resolve::resolve(&mut suite, &files, &mut diags);
     Loaded { suite, diagnostics: diags }
 }
@@ -74,6 +82,11 @@ pub fn load_sources(name: &str, sources: &[(&str, &str)]) -> Loaded {
 /// Every `*.expect` file under `dir` (recursively, in path order) as one suite, named by its
 /// `Suite:` line or else after the directory. File names in diagnostics are relative to `dir`.
 pub fn load_dir(dir: &Path) -> std::io::Result<Loaded> {
+    load_dir_for(dir, None)
+}
+
+/// As [`load_dir`], read for `platform`.
+pub fn load_dir_for(dir: &Path, platform: Option<&str>) -> std::io::Result<Loaded> {
     let mut paths = vec![];
     collect(dir, &mut paths)?;
     paths.sort();
@@ -83,7 +96,7 @@ pub fn load_dir(dir: &Path) -> std::io::Result<Loaded> {
         texts.push((rel, std::fs::read_to_string(p)?));
     }
     let refs: Vec<(&str, &str)> = texts.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
-    let mut loaded = load_sources(&suite_name(dir), &refs);
+    let mut loaded = load_sources_for(&suite_name(dir), &refs, platform);
     if paths.is_empty() {
         loaded
             .diagnostics
@@ -296,6 +309,76 @@ Feature: F
         // A "When" line in a feature's description is prose: features hold no steps.
         assert_eq!(s.features[0].description, vec!["When the plane is in hand, Space throws it."]);
         assert!(s.expectations[0].hidden);
+    }
+
+    const PLATFORMS: &str = "Suite: Station
+Vocabulary:
+  Platform: desktop | iOS
+  State: the vehicle is disarmed | armed
+    Shows: armed: the ARMED annunciator lights up
+    Shows[iOS]: armed: the ARMED badge turns yellow
+  State: the map tool is pan | PLAN
+  Event: the operator arms the vehicle
+    Say: press ARM
+    Say[iOS]: tap ARM
+  Phrase: the station is up
+    Say: run it on the Mac
+    Given the vehicle is disarmed
+    And the map tool is pan
+  Phrase[iOS]: the station is up
+    Say: open the app
+    Given the vehicle is disarmed
+Background:
+  Given the station is up
+
+Feature: Arming
+  Expectation: ARM arms
+    Given the vehicle is disarmed
+    When the operator arms the vehicle
+    Then the vehicle is armed
+
+Feature: Planning
+  On: desktop
+  Expectation: PLAN picks the tool
+    Given the map tool is pan
+    When the operator arms the vehicle
+    Then the map tool is PLAN
+";
+
+    #[test]
+    fn a_platform_reads_its_own_variants() {
+        let sources = [("s.expect", PLATFORMS)];
+        let desktop = load_sources_for("s", &sources, None);
+        assert!(!desktop.has_errors(), "{}", desktop.render_diagnostics());
+        let s = &desktop.suite;
+        assert_eq!((s.platforms.clone(), s.platform.as_deref()), (vec!["desktop".into(), "iOS".into()], Some("desktop")));
+        assert_eq!(s.vocabulary.events[0].say.as_deref(), Some("press ARM"));
+        assert_eq!(s.expectations.len(), 2);
+        assert_eq!(s.background.vars().count(), 2, "the plain phrase sets the map tool too");
+
+        let ios = load_sources_for("s", &sources, Some("iOS"));
+        assert!(!ios.has_errors(), "{}", ios.render_diagnostics());
+        let s = &ios.suite;
+        assert_eq!(s.platform.as_deref(), Some("iOS"));
+        assert_eq!(s.vocabulary.events[0].say.as_deref(), Some("tap ARM"));
+        assert_eq!(s.vocabulary.phrases.len(), 1, "one `the station is up`, the iOS one");
+        assert_eq!(s.vocabulary.phrases[0].say.as_deref(), Some("open the app"));
+        assert_eq!(s.background.vars().count(), 1, "iOS has no map tool in its start");
+        assert_eq!(s.expectations.len(), 1, "Planning is on desktop only");
+        let shown = s.vocabulary.variables[0].shows.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>();
+        assert_eq!(shown, vec!["the ARMED badge turns yellow"]);
+    }
+
+    #[test]
+    fn platform_mistakes_are_reported() {
+        let vocab = "Vocabulary:\n Platform: desktop | iOS\n State: the vehicle is disarmed | armed\n Event: the operator arms the vehicle\n";
+        let with = |rest: &str| format!("{vocab}{rest}");
+        assert_eq!(errors(&with("Event: x\n Say[watch]: tap\n")), vec!["unknown-platform"]);
+        assert_eq!(errors(&with("Event: y\n Say[desktop]: tap\n")), vec!["default-platform"]);
+        assert_eq!(errors(&with("Feature: F\n On: Android\n")), vec!["unknown-platform"]);
+        assert_eq!(errors("Feature: F\n On: iOS\n"), vec!["unknown-platform"]);
+        let l = load_sources_for("t", &[("t.expect", vocab)], Some("Android"));
+        assert_eq!(l.diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["unknown-platform"]);
     }
 
     fn errors(src: &str) -> Vec<&'static str> {

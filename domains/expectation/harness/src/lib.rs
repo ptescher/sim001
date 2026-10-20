@@ -34,6 +34,9 @@ pub struct Acceptance {
     pub diagnostics: Vec<Diagnostic>,
     /// The directory it was loaded from, if it was.
     pub dir: Option<std::path::PathBuf>,
+    /// Set by [`Acceptance::load_for`]: the platform this is the suite of. Its results are
+    /// its own, and its docs are one tree of several (see [`Acceptance::tree`]).
+    pub platform: Option<String>,
 }
 
 impl Acceptance {
@@ -41,12 +44,35 @@ impl Acceptance {
     /// vocabulary, an unsettled conflict, a story relying on unspecified behaviour — fails
     /// it, with every diagnostic rendered.
     pub fn load(dir: impl AsRef<Path>) -> Result<Self, String> {
-        let dir = dir.as_ref();
-        let loaded =
-            expectation_language::load_dir(dir).map_err(|e| format!("couldn't read {}: {e}", dir.display()))?;
+        Self::read(dir.as_ref(), None)
+    }
+
+    /// As [`Acceptance::load`], for one platform of a suite that declares several: the
+    /// variants written for it replace the plain lines, and what is `On:` elsewhere is
+    /// left out. Run the same suite on each platform with its own driver.
+    pub fn load_for(dir: impl AsRef<Path>, platform: &str) -> Result<Self, String> {
+        let mut a = Self::read(dir.as_ref(), Some(platform))?;
+        a.platform = a.suite.platform.clone();
+        Ok(a)
+    }
+
+    fn read(dir: &Path, platform: Option<&str>) -> Result<Self, String> {
+        let loaded = expectation_language::load_dir_for(dir, platform)
+            .map_err(|e| format!("couldn't read {}: {e}", dir.display()))?;
         let mut a = Self::from_loaded(loaded)?;
         a.dir = Some(dir.to_path_buf());
         Ok(a)
+    }
+
+    /// Where this platform's docs go under the docs directory `dir`: the default platform's
+    /// (and a suite without platforms) are in `dir` itself, the others' in `dir/platforms/<name>`.
+    pub fn tree(&self, dir: &Path) -> std::path::PathBuf {
+        match self.suite.platform.as_deref() {
+            Some(p) if self.suite.platforms.first().map(String::as_str) != Some(p) => {
+                dir.join("platforms").join(p.to_lowercase())
+            }
+            _ => dir.to_path_buf(),
+        }
     }
 
     pub fn from_loaded(loaded: Loaded) -> Result<Self, String> {
@@ -62,7 +88,7 @@ impl Acceptance {
         if has_errors(&diagnostics) {
             return Err(render_all(&diagnostics, &suite.sources));
         }
-        Ok(Acceptance { suite, analysis, plans: planned.plans, diagnostics, dir: None })
+        Ok(Acceptance { suite, analysis, plans: planned.plans, diagnostics, dir: None, platform: None })
     }
 
     /// Add generated tests for the expectations no story exercises.
@@ -81,18 +107,26 @@ impl Acceptance {
     }
 
     pub fn docs<'a>(&'a self, report: Option<&'a Report>) -> Docs<'a> {
-        Docs { suite: &self.suite, analysis: &self.analysis, plans: &self.plans, report, suite_dir: self.dir.as_deref() }
+        Docs {
+            suite: &self.suite,
+            analysis: &self.analysis,
+            plans: &self.plans,
+            report,
+            suite_dir: self.dir.as_deref(),
+            siblings: &[],
+        }
     }
 
-    /// Save `report` as `runner`'s results in `dir/results/`, merge them with the results other
-    /// runners saved there, and write the docs (Markdown and the HTML site) from the lot.
-    /// Returns the merged report.
+    /// Save `report` as `runner`'s results in `dir/results/` (a platform's runner saves its
+    /// own: `gcs@iOS.tsv`), merge them with the results that apply to this platform, and write
+    /// its docs (Markdown and the HTML site) from the lot. Returns the merged report.
     pub fn publish(&self, dir: &Path, runner: &str, report: &Report) -> std::io::Result<Report> {
         let results = dir.join("results");
         std::fs::create_dir_all(&results)?;
-        std::fs::write(results.join(format!("{runner}.tsv")), report.save(&self.plans))?;
-        let merged = expectation_story::load_results(&results, &self.plans);
-        self.docs(Some(&merged)).write(dir)?;
+        let file = expectation_story::results_file(runner, self.platform.as_deref());
+        std::fs::write(results.join(file), report.save(&self.plans))?;
+        let merged = expectation_story::load_results_for(&results, &self.plans, self.suite.platform.as_deref());
+        self.docs(Some(&merged)).write(&self.tree(dir))?;
         Ok(merged)
     }
 

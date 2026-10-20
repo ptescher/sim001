@@ -1,0 +1,10 @@
+[package]
+name = "teleoperation_core"
+version = "0.1.0"
+edition = "2024"
+description = "The ground station without a screen: the MAVLink link, the vehicle's state and the map geometry. The GPUI console and the iOS app are two faces of it"
+
+[dependencies]
+mavlink = { version = "0.19", default-features = false, features = ["std", "transport-tcp", "transport-udp", "dialect-ardupilotmega", "dialect-common", "mav2-message-extensions"] }
+communication_telemetry = { path = "../../communication/telemetry" }
+communication_traffic = { path = "../../communication/traffic" }

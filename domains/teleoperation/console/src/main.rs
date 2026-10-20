@@ -8,13 +8,12 @@
 mod autotest;
 mod expect;
 mod feed;
-mod geo;
-mod link;
 mod screens;
 mod station;
 mod tx15_screen;
 mod ui;
-mod vehicle;
+// The screenless half of the station lives in teleoperation_core; keep the old paths.
+use teleoperation_core::{geo, link, vehicle};
 
 use geo::{Origin, TerrainMap};
 use gpui::{

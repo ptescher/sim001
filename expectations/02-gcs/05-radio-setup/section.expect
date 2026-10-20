@@ -1,4 +1,5 @@
 Section: Setting up the radio
+  On: desktop
   The sim reads a radio that is in USB joystick mode as a game controller. The first time, it has
   to learn which stick is which, and which channels the switches are on. This is the
   calibration. The sim saves it in the file controls.cfg, and the next start uses it. This

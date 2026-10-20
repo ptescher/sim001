@@ -337,12 +337,32 @@ pub fn fingerprint(plan: &Plan) -> String {
 }
 
 pub fn load_results(dir: &std::path::Path, plans: &[Plan]) -> Report {
+    load_results_for(dir, plans, None)
+}
+
+/// The results file for `runner` on `platform`: `gcs@iOS.tsv`. A runner that is the same
+/// on every platform (the sim's) has none: `sim.tsv`.
+pub fn results_file(runner: &str, platform: Option<&str>) -> String {
+    match platform {
+        Some(p) => format!("{runner}@{p}.tsv"),
+        None => format!("{runner}.tsv"),
+    }
+}
+
+/// As [`load_results`], for the docs of `platform`: the results of runners that are the same on
+/// every platform (`sim.tsv`), and of those that ran on this one (`gcs@iOS.tsv`), not the
+/// results another platform's run saved.
+pub fn load_results_for(dir: &std::path::Path, plans: &[Plan], platform: Option<&str>) -> Report {
     let mut files: Vec<_> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "tsv"))
+        .filter(|p| match p.file_stem().and_then(|s| s.to_str()).and_then(|s| s.split_once('@')) {
+            Some((_, on)) => Some(on) == platform,
+            None => true,
+        })
         .collect();
     files.sort();
     let mut report = Report::not_run(plans);

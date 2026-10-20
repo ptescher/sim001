@@ -1,4 +1,5 @@
 Feature: Map tools
+  On: desktop
   When you drag the tactical map, it pans. PLAN and GOTO change what a click on the map does.
   With PLAN, a click adds a waypoint to the plan. With GOTO, a click sends the plane to that
   point. Press the same tool again to go back to panning.

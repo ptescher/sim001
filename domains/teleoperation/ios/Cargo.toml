@@ -1,0 +1,11 @@
+[package]
+name = "teleoperation_ios"
+version = "0.1.0"
+edition = "2024"
+description = "The ground station for iOS: the station's logic and a C interface for the SwiftUI app, and the control server the acceptance driver reads it through"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+teleoperation_core = { path = "../core" }

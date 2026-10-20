@@ -298,6 +298,11 @@ pub struct Suite {
     /// `Term:`s: the glossary's definitions.
     pub glossary: Vec<Term>,
     pub sources: Sources,
+    /// `Platform:`s the suite is run on; the first is the default, which untagged lines are about.
+    pub platforms: Vec<String>,
+    /// The platform this suite was read for (a lens on one platform's variants), if the
+    /// suite declares platforms.
+    pub platform: Option<String>,
 }
 
 /// `Term: <name>` and the text under it: a definition for the glossary.
