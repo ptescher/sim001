@@ -7,10 +7,15 @@ Part: Getting started
   Page: installing [desktop]
   Page: the-launcher [desktop]
   Page: controls [desktop]
+  Section: Setting up the radio
 
-Part: Flying by hand
+Part: Flying in the sim
   Section: The simulator
+
+Part: Flying the VTOL
   Section: Flying with a flight controller
+  Section: Flying a VTOL
+  Section: Flying with a radio
 
 Part: The ground station
   Section: Ground control station
@@ -23,6 +28,7 @@ Part: Games
 Part: Beyond the cockpit
   Section: Other aircraft
   Section: The flight computer
+  Section: The TX15 on the serial line
   Section: Watching a real plane
   Section: Flying by plan
 
