@@ -82,7 +82,7 @@ rsync -a --exclude results docs/ "$RES/docs/"
 rsync -a domains/teleoperation/console/assets/ "$RES/assets/"
 cp controls.cfg.example "$RES/"
 cp README.md "$RES/"
-echo "SIM001 $(git describe --always --dirty 2>/dev/null || echo dev)" > "$RES/sim001-bundle"
+echo "SIM001 ${SIM001_VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)}" > "$RES/sim001-bundle"
 
 case $os in
   macos)
@@ -107,6 +107,8 @@ case $os in
 </dict>
 </plist>
 PLIST
+    # SIM001_VERSION (the release workflow sets it from the tag) replaces the version in the plist.
+    [ -z "$SIM001_VERSION" ] || sed -i '' "s#<string>0.1.0</string>#<string>$SIM001_VERSION</string>#" "$APP/Contents/Info.plist"
     # Ad-hoc signed, so that macOS treats the copy as a normal app (right-click, Open the first time
     # if it came from the internet). A Developer ID signature and notarization are up to you.
     codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "(codesign failed: the app is unsigned)"
