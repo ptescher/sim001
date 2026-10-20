@@ -122,6 +122,7 @@ fn advance_loading(
     mut images: ResMut<Assets<Image>>,
     mut render_scale: ResMut<RenderScale>,
     mut next_state: ResMut<NextState<AppState>>,
+    settings: Res<crate::RenderSettings>,
 ) {
     let loading = &mut *loading;
     match &mut loading.phase {
@@ -157,7 +158,7 @@ fn advance_loading(
             let done = *total - terrain.len();
             set_stage(&loading.shared, 0.88 + 0.02 * done as f32 / *total as f32, &format!("Uploading terrain  {done}/{total}"));
             if terrain.is_empty() {
-                let handles = vegetation::upload_vegetation(vegetation.take().unwrap(), &mut commands, &mut meshes, &mut materials, &mut images);
+                let handles = vegetation::upload_vegetation(vegetation.take().unwrap(), settings.raytracing, &mut commands, &mut meshes, &mut materials, &mut images);
                 set_stage(&loading.shared, 0.90, "Planting the forest");
                 loading.phase = Phase::Planting { trees: std::mem::take(trees), plants: std::mem::take(plants), handles, next: 0 };
             }

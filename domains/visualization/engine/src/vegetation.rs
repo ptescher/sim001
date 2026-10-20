@@ -199,6 +199,14 @@ const RT_WOOD_RADIUS: f32 = 400.0;
 const SPRUCE_REF: f32 = 20.0;
 /// How much light leaves pass through, as emission in nits (full sun on a leaf is about 5000).
 const LEAF_GLOW: f32 = 2500.0;
+
+/// The ray tracer's stand-ins for the crowns block the sun completely, so the crowns' drawn
+/// surfaces glow a little in their own colour to stand for the light through the leaves. The
+/// rasterized view has shadow maps that the cards do not fully block, so a crown is lit as it
+/// is and a glow would only blow it out.
+fn leaf_glow(raytracing: bool, over: Option<f32>) -> f32 {
+    over.unwrap_or(if raytracing { LEAF_GLOW } else { 0.0 })
+}
 const SAPLING_REF: f32 = 4.0;
 const SHRUB_REF: f32 = 1.5;
 /// How many different trees of each kind are grown; instances pick one by index.
@@ -403,6 +411,7 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
 /// batches afterwards with `spawn_tree`.
 pub fn upload_vegetation(
     b: VegetationBuild,
+    raytracing: bool,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
@@ -412,7 +421,7 @@ pub fn upload_vegetation(
         m.add(StandardMaterial { base_color: c, perceptual_roughness: rough, reflectance: 0.3, ..default() })
     };
     // The solid crowns seen far away let the sun through as the cards do.
-    let glow = std::env::var("SIM001_LEAF_GLOW").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(LEAF_GLOW);
+    let glow = leaf_glow(raytracing, std::env::var("SIM001_LEAF_GLOW").ok().and_then(|v| v.parse::<f32>().ok()));
     let lit_mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32| {
         let l = c.to_linear();
         m.add(StandardMaterial {
@@ -445,7 +454,7 @@ pub fn upload_vegetation(
         // Leaves and needles pass some of the sun's light through: the side of a crown in its own
         // shadow is not black but glows, dimly, in the leaves' colour. (The ray tracer's
         // stand-ins for the crowns block the sun completely, so the glow is added here.)
-        let glow = std::env::var("SIM001_LEAF_GLOW").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(LEAF_GLOW);
+        let glow = leaf_glow(raytracing, std::env::var("SIM001_LEAF_GLOW").ok().and_then(|v| v.parse::<f32>().ok()));
         m.add(StandardMaterial {
             base_color: Color::linear_rgb(tint.x, tint.y, tint.z),
             emissive: LinearRgba::rgb(tint.x * glow, tint.y * glow, tint.z * glow),
@@ -647,6 +656,26 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
 mod tests {
     use super::*;
 
+    /// The leaves' glow stands in for light the ray tracer's solid crowns block; the rasterized
+    /// view has none of that problem, and a glow there only blows the trees out white.
+    #[test]
+    fn leaves_glow_only_in_the_ray_traced_view() {
+        assert_eq!(leaf_glow(false, None), 0.0);
+        assert_eq!(leaf_glow(true, None), LEAF_GLOW);
+        assert_eq!(leaf_glow(false, Some(900.0)), 900.0, "an override still works");
+        let mut meshes = Assets::<Mesh>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut images = Assets::<Image>::default();
+        let mut world = World::new();
+        let mut queue = bevy::ecs::world::CommandQueue::default();
+        let mut commands = Commands::new(&mut queue, &world);
+        let handles = upload_vegetation(build_vegetation(|_| {}), false, &mut commands, &mut meshes, &mut materials, &mut images);
+        queue.apply(&mut world);
+        for h in handles.leaf_mats.iter().chain(&handles.spray_mats) {
+            assert_eq!(materials.get(h).unwrap().emissive, LinearRgba::BLACK, "a raster leaf glows");
+        }
+    }
+
     /// The ray tracer treats a glowing mesh in its scene as a light and spends the sun's samples
     /// on it, which darkens everything else: so nothing the crowns put in the ray-traced scene
     /// may glow. (The glow that stands for light through leaves is on the drawn crowns only.)
@@ -658,7 +687,7 @@ mod tests {
         let mut commands_world = World::new();
         let mut queue = bevy::ecs::world::CommandQueue::default();
         let mut commands = Commands::new(&mut queue, &commands_world);
-        let handles = upload_vegetation(build_vegetation(|_| {}), &mut commands, &mut meshes, &mut materials, &mut images);
+        let handles = upload_vegetation(build_vegetation(|_| {}), true, &mut commands, &mut meshes, &mut materials, &mut images);
         queue.apply(&mut commands_world);
         let ray_traced = handles.ray_traced_materials();
         assert!(!ray_traced.is_empty());
