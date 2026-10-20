@@ -3,9 +3,9 @@
 //! All meshes are unit-sized and shared between instances (one BLAS each for Solari);
 //! variety comes from several variants, per-instance scale/rotation and material tints.
 
-use crate::mesh_util::{texture, GeoBuilder};
+use crate::mesh_util::GeoBuilder;
 use crate::model::rt;
-use crate::terrain::{self, fbm, gradient_noise};
+use crate::terrain::{self, gradient_noise};
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -17,7 +17,7 @@ fn hash3(x: i32, y: i32, z: i32) -> f32 {
 }
 
 /// Smooth 3D value noise in [0, 1].
-fn noise3(p: Vec3) -> f32 {
+pub(crate) fn noise3(p: Vec3) -> f32 {
     let i = p.floor();
     let f = p - i;
     let u = f * f * (Vec3::splat(3.0) - 2.0 * f);
@@ -36,7 +36,7 @@ fn noise3(p: Vec3) -> f32 {
     acc
 }
 
-fn rnd(seed: u32, k: u32) -> f32 {
+pub(crate) fn rnd(seed: u32, k: u32) -> f32 {
     hash3(seed as i32, k as i32, 911)
 }
 
@@ -213,6 +213,8 @@ pub struct VegetationBuild {
     bark_tex: Image,
     aspen_bark_tex: Image,
     granite_tex: Image,
+    granite_normal: Image,
+    cobble_meshes: Vec<Mesh>,
     spruce_gen: Vec<(Mesh, Mesh)>,
     aspen_gen: Vec<(Mesh, Mesh)>,
     spruce_mid: Vec<(Mesh, Mesh)>,
@@ -297,21 +299,11 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
     let aspen_trunk = trunk(0.02, 0.85, 0.35);
 
     step("Placing granite boulders");
-    let granite_tex = texture(512, |u, v| {
-        let speck = fbm(u * 180.0, v * 180.0, 2);
-        let grain = fbm(u * 40.0, v * 40.0, 3);
-        let lichen = ((fbm(u * 9.0 + 4.0, v * 9.0, 4) - 0.55) * 4.0).clamp(0.0, 1.0);
-        let g = 0.11 + 0.08 * grain + 0.07 * (speck - 0.5);
-        let rock = [g * 1.02, g, g * 0.97];
-        let lich = [0.16, 0.18, 0.08];
-        [
-            rock[0] + (lich[0] - rock[0]) * lichen * 0.6,
-            rock[1] + (lich[1] - rock[1]) * lichen * 0.6,
-            rock[2] + (lich[2] - rock[2]) * lichen * 0.6,
-        ]
-    });
-    let boulder_meshes: Vec<_> =
-        (0..6).map(|s| lumpy(300 + s, 1 + (s as usize % 3), Vec3::new(0.9, 0.3, 0.9), 0.75, 0.22, Some(-0.35), 3)).collect();
+    let granite_tex = crate::rocks::granite_texture();
+    let granite_normal = crate::rocks::granite_normal();
+    use crate::rocks::{self, Size};
+    let boulder_meshes: Vec<_> = (1..=10).map(|k| rocks::rock(k, Size::Boulder)).collect();
+    let cobble_meshes: Vec<_> = (1..=10).map(|k| rocks::rock(100 + k, Size::Cobble)).collect();
     let mut boulders = Vec::new();
     let mut place = |x: f32, z: f32, size: f32, sink: f32, k: u32| {
         let h = terrain::ground_height(x, z);
@@ -319,6 +311,19 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         let rot = Quat::from_rotation_arc(Vec3::Y, n.lerp(Vec3::Y, 0.5).normalize()) * Quat::from_rotation_y(rnd(k, 1) * TAU);
         let s = Vec3::new(size * (0.8 + 0.4 * rnd(k, 2)), size * (0.55 + 0.35 * rnd(k, 3)), size * (0.8 + 0.4 * rnd(k, 4)));
         boulders.push((k as usize, Transform::from_xyz(x, h - sink * s.y, z).with_rotation(rot).with_scale(s)));
+        // A big boulder has smaller ones round it, where pieces have broken off and rolled.
+        if size > 2.2 && k < 1000 {
+            for j in 0..(2 + (rnd(k, 60) * 3.0) as u32) {
+                let a = rnd(k, 61 + j) * TAU;
+                let d = size * (0.9 + 0.8 * rnd(k, 70 + j));
+                let (sx, sz) = (x + a.cos() * d, z + a.sin() * d);
+                let small = size * (0.12 + 0.28 * rnd(k, 80 + j));
+                let sh = terrain::ground_height(sx, sz);
+                let spin = Quat::from_rotation_y(rnd(k, 90 + j) * TAU);
+                let sv = Vec3::new(small, small * (0.5 + 0.4 * rnd(k, 100 + j)), small);
+                boulders.push((5000 + (k as usize) * 8 + j as usize, Transform::from_xyz(sx, sh - 0.3 * sv.y, sz).with_rotation(spin).with_scale(sv)));
+            }
+        }
     };
     // Lake shore boulders, some standing in the water (the Alpine Valley only).
     let alpine = terrain::real().is_none();
@@ -373,6 +378,8 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         bark_tex,
         aspen_bark_tex,
         granite_tex,
+        granite_normal,
+        cobble_meshes,
         spruce_gen,
         aspen_gen,
         spruce_mid,
@@ -483,21 +490,26 @@ pub fn upload_vegetation(
 
     // Boulders.
     let granite = images.add(b.granite_tex);
+    let granite_normal = images.add(b.granite_normal);
     let rock_mats: Vec<_> = [1.0f32, 0.85, 1.12]
         .iter()
         .map(|&k| {
             materials.add(StandardMaterial {
                 base_color: Color::linear_rgb(k, k, k * 0.98),
                 base_color_texture: Some(granite.clone()),
-                perceptual_roughness: 0.75,
-                reflectance: 0.35,
+                normal_map_texture: Some(granite_normal.clone()),
+                perceptual_roughness: 0.82,
+                reflectance: 0.3,
                 ..default()
             })
         })
         .collect();
     let boulder_meshes: Vec<_> = b.boulder_meshes.into_iter().map(|m| meshes.add(m)).collect();
+    let cobble_meshes: Vec<_> = b.cobble_meshes.into_iter().map(|m| meshes.add(m)).collect();
     for (k, tf) in &b.boulders {
-        commands.spawn(rt(boulder_meshes[k % boulder_meshes.len()].clone(), rock_mats[k % rock_mats.len()].clone(), *tf));
+        // Cobbles and the small pieces round a boulder are the cheap meshes.
+        let mesh = if *k >= 1000 { &cobble_meshes[k % cobble_meshes.len()] } else { &boulder_meshes[k % boulder_meshes.len()] };
+        commands.spawn(rt(mesh.clone(), rock_mats[k % rock_mats.len()].clone(), *tf));
     }
     info!("placed {} boulders", b.boulders.len());
 
