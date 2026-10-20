@@ -20,7 +20,7 @@ struct Clouds {
     haze_scale_height: f32,
     shadow_floor: f32,
     frame: u32,
-    _pad: vec3<f32>,
+    view_size: vec2<f32>,
 }
 
 @group(0) @binding(0) var screen: texture_2d<f32>;
@@ -170,7 +170,7 @@ fn scene_distance(px: vec2<i32>, ndc_xy: vec2<f32>) -> f32 {
 @fragment
 fn march(in: FullscreenVertexOutput) -> MarchOut {
     let base = vec2<i32>(in.position.xy) * 2;
-    let size = vec2<i32>(textureDimensions(depth));
+    let size = vec2<i32>(clouds.view_size);
     let ndc_xy = vec2<f32>(in.uv.x * 2.0 - 1.0, 1.0 - in.uv.y * 2.0);
     var limit = 0.0;
     for (var k = 0; k < 4; k++) {
@@ -268,12 +268,12 @@ fn march(in: FullscreenVertexOutput) -> MarchOut {
 // Lays the half-size cloud over the picture, and darkens the ground under it.
 @fragment
 fn composite(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let colour = textureSample(screen, screen_sampler, in.uv);
+    // Pixels, not uvs: the picture may fill only a corner of the textures.
+    let px = vec2<i32>(in.position.xy);
+    let colour = textureLoad(screen, px, 0);
     if clouds.coverage <= 0.0 {
         return colour;
     }
-    let size = vec2<f32>(textureDimensions(depth));
-    let px = vec2<i32>(in.uv * size);
     let d = textureLoad(depth, px, 0).x;
     var scene = colour.rgb;
     var dist = MAX_DISTANCE;

@@ -73,6 +73,9 @@ pub struct RenderScale {
     /// While loading: render a tiny frame so the GPU is free (deactivating the camera
     /// trips Bevy's atmosphere probe, which needs a live view).
     pub suspended: bool,
+    /// The camera draws a part of the picture and the rest is rebuilt over time (see `upscale`),
+    /// rather than the picture being smaller and stretched. SIM001_UPSCALE=0 turns it off.
+    pub upscale: bool,
 }
 
 #[derive(Component)]
@@ -96,7 +99,8 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
     let mut target = Image::new_target_texture(1920, 1080, TextureFormat::Bgra8UnormSrgb, None);
     target.sampler = ImageSampler::linear();
     let image = images.add(target);
-    commands.insert_resource(RenderScale { scale: if settings.raytracing { 0.0 } else { 1.0 }, auto: settings.raytracing, image: image.clone(), suspended: true });
+    let upscale = settings.raytracing && std::env::var("SIM001_UPSCALE").map_or(true, |v| v != "0");
+    commands.insert_resource(RenderScale { scale: if settings.raytracing { 0.0 } else { 1.0 }, auto: settings.raytracing, image: image.clone(), suspended: true, upscale });
 
     // Window camera: draws the upscaled scene image and the HUD at full resolution.
     let mut ui_camera = commands.spawn((Camera2d, Camera { order: 1, ..default() }, bevy::ui::IsDefaultUiCamera));
@@ -125,6 +129,11 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
     ));
     if settings.raytracing {
         add_raytracing(&mut cam);
+    }
+    if upscale {
+        // The ray tracer draws a smaller picture (see `RenderScale`) and the full-size one is
+        // rebuilt over time, which takes the place of the temporal anti-aliasing.
+        cam.remove::<TemporalAntiAliasing>().insert(crate::upscale::TemporalUpscale::default());
     }
 }
 
@@ -241,6 +250,7 @@ fn update_render_scale(
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time<Real>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut upscale: Query<&mut crate::upscale::TemporalUpscale, With<MainCamera>>,
     mut rs: ResMut<RenderScale>,
     mut images: ResMut<Assets<Image>>,
     mut auto: Local<AutoScale>,
@@ -276,7 +286,18 @@ fn update_render_scale(
             rs.scale = scale;
         }
     }
-    let want = if rs.suspended { UVec2::new(64, 36) } else { (phys.as_vec2() * rs.scale).round().as_uvec2().max(UVec2::splat(64)) };
+    // With temporal upscaling the picture is always the window's size and the camera draws a
+    // part of it; without, the picture itself is smaller and the screen stretches it.
+    let want = if rs.suspended {
+        UVec2::new(64, 36)
+    } else if rs.upscale {
+        phys
+    } else {
+        (phys.as_vec2() * rs.scale).round().as_uvec2().max(UVec2::splat(64))
+    };
+    for mut u in &mut upscale {
+        u.scale = rs.scale;
+    }
     let handle = rs.image.clone();
     // Only take a mutable borrow when resizing: `get_mut` flags the asset as modified.
     if images.get(&handle).is_some_and(|img| img.size() != want) {

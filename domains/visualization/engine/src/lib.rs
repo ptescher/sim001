@@ -24,6 +24,7 @@ pub mod model;
 pub mod scenery;
 pub mod terrain_render;
 pub mod theme;
+pub mod upscale;
 pub mod treegen;
 pub mod vegetation;
 
@@ -126,7 +127,7 @@ struct Liveries(Vec<Color>);
 impl Plugin for EnginePlugin {
     fn build(&self, app: &mut App) {
         if self.raytracing {
-            app.add_plugins((bevy::solari::SolariPlugins, haze::HazePlugin));
+            app.add_plugins((bevy::solari::SolariPlugins, haze::HazePlugin, upscale::TemporalUpscalePlugin));
         }
         app.add_plugins((bevy::post_process::auto_exposure::AutoExposurePlugin, clouds::CloudsPlugin));
         app.world_mut()

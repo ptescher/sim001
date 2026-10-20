@@ -16,6 +16,7 @@ use bevy::core_pipeline::{
     FullscreenShader,
     schedule::{Core3d, Core3dSystems},
 };
+use bevy::camera::MainPassResolutionOverride;
 use bevy::diagnostic::FrameCount;
 use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
@@ -72,7 +73,8 @@ pub struct Clouds {
     pub shadow_floor: f32,
     /// Changes the ray-march jitter every frame, for the anti-aliasing to average out.
     pub frame: u32,
-    pub _pad: Vec3,
+    /// The size of the picture the passes draw (pixels), which may be a corner of the textures.
+    pub view_size: Vec2,
 }
 
 impl Default for Clouds {
@@ -98,7 +100,7 @@ impl Default for Clouds {
             drift: Vec2::ZERO,
             shadow_floor: 0.3,
             frame: 0,
-            _pad: Vec3::ZERO,
+            view_size: Vec2::ZERO,
         }
     }
 }
@@ -236,6 +238,10 @@ fn noise_image() -> Image {
 #[extract_app(RenderApp)]
 struct CloudNoise(Handle<Image>);
 
+/// The cloud passes, for the ones that come after to order themselves by.
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub struct CloudsSet;
+
 pub struct CloudsPlugin;
 
 impl Plugin for CloudsPlugin {
@@ -262,7 +268,7 @@ impl Plugin for CloudsPlugin {
                 ),
             )
             // Before the anti-aliasing, which averages the ray march's jitter away.
-            .add_systems(Core3d, clouds.in_set(Core3dSystems::EarlyPostProcess).before(temporal_anti_alias));
+            .add_systems(Core3d, clouds.in_set(CloudsSet).in_set(Core3dSystems::EarlyPostProcess).before(temporal_anti_alias));
     }
 }
 
@@ -270,12 +276,17 @@ fn update_clouds(
     time: Res<Time>,
     frame: Res<FrameCount>,
     scene: Res<crate::Scene>,
-    mut cameras: Query<(&mut Clouds, &Camera, &GlobalTransform)>,
+    capture: Option<Res<crate::capture::Capture>>,
+    mut cameras: Query<(&mut Clouds, &Camera, &GlobalTransform, Option<&crate::upscale::TemporalUpscale>)>,
 ) {
-    for (mut c, cam, t) in &mut cameras {
+    for (mut c, cam, t, upscale) in &mut cameras {
+        if let Some(full) = cam.physical_viewport_size() {
+            c.view_size = upscale.map_or(full, |u| crate::upscale::render_resolution(full, u.scale)).as_vec2();
+        }
         c.world_from_clip = t.to_matrix() * cam.clip_from_view().inverse();
         c.camera = t.translation();
-        c.drift = drift(&scene.wind, time.elapsed_secs());
+        // Pictures of the scenery are of the same sky, however long they took to get to.
+        c.drift = if capture.is_some() { Vec2::ZERO } else { drift(&scene.wind, time.elapsed_secs()) };
         c.frame = frame.0;
     }
 }
@@ -412,12 +423,13 @@ fn prepare_buffers(
     mut commands: Commands,
     mut textures: ResMut<TextureCache>,
     device: Res<RenderDevice>,
-    views: Query<(Entity, &ExtractedView), With<Clouds>>,
+    views: Query<(Entity, &ExtractedView, Option<&MainPassResolutionOverride>), With<Clouds>>,
 ) {
-    for (entity, view) in &views {
+    for (entity, view, resolution) in &views {
+        let view_size = resolution.map_or(view.viewport.zw(), |r| r.0);
         let size = Extent3d {
-            width: view.viewport.z.div_ceil(DIVISOR).max(1),
-            height: view.viewport.w.div_ceil(DIVISOR).max(1),
+            width: view_size.x.div_ceil(DIVISOR).max(1),
+            height: view_size.y.div_ceil(DIVISOR).max(1),
             depth_or_array_layers: 1,
         };
         let mut texture = |label, format| {
@@ -448,7 +460,14 @@ fn depth_readable(mut cameras: Query<&mut Camera3d, With<Clouds>>) {
 }
 
 fn clouds(
-    view: ViewQuery<(&ViewTarget, &CloudsPipelineId, &ViewDepthStencilTexture, &DynamicUniformIndex<Clouds>, &CloudBuffers)>,
+    view: ViewQuery<(
+        &ViewTarget,
+        &CloudsPipelineId,
+        &ViewDepthStencilTexture,
+        &DynamicUniformIndex<Clouds>,
+        &CloudBuffers,
+        Option<&MainPassResolutionOverride>,
+    )>,
     pipeline: Res<CloudsPipeline>,
     cache: Res<PipelineCache>,
     uniforms: Res<ComponentUniforms<Clouds>>,
@@ -456,7 +475,7 @@ fn clouds(
     images: Res<RenderAssets<GpuImage>>,
     mut ctx: RenderContext,
 ) {
-    let (target, id, depth, index, buffers) = view.into_inner();
+    let (target, id, depth, index, buffers, resolution) = view.into_inner();
     let Some(noise) = noise.and_then(|n| images.get(&n.0)) else { return };
     let Some(depth_view) = depth.attachment.depth_stencil_views().depth_only_view() else { return };
     let (Some(march), Some(composite)) = (cache.get_render_pipeline(pipeline.march), cache.get_render_pipeline(id.0)) else { return };
@@ -516,6 +535,10 @@ fn clouds(
     });
     pass.set_render_pipeline(composite);
     pass.set_bind_group(0, &bind_group, &[index.index()]);
+    // The main pass may fill only a corner of the textures.
+    if let Some(MainPassResolutionOverride(size)) = resolution {
+        pass.set_viewport(0.0, 0.0, size.x as f32, size.y as f32, 0.0, 1.0);
+    }
     pass.draw(0..3, 0..1);
 }
 

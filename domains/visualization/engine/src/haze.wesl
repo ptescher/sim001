@@ -19,9 +19,10 @@ struct Haze {
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let colour = textureSample(screen, screen_sampler, in.uv);
-    let size = vec2<f32>(textureDimensions(depth));
-    let d = textureLoad(depth, vec2<i32>(in.uv * size), 0).x;
+    // Pixels, not uvs: the picture may fill only a corner of the textures.
+    let pixel = vec2<i32>(in.position.xy);
+    let colour = textureLoad(screen, pixel, 0);
+    let d = textureLoad(depth, pixel, 0).x;
     // Reversed infinite depth: 0 is the sky, which the atmosphere already drew.
     if d <= 0.0 {
         return colour;

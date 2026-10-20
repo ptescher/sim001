@@ -8,8 +8,8 @@ use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::core_pipeline::{
     FullscreenShader,
     schedule::{Core3d, Core3dSystems},
-    tonemapping::tonemapping,
 };
+use bevy::camera::MainPassResolutionOverride;
 use bevy::prelude::*;
 use bevy::render::{
     Render, RenderApp, RenderStartup, RenderSystems,
@@ -76,7 +76,8 @@ impl Plugin for HazePlugin {
                     depth_readable.in_set(RenderSystems::PrepareViews).after(prepare_view_targets).ambiguous_with_all(),
                 ),
             )
-            .add_systems(Core3d, haze.in_set(Core3dSystems::PostProcess).before(tonemapping));
+            // Early, with the passes that work at the main pass's size (a temporal upscale comes after).
+            .add_systems(Core3d, haze.in_set(Core3dSystems::EarlyPostProcess).before(crate::clouds::CloudsSet));
     }
 }
 
@@ -158,13 +159,19 @@ fn depth_readable(mut cameras: Query<&mut Camera3d, With<Haze>>) {
 }
 
 fn haze(
-    view: ViewQuery<(&ViewTarget, &HazePipelineId, &ViewDepthStencilTexture, &bevy::render::extract_component::DynamicUniformIndex<Haze>)>,
+    view: ViewQuery<(
+        &ViewTarget,
+        &HazePipelineId,
+        &ViewDepthStencilTexture,
+        &bevy::render::extract_component::DynamicUniformIndex<Haze>,
+        Option<&MainPassResolutionOverride>,
+    )>,
     pipeline: Res<HazePipeline>,
     cache: Res<PipelineCache>,
     uniforms: Res<ComponentUniforms<Haze>>,
     mut ctx: RenderContext,
 ) {
-    let (target, id, depth, index) = view.into_inner();
+    let (target, id, depth, index, resolution) = view.into_inner();
     let Some(depth_view) = depth.attachment.depth_stencil_views().depth_only_view() else { return };
     let Some(render_pipeline) = cache.get_render_pipeline(id.0) else { return };
     let Some(settings) = uniforms.uniforms().binding() else { return };
@@ -189,5 +196,9 @@ fn haze(
     });
     pass.set_render_pipeline(render_pipeline);
     pass.set_bind_group(0, &bind_group, &[index.index()]);
+    // The main pass may fill only a corner of the textures.
+    if let Some(MainPassResolutionOverride(size)) = resolution {
+        pass.set_viewport(0.0, 0.0, size.x as f32, size.y as f32, 0.0, 1.0);
+    }
     pass.draw(0..3, 0..1);
 }

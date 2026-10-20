@@ -104,7 +104,7 @@ fn main() {
     .add_systems(Update, (keys, publish).before(EngineSet::Draw))
     .add_systems(Update, update_status);
     if let Some(dir) = arg("--capture") {
-        capture::plugin(&mut app, capture::Capture { dir: dir.into(), views, settle_secs: 4.0 });
+        capture::plugin(&mut app, capture::Capture { dir: dir.into(), views, settle_secs: std::env::var("SIM001_SETTLE").ok().and_then(|v| v.parse().ok()).unwrap_or(4.0) });
     }
     app.run();
 }
