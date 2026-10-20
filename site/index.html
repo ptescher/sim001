@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIM001, an FPV flight simulator</title>
+<meta name="description" content="SIM001 is a Bevy flight simulator for practising with small FPV planes: the HEEWING T1-S Ranger and the T1-S VTOL with ArduPilot.">
+<link rel="stylesheet" href="docs/site/assets/theme.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--canvas); color: var(--text); font: 16px/1.55 var(--font-sans); }
+  a { color: var(--info); }
+  .wrap { max-width: 62rem; margin: 0 auto; padding: 0 16px; }
+  header.hero { background: var(--screen); border-bottom: 1px solid var(--bezel-edge); }
+  .hero img { display: block; width: 100%; max-height: 28rem; object-fit: cover; }
+  .hero .wrap { padding-top: 1.5rem; padding-bottom: 2rem; }
+  h1 { margin: 0 0 .25rem; font-size: 2.4rem; letter-spacing: -.01em; }
+  .tag { margin: 0 0 1.25rem; color: var(--muted); font-size: 1.15rem; max-width: 40rem; }
+  .btns { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: .55rem 1.1rem; border-radius: var(--radius-control); border: 1px solid var(--bezel-edge);
+         background: var(--control); color: var(--text); text-decoration: none; font-weight: 600; }
+  .btn:hover { background: var(--control-hover); }
+  .btn.primary { background: var(--info); border-color: var(--info); color: var(--screen); }
+  main { padding: 2rem 0 3rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+  .card { background: var(--bezel); border: 1px solid var(--bezel-edge); border-radius: var(--radius-panel); padding: 1rem 1.1rem; }
+  .card h2 { margin: 0 0 .4rem; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); }
+  h2.sec { margin: 2.5rem 0 .75rem; font-size: 1.3rem; }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1rem; }
+  .shots figure { margin: 0; }
+  .shots img { width: 100%; display: block; border-radius: var(--radius-panel); border: 1px solid var(--bezel-edge); }
+  .shots figcaption { color: var(--muted); font-size: .9rem; margin-top: .3rem; }
+  pre { background: var(--screen); border: 1px solid var(--bezel-edge); border-radius: var(--radius-panel); padding: .9rem 1rem; overflow-x: auto; font: 14px/1.5 var(--font-mono); }
+  footer { border-top: 1px solid var(--bezel-edge); padding: 1.25rem 0; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <img src="chase_forest.jpg" alt="The T1-S flying over an alpine meadow, seen from the chase camera">
+  <div class="wrap">
+    <h1>SIM001</h1>
+    <p class="tag">A flight simulator for practising with small FPV planes. A 6-DOF flight model, a real ArduPilot flight controller, and your own radio.</p>
+    <div class="btns">
+      <a class="btn primary" href="docs/site/">Read the manual</a>
+      <a class="btn" href="docs/site/page-installing.html">Install</a>
+      <a class="btn" href="https://github.com/ptescher/sim001">Source on GitHub</a>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <div class="cards">
+    <div class="card"><h2>Two planes</h2><p>The T1-S Ranger, a plain twin-motor plane, and the T1-S VTOL with two tilt-rotors, a rear rotor and ArduPilot.</p></div>
+    <div class="card"><h2>A flight model from geometry</h2><p>Strip theory: stalls, adverse yaw, prop wash and V-tail coupling come out of the airframe, not a lookup table.</p></div>
+    <div class="card"><h2>Your radio</h2><p>A RadioMaster TX15 or any EdgeTX/OpenTX radio over USB, a Switch Pro Controller, or the keyboard.</p></div>
+    <div class="card"><h2>ArduPilot in the loop</h2><p>The sim is the physics backend for ArduPlane SITL, in lockstep, with a ground station for missions.</p></div>
+  </div>
+
+  <h2 class="sec">See it fly</h2>
+  <div class="shots">
+    <figure><img src="alpine_lake.jpg" alt="An alpine lake" loading="lazy"><figcaption>Alpine lake, rasterized lighting</figcaption></figure>
+    <figure><img src="ardupilot_loiter.jpg" alt="The VTOL loitering under ArduPilot" loading="lazy"><figcaption>The VTOL loitering under ArduPilot</figcaption></figure>
+  </div>
+
+  <h2 class="sec">Run it</h2>
+<pre>ardupilot/build_native.sh   # once: builds ArduPlane SITL
+cargo run --release         # the VTOL, with its own ArduPilot</pre>
+  <p>The <a href="docs/site/">manual</a> is generated from the behaviour specs the simulator is tested against: every page is a feature, a tutorial or a test result.</p>
+</main>
+<footer><div class="wrap">SIM001 &middot; <a href="docs/site/">Manual</a> &middot; <a href="https://github.com/ptescher/sim001">GitHub</a></div></footer>
+</body>
+</html>

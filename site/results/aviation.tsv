@@ -1,0 +1,706 @@
+expectation-results 1
+plan	sim--recreation--your-first-pylon-race--start-throw-at-go-fly-five-laps	unsupported	3af105fbd21821b4
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 36 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+step	7	unsupported	0	-	-
+step	8	unsupported	0	-	-
+plan	sim--recreation--a-game-of-tag--tag-then-get-tagged	unsupported	084b841b31e1f44a
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 36 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	sim--your-first-throw--throttle-up-then-pick-it-back-up	unsupported	629c2b1d687e8169
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	sim--watching-from-every-view--throw-it-then-step-through-the-views	unsupported	e5226fec772a793d
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	sim--crashing-and-starting-again--nose-it-in-then-reset	unsupported	28b82c8c7c770fdc
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 32 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	sim--taking-a-break--pause-read-the-help-carry-on	unsupported	e1062ed13ae4a8ec
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 33 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	sim--checking-the-controls-before-a-flight--open-the-help-and-close-it-again	unsupported	9fbd82c6c3c18265
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home	unsupported	d76d878f967f1a1d
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 34 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+plan	gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click	unsupported	1b660436853ce909
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	gcs--planning--clearing-the-ridge--raise-the-plan-add-a-waypoint-check-it	unsupported	57914c47ba3aedb0
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 33 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	gcs--planning--keeping-a-mission-for-the-field--save-change-load	unsupported	340051a406282c62
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 33 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	gcs--planning--surveying-a-field--draw-a-grid-and-upload-it	unsupported	4570f817b97ee1c6
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--planning--planning-at-the-altitude-limit--alt-from-290-m	unsupported	3fe5dc936a35bae8
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--flying--flying-the-circuit-and-coming-home--three-waypoints-then-home	unsupported	4ed628e8dfe2cd63
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	gcs--flying--flying-the-circuit-again--back-to-the-first-waypoint	unsupported	3804a864d7c23cba
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land	unsupported	f9e94ce037824f1b
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 40 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	unsupported	8d823740ed274f32
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 44 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	390d16bf2a758a1e
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 50 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+step	7	unsupported	0	-	-
+step	8	unsupported	0	-	-
+plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	unsupported	e785728ef515c9bc
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 48 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	unsupported	40a4fa78f44fd4cb
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 44 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	3df9eb69430e6b08
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 50 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+step	7	unsupported	0	-	-
+step	8	unsupported	0	-	-
+plan	gcs--from-plan-to-flight--plan-upload-arm-auto-throw	unsupported	d409cf0f07753984
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 38 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+step	7	unsupported	0	-	-
+step	8	unsupported	0	-	-
+step	9	unsupported	0	-	-
+plan	flight-controller--your-first-hover--arm-lift-off-hold-the-hover-and-bring-the-plane-home	unsupported	0d7486b8d4b2db35
+step	0	unsupported	0	-	The driver can't arrange the autopilot, arrange the flight controller, arrange the flight mode and 16 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	flight-controller--learning-with-self-levelling--pick-angle-mode-and-throw	unsupported	386c931db670577a
+step	0	unsupported	0	-	The driver can't arrange the flight controller, arrange the flight mode, arrange the pitch stick and 14 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	communication--seeing-a-friend-who-flies-near-you--a-friend-joins-and-leaves	unsupported	b3bb392fc7b2b4b2
+step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the crowd, arrange the distance to the other plane and 12 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	communication--flying-near-a-crowd-of-planes--out-of-range-into-range-into-a-crowd	unsupported	fa777ad2f986ba2a
+step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the crowd, arrange the distance to the other plane and 15 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	communication--losing-the-radio-link--the-link-drops	unsupported	36a623d7295b5a8c
+step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the crowd, arrange the distance to the other plane and 13 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	visualization--watching-a-flight-from-the-pilot-box--the-plane-takes-off-turns-and-goes-quiet	unsupported	5398d8fee01cbe67
+step	0	unsupported	0	-	The driver can't arrange the plane in the view, arrange the reported bank, arrange the reported distance north of home and 19 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	aviation--flying-with-a-tx15-on-the-serial-line--fly-and-watch-the-screen	passed	eea48c287a6c65a4
+step	0	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--fly-and-watch-the-screen/00.svg	-
+check	1	e:connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:on	-
+check	1	n:0	-
+check	1	n:11.100000381469727	-
+check	1	n:30	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:flowing	-
+check	1	n:400	-
+check	1	e:AUTO	-
+check	1	e:armed	-
+step	1	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--fly-and-watch-the-screen/01.svg	-
+check	1	n:1500	-
+check	1	n:1500	-
+check	1	n:1900	-
+check	1	e:armed	-
+check	1	n:11.100000381469727	-
+check	1	n:30	-
+check	1	e:flowing	-
+check	1	n:400	-
+check	1	e:AUTO	-
+check	1	n:11.100000381469727	-
+check	1	n:11.100000381469727	-
+check	1	n:30	-
+check	1	n:30	-
+check	1	n:400	-
+check	1	n:400	-
+plan	aviation--flying-with-a-tx15-on-the-serial-line--full-travel-on-the-sticks	passed	88b499c630ee34d4
+step	0	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--full-travel-on-the-sticks/00.svg	-
+check	1	e:connected	-
+check	1	n:100	-
+check	1	n:-50	-
+check	1	n:100	-
+check	1	e:on	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:silent	-
+check	1	n:0	-
+check	1	e:MANUAL	-
+check	1	e:disarmed	-
+step	1	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--full-travel-on-the-sticks/01.svg	-
+check	1	n:2000	-
+check	1	n:2000	-
+check	1	n:1250	-
+check	1	n:1900	-
+check	1	n:1250	-
+check	1	n:1250	-
+plan	aviation--flying-with-a-tx15-on-the-serial-line--sticks-centred	passed	249a5d4747f549a7
+step	0	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--sticks-centred/00.svg	-
+check	1	e:connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:off	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:silent	-
+check	1	n:0	-
+check	1	e:MANUAL	-
+check	1	e:disarmed	-
+step	1	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--sticks-centred/01.svg	-
+check	1	n:1500	-
+check	1	n:1500	-
+plan	aviation--flying-with-a-tx15-on-the-serial-line--a-damaged-line	passed	2890046dd9ed94ef
+step	0	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--a-damaged-line/00.svg	-
+check	1	e:connected	-
+check	1	n:100	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:off	-
+check	1	n:100	-
+check	1	n:12	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:silent	-
+check	1	n:0	-
+check	1	e:MANUAL	-
+check	1	e:disarmed	-
+step	1	passed	1	screenshots/aviation--flying-with-a-tx15-on-the-serial-line--a-damaged-line/01.svg	-
+check	1	n:1500	-
+plan	aviation--losing-the-tx15-and-getting-it-back--unplug	passed	fa9db92a5c32dd9a
+step	0	passed	1	screenshots/aviation--losing-the-tx15-and-getting-it-back--unplug/00.svg	-
+check	1	e:connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:50	-
+check	1	e:off	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:silent	-
+check	1	n:0	-
+check	1	e:MANUAL	-
+check	1	e:disarmed	-
+step	1	passed	1	screenshots/aviation--losing-the-tx15-and-getting-it-back--unplug/01.svg	-
+check	1	n:880	-
+check	1	n:0	-
+plan	aviation--losing-the-tx15-and-getting-it-back--plug-in-again	passed	5dba190112142e21
+step	0	passed	1	screenshots/aviation--losing-the-tx15-and-getting-it-back--plug-in-again/00.svg	-
+check	1	e:not connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:50	-
+check	1	e:off	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:silent	-
+check	1	n:0	-
+check	1	e:MANUAL	-
+check	1	e:disarmed	-
+step	1	passed	1	screenshots/aviation--losing-the-tx15-and-getting-it-back--plug-in-again/01.svg	-
+check	1	n:1500	-
+check	1	n:100	-
+plan	aviation--commanding-the-plane-from-the-ground-station--command-through-the-line	passed	95a1744700806288
+step	0	passed	1	screenshots/aviation--commanding-the-plane-from-the-ground-station--command-through-the-line/00.svg	-
+check	1	e:connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:off	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:flowing	-
+check	1	n:0	-
+check	1	e:RTL	-
+check	1	e:disarmed	-
+step	1	passed	1	screenshots/aviation--commanding-the-plane-from-the-ground-station--command-through-the-line/01.svg	-
+check	1	n:1500	-
+check	1	n:1500	-
+check	1	e:RTL	-
+check	1	e:flowing	-
+check	1	e:received	-
+plan	aviation--commanding-the-plane-from-the-ground-station--the-line-is-narrow	passed	7fe2d7cd55b479cd
+step	0	passed	1	screenshots/aviation--commanding-the-plane-from-the-ground-station--the-line-is-narrow/00.svg	-
+check	1	e:connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:off	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:flowing	-
+check	1	n:0	-
+check	1	e:MANUAL	-
+check	1	e:disarmed	-
+step	1	passed	1	screenshots/aviation--commanding-the-plane-from-the-ground-station--the-line-is-narrow/01.svg	-
+check	1	n:354.79999999998864	-
+plan	aviation--reading-the-flight-display--armed-banked-and-climbing	passed	7dd0726b561111f6
+step	0	passed	1	screenshots/aviation--reading-the-flight-display--armed-banked-and-climbing/00.svg	-
+check	1	e:connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:off	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	n:-20	-
+check	1	n:18	-
+check	1	n:2	-
+check	1	n:12	-
+check	1	e:PreArm: Throttle (RC3) is not neutral	-
+check	1	e:silent	-
+check	1	n:0	-
+check	1	e:QHOVER	-
+check	1	e:armed	-
+step	1	passed	1	screenshots/aviation--reading-the-flight-display--armed-banked-and-climbing/01.svg	-
+check	1	n:1500	-
+check	1	n:1500	-
+check	1	e:armed	-
+check	1	n:18	-
+check	1	e:PreArm: Throttle (RC3) is not neutral	-
+check	1	e:QHOVER	-
+check	1	n:-20	-
+check	1	n:18	-
+plan	cognition--watching-a-game-of-tag-by-plan--play-and-watch	unsupported	a46ba355a09cbde2
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 15 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	cognition--sending-your-first-plan--send-a-plan	unsupported	7ebc013efa4e6848
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 11 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	cognition--letting-a-plan-run-out--let-a-plan-run-out	unsupported	94f221d3ffdc18b8
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 11 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	sim--coverage--space-throws-the-plane	unsupported	b07455ecdd3895f3
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	sim--coverage--a-pause-holds-the-plane-in-your-hand	unsupported	9985bebeeb73e035
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	sim--coverage--a-throw-during-a-pause-waits-for-the-pause-to-end	unsupported	f2d1f466c26c612a
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	sim--coverage--without-a-flight-controller-there-is-only-one-mode	unsupported	8d5dd45c8d5db31d
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	sim--coverage--low-rates-for-gentle-flying	unsupported	e6ad567532ba8499
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	sim--coverage--high-rates-for-tight-turns	unsupported	8164d50e9524e886
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	sim--coverage--differential-thrust-off	unsupported	22868cb34ac79753
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	sim--coverage--differential-thrust-on	unsupported	b1189bcbfd9d45ea
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	sim--coverage--auto-zoom-off	unsupported	eae1defd8a09428d
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	sim--coverage--auto-zoom-on	unsupported	cad324f985851776
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	sim--coverage--v-fits-a-fresh-battery	unsupported	eb69bc217cd7d2a2
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	sim--recreation--coverage--the-key-of-the-game-stops-it	unsupported	0f9643c6879ff348
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 33 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	sim--recreation--coverage--a-turn-inside-a-pylon-is-a-cut	unsupported	aaf94a866db1b19e
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 38 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	sim--recreation--coverage--a-second-cut-disqualifies-you	unsupported	635e06bb4e8cb79a
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 38 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+plan	sim--recreation--coverage--out-of-the-arena-you-are-it	unsupported	2f4e6d83f660a635
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 36 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	sim--recreation--coverage--two-minutes-of-tag	unsupported	87caef8d01c11c93
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 35 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	gcs--coverage--plan-again-goes-back-to-panning	unsupported	f260f623bd9201d8
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--coverage--goto-picks-the-fly-to-tool	unsupported	143575b653b09151
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--coverage--a-goto-click-flies-the-plane-there	unsupported	e2cbaa8bc62102aa
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	gcs--planning--coverage--right-click-on-an-empty-plan-does-nothing	unsupported	9926e2bb405efe2a
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--coverage--clear-empties-the-plan	unsupported	14c58026eed146a4
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--coverage--alt-lowers-the-plan-altitude	unsupported	cb9f8488ed1a12f6
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--coverage--alt-stops-at-10-m	unsupported	7ee452c94b9f65d4
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	gcs--planning--coverage--waypoints-already-planned-keep-their-altitude	unsupported	c6fa16be2a469995
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--planning--coverage--a-new-waypoint-needs-a-new-height-check	unsupported	a54c8b8fbc9407f7
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	gcs--planning--coverage--the-plan-has-only-one-takeoff	unsupported	de818678d8426eac
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--planning--coverage--changing-a-command-keeps-the-item-in-its-place	unsupported	bb38f8b7b87565a5
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--planning--coverage--changing-a-command-makes-the-vehicle-s-copy-out-of-date	unsupported	133a75dd902b6158
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 33 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	gcs--planning--coverage--upload-does-not-send-an-empty-plan	unsupported	fb1ecf88248a8598
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date	unsupported	3fc2fa281250e008
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 33 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	gcs--planning--coverage--download-only-reads	unsupported	00e07c56a43951bb
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--coverage--edit-brings-the-vehicle-s-mission-back-into-the-plan	unsupported	463b6176c8a580cd
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 34 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	gcs--planning--coverage--before-a-save-there-is-nothing-to-load	unsupported	3ae5101e61c66f4f
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--coverage--measuring-between-two-points-shows-the-distance	unsupported	2f6249bd6ef404a0
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--coverage--a-mission-that-ends-with-a-loiter-keeps-circling	unsupported	c1352241c0bbc83e
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--flying--coverage--a-mission-that-ends-with-a-landing-lands	unsupported	3d1f91fcbf93e370
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	gcs--flying--coverage--a-mission-that-ends-with-rtl-flies-home-in-auto	unsupported	164d4bc79fddc074
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--flying--coverage--disarming-outside-auto-restarts-the-mission	unsupported	134db15338d50349
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--flying--coverage--disarming-in-auto-keeps-the-plane-s-place	unsupported	4aa6fe54eee9b8a4
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--coverage--auto-with-no-mission-asks-first	unsupported	08fb81376c598380
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--coverage--auto-twice-goes-anyway	unsupported	97a0c342ae06c08b
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	465cb87be3a3784d
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	gcs--radio-setup--coverage--f2-calibrates-the-radio	unsupported	9abcbc49d7cda3ee
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	flight-controller--coverage--acro-holds-the-attitude	unsupported	d9ac85a77e0823ab
+step	0	unsupported	0	-	The driver can't arrange the flight controller, arrange the flight mode, arrange the pitch stick and 10 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	flight-controller--coverage--manual-gives-you-the-control-surfaces	unsupported	75c252ef4081c891
+step	0	unsupported	0	-	The driver can't arrange the flight controller, arrange the flight mode, arrange the pitch stick and 10 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	communication--coverage--your-own-transmitter-is-not-another-plane	unsupported	bddb0013e623238a
+step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the crowd, arrange the distance to the other plane and 9 more things yet.
+step	1	unsupported	0	-	-
+plan	aviation--coverage--without-the-tx15-the-ground-station-hears-nothing	passed	d2f69fe19251eca4
+step	0	passed	1	screenshots/aviation--coverage--without-the-tx15-the-ground-station-hears-nothing/00.svg	-
+check	1	e:connected	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:on	-
+check	1	n:0	-
+check	1	n:11.100000381469727	-
+check	1	n:30	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:12	-
+check	1	e:none	-
+check	1	e:flowing	-
+check	1	n:400	-
+check	1	e:AUTO	-
+check	1	e:armed	-
+step	1	passed	1	screenshots/aviation--coverage--without-the-tx15-the-ground-station-hears-nothing/01.svg	-
+check	1	n:50.699999999998376	-
+check	1	e:silent	-
+plan	cognition--coverage--a-repeated-plan-id-changes-nothing	unsupported	7d3ddec7230d2e29
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 9 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--go-to-flies-over-the-point-then-circles-it	unsupported	6ac02dd050218862
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 13 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--orbit-holds-its-radius-and-its-height	unsupported	1d21def65ffb6773
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 13 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--a-band-plan-holds-a-height-band	unsupported	446dca1e239d3f60
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 8 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--band-keeps-the-plane-between-its-two-heights	unsupported	0f3eda2ff091d646
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 12 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--a-loiter-plan-circles-where-the-plane-is	unsupported	bffb41b2d5df69ff
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 8 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--loiter-stays-round-the-place-where-it-began	unsupported	268256323c838f26
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 11 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--a-pursue-plan-chases-another-aircraft	unsupported	70ec5374c8980aff
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 10 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--pursue-closes-on-the-target-and-stays-on-its-tail	unsupported	d3caa3e7265941a1
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--an-evade-plan-breaks-away-from-another-aircraft	unsupported	fb0f37ece9d4d8de
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 10 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--evade-opens-the-distance-from-a-chaser	unsupported	c4826582f4d55286
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 12 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--a-target-that-goes-silent-ends-the-chase	unsupported	d679f70fade37589
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--the-envelope-leaves-a-safe-plan-alone	unsupported	1d8b67c77a2e8948
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 10 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	cognition--coverage--the-plane-stays-inside-the-fence	unsupported	ae62cfc6f5ee5306
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 14 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--the-plane-stays-above-the-floor	unsupported	1dac30b359718647
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--the-plane-stays-below-the-ceiling	unsupported	ffdda131037bfec7
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--under-the-stall-margin-the-plane-gets-its-airspeed-back-first	unsupported	56a9c5a5aad19ef7
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 12 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--after-a-recovery-the-plane-flies-on	unsupported	b98c4695d278f260
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 15 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--the-plane-keeps-clear-of-an-aircraft-that-crosses-its-path	unsupported	3fea423223740326
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 11 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--bad-input-gives-wings-level-and-the-throttle-to-the-pilot	unsupported	c7b5140f2c35e368
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 10 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--the-plane-flies-again-when-the-position-estimate-comes-back	unsupported	5ecdf23d3e5d19a5
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported fallback and 11 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--with-space-to-turn-planes-on-plans-keep-their-separation	unsupported	a41ea0303c306dcf
+step	0	unsupported	0	-	The driver can't arrange the fence radius, arrange the flight mode of the plane, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--in-a-small-fence-the-fence-wins-over-the-separation	unsupported	fc98651fc2990c01
+step	0	unsupported	0	-	The driver can't arrange the fence radius, arrange the flight mode of the plane, arrange the reply to the plan and 14 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--the-plane-that-is-it-pursues-the-plane-it-can-catch-soonest	unsupported	2b1bffd9e1e21a50
+step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the flight mode of the plane, arrange the reply to the plan and 11 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--a-plane-that-is-not-it-holds-its-own-height-band	unsupported	19542b6b93072acf
+step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the flight mode of the plane, arrange the reply to the plan and 14 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--coverage--a-plane-that-is-not-it-breaks-away-from-a-chaser-that-comes-near	unsupported	62f942608eff1eb7
+step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the flight mode of the plane, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
