@@ -22,3 +22,15 @@ For the flight computer (see [aviation](../aviation/README.md)), the radio's USB
 to be in the `LUA` mode and the `SIM001FC` widget (`WIDGETS/SIM001FC`) has to be on the model's main view. The widget is tracked here;
 Companion's mirror of the SD card holds the rest, which is not.
 
+
+## Debugging the autopilot
+
+The station keeps what it knows of ArduPilot as a debug log, so that a plane that won't arm or a test that fails can be worked out from what passed between them.
+
+- **The log** (`teleoperation_core::debug`): every command sent (with its parameters), every acknowledgement (a refusal is a warning), everything the autopilot said, the heartbeat lost and back, what changed in its state (mode, armed, GPS fix, EKF flags, a sensor going unhealthy), and the pings. Repeats are kept: the operator's MESSAGES list collapses them, this does not. The console writes it as it happens to `logs/debug/console.log`.
+- **The ping:** a TIMESYNC every 2 s that ArduPilot echoes. The round trip and the loss are in the top bar (`PING 21 ms`) and the report.
+- **The report:** link, heartbeat age, mode, armed, sensors that are present but not healthy (by name), whether the pre-arm checks pass and the last reason they didn't, EKF, GPS, last acknowledgement.
+- **ArduPlane's own output** is kept in `arduplane.log` in its folder (`logs/sitl/`, `logs/sitl/opponent-N/`), after a line that says when each start was.
+- **In the console:** the DEBUG button on the MESSAGES screen shows the report, the end of ArduPlane's output and the events, newest first. `SIM001_DEBUG_VIEW=1` opens on it.
+- **In the launcher:** the log pane has a tab for each log file of a run (the console's debug log, ArduPlane's output), read as it grows.
+- **When a console test fails** it prints the report, the last 80 events and the end of ArduPlane's output.

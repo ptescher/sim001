@@ -2,6 +2,7 @@
 //! history, and the geometry of the map. `teleoperation_console` (GPUI) and `teleoperation_ios`
 //! (SwiftUI) both draw this.
 
+pub mod debug;
 pub mod geo;
 pub mod link;
 pub mod vehicle;

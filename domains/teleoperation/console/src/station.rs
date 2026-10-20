@@ -68,6 +68,12 @@ fn work_dir() -> PathBuf {
     std::env::var_os("SIM001_DATA").map(PathBuf::from).unwrap_or_else(repo_root)
 }
 
+/// Where the logs of a run go: `logs/` under the working directory (the console's own debug log,
+/// each ArduPlane's output and its flight logs).
+pub fn logs_dir() -> PathBuf {
+    work_dir().join("logs")
+}
+
 fn sim_binary() -> PathBuf {
     if let Some(bin) = std::env::var_os("SIM001_BIN") {
         return PathBuf::from(bin).join(if cfg!(windows) { "sim001.exe" } else { "sim001" });
@@ -133,12 +139,13 @@ fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Optio
         .stderr(Stdio::null())
         .status();
     std::thread::sleep(std::time::Duration::from_millis(200));
+    let (out, err) = process_log(&logs).map_err(|e| format!("opening the log of ArduPlane {instance}: {e}"))?;
     let mut child = Command::new(program)
         .args(native_sitl_args(instance, aircraft, home_loc))
         .current_dir(&logs)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(out)
+        .stderr(err)
         .spawn()
         .map_err(|e| format!("starting {}: {e}", program.display()))?;
     std::thread::sleep(std::time::Duration::from_millis(400));
@@ -151,6 +158,17 @@ fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Optio
     } else {
         format!("started a computer pilot's ArduPlane {instance} (flight logs in {})", logs.display())
     })
+}
+
+/// Where an autopilot's output goes (stdout and stderr of the one process): `arduplane.log` in its
+/// folder, after a line that says when this start was.
+fn process_log(dir: &Path) -> std::io::Result<(Stdio, Stdio)> {
+    use std::io::Write;
+    let log = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("arduplane.log"))?;
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    writeln!(&log, "--- started {secs} ---")?;
+    let err = log.try_clone()?;
+    Ok((Stdio::from(log), Stdio::from(err)))
 }
 
 fn stop_native() {
@@ -596,6 +614,22 @@ mod tests {
         let kestrel = native_sitl_args(1, "t1s-vtol", Some("1,2,3,4"));
         assert!(kestrel.windows(2).any(|w| w == ["--serial0", "tcp:0"]) && kestrel.contains(&"-I1".to_string()));
         assert!(kestrel.windows(2).any(|w| w == ["--home", "1,2,3,4"]));
+    }
+
+    /// What each autopilot prints goes to a file in its own folder (where the launcher and the
+    /// console's debug panel read it), and a restart adds to it after a line that says so.
+    #[test]
+    fn what_an_autopilot_prints_is_kept_in_its_folder() {
+        let dir = std::env::temp_dir().join(format!("sim001-station-log-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (out, err) = process_log(&dir).unwrap();
+        let mut child = Command::new("echo").arg("ArduPlane says hello").stdout(out).stderr(err).spawn().unwrap();
+        child.wait().unwrap();
+        let _ = process_log(&dir).unwrap();
+        let text = std::fs::read_to_string(dir.join("arduplane.log")).unwrap();
+        assert!(text.contains("ArduPlane says hello"), "{text}");
+        assert_eq!(text.matches("--- started ").count(), 2, "{text}");
     }
 
     #[test]

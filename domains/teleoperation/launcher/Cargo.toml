@@ -10,6 +10,8 @@ gpui = "0.2.2"
 hidapi = "2"
 # The shared look (the console, the sim's HUD and the docs use it too).
 illustration_theme = { path = "../../illustration/theme" }
+# The debug log: the files the console and ArduPlane write, read here (the same code the console writes them with).
+teleoperation_core = { path = "../core" }
 
 # Keep `cargo run` (debug) usable: optimize dependencies.
 [profile.dev.package."*"]

@@ -8,6 +8,7 @@ use crate::feed::Sensor;
 use crate::geo::{Origin, TerrainMap, wrap360};
 use crate::link::{Cmd, Shared};
 use crate::vehicle::{Vehicle, Waypoint, WpKind, mode_number};
+use teleoperation_core::debug::{self, Level, Source};
 use gpui::{
     AnyElement, Bounds, Context, Div, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
     Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful, Window, canvas, div, prelude::*, px,
@@ -53,6 +54,11 @@ pub struct Gcs {
     pub(crate) sensor: Option<Arc<Sensor>>,
     /// The plane is a VTOL: show its Q modes.
     vtol: bool,
+    /// The MESSAGES screen shows the debug view: the autopilot's state, its process log and
+    /// everything that happened on the link.
+    pub(crate) debug_view: bool,
+    /// The last lines of the autopilot's own output, read once a second.
+    proc_log: (Option<Instant>, Vec<String>),
 }
 
 /// Below this window width the console drops to two columns; with a sensor window open the
@@ -97,6 +103,9 @@ impl Gcs {
             auto_confirm: None,
             sensor,
             vtol,
+            // SIM001_DEBUG_VIEW=1 opens on the debug view (for a screenshot of it, and while debugging).
+            debug_view: std::env::var_os("SIM001_DEBUG_VIEW").is_some(),
+            proc_log: (None, vec![]),
         }
     }
 
@@ -196,7 +205,7 @@ impl Gcs {
         let utc = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let (hh, mm, ss) = ((utc / 3600) % 24, (utc / 60) % 60, utc % 60);
         let (link_txt, link_col) = if v.link.alive() {
-            (format!("LINK {}  ·  {}  ·  SYS {}", v.link.address, v.link.status, v.sysid), GREEN)
+            (format!("LINK {}  ·  {}  ·  SYS {}{}", v.link.address, v.link.status, v.sysid, v.ping.last_ms().map_or(String::new(), |ms| format!("  ·  PING {ms:.0} ms"))), GREEN)
         } else if v.link.connected {
             (format!("LINK {}  ·  {}", v.link.address, v.link.status), AMBER)
         } else {
@@ -519,6 +528,54 @@ impl Gcs {
             .child(row("SERVO 1-5", format!("{} {} {} {} {}", v.servo[0], v.servo[1], v.servo[2], v.servo[3], v.servo[4]), GREY))
     }
 
+    /// The autopilot's own output, the last lines, read from its file once a second.
+    fn refresh_proc_log(&mut self) {
+        if self.proc_log.0.is_some_and(|t| t.elapsed() < Duration::from_secs(1)) {
+            return;
+        }
+        self.proc_log = (Some(Instant::now()), debug::tail_lines(&crate::station::logs_dir().join("sitl/arduplane.log"), 8));
+    }
+
+    /// What a debugger wants: the autopilot's state, its own output, and everything that
+    /// happened on the link, newest first.
+    fn debug_panel(&self, v: &Vehicle) -> Div {
+        let level_colour = |l: Level| match l {
+            Level::Error => RED,
+            Level::Warn => AMBER,
+            Level::Info => WHITE,
+            Level::Debug | Level::Trace => GREY,
+        };
+        let state = debug::state_report(v).into_iter().map(|(k, val)| {
+            div()
+                .flex()
+                .gap_2()
+                .child(div().flex_none().w(px(84.0)).text_color(c(GREY)).child(k.to_uppercase()))
+                .child(div().flex_1().min_w(px(0.0)).text_color(c(if val.contains("LOST") || val.starts_with("no (") || val.starts_with("unhealthy") { AMBER } else { GREEN })).child(val))
+        });
+        let process = self.proc_log.1.iter().map(|l| div().text_color(c(GREY)).whitespace_nowrap().overflow_hidden().child(l.clone()));
+        let events = v.debug.tail(80).into_iter().rev().map(|e| {
+            let secs = e.t as u64;
+            div()
+                .flex()
+                .gap_2()
+                .child(div().flex_none().whitespace_nowrap().text_color(c(DARK)).child(format!("{:02}:{:02}.{:01}", secs / 60, secs % 60, ((e.t.fract()) * 10.0) as u8)))
+                .child(div().flex_none().w(px(38.0)).text_color(c(if e.source == Source::Fc { GREY } else { CYAN })).child(e.source.tag()))
+                .child(div().flex_1().min_w(px(0.0)).text_color(c(level_colour(e.level))).child(e.text.clone()))
+        });
+        let heading = |t: &'static str| div().pt_1().text_color(c(MAGENTA)).child(t);
+        div()
+            .flex()
+            .flex_col()
+            .p_2()
+            .gap(px(1.0))
+            .overflow_hidden()
+            .children(state)
+            .child(heading("ARDUPLANE OUTPUT"))
+            .children(process)
+            .child(heading("EVENTS"))
+            .children(events)
+    }
+
     fn messages(&self, v: &Vehicle) -> Div {
         let lines = v.log.iter().rev().take(60).map(|l| {
             let age = l.time.duration_since(v.start).as_secs();
@@ -558,10 +615,20 @@ impl Render for Gcs {
         let top = self.top_bar(&v);
         let systems = self.systems(&v, agl);
         let ann = self.annunciators(&v, agl, (right_w - 30.0) / 3.0);
-        let msgs = self.messages(&v);
+        let msgs = if self.debug_view {
+            self.refresh_proc_log();
+            self.debug_panel(&v)
+        } else {
+            self.messages(&v)
+        };
         let command = self.command_panel(&v, cx);
         drop(v);
         let toolbar = self.map_toolbar(cx);
+        let debug_toggle = button("debug-toggle", if self.debug_view { "MESSAGES" } else { "DEBUG" }, if self.debug_view { Style::Active } else { Style::Normal })
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.debug_view = !this.debug_view;
+                cx.notify();
+            }));
 
         let hud_canvas = canvas(|_, _, _| {}, move |b, _, window, cx| {
             hud::paint(b, &hud_data, hud::HudOpts::default(), window, cx);
@@ -603,15 +670,22 @@ impl Render for Gcs {
         let pfd = screen("PRIMARY FLIGHT DISPLAY", None, hud_canvas.into_any_element());
         let command = screen("VEHICLE COMMAND", None, command.into_any_element());
         let trends = screen("TELEMETRY TRENDS", None, charts_canvas.into_any_element());
-        let right = div()
-            .flex()
-            .flex_col()
-            .gap(px(6.0))
-            .w(px(right_w))
-            .flex_none()
-            .child(screen("CAUTION / WARNING", None, ann.into_any_element()))
-            .child(screen("SYSTEMS", None, systems.into_any_element()))
-            .child(screen("MESSAGES", None, msgs.into_any_element()).flex_1());
+        let messages_screen = screen(if self.debug_view { "DEBUG" } else { "MESSAGES" }, Some(debug_toggle.into_any_element()), msgs.into_any_element()).flex_1();
+        // The debug view takes the whole right column: the autopilot's state, its output and the
+        // events on the link need the room, and the state it shows covers what SYSTEMS does.
+        let right = if self.debug_view {
+            div().flex().flex_col().gap(px(6.0)).w(px(right_w + 140.0)).flex_none().child(messages_screen)
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(6.0))
+                .w(px(right_w))
+                .flex_none()
+                .child(screen("CAUTION / WARNING", None, ann.into_any_element()))
+                .child(screen("SYSTEMS", None, systems.into_any_element()))
+                .child(messages_screen)
+        };
 
         let body = if compact {
             // Map with command + trends under it; the PFD only if there's no sensor window

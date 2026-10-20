@@ -13,7 +13,7 @@ mod station;
 mod tx15_screen;
 mod ui;
 // The screenless half of the station lives in teleoperation_core; keep the old paths.
-use teleoperation_core::{geo, link, vehicle};
+use teleoperation_core::{debug, geo, link, vehicle};
 
 use geo::{Origin, TerrainMap};
 use gpui::{
@@ -163,6 +163,11 @@ fn main() {
     }
 
     let vehicle = Arc::new(Mutex::new(Vehicle::new(&address)));
+    // What happens between the console and the autopilot goes to a file as it happens, where the
+    // launcher reads it (and what a test that fails prints).
+    if let Err(e) = vehicle.lock().unwrap().debug.to_file(&station::logs_dir().join("debug/console.log")) {
+        eprintln!("the debug log has no file: {e}");
+    }
     let tx = link::spawn(address, vehicle.clone());
     if flag("--autotest") {
         autotest::spawn(vehicle.clone(), tx.clone(), origin);

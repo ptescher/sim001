@@ -3,6 +3,7 @@
 use crate::controllers::{self, Device, Mapping, SerialRadio};
 use crate::job::{Job, layout};
 use crate::theme::*;
+use teleoperation_core::debug::{self, Level, LogFile};
 use gpui::{AnyElement, Context, Div, IntoElement, Render, SharedString, Stateful, Window, div, prelude::*, px};
 use std::time::Duration;
 
@@ -32,6 +33,12 @@ pub struct Launcher {
     mapping: Mapping,
     job: Option<Job>,
     notice: String,
+    /// The log pane shows the program's output (`None`) or one of the log files of a run: the
+    /// console's debug log, what each ArduPlane printed.
+    log_tab: Option<String>,
+    /// The log files there are, and the last lines of the one that is shown, read as they grow.
+    logs: Vec<LogFile>,
+    file_lines: Vec<String>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -136,10 +143,25 @@ impl Launcher {
             mapping: controllers::mapping(),
             job: None,
             notice: String::new(),
+            log_tab: None,
+            logs: vec![],
+            file_lines: vec![],
         }
     }
 
     fn tick(&mut self, cx: &mut Context<Self>) {
+        // The log files of a run, and the end of the one that is shown.
+        let logs = debug::list_logs(&layout().data.join("logs"));
+        if logs != self.logs {
+            self.logs = logs;
+        }
+        if let Some(name) = &self.log_tab {
+            match self.logs.iter().find(|l| &l.name == name) {
+                Some(l) => self.file_lines = debug::tail_lines(&l.path, 60),
+                None => self.file_lines.clear(),
+            }
+            cx.notify();
+        }
         if let Some(j) = &mut self.job {
             let was = j.running();
             j.poll();
@@ -509,7 +531,38 @@ impl Launcher {
         )
     }
 
-    fn log_panel(&self) -> Div {
+    /// The log pane: the program's output, or a log file of the run (the console's debug log,
+    /// ArduPlane's own output), chosen by the tabs along its top.
+    fn log_panel(&self, cx: &mut Context<Self>) -> Div {
+        let mut tabs = row().child(button("log-output", "OUTPUT", if self.log_tab.is_none() { Style::Active } else { Style::Normal }).on_click(cx.listener(|this, _, _, cx| {
+            this.log_tab = None;
+            cx.notify();
+        })));
+        for l in &self.logs {
+            let name = l.name.clone();
+            let id: SharedString = format!("log-{}", l.name).into();
+            tabs = tabs.child(button(id, l.name.to_uppercase(), if self.log_tab.as_deref() == Some(l.name.as_str()) { Style::Active } else { Style::Normal }).on_click(cx.listener(move |this, _, _, cx| {
+                this.log_tab = Some(name.clone());
+                this.file_lines.clear();
+                cx.notify();
+            })));
+        }
+        let Some(tab) = &self.log_tab else { return self.output_panel(tabs) };
+        let colour = |line: &str| match debug::parse_line(line).map(|e| e.level) {
+            Some(Level::Error) => RED,
+            Some(Level::Warn) => AMBER,
+            Some(Level::Info) => WHITE,
+            _ => GREY,
+        };
+        let mut out = div().flex().flex_col().text_size(px(11.0));
+        for l in &self.file_lines {
+            out = out.child(div().text_color(c(colour(l))).child(l.clone()));
+        }
+        let path = self.logs.iter().find(|l| &l.name == tab).map(|l| l.path.display().to_string()).unwrap_or_default();
+        screen("DEBUG LOG", div().flex().flex_col().gap_1().child(tabs).child(note(path)).child(out))
+    }
+
+    fn output_panel(&self, tabs: Div) -> Div {
         let (title, status, color, lines) = match &self.job {
             None => ("Nothing running".to_string(), String::new(), GREY, vec![]),
             Some(j) => {
@@ -534,6 +587,7 @@ impl Launcher {
                 .flex()
                 .flex_col()
                 .gap_1()
+                .child(tabs)
                 .child(
                     row()
                         .child(div().text_color(c(WHITE)).child(title))
@@ -551,7 +605,7 @@ impl Render for Launcher {
             self.launch_panel(cx).into_any_element(),
             self.controllers_panel(cx).into_any_element(),
             self.docs_panel(cx).into_any_element(),
-            self.log_panel().into_any_element(),
+            self.log_panel(cx).into_any_element(),
         ];
         let [launch, ctrl, docs, log] = panels;
         div()

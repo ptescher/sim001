@@ -6,6 +6,7 @@
 // may send the old MISSION_REQUEST, so the "deprecated" messages are used on purpose.
 #![allow(deprecated)]
 
+use crate::debug::{self, Digest, Level, Source};
 use crate::vehicle::{Vehicle, Waypoint, WpKind, mode_name};
 use mavlink::dialects::ardupilotmega::*;
 use mavlink::error::MessageReadError;
@@ -85,6 +86,11 @@ struct Session {
     /// STATUSTEXT longer than one message arrives in chunks sharing an id: (id, next chunk,
     /// severity, text so far).
     text_chunks: Option<(u16, u8, u8, String)>,
+    /// When the last ping went out, and whether the heartbeat was there at the last look.
+    last_ping: Instant,
+    was_alive: bool,
+    /// The autopilot's state at the last look, to say what changed.
+    digest: Option<(Instant, Digest)>,
 }
 
 fn run(address: String, vehicle: Shared, rx: Receiver<Cmd>) {
@@ -110,6 +116,7 @@ fn run(address: String, vehicle: Shared, rx: Receiver<Cmd>) {
             v.link.connected = true;
             v.link.status = format!("connected {address}, waiting for heartbeat");
             v.push_log("GCS", 6, format!("Link up: {address}"));
+            v.debug.record(Level::Info, Source::Link, format!("connected to {address}"));
         }
         let mut s = Session {
             conn,
@@ -121,12 +128,16 @@ fn run(address: String, vehicle: Shared, rx: Receiver<Cmd>) {
             downloaded_once: false,
             rate_window: (Instant::now(), 0),
             text_chunks: None,
+            last_ping: Instant::now(),
+            was_alive: false,
+            digest: None,
         };
         let err = s.run(&vehicle, &rx);
         let mut v = vehicle.lock().unwrap();
         v.link.connected = false;
         v.link.status = format!("link lost: {err}");
         v.push_log("GCS", 4, format!("Link lost: {err}"));
+        v.debug.record(Level::Warn, Source::Link, format!("link lost: {err}"));
         drop(v);
         std::thread::sleep(Duration::from_millis(500));
     }
@@ -147,7 +158,12 @@ impl Session {
         }
     }
 
-    fn command_long(&self, command: MavCmd, p: [f32; 7]) {
+    fn command_long(&self, vehicle: &Shared, command: MavCmd, p: [f32; 7]) {
+        let name = format!("{command:?}");
+        let text = debug::describe_command(name.trim_start_matches("MAV_CMD_"), &p);
+        if !(command == MavCmd::MAV_CMD_REQUEST_MESSAGE) {
+            vehicle.lock().unwrap().debug.record(Level::Debug, Source::Cmd, format!("-> {text}"));
+        }
         self.send(MavMessage::COMMAND_LONG(COMMAND_LONG_DATA {
             param1: p[0],
             param2: p[1],
@@ -209,6 +225,7 @@ impl Session {
             }
             (v.link.alive(), v.home.is_some())
         };
+        self.watch(vehicle, now, have_hb);
         if !have_hb {
             return;
         }
@@ -243,7 +260,7 @@ impl Session {
                 .is_none_or(|t| now.duration_since(t) > Duration::from_secs(3))
         {
             self.home_requested = Some(now);
-            self.command_long(
+            self.command_long(vehicle, 
                 MavCmd::MAV_CMD_REQUEST_MESSAGE,
                 [MSG_HOME_POSITION, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             );
@@ -255,6 +272,43 @@ impl Session {
         self.xfer_timeouts(vehicle, now);
     }
 
+    /// What a debugger wants to know that no message says: that the heartbeat stopped and came
+    /// back, how long the autopilot takes to answer a ping, and what in its state changed.
+    fn watch(&mut self, vehicle: &Shared, now: Instant, alive: bool) {
+        let mut v = vehicle.lock().unwrap();
+        if alive != self.was_alive {
+            let since = v.link.last_heartbeat.map_or(0.0, |t| t.elapsed().as_secs_f32());
+            if alive {
+                v.debug.record(Level::Info, Source::Link, "heartbeat back");
+            } else if self.was_alive {
+                v.debug.record(Level::Warn, Source::Link, format!("heartbeat lost (the last was {since:.1} s ago)"));
+            }
+            self.was_alive = alive;
+        }
+        // The ping: TIMESYNC, which the autopilot echoes. Every 2 s while it is there to answer.
+        for _ in 0..v.ping.expire(now, Duration::from_secs(2)) {
+            v.debug.record(Level::Warn, Source::Ping, "no reply within 2 s");
+        }
+        if alive && now.duration_since(self.last_ping) >= Duration::from_secs(2) {
+            self.last_ping = now;
+            let token = v.start.elapsed().as_nanos() as i64 + 1;
+            v.ping.sent(token, now);
+            drop(v);
+            self.send(MavMessage::TIMESYNC(TIMESYNC_DATA { tc1: 0, ts1: token, target_system: self.target.0, target_component: self.target.1 }));
+            v = vehicle.lock().unwrap();
+        }
+        // What changed in its state, looked at once a second.
+        if self.digest.as_ref().is_none_or(|(t, _)| now.duration_since(*t) >= Duration::from_secs(1)) {
+            let now_digest = Digest::of(&v);
+            if let Some((_, before)) = &self.digest {
+                for line in debug::changes(before, &now_digest) {
+                    v.debug.record(Level::Info, Source::State, line);
+                }
+            }
+            self.digest = Some((now, now_digest));
+        }
+    }
+
     fn execute(&mut self, vehicle: &Shared, cmd: Cmd) {
         let log = |sev: u8, s: String| vehicle.lock().unwrap().push_log("GCS", sev, s);
         match cmd {
@@ -263,7 +317,7 @@ impl Session {
                     6,
                     format!("Command: {}", if arm { "ARM" } else { "DISARM" }),
                 );
-                self.command_long(
+                self.command_long(vehicle, 
                     MavCmd::MAV_CMD_COMPONENT_ARM_DISARM,
                     [arm as u8 as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -271,7 +325,7 @@ impl Session {
             Cmd::ForceDisarm => {
                 log(4, "Command: FORCE DISARM".into());
                 // param2 21196: ArduPilot's magic value to disarm regardless of state.
-                self.command_long(
+                self.command_long(vehicle, 
                     MavCmd::MAV_CMD_COMPONENT_ARM_DISARM,
                     [0.0, 21196.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -279,7 +333,7 @@ impl Session {
             Cmd::Reboot => {
                 log(4, "Command: REBOOT autopilot".into());
                 // param1 1 = reboot; param6 20190226 = ArduPilot's magic value to allow it armed.
-                self.command_long(
+                self.command_long(vehicle, 
                     MavCmd::MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN,
                     [1.0, 0.0, 0.0, 0.0, 0.0, 20190226.0, 0.0],
                 );
@@ -287,7 +341,7 @@ impl Session {
             Cmd::SetMode(m) => {
                 log(6, format!("Command: mode {}", mode_name(m)));
                 // param1 = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, param2 = custom mode.
-                self.command_long(
+                self.command_long(vehicle, 
                     MavCmd::MAV_CMD_DO_SET_MODE,
                     [1.0, m as f32, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -316,7 +370,7 @@ impl Session {
             }
             Cmd::Takeoff { alt } => {
                 log(6, format!("Command: take off vertically to {alt:.0} m"));
-                self.command_long(
+                self.command_long(vehicle, 
                     MavCmd::MAV_CMD_DO_SET_MODE,
                     [1.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -324,7 +378,7 @@ impl Session {
                 // rotors have spooled up for GUIDED's hover (about 0.7 s later: "Already flying").
                 // The mode change takes effect on the next of ArduPilot's main loops.
                 std::thread::sleep(Duration::from_millis(150));
-                self.command_long(
+                self.command_long(vehicle, 
                     MavCmd::MAV_CMD_NAV_TAKEOFF,
                     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, alt],
                 );
@@ -361,7 +415,7 @@ impl Session {
             }
             Cmd::SetCurrentWp(seq) => {
                 log(6, format!("Command: set current waypoint {seq}"));
-                self.command_long(
+                self.command_long(vehicle, 
                     MavCmd::MAV_CMD_DO_SET_MISSION_CURRENT,
                     [seq as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -736,6 +790,9 @@ impl Session {
                 if !(ok && name == "REQUEST_MESSAGE") {
                     v.push_log("GCS", if ok { 6 } else { 4 }, format!("{name}: {res}"));
                 }
+                let (level, text) = debug::describe_ack(&name, &res, a.progress, a.result_param2);
+                v.debug.record(level, Source::Ack, text);
+                v.record_ack(&name, &res);
             }
             // Mission protocol: the vehicle pulls items during an upload...
             MavMessage::MISSION_REQUEST_INT(MISSION_REQUEST_INT_DATA { seq, .. })
@@ -824,6 +881,12 @@ impl Session {
                             self.send_mission_ack();
                         }
                     }
+                }
+            }
+            MavMessage::TIMESYNC(t) if t.tc1 != 0 => {
+                // The autopilot's answer to our ping echoes what we sent in ts1.
+                if let Some(ms) = v.ping.reply(t.ts1, Instant::now()) {
+                    v.debug.record(Level::Trace, Source::Ping, format!("{ms:.1} ms"));
                 }
             }
             _ => {}

@@ -213,6 +213,11 @@ pub struct Vehicle {
     fastest_sink: f32,
 
     pub log: VecDeque<LogLine>,
+    /// Everything that happened between here and the autopilot (see `debug`), and the ping.
+    pub debug: crate::debug::DebugLog,
+    pub ping: crate::debug::PingStats,
+    /// What the autopilot last answered to a command.
+    pub acks: VecDeque<crate::debug::Ack>,
     /// Ground track, (lat, lon), roughly 2 Hz.
     pub trail: VecDeque<(f64, f64)>,
     pub history: VecDeque<Sample>,
@@ -299,6 +304,9 @@ impl Vehicle {
             airborne: false,
             fastest_sink: 0.0,
             log: VecDeque::new(),
+            debug: crate::debug::DebugLog::new(Instant::now()),
+            ping: Default::default(),
+            acks: VecDeque::new(),
             trail: VecDeque::new(),
             history: VecDeque::new(),
             armed_since: None,
@@ -371,8 +379,19 @@ impl Vehicle {
             .map_or(self.last_flight_secs, |t| t.elapsed().as_secs_f32())
     }
 
+    /// Notes what the autopilot answered to a command.
+    pub fn record_ack(&mut self, command: &str, result: &str) {
+        self.acks.push_back(crate::debug::Ack { at: Instant::now(), command: command.into(), result: result.into() });
+        while self.acks.len() > crate::debug::ACKS_KEPT {
+            self.acks.pop_front();
+        }
+    }
+
     pub fn push_log(&mut self, source: &'static str, severity: u8, text: impl Into<String>) {
         let text = text.into();
+        // The debug log has every line, repeats and all.
+        let (src, level) = if source == "FC" { (crate::debug::Source::Fc, crate::debug::Level::from_severity(severity)) } else { (crate::debug::Source::Gcs, crate::debug::Level::from_severity(severity)) };
+        self.debug.record(level, src, text.clone());
         // ArduPilot repeats some messages (e.g. PreArm) every few seconds: collapse repeats.
         if let Some(last) = self.log.back_mut() {
             if last.text == text && last.time.elapsed().as_secs_f32() < 30.0 {

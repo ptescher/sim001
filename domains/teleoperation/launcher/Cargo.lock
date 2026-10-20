@@ -927,6 +927,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "communication_remoteid"
+version = "0.1.0"
+
+[[package]]
+name = "communication_telemetry"
+version = "0.1.0"
+dependencies = [
+ "communication_remoteid",
+ "communication_traffic",
+ "mavlink",
+ "num-traits",
+]
+
+[[package]]
+name = "communication_traffic"
+version = "0.1.0"
+
+[[package]]
 name = "compression-codecs"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1166,6 +1184,12 @@ checksum = "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc-any"
+version = "2.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46db9f663dfb869b80fcf59e32d7a80fc6c464a4f6328f3f06a00f5e36d05f8c"
 
 [[package]]
 name = "crc32fast"
@@ -3072,6 +3096,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "mavlink"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82f4bc8f826928c899e39e30d98eafd57b1c0d992b541a007fadc68126f95303"
+dependencies = [
+ "bitflags 2.13.2",
+ "mavlink-bindgen",
+ "mavlink-core",
+ "num-derive 0.5.1",
+ "num-traits",
+]
+
+[[package]]
+name = "mavlink-bindgen"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0059289d3f5daf95a46e151c57113e95fa0ee80e8ebacb3cc5a305e7280fa020"
+dependencies = [
+ "crc-any",
+ "proc-macro2",
+ "quick-xml",
+ "quote",
+ "regex",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mavlink-core"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c71af820ebc18c4a21abe634bf297dc0dde578edc92e9b538c0c50c9ea4b69d"
+dependencies = [
+ "crc-any",
+ "memchr",
+]
+
+[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3372,6 +3433,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e98dc3b890f6c23a0f9d3d491a2823d0dea0fa656302a13dd225fa924112a8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -4168,7 +4240,7 @@ dependencies = [
  "maybe-rayon",
  "new_debug_unreachable",
  "noop_proc_macro",
- "num-derive",
+ "num-derive 0.4.2",
  "num-traits",
  "paste",
  "profiling",
@@ -5310,6 +5382,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "teleoperation_core"
+version = "0.1.0"
+dependencies = [
+ "communication_telemetry",
+ "communication_traffic",
+ "mavlink",
+]
+
+[[package]]
 name = "teleoperation_launcher"
 version = "0.1.0"
 dependencies = [
@@ -5317,6 +5398,7 @@ dependencies = [
  "hidapi",
  "illustration_theme",
  "libc",
+ "teleoperation_core",
 ]
 
 [[package]]

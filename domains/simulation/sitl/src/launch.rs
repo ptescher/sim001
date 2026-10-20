@@ -83,6 +83,11 @@ pub fn docker_image_exists() -> bool {
     Command::new("docker").args(["image", "inspect", DOCKER_IMAGE]).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
 }
 
+/// Where what ArduPlane prints goes: in the directory it runs in.
+pub fn log_path(dir: &Path) -> PathBuf {
+    dir.join("arduplane.log")
+}
+
 /// Starts what the plan says, with `dir` as its working directory (SITL keeps its files there).
 /// Returns the child and whether it is a Docker one.
 pub fn spawn(dir: &Path, plan: Plan) -> Result<(Child, bool), String> {
@@ -101,7 +106,14 @@ pub fn spawn(dir: &Path, plan: Plan) -> Result<(Child, bool), String> {
         }
         Plan::Missing(why) => return Err(why),
     };
-    let child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| format!("cannot start ArduPilot: {e}"))?;
+    // What it prints is kept, after a line that says when this start was (a restart adds to the file).
+    let log = std::fs::OpenOptions::new().create(true).append(true).open(log_path(dir)).map_err(|e| format!("cannot open {}: {e}", log_path(dir).display()))?;
+    {
+        use std::io::Write;
+        let _ = writeln!(&log, "--- started {} ---", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()));
+    }
+    let err = log.try_clone().map_err(|e| e.to_string())?;
+    let child = cmd.stdin(Stdio::null()).stdout(Stdio::from(log)).stderr(Stdio::from(err)).spawn().map_err(|e| format!("cannot start ArduPilot: {e}"))?;
     Ok((child, docker))
 }
 
@@ -209,6 +221,25 @@ mod tests {
     fn docker_gets_the_plane_and_does_not_wait() {
         let args = docker_args("t1s-vtol").join(" ");
         assert!(args.contains("AIRCRAFT=t1s-vtol") && args.contains("NOWAIT=1") && args.contains("5760:5760"), "{args}");
+    }
+
+    /// What ArduPlane prints goes to a file where it runs, so that the console and the launcher
+    /// have its side of what happened: the planes of a run are not silent.
+    #[test]
+    fn what_the_autopilot_prints_is_kept_in_its_directory() {
+        let dir = std::env::temp_dir().join(format!("sim001-sitl-log-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let plan = Plan::Native { program: "echo".into(), args: vec!["ArduPlane V4.6 starting".into()] };
+        let (mut child, _) = spawn(&dir, plan).unwrap();
+        child.wait().unwrap();
+        let text = std::fs::read_to_string(log_path(&dir)).unwrap();
+        assert!(text.contains("ArduPlane V4.6 starting"), "{text}");
+        assert_eq!(log_path(&dir).file_name().unwrap(), "arduplane.log");
+        // The next start adds to it, after a line that says it began.
+        let plan = Plan::Native { program: "echo".into(), args: vec!["second".into()] };
+        spawn(&dir, plan).unwrap().0.wait().unwrap();
+        let text = std::fs::read_to_string(log_path(&dir)).unwrap();
+        assert!(text.contains("starting") && text.contains("second") && text.contains("--- started "), "{text}");
     }
 
     #[test]

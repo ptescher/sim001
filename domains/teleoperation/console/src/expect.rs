@@ -416,6 +416,24 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                             println!("expect:   vehicle: {l}");
                         }
                     }
+                    // What the autopilot was, and everything that passed between it and the console:
+                    // commands, acknowledgements, pings, heartbeats, and what it printed itself.
+                    if let Ok((report, events)) = driver.call(|g, _, _| {
+                        let v = g.vehicle.lock().unwrap();
+                        let report = teleoperation_core::debug::state_report(&v);
+                        let events: Vec<String> = v.debug.tail(80).into_iter().map(teleoperation_core::debug::format_line).collect();
+                        (report, events)
+                    }) {
+                        for (k, val) in report {
+                            println!("expect:   autopilot {k}: {val}");
+                        }
+                        for e in events {
+                            println!("expect:   debug: {e}");
+                        }
+                    }
+                    for l in teleoperation_core::debug::tail_lines(&crate::station::logs_dir().join("sitl/arduplane.log"), 20) {
+                        println!("expect:   arduplane: {l}");
+                    }
                 }
             }
             report.results.push(r);
