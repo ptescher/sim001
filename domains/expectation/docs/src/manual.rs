@@ -406,7 +406,10 @@ pub fn reading_order(d: &Docs) -> Vec<Reading> {
         );
         out.extend(s.features.iter().map(|&f| Reading::Feature(f)));
         for &c in &s.children {
-            walk(d, c, out);
+            // A section the outline places elsewhere is read there.
+            if !d.outline.is_some_and(|o| o.listed(c)) {
+                walk(d, c, out);
+            }
         }
     }
     let mut out = vec![];

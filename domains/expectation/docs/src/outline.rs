@@ -93,6 +93,7 @@ impl Outline {
                 "Part" => out.parts.push(Part { name: value.to_string(), items: vec![] }),
                 "Section" => {
                     let found = suite.sections.iter().find(|s| s.parent.is_some() && s.name.eq_ignore_ascii_case(value));
+                    // A section below the top level moves, with its subsections, to here.
                     match (found, out.parts.last_mut()) {
                         (Some(s), Some(part)) => part.items.push(Item::Section(s.id)),
                         (None, _) => warnings.push(format!("outline.txt:{}: no section named «{value}»", n + 1)),
@@ -155,10 +156,18 @@ impl Outline {
         Some((out, warnings))
     }
 
-    /// The part a top-level chapter, or the chapter a section is under, is in.
-    pub fn part_of(&self, suite: &Suite, id: SectionId) -> Option<usize> {
-        let top = suite.chain(id).into_iter().nth(1).map(|s| s.id)?;
-        self.parts.iter().position(|p| p.items.contains(&Item::Section(top)))
+    /// Whether the outline places this section itself (rather than under its parent).
+    pub fn listed(&self, id: SectionId) -> bool {
+        self.parts.iter().any(|p| p.items.contains(&Item::Section(id)))
+    }
+
+    /// The part a section is in, and the chapter it is under: the section itself or its
+    /// nearest ancestor that the outline places.
+    pub fn anchor(&self, suite: &Suite, id: SectionId) -> Option<(usize, SectionId)> {
+        suite.chain(id).into_iter().rev().find_map(|s| {
+            let part = self.parts.iter().position(|p| p.items.contains(&Item::Section(s.id)))?;
+            Some((part, s.id))
+        })
     }
 }
 

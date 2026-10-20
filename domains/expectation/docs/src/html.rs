@@ -295,7 +295,9 @@ impl Site<'_> {
             );
         }
         for &c in &s.children {
-            self.nav_section(&mut inner, c, open, here);
+            if !self.d.outline.is_some_and(|o| o.listed(c)) {
+                self.nav_section(&mut inner, c, open, here);
+            }
         }
         if s.parent.is_none() {
             if self.d.outline.is_some() {
@@ -355,14 +357,18 @@ impl Site<'_> {
             );
         }
         if let Some(sec) = self.section_of(here) {
-            for s in self.suite().chain(sec) {
+            let anchor = self.d.outline.and_then(|o| o.anchor(self.suite(), sec).map(|a| (o, a)));
+            let chain = self.suite().chain(sec);
+            // With an outline, the way back starts at the part and the chapter the section is
+            // placed in, not at the parent it has in the specs.
+            let from = anchor.map_or(0, |(_, (_, top))| chain.iter().position(|s| s.id == top).unwrap_or(0));
+            if let Some((o, (part, _))) = anchor {
+                parts.push(self.section_link(SectionId(0)));
+                parts.push(esc(&o.parts[part].name));
+            }
+            for s in &chain[from..] {
                 if here != Here::Section(s.id) {
                     parts.push(self.section_link(s.id));
-                }
-                if let (None, Some(o)) = (s.parent, self.d.outline)
-                    && let Some(part) = o.part_of(self.suite(), sec)
-                {
-                    parts.push(esc(&o.parts[part].name));
                 }
             }
         } else {
@@ -618,9 +624,11 @@ impl Site<'_> {
             o.push_str("</aside>");
         }
 
-        if !section.children.is_empty() {
+        let children: Vec<SectionId> =
+            section.children.iter().copied().filter(|&c| !self.d.outline.is_some_and(|o| o.listed(c))).collect();
+        if !children.is_empty() {
             o.push_str(r#"<div class="cards">"#);
-            for &c in &section.children {
+            for &c in &children {
                 let child = s.section(c);
                 let about = paragraphs(&child.description).into_iter().next().unwrap_or_default();
                 let _ = write!(

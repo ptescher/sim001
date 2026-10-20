@@ -16,6 +16,10 @@ Part: The ground station
   Section: Ground control station
   Page: ground-station-screens [desktop]
 
+Part: Games
+  Section: Recreation
+  Section: Games with ArduPilot
+
 Part: Beyond the cockpit
   Section: Other aircraft
   Section: The flight computer

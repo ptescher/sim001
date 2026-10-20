@@ -161,7 +161,8 @@ fn index(d: &Docs) -> String {
     );
     // With an outline: a contents list first, then the chapters in the outline's order under
     // the heading of their part. Without one, the sections in the suite's own order.
-    let mut order: Vec<(Option<usize>, &expectation_model::Section)> = vec![];
+    // Each section with its part and its depth below the chapter it is placed as.
+    let mut order: Vec<(Option<(usize, usize)>, &expectation_model::Section)> = vec![];
     if let Some(outline) = d.outline {
         let _ = writeln!(o, "## Contents\n");
         for part in &outline.parts {
@@ -193,11 +194,13 @@ fn index(d: &Docs) -> String {
         for (p, part) in outline.parts.iter().enumerate() {
             for item in &part.items {
                 if let crate::outline::Item::Section(id) = *item {
-                    // Depth first, as the suite lists them.
-                    let mut stack = vec![id];
-                    while let Some(x) = stack.pop() {
-                        order.push((Some(p), s.section(x)));
-                        stack.extend(s.section(x).children.iter().rev());
+                    // Depth first, as the suite lists them, without the sections the outline
+                    // places elsewhere.
+                    let mut stack = vec![(id, 1usize)];
+                    while let Some((x, depth)) = stack.pop() {
+                        order.push((Some((p, depth)), s.section(x)));
+                        let below = s.section(x).children.iter().rev().filter(|&&c| !outline.listed(c));
+                        stack.extend(below.map(|&c| (c, depth + 1)));
                     }
                 }
             }
@@ -207,14 +210,17 @@ fn index(d: &Docs) -> String {
     }
     let mut last_part = None;
     for (part, section) in order {
-        if let (Some(p), Some(outline)) = (part, d.outline)
+        if let (Some((p, _)), Some(outline)) = (part, d.outline)
             && last_part != Some(p)
         {
             last_part = Some(p);
             let _ = writeln!(o, "## {}\n", outline.parts[p].name);
         }
-        let bump = usize::from(d.outline.is_some());
-        let depth = (s.chain(section.id).len() + bump).min(5);
+        let depth = match part {
+            Some((_, below)) => below + 2,
+            None => s.chain(section.id).len(),
+        }
+        .min(6);
         let _ = writeln!(o, "{} {}\n", "#".repeat(depth), section.name);
         for p in paragraphs(&section.description) {
             let _ = writeln!(o, "{}\n", prose(d, &p, false));
