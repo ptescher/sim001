@@ -1624,6 +1624,7 @@ dependencies = [
  "expectation_graph",
  "expectation_language",
  "expectation_model",
+ "expectation_service",
  "expectation_story",
 ]
 
@@ -1636,6 +1637,10 @@ dependencies = [
 
 [[package]]
 name = "expectation_model"
+version = "0.1.0"
+
+[[package]]
+name = "expectation_service"
 version = "0.1.0"
 
 [[package]]

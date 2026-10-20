@@ -311,6 +311,11 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
 
     // A hung run never leaves the windows open: the whole run has a limit, and the console quits when
     // it passes. Each test has its own budget (below); this is for what a budget can't catch.
+    // SIM001_EXPECT_ONLY=<text>: run only the tests whose title has it (while working on them).
+    let mut acceptance = acceptance;
+    if let Ok(only) = std::env::var("SIM001_EXPECT_ONLY") {
+        acceptance.plans.retain(|p| p.title.contains(&only));
+    }
     let total = run_limit(&acceptance.plans);
     std::thread::spawn(move || {
         std::thread::sleep(total);
