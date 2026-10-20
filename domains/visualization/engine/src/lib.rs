@@ -24,6 +24,7 @@ pub mod meadow;
 pub mod mesh_util;
 pub mod model;
 pub mod rocks;
+pub mod pod;
 pub mod scenery;
 pub mod terrain_render;
 pub mod theme;

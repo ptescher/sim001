@@ -4,6 +4,7 @@
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{Image, ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::mesh::{Indices, Mesh, PrimitiveTopology};
+use bevy::math::DVec3;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
@@ -46,22 +47,45 @@ impl GeoBuilder {
         Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, pos)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, smooth_normals(&self.pos, &self.idx))
             .with_inserted_indices(Indices::U32(self.idx))
-            .with_computed_smooth_normals()
             .with_generated_tangents()
             .expect("tangent generation")
     }
 }
 
+/// Smooth vertex normals, each face counting by the angle it makes at the vertex. Done in double
+/// precision: a model in metres has triangles of a few square millimetres, whose normals
+/// underflow single precision, and a vertex with no normal leaves a hole in the shading.
+fn smooth_normals(pos: &[Vec3], idx: &[u32]) -> Vec<[f32; 3]> {
+    let mut acc = vec![DVec3::ZERO; pos.len()];
+    let p = |i: u32| pos[i as usize].as_dvec3();
+    for t in idx.chunks_exact(3) {
+        let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+        let face = (b - a).cross(c - a).normalize_or_zero();
+        for (k, (o, x, y)) in [(a, b, c), (b, c, a), (c, a, b)].into_iter().enumerate() {
+            let angle = (x - o).normalize_or_zero().dot((y - o).normalize_or_zero()).clamp(-1.0, 1.0).acos();
+            acc[t[k] as usize] += face * angle;
+        }
+    }
+    acc.iter().map(|n| n.normalize_or(DVec3::Y).as_vec3().to_array()).collect()
+}
+
 /// Body of revolution-ish loft along +Z. Stations: (z, half_width, half_height, center_y).
 pub fn loft(stations: &[(f32, f32, f32, f32)], center_x: f32, segments: usize, cap_ends: bool) -> Mesh {
+    loft_n(stations, center_x, segments, cap_ends, 2.0)
+}
+
+/// A loft whose sections are `|x|^n + |y|^n = 1`: an ellipse for 2, a rounded rectangle for more.
+pub fn loft_n(stations: &[(f32, f32, f32, f32)], center_x: f32, segments: usize, cap_ends: bool, n: f32) -> Mesh {
     let mut b = GeoBuilder::default();
     let mut rings = Vec::new();
     for (si, &(z, rx, ry, cy)) in stations.iter().enumerate() {
         let mut ring = Vec::new();
         for j in 0..=segments {
             let t = j as f32 / segments as f32 * std::f32::consts::TAU;
-            let p = Vec3::new(center_x + rx * t.cos(), cy + ry * t.sin(), z);
+            let (c, s) = (t.cos(), t.sin());
+            let p = Vec3::new(center_x + rx * c.signum() * c.abs().powf(2.0 / n), cy + ry * s.signum() * s.abs().powf(2.0 / n), z);
             ring.push(b.vert(p, Vec2::new(j as f32 / segments as f32, si as f32 / (stations.len() - 1) as f32)));
         }
         rings.push(ring);
@@ -253,6 +277,24 @@ pub fn texture(size: u32, f: impl Fn(f32, f32) -> [f32; 3]) -> Image {
 
 #[cfg(test)]
 mod tests {
+    /// Parts of a model in metres have triangles of a few square millimetres. Their vertices
+    /// still get unit normals: a zero one turns the shading into a hole.
+    #[test]
+    fn tiny_triangles_still_get_unit_normals() {
+        use super::*;
+        for size in [1.0f32, 1e-2, 3e-3, 1e-3] {
+            let mut b = GeoBuilder::default();
+            let v: Vec<u32> = [Vec3::ZERO, Vec3::X * size, Vec3::new(size, size, 0.0), Vec3::Y * size].iter().map(|p| b.vert(*p, Vec2::ZERO)).collect();
+            b.quad(v[0], v[1], v[2], v[3], Vec3::Z);
+            let m = b.build();
+            let n = m.attribute(Mesh::ATTRIBUTE_NORMAL).and_then(|a| a.as_float3()).unwrap();
+            for p in n {
+                assert!((Vec3::from(*p).length() - 1.0).abs() < 1e-3, "size {size}: normal {p:?}");
+                assert!(p[2] > 0.99, "size {size}: normal {p:?} does not face out");
+            }
+        }
+    }
+
     #[test]
     fn mip_chain_keeps_colour() {
         let img = super::texture(64, |_, _| [0.1, 0.3, 0.05]);

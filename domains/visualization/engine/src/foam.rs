@@ -234,6 +234,48 @@ mod tests {
         assert_eq!(m.indices().unwrap().len() / 3, 12, "same triangles");
     }
 
+    /// A normal map needs a tangent on every vertex, and a tangent that is not a number turns
+    /// the shading normal into one: the ray tracer then keeps a black hole where it was. The
+    /// meshes of the plane (lofts, wing panels, the pod) have finite, unit tangents after
+    /// projection.
+    #[test]
+    fn the_plane_meshes_have_sound_tangents() {
+        use crate::mesh_util::{airfoil_panel, loft, PanelSpec};
+        use simulation_aircraft::t1s_ranger::geom::*;
+        let (wing_top, wing_bottom) = airfoil_panel(&PanelSpec {
+            root_le: Vec3::new(0.0, WING_Y, WING_LE_Z),
+            tip_le: Vec3::new(WING_HALF_SPAN, WING_Y, wing_le_z(WING_HALF_SPAN)),
+            root_chord: wing_chord(0.0),
+            tip_chord: wing_chord(WING_HALF_SPAN),
+            up: Vec3::Y,
+            x0: 0.0,
+            x1: 1.0,
+            thickness: 0.11,
+            camber: 0.03,
+            origin: Vec3::ZERO,
+        });
+        let meshes = [
+            ("pod", crate::pod::mesh()),
+            ("wing top", wing_top),
+            ("wing bottom", wing_bottom),
+            ("boom", loft(&[(0.14, 0.0095, 0.0095, 0.024), (TAIL_END_Z, 0.0075, 0.0075, 0.028)], 0.0, 16, true)),
+        ];
+        for (name, m) in meshes {
+            let m = world_uv(m);
+            let tangents = match m.attribute(Mesh::ATTRIBUTE_TANGENT) {
+                Some(bevy::mesh::VertexAttributeValues::Float32x4(v)) => v.clone(),
+                _ => panic!("{name}: no tangents"),
+            };
+            let normals = m.attribute(Mesh::ATTRIBUTE_NORMAL).and_then(|a| a.as_float3()).unwrap();
+            for (i, (t, n)) in tangents.iter().zip(normals).enumerate() {
+                assert!(t.iter().all(|v| v.is_finite()), "{name}: vertex {i} has tangent {t:?}");
+                let tl = Vec3::new(t[0], t[1], t[2]).length();
+                assert!((tl - 1.0).abs() < 0.05, "{name}: vertex {i} has a tangent of length {tl}");
+                assert!(n.iter().all(|v| v.is_finite()) && (Vec3::from(*n).length() - 1.0).abs() < 0.05, "{name}: vertex {i} has normal {n:?}");
+            }
+        }
+    }
+
     /// Tilted faces stretch the texture by at most what the plane they are projected on allows.
     #[test]
     fn a_slanted_face_is_not_stretched_much() {

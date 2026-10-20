@@ -51,13 +51,20 @@ fn clip_towards_aabb_center(history_color: vec3<f32>, aabb_min: vec3<f32>, aabb_
     return history_color;
 }
 
+// A colour that is not a number (or is absurdly bright) becomes black. One such pixel left in
+// the history would be spread to its neighbours by the resampling (NaN times zero is NaN) and
+// grow until the picture was black.
+fn finite(c: vec3<f32>) -> vec3<f32> {
+    return select(vec3<f32>(0.0), clamp(c, vec3<f32>(0.0), vec3<f32>(60000.0)), c == c);
+}
+
 fn load_current(p: vec2<i32>) -> vec3<f32> {
     let c = clamp(p, vec2<i32>(0), vec2<i32>(u.render_size) - vec2<i32>(1));
-    return rgb_to_ycocg(tonemap(textureLoad(current, c, 0).rgb));
+    return rgb_to_ycocg(tonemap(finite(textureLoad(current, c, 0).rgb)));
 }
 
 fn sample_history(uv: vec2<f32>) -> vec3<f32> {
-    return textureSampleLevel(history, linear_sampler, uv, 0.0).rgb;
+    return finite(textureSampleLevel(history, linear_sampler, uv, 0.0).rgb);
 }
 
 @fragment
@@ -166,7 +173,7 @@ fn upscale(in: FullscreenVertexOutput) -> Output {
         colour = rgb_to_ycocg(mix(past, now, factor));
     }
 
-    let rgb = ycocg_to_rgb(colour);
+    let rgb = finite(ycocg_to_rgb(colour));
     var out: Output;
     out.history = vec4(rgb, confidence);
     out.view_target = vec4(untonemap(rgb), alpha);

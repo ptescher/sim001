@@ -150,38 +150,30 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         children.push(commands.spawn(rt(b.0, b.1, b.2)).id());
     };
 
-    // Fuselage: a broad, flat-topped pod that the wing blends into, with a chin camera.
-    let pod = meshes.add(world_uv(loft(
-        &[
-            (NOSE_Z, 0.006, 0.006, 0.002),
-            (NOSE_Z + 0.008, 0.030, 0.024, 0.004),
-            (NOSE_Z + 0.028, 0.050, 0.037, 0.008),
-            (-0.20, 0.064, 0.045, 0.011),
-            (-0.12, 0.072, 0.050, 0.014),
-            (-0.03, 0.072, 0.050, 0.014),
-            (0.05, 0.062, 0.044, 0.016),
-            (0.11, 0.040, 0.032, 0.020),
-            (0.15, 0.017, 0.017, 0.024),
-        ],
-        0.0,
-        36,
-        false,
-    )));
+    // Fuselage: the pod, from the manufacturer's drawing (see `pod`), with its hatches, vents and slot.
+    let pod = meshes.add(world_uv(crate::pod::mesh()));
     add(&mut children, commands, (pod, m.fuselage.clone(), Transform::IDENTITY));
+    // The markings on it are raster only: they stand a millimetre off the surface, which the
+    // ray tracer would shadow itself with.
+    let details = crate::pod::details();
+    let dark = details.dark;
+    for (i, mesh) in details.meshes.into_iter().enumerate() {
+        let (mesh, material) = if i < dark { (mesh, m.black.clone()) } else { (world_uv(mesh), m.fuselage.clone()) };
+        children.push(commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material), Transform::IDENTITY)).id());
+    }
     // Carbon tail boom, with the accent collar where it meets the pod.
     let boom = meshes.add(loft(&[(0.14, 0.0095, 0.0095, 0.024), (TAIL_END_Z, 0.0075, 0.0075, 0.028)], 0.0, 16, true));
     add(&mut children, commands, (boom, m.carbon.clone(), Transform::IDENTITY));
     let collar = meshes.add(loft(&[(0.148, 0.0125, 0.0125, 0.0245), (0.172, 0.0125, 0.0125, 0.0255)], 0.0, 20, true));
     add(&mut children, commands, (collar, m.accent.clone(), Transform::IDENTITY));
-    // Cooling vent behind the nose, and the carry handle on the back.
-    let vent = meshes.add(cuboid(Vec3::new(0.046, 0.003, 0.026)));
-    add(&mut children, commands, (vent, m.black.clone(), Transform::from_xyz(0.0, 0.0555, -0.225).with_rotation(Quat::from_rotation_x(-0.18))));
+    // The carry handle on the back.
     let post = meshes.add(cuboid(Vec3::new(0.005, 0.016, 0.006)));
     let bar = meshes.add(cuboid(Vec3::new(0.05, 0.004, 0.007)));
+    let top = crate::pod::surface_y(-0.075, true);
     for x in [-0.023, 0.023] {
-        add(&mut children, commands, (post.clone(), m.carbon.clone(), Transform::from_xyz(x, 0.064, -0.075)));
+        add(&mut children, commands, (post.clone(), m.carbon.clone(), Transform::from_xyz(x, top + 0.005, -0.075)));
     }
-    add(&mut children, commands, (bar, m.carbon.clone(), Transform::from_xyz(0.0, 0.074, -0.075)));
+    add(&mut children, commands, (bar, m.carbon.clone(), Transform::from_xyz(0.0, top + 0.015, -0.075)));
     // FPV camera: a dark chin window and its lens.
     let chin = meshes.add(cuboid(Vec3::new(0.036, 0.020, 0.012)));
     add(&mut children, commands, (chin, m.canopy.clone(), Transform::from_xyz(0.0, -0.004, NOSE_Z + 0.022).with_rotation(Quat::from_rotation_x(-0.35))));
