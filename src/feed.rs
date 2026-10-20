@@ -22,10 +22,10 @@ use std::time::{Duration, Instant};
 use recreation_games::Kind;
 use teleoperation_shared::feed::{Arena, ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, GameClock, GameKind, GameStatus, Gimbal, write_frame};
 
-/// Camera position in the airframe (Bevy body axes: +X right, +Y up, -Z forward): a small
-/// sensor ball just ahead of and below the nose tip, clear of the fuselage so it never looks
-/// out through the hull.
-const MOUNT: Vec3 = Vec3::new(0.0, -0.008, simulation_aircraft::t1s_ranger::geom::NOSE_Z - 0.02);
+/// Camera position in the airframe (Bevy body axes: +X right, +Y up, -Z forward): the lens of the
+/// gimbal hanging under the front of the pod, on the surface of its ball (see `optics`), so that
+/// the camera looks out of the ball and never through the hull.
+const MOUNT: Vec3 = visualization_engine::optics::SENSOR_MOUNT;
 const IDLE_SIZE: UVec2 = UVec2::new(64, 36);
 const MAX_FPS: f64 = 30.0;
 /// Gimbal slew rate, degrees per second.

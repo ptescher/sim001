@@ -87,7 +87,9 @@ pub struct Mats {
     carbon: Handle<StandardMaterial>,
     black: Handle<StandardMaterial>,
     metal: Handle<StandardMaterial>,
-    canopy: Handle<StandardMaterial>,
+    /// White plastic (the gimbal) and camera glass.
+    white: Handle<StandardMaterial>,
+    glass: Handle<StandardMaterial>,
     prop: Handle<StandardMaterial>,
 }
 
@@ -140,7 +142,8 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         carbon: mat(materials, Color::srgb(0.04, 0.042, 0.048), 0.3, 0.2),
         black: mat(materials, Color::srgb(0.02, 0.02, 0.024), 0.5, 0.0),
         metal: mat(materials, Color::srgb(0.30, 0.30, 0.33), 0.28, 1.0),
-        canopy: mat(materials, Color::srgb(0.01, 0.015, 0.03), 0.06, 0.0),
+        white: mat(materials, Color::srgb(0.78, 0.78, 0.80), 0.42, 0.0),
+        glass: mat(materials, Color::linear_rgb(0.004, 0.018, 0.014), 0.04, 0.0),
         prop: mat(materials, Color::srgb(0.08, 0.08, 0.09), 0.45, 0.0),
     };
 
@@ -174,11 +177,18 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         add(&mut children, commands, (post.clone(), m.carbon.clone(), Transform::from_xyz(x, top + 0.005, -0.075)));
     }
     add(&mut children, commands, (bar, m.carbon.clone(), Transform::from_xyz(0.0, top + 0.015, -0.075)));
-    // FPV camera: a dark chin window and its lens.
-    let chin = meshes.add(cuboid(Vec3::new(0.036, 0.020, 0.012)));
-    add(&mut children, commands, (chin, m.canopy.clone(), Transform::from_xyz(0.0, -0.004, NOSE_Z + 0.022).with_rotation(Quat::from_rotation_x(-0.35))));
-    let lens = meshes.add(loft(&[(0.0, 0.007, 0.007, 0.0), (0.008, 0.0075, 0.0075, 0.0)], 0.0, 16, true));
-    add(&mut children, commands, (lens, m.metal.clone(), Transform::from_xyz(0.0, -0.002, NOSE_Z + 0.01).with_rotation(Quat::from_rotation_x(-0.35))));
+    // The camera in the nose, in its recess; and the gimbal under the belly (see `optics`).
+    let nose = crate::optics::nose_camera();
+    let kind_material = |k: crate::optics::Kind| match k {
+        crate::optics::Kind::Black => m.black.clone(),
+        crate::optics::Kind::White => m.white.clone(),
+        crate::optics::Kind::Glass => m.glass.clone(),
+        crate::optics::Kind::Metal => m.metal.clone(),
+    };
+    add(&mut children, commands, (meshes.add(nose.bulkhead), m.black.clone(), Transform::IDENTITY));
+    for part in nose.parts.into_iter().chain(crate::optics::gimbal()) {
+        add(&mut children, commands, (meshes.add(part.mesh), kind_material(part.kind), part.at));
+    }
     // Wings: inner panel (full chord), outer panel (ahead of aileron) and aileron.
     for side in [-1.0f32, 1.0] {
         let up = Vec3::new(-side * WING_DIHEDRAL.sin(), WING_DIHEDRAL.cos(), 0.0);
