@@ -80,6 +80,67 @@ pub struct ArduPilotLink {
     pub gcs: Option<(Instant, bool, String)>,
     /// ArduPilot says its pre-arm checks pass (its SYS_STATUS), so that it will arm.
     pub prearm_ok: bool,
+    /// What ArduPilot says and reports, for the tests: when one fails, this is what it saw.
+    pub watch: ApWatch,
+}
+
+/// ArduPilot as the sim's own MAVLink link hears it: its recent messages and last readings.
+#[derive(Clone, Debug, Default)]
+pub struct ApWatch {
+    /// The newest STATUSTEXTs, oldest first.
+    pub messages: std::collections::VecDeque<String>,
+    /// The estimator's status flags (EKF_STATUS_REPORT), once heard.
+    pub ekf_flags: Option<u16>,
+    /// The channels ArduPilot received (RC_CHANNELS), in µs.
+    pub rc: Option<[u16; 8]>,
+    /// The outputs it drives (SERVO_OUTPUT_RAW), in µs.
+    pub servo: Option<[u16; 8]>,
+    /// Height above home in m, climb in m/s and throttle in % (VFR_HUD).
+    pub hud: Option<(f32, f32, u16)>,
+}
+
+impl ApWatch {
+    /// The estimator can fly on: attitude, horizontal and vertical velocity, and relative and
+    /// absolute horizontal position and vertical position are all good. ArduPilot may not send
+    /// its estimator status; then there is nothing to wait for.
+    pub fn estimator_ready(&self) -> bool {
+        const NEEDED: u16 = 1 | 2 | 4 | 8 | 16 | 32;
+        self.ekf_flags.is_none_or(|f| f & NEEDED == NEEDED)
+    }
+
+    pub fn say(&mut self, text: String) {
+        if self.messages.len() >= 30 {
+            self.messages.pop_front();
+        }
+        self.messages.push_back(text);
+    }
+
+    /// What ArduPilot was doing, in a few lines, for a test that did not get what it waited for.
+    pub fn report(&self, mode: Option<(bool, &str)>) -> String {
+        let mut o = String::from("ArduPilot: ");
+        match mode {
+            Some((armed, m)) => o.push_str(&format!("{m}, {}", if armed { "armed" } else { "disarmed" })),
+            None => o.push_str("no heartbeat"),
+        }
+        match self.ekf_flags {
+            Some(f) => o.push_str(&format!("; estimator flags {f:#06x}{}", if self.estimator_ready() { " (ready)" } else { " (not ready)" })),
+            None => o.push_str("; no estimator status"),
+        }
+        if let Some(rc) = self.rc {
+            o.push_str(&format!("; it receives {rc:?}"));
+        }
+        if let Some(s) = self.servo {
+            o.push_str(&format!("; it drives {s:?}"));
+        }
+        if let Some((alt, climb, thr)) = self.hud {
+            o.push_str(&format!("; {alt:.1} m, climb {climb:+.1} m/s, throttle {thr} %"));
+        }
+        let last: Vec<&str> = self.messages.iter().rev().take(8).map(String::as_str).collect();
+        if !last.is_empty() {
+            o.push_str(&format!("; it said: {}", last.into_iter().rev().collect::<Vec<_>>().join(" | ")));
+        }
+        o
+    }
 }
 
 impl ArduPilotLink {
@@ -203,6 +264,7 @@ impl SimCore {
                 status: String::from("waiting for SITL"),
                 gcs: None,
                 prearm_ok: false,
+                watch: ApWatch::default(),
             },
             pid: PidState::default(),
             launch_hold: 0.0,
@@ -385,6 +447,8 @@ impl SimCore {
             self.step_standalone(dt);
             return;
         }
+        // The tests' stand-in pilot holds the sticks through the hook, as it does without ArduPilot.
+        self.run_hook(dt);
         // What each output does is in the plane's description (for the T1-S, SERVO1 to SERVO5
         // are the aileron, the V-tail panels and the throttles: see ardupilot/t1s.parm).
         let cmd = ActuatorCommands::from_pwm(&self.params, pwm);

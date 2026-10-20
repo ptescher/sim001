@@ -94,6 +94,17 @@ pub fn watch_heartbeat(core: Arc<Mutex<SimCore>>) {
             };
             let mut parser = communication_telemetry::Parser::default();
             let mut buf = [0u8; 512];
+            let trace = std::env::var_os("SIM001_TRACE_AP").is_some();
+            let mut last_trace = Instant::now();
+            // Ask for every stream at 4 Hz, so that the tests can see what ArduPilot sees.
+            let mut ask = communication_telemetry::MavMessage::REQUEST_DATA_STREAM(Default::default());
+            if let communication_telemetry::MavMessage::REQUEST_DATA_STREAM(r) = &mut ask {
+                r.req_message_rate = 4;
+                r.target_system = 1;
+                r.target_component = 1;
+                r.start_stop = 1;
+            }
+            let _ = std::io::Write::write_all(&mut stream, &communication_telemetry::frame(255, 190, 0, &ask));
             while let Ok(n) = std::io::Read::read(&mut stream, &mut buf) {
                 if n == 0 {
                     break;
@@ -103,7 +114,27 @@ pub fn watch_heartbeat(core: Arc<Mutex<SimCore>>) {
                     // What ArduPilot says (why it won't arm, for one) goes to the terminal.
                     if let communication_telemetry::MavMessage::STATUSTEXT(t) = &msg {
                         let text: Vec<u8> = t.text.iter().copied().take_while(|b| *b != 0).collect();
-                        println!("ArduPilot: {}", String::from_utf8_lossy(&text));
+                        let text = String::from_utf8_lossy(&text).into_owned();
+                        println!("ArduPilot: {text}");
+                        core.lock().unwrap().ap.watch.say(text);
+                    }
+                    // SIM001_TRACE_AP=1: what ArduPilot sees, once a second, in the terminal.
+                    if trace && last_trace.elapsed() > Duration::from_secs(1) {
+                        last_trace = Instant::now();
+                        let c = core.lock().unwrap();
+                        println!("ap-trace: [t {:.0} s, sticks {:.2}, ground {}] {}", c.state.time, c.sticks.throttle, c.state.on_ground, c.ap.watch.report(c.ap.vehicle()));
+                    }
+                    use communication_telemetry::MavMessage as M;
+                    match &msg {
+                        M::ESTIMATOR_STATUS(e) => core.lock().unwrap().ap.watch.ekf_flags = Some(e.flags.bits()),
+                        M::RC_CHANNELS(r) => {
+                            core.lock().unwrap().ap.watch.rc = Some([r.chan1_raw, r.chan2_raw, r.chan3_raw, r.chan4_raw, r.chan5_raw, r.chan6_raw, r.chan7_raw, r.chan8_raw])
+                        }
+                        M::SERVO_OUTPUT_RAW(s) => {
+                            core.lock().unwrap().ap.watch.servo = Some([s.servo1_raw, s.servo2_raw, s.servo3_raw, s.servo4_raw, s.servo5_raw, s.servo6_raw, s.servo7_raw, s.servo8_raw])
+                        }
+                        M::VFR_HUD(h) => core.lock().unwrap().ap.watch.hud = Some((h.alt, h.climb, h.throttle)),
+                        _ => {}
                     }
                     // MAV_SYS_STATUS_PREARM_CHECK: ArduPilot's own pre-arm checks pass.
                     if let communication_telemetry::MavMessage::SYS_STATUS(st) = &msg {

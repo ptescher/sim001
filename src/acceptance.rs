@@ -196,10 +196,12 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
             // The games are played by computer pilots, and how a game goes is not the same twice:
             // a test that fails once gets one more go, and says so.
             let mut retried = false;
+            say_what_ardupilot_did(&driver, &r);
             if matches!(r.status, expectation_story::Status::Failed) && std::env::var("SIM001_EXPECT_NO_RETRY").is_err() {
                 println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, started.elapsed().as_secs_f32());
                 r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts).results.into_iter().next().unwrap();
                 retried = true;
+                say_what_ardupilot_did(&driver, &r);
             }
             let took = started.elapsed().as_secs_f32();
             let again = if retried { ", on the second go" } else { "" };
@@ -434,7 +436,12 @@ impl SimDriver {
             self.wait(LOOK)?;
             waited += LOOK;
         }
-        Err(format!("waited {secs:.0} s for {what}"))
+        // With ArduPilot, say what it was doing: it is the usual reason a wait runs out.
+        let seen = self.sim(|c| c.ap.enabled.then(|| c.ap.watch.report(c.ap.vehicle())))?;
+        Err(match seen {
+            Some(seen) => format!("waited {secs:.0} s for {what}. {seen}"),
+            None => format!("waited {secs:.0} s for {what}"),
+        })
     }
 
     /// Give the stand-in pilot a job.
@@ -505,6 +512,7 @@ impl SimDriver {
     /// changes, so a press before they pass is lost.
     fn arm(&self) -> Result<(), String> {
         self.until(180.0, "ArduPilot's pre-arm checks to pass", |c| c.ap.prearm_ok)?;
+        self.until(60.0, "ArduPilot's estimator to be ready", |c| c.ap.watch.estimator_ready())?;
         self.press(KeyCode::KeyB)
     }
 
@@ -520,6 +528,16 @@ impl SimDriver {
             w.resource_mut::<ButtonInput<KeyCode>>().press(key);
             w.resource_mut::<Pressed>().0.push(key);
         })
+    }
+}
+
+/// A failed test with ArduPilot flying the plane: what ArduPilot was doing when it ended.
+fn say_what_ardupilot_did(driver: &SimDriver, r: &expectation_story::PlanResult) {
+    if !matches!(r.status, expectation_story::Status::Failed) {
+        return;
+    }
+    if let Ok(Some(seen)) = driver.sim(|c| c.ap.enabled.then(|| c.ap.watch.report(c.ap.vehicle()))) {
+        println!("expect:   {seen}");
     }
 }
 
@@ -545,6 +563,7 @@ impl Driver for SimDriver {
                 c.ap.connected = false;
                 c.ap.gcs = None;
                 c.ap.prearm_ok = false;
+                c.ap.watch = Default::default();
                 c.ap.arm_switch = false;
                 c.ap.mode_index = 0;
             })?;
@@ -623,6 +642,7 @@ impl Driver for SimDriver {
                     self.arm()?;
                     self.until(30.0, "ArduPilot to arm", |c| c.ap.vehicle().is_some_and(|(a, _)| a))?;
                 }
+                self.standin.lock().unwrap().held.throttle = 0.8;
                 self.press(KeyCode::Digit4)?;
                 self.until(60.0, "the plane to lift off", |c| !c.state.on_ground && c.state.pos.y - crate::terrain::ground_height(c.state.pos.x, c.state.pos.z) > 3.0)
             }
@@ -716,16 +736,20 @@ impl Driver for SimDriver {
         if event.key == "pilot sends the plane home" {
             // N picks the next mode of the radio, and the last one is QRTL.
             let last = self.sim(|c| c.params.rc_modes.len().saturating_sub(1))?;
-            while self.sim(|c| c.ap.mode_index)? != last {
-                self.press(KeyCode::KeyN)?;
-                self.wait(LOOK)?;
-            }
+            // (Press N through the modes and the plane would pass FBWA and CRUISE in the hover:
+            // a real pilot presses button 6.)
+            self.sim(move |c| c.ap.mode_index = last)?;
             return Ok(());
         }
         if FLOWN.contains(&event.key.as_str()) {
             return self.fly(&event.key);
         }
         let key = KEYS.iter().find(|(k, _)| *k == event.key).map(|(_, k)| *k).ok_or("no key for it")?;
+        if event.key == "pilot opens the throttle to climb" {
+            // The test's stand-in pilot holds the sticks, written over the keyboard every frame:
+            // hold the 80 % that the key sets.
+            self.standin.lock().unwrap().held.throttle = 0.8;
+        }
         self.press(key)
     }
 
