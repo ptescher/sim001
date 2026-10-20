@@ -11,9 +11,9 @@
   body { margin: 0; background: var(--canvas); color: var(--text); font: 16px/1.55 var(--font-sans); }
   a { color: var(--info); }
   .wrap { max-width: 62rem; margin: 0 auto; padding: 0 16px; }
-  header.hero { background: var(--screen); border-bottom: 1px solid var(--bezel-edge); }
-  .hero img { display: block; width: 100%; max-height: 28rem; object-fit: cover; }
-  .hero .wrap { padding-top: 1.5rem; padding-bottom: 2rem; }
+  header.hero .wrap { padding-top: 2.5rem; padding-bottom: 2rem; }
+  .hero img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin-top: 2rem;
+              border-radius: var(--radius-panel); border: 1px solid var(--bezel-edge); }
   h1 { margin: 0 0 .25rem; font-size: 2.4rem; letter-spacing: -.01em; }
   .tag { margin: 0 0 1.25rem; color: var(--muted); font-size: 1.15rem; max-width: 40rem; }
   .btns { display: flex; gap: .75rem; flex-wrap: wrap; }
@@ -37,7 +37,6 @@
 </head>
 <body>
 <header class="hero">
-  <img src="chase_forest.jpg" alt="The T1-S flying over an alpine meadow, seen from the chase camera">
   <div class="wrap">
     <h1>SIM001</h1>
     <p class="tag">A flight simulator for practising with small FPV planes. A 6-DOF flight model, a real ArduPilot flight controller, and your own radio.</p>
@@ -46,6 +45,7 @@
       <a class="btn" href="docs/site/page-installing.html">Install</a>
       <a class="btn" href="https://github.com/ptescher/sim001">Source on GitHub</a>
     </div>
+    <img src="chase_forest.jpg" alt="The T1-S flying over an alpine meadow, seen from the chase camera">
   </div>
 </header>
 <main class="wrap">
