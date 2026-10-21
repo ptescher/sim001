@@ -27,7 +27,7 @@ esac
 
 if [ $build = 1 ]; then
   echo "== building the sim, the viewer, the tag runner, the expectation tool, the map builder, the console and the launcher"
-  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation_cli
+  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation
   (cd domains/visualization/mapbuild && cargo build --release)
   (cd domains/teleoperation/console && cargo build --release)
   (cd domains/teleoperation/launcher && cargo build --release)
@@ -46,7 +46,7 @@ if [ ! -f domains/teleoperation/console/assets/terrain_map.png ]; then
 fi
 if [ $docs = 1 ]; then
   echo "== rendering the docs from the saved test results"
-  cargo run -q --release -p expectation_cli -- docs expectations docs || echo "(docs not re-rendered: using docs/ as it is)"
+  cargo run -q --release -p expectation -- docs expectations docs || echo "(docs not re-rendered: using docs/ as it is)"
 fi
 
 OUT=target/bundle

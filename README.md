@@ -201,11 +201,11 @@ From `--selftest`, that gives hands-off trim at about 13 m/s, a stall at about 9
 Each feature is written there as Given/When/Then expectations in a shared vocabulary. Conflicting expectations are detected, and exceptions are declared with `Overrides:` (pausing holds the plane even with the throttle up, for example). User stories walk through the expectations, and each one becomes an acceptance test. Running the tests presses the real keys, reads the sim's state and takes a screenshot at every step:
 
 ```bash
-cargo run -p expectation_cli -- check expectations        # conflicts, coverage, story problems (no window)
+cargo run -p expectation -- check expectations        # conflicts, coverage, story problems (no window)
 cargo run --release -- --expect                           # run the tests in the sim window
 cargo run --release -- --expect --docs docs               # ...and rewrite docs/ from the results
 (cd domains/teleoperation/console && cargo run --release -- --station --expect --docs ../../../docs)   # the same for the console (needs Docker)
-cargo run -p expectation_cli -- docs expectations docs    # rewrite docs/ from the saved results
+cargo run -p expectation -- docs expectations docs    # rewrite docs/ from the saved results
 cargo run --release -p sim001_tasks -- docs                # every runner in turn, with a time limit on each, then the docs
 cargo run --release -p sim001_tasks -- pack-docs          # the manual's results and screenshots, packed into site/ for Pages
 cargo run --release -- --aircraft t1s-vtol --direct --expect --docs docs   # the sim's tests for a plane with a flight controller (ArduPilot beside it)
@@ -213,4 +213,4 @@ cargo run --release -- --aircraft t1s-vtol --direct --expect --docs docs   # the
 
 The domains' own tests (what the radios tell the station, the flight computer and the TX15's screen, the view of a real plane) run with no window, and `SIM001_DOCS=docs cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry --test acceptance` puts their results and pictures in the docs beside the others. The TX15's screen is drawn as an SVG from the same layout as its widget. Each runner keeps its own results in `docs/results/`, and the docs merge them. Time limits: `SIM001_EXPECT_TIMEOUT` (the sim's, 40 s a test) and `SIM001_EXPECT_SPEED` (how much faster than real time the sim runs for them, 8).
 
-The run takes a few minutes and keeps the window on top, because screenshots need it visible. Connected controllers are ignored, so the keys behave the same every time. `cargo test` checks the suite without a window. The system behind this is the [expectation](domains/expectation/README.md) domain. The repo is one Cargo workspace laid out as workspace → domain → module (see [domains/README.md](domains/README.md)).
+The run takes a few minutes and keeps the window on top, because screenshots need it visible. Connected controllers are ignored, so the keys behave the same every time. `cargo test` checks the suite without a window. The system behind this is [expectation](https://github.com/ptescher/expectation). The repo is one Cargo workspace laid out as workspace → domain → module (see [domains/README.md](domains/README.md)).

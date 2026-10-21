@@ -6,7 +6,7 @@ name: Pages
 on:
   push:
     branches: [master]
-    paths: [site/**, expectations/**, domains/expectation/**, domains/illustration/**, .github/workflows/pages.yml]
+    paths: [site/**, expectations/**, tools/expectation/**, domains/illustration/**, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir out
           cp -r site/results site/screenshots out/
-          cargo run -q -p expectation_cli -- docs expectations out
+          cargo run -q -p expectation -- docs expectations out
       - name: Assemble the site
         run: |
           mkdir -p _site/docs

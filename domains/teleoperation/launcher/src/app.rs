@@ -297,7 +297,7 @@ impl Launcher {
     /// Writes the manual from the saved test results (`expectation docs`).
     fn render_docs(&mut self) {
         let args =
-            ["run", "-q", "-p", "expectation_cli", "--", "docs", "expectations", "docs"].map(String::from).to_vec();
+            ["run", "-q", "-p", "expectation", "--", "docs", "expectations", "docs"].map(String::from).to_vec();
         self.run("Render the docs", "cargo", args, layout().home.clone());
     }
 

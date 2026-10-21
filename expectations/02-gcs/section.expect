@@ -20,7 +20,7 @@ Section: Ground control station
 
 Vocabulary:
   # The suite is about the desktop console, and the iOS app does the same job. Lines tagged
-  # [iOS] are what differs there; see domains/expectation/README.md, "Platforms".
+  # [iOS] are what differs there; see the expectation README, "Platforms" (https://github.com/ptescher/expectation).
   Platform: desktop | iOS
   State: the link is connected | lost
   State: the vehicle is disarmed | armed

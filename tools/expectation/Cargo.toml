@@ -1,0 +1,12 @@
+[package]
+name = "expectation"
+version = "0.1.0"
+edition = "2024"
+description = "The expectation command (check, graph, plan, docs), from github.com/ptescher/expectation"
+
+[dependencies]
+expectation_cli = { git = "https://github.com/ptescher/expectation" }
+
+[[bin]]
+name = "expectation"
+path = "src/main.rs"

@@ -2782,8 +2782,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "expectation"
+version = "0.1.0"
+dependencies = [
+ "expectation_cli",
+]
+
+[[package]]
 name = "expectation_cli"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_docs",
  "expectation_graph",
@@ -2795,25 +2803,27 @@ dependencies = [
 [[package]]
 name = "expectation_docs"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_graph",
  "expectation_model",
  "expectation_story",
- "illustration_theme",
+ "expectation_theme",
 ]
 
 [[package]]
 name = "expectation_graph"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
- "expectation_language",
  "expectation_model",
- "illustration_theme",
+ "expectation_theme",
 ]
 
 [[package]]
 name = "expectation_harness"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_docs",
  "expectation_graph",
@@ -2826,6 +2836,7 @@ dependencies = [
 [[package]]
 name = "expectation_language"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_model",
 ]
@@ -2833,19 +2844,26 @@ dependencies = [
 [[package]]
 name = "expectation_model"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 
 [[package]]
 name = "expectation_service"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 
 [[package]]
 name = "expectation_story"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_graph",
- "expectation_language",
  "expectation_model",
 ]
+
+[[package]]
+name = "expectation_theme"
+version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 
 [[package]]
 name = "fastrand"

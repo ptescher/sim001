@@ -25,8 +25,8 @@ Where things are:
 | What | Where |
 | --- | --- |
 | The suite | `expectations/` (one directory per docs section; `section.expect` holds its `Section:`, `Vocabulary:` and `Background:`) |
-| The language and docs generator | `domains/expectation/` (README.md describes both) |
-| How steps become instructions | `domains/expectation/docs/src/voice.rs` |
+| The language and docs generator | [https://github.com/ptescher/expectation](https://github.com/ptescher/expectation) (its README describes both); the source Cargo checked out is under `~/.cargo/git/checkouts/expectation-*` |
+| How steps become instructions | `crates/docs/src/voice.rs` in that repo |
 | The sim's test driver | `src/acceptance.rs` (`KEYS` maps each event to a key) |
 | The generated manual | `docs/` (Markdown) and `docs/site/` (HTML). Never edit these by hand |
 
@@ -73,8 +73,8 @@ with `Overrides:`.
 ### 3. Check the graph
 
 ```bash
-cargo run -p expectation_cli -- check expectations      # errors and warnings; exits 1 on errors
-cargo run -p expectation_cli -- graph expectations      # the flow DAG as Mermaid
+cargo run -p expectation -- check expectations      # errors and warnings; exits 1 on errors
+cargo run -p expectation -- graph expectations      # the flow DAG as Mermaid
 ```
 
 Fix every error. Conflicts mean two expectations promise different things in the same
@@ -96,7 +96,7 @@ In the section's `stories.expect`. Each story is one tutorial page:
   list what the expectations promise, which is accurate but often wordy.
 
 ```bash
-cargo run -p expectation_cli -- plan expectations       # each tutorial as test steps and checks
+cargo run -p expectation -- plan expectations       # each tutorial as test steps and checks
 ```
 
 A plan that stops early, or a story error, means the story relies on behaviour no
@@ -117,7 +117,7 @@ That's expected; don't remove stories because of it.
 ### 6. Generate the docs
 
 ```bash
-cargo run -p expectation_cli -- docs expectations docs   # from the results saved in docs/results
+cargo run -p expectation -- docs expectations docs   # from the results saved in docs/results
 cargo run --release -- --expect --docs docs              # or run the sim's tests and get screenshots
 ```
 
@@ -148,10 +148,11 @@ For each finding, change the spec, not the generated page: a vague step needs a 
 `Say:`, a phrase, or a `Then`; a missing why needs a description; a confusing title needs a
 better name; a state dump in "Before you begin" needs a setup phrase. Only when a finding is
 about how every page words something (a rule in `voice.rs`, or a page layout in
-`domains/expectation/docs/src/`) change the generator, and then run its tests:
+`crates/docs/src/`) change the generator in a checkout of [https://github.com/ptescher/expectation](https://github.com/ptescher/expectation), run its tests
+there, push, and `cargo update -p expectation_harness` here:
 
 ```bash
-cargo test -p expectation_docs -p expectation_language -p expectation_story
+cargo test -p expectation_docs -p expectation_language -p expectation_story   # in the expectation repo
 ```
 
 Then go back to step 3: check, regenerate and audit again. Reuse the same audit agent with

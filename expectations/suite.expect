@@ -2,9 +2,9 @@
 # docs (a leading 01- only orders it), and a section's Background is the setup everything in
 # it starts from, on top of its parent's. See .claude/skills/writing-specs for how to write them.
 #
-#   cargo run -p expectation_cli -- check expectations              check it (no window)
+#   cargo run -p expectation -- check expectations              check it (no window)
 #   cargo run --release -- --expect --docs docs                     run the sim's tests, write docs/
-#   cargo run -p expectation_cli -- docs expectations docs          rewrite docs/ from saved results
+#   cargo run -p expectation -- docs expectations docs          rewrite docs/ from saved results
 
 Suite: SIM001
   SIM001 is a flight simulator for small FPV planes. It supports two planes of the HEEWING

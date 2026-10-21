@@ -1,7 +1,7 @@
 # Spec style
 
 How to write `.expect` files that make good tests and good docs. The language itself is
-described in `domains/expectation/README.md`; this is how to use it well.
+described in the [expectation README](https://github.com/ptescher/expectation); this is how to use it well.
 
 ## The one test
 
