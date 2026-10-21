@@ -259,9 +259,11 @@ fn viewer(shared: &Arc<Shared>, core: Arc<Mutex<SimCore>>, mut stream: TcpStream
                     Ok(ClientMsg::Gimbal(g)) => *shared.commanded.lock().unwrap() = Some(g),
                     Ok(ClientMsg::Status(st)) => core.lock().unwrap().ap.gcs = Some((Instant::now(), st.armed, st.mode)),
                     Ok(ClientMsg::Radio(r)) => core.lock().unwrap().test_radio = Some(r),
+                    Ok(ClientMsg::Key(teleoperation_shared::feed::Key::Reset)) => core.lock().unwrap().reset(),
                     Ok(ClientMsg::Key(k)) => core.lock().unwrap().toggle_game(match k {
                         teleoperation_shared::feed::Key::Race => Kind::Race,
                         teleoperation_shared::feed::Key::Tag => Kind::Tag,
+                        teleoperation_shared::feed::Key::Reset => unreachable!("handled above"),
                     }),
                     Err(_) => {}
                 }

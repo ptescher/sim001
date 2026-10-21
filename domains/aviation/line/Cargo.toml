@@ -1,0 +1,10 @@
+[package]
+name = "aviation_line"
+version = "0.1.0"
+edition = "2024"
+description = "Aviation domain: the TX15's end of the serial line as a driver (sticks and switches in, screen and MAVLink out), over TCP, a serial device or an in-memory mock"
+
+[dependencies]
+aviation_computer = { path = "../computer" }
+aviation_crsf = { path = "../crsf" }
+simulation_aircraft = { path = "../../simulation/aircraft" }
