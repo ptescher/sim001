@@ -1,0 +1,41 @@
+Feature: The loop
+  The league runs [[generation]]s, one after the other. In each generation, each
+  [[strategy]] gives [[challenger]]s. The league plays them all, and promotes the best one that
+  passes. It writes all of it in the folder `league`.
+
+  There are three strategies. The evolution strategy (`es`) gives 8 challengers near a point
+  of its own, at random. After each generation it moves the point to its two best challengers,
+  also when none of them was promoted. Thus small gains add up until one challenger is clearly
+  better than the champion. The Claude tuner
+  (`claude-tuner`) reads the report of the last generation and gives new numbers, with its
+  reasons. The Claude engineer (`claude-engineer`) changes the code of the executor or the
+  tactics in a git worktree of its own.
+
+  The league does not trust what a strategy says. It runs the tests of the executor on the
+  code of each Claude engineer, and refuses code that fails them. It refuses code that changes
+  the [[safety envelope]]. A promoted change to the code goes on the branch `league/champion`.
+  The league never merges it into `master`.
+
+  Expectation: Each generation is written down
+    Given the league is new
+    When the league runs one generation with the evolution strategy
+    Then the challengers in the history are 8
+    And the report of the generation is written
+    And the champion file is written
+
+  Expectation: The evolution strategy improves on a slow start
+    Given the league is started from the slow executor
+    When the league runs 5 generations with the evolution strategy
+    Then the score of the champion against the slow executor is at least 0.05
+
+  Expectation: A challenger whose tests fail stays out
+    Given the league is new
+    When a Claude strategy gives a challenger whose tests fail
+    Then the verdict is refused
+    And the reason is its tests fail
+
+  Expectation: A challenger that changes the envelope stays out
+    Given the league is new
+    When a Claude strategy gives a challenger that changes the envelope
+    Then the verdict is refused
+    And the reason is it changes the envelope

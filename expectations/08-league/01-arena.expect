@@ -1,0 +1,39 @@
+Feature: Games in the fast arena
+  The [[fast arena]] plays a game of [[tag]] with no window and no [[SITL]]. Four planes play.
+  The candidate is the first plane, and the three [[computer pilot]]s are the others. The
+  computer pilots fly with their own hands, not with the executor. Thus they are the same for
+  every candidate.
+
+  The candidate flies the T1-S Ranger, as the computer pilots do. Its [[ground control agent]]
+  gives a plan once a second, and the [[executor]] flies it 50 times a second. A small model of
+  the roll and pitch controllers of ArduPilot flies the demand. The other planes reach the
+  executor as tracks, late and with some lost, as from a radio.
+
+  A plane tags another when it comes within 8 m: a virtual touch. In the simulator the touch is
+  1.5 m, but the executor keeps 4 m from other aircraft, so it could never tag. Each game has a
+  seed. The seed sets the wind, who is it first, the delay and the loss
+  of the tracks. The same seed gives the same game.
+
+  The score of a game is the reward of the plan for tag: -1 for each 120 s as [[it]], +0.2 for
+  each tag, -0.2 for each time tagged, -0.3 for each exit from the arena and -1 for a crash. The
+  plane that is it for the least time gets +1, then +0.3, -0.3 and -1.
+
+  Expectation: A game in the arena is a game of tag with the computer pilots
+    When the arena plays a game with the default executor
+    Then the length of the game is 120 s
+    And the players in the game are 4
+    And the time the candidate flew by plan is above 90 s
+    And the crashes of the candidate are 0
+
+  Expectation: The same seed plays the same game
+    The league compares two executors on the same seeds. Thus a difference in the score comes
+    from the executors, not from the luck of the game.
+
+    When the arena plays the same seed twice
+    Then the two games are the same
+
+  Expectation: The arena plays much faster than real time
+    The arena plays many games at the same time, one on each core.
+
+    When the arena plays 64 games with the default executor
+    Then the speed of the arena is at least 200 times real time

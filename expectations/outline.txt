@@ -31,6 +31,7 @@ Part: Beyond the cockpit
   Section: The TX15 on the serial line
   Section: Watching a real plane
   Section: Flying by plan
+  Section: Making the executor better
 
 Part: Reference
   Page: places-and-scenery [desktop]

@@ -1,0 +1,40 @@
+Feature: Promotion
+  The [[challenger]] and the [[champion]] play the same 256 seeds. For each seed, the league
+  subtracts the score of the champion from the score of the challenger. The challenger is
+  better if the mean of these differences is more than 0, with 95 % confidence. When a
+  generation has more challengers, each one must be surer, so that luck does not promote one of
+  many.
+
+  The games are noisy. The difference between two executors in one game is often 0.7 or more.
+  With 256 games, the league can see a difference of about 0.1.
+
+  A better challenger becomes the champion only if it is also safe. It must not crash. It must
+  not leave the arena clearly more often than the champion: more than two standard deviations
+  of chance (with 9 exits for the champion, 15 is too many). The [[safety envelope]] must not change its
+  demands more than 2 times as often as for the champion. A chaser that follows its target to
+  the edge of the arena makes the [[fence]] turn it back more often, so a better executor can
+  need the envelope a little more.
+
+  Expectation: A challenger that scores better on the same seeds becomes the champion
+    Given the champion is the slow executor
+    And the challenger is the default executor
+    When the league judges the challenger
+    Then the verdict is promoted
+
+  Expectation: A challenger that scores worse stays out
+    Given the champion is the default executor
+    And the challenger is the slow executor
+    When the league judges the challenger
+    Then the verdict is kept out
+
+  Expectation: A challenger that crashes stays out, whatever it scores
+    A crash in the arena is a crash of a real plane later. No score makes up for it.
+
+    Overrides: A challenger that scores better on the same seeds becomes the champion
+
+    Given the champion is the slow executor
+    And the challenger is the default executor
+    And the crashes of the candidate are 1
+    When the league judges the challenger
+    Then the verdict is refused
+    And the reason is it crashed

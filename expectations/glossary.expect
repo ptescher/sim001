@@ -323,3 +323,32 @@ Term: COMMAND_ACK
 Term: EKF
   The extended Kalman filter of ArduPilot. It estimates the position, the velocity and the
   attitude of the plane from its sensors.
+
+Term: League
+  The program that makes the [[executor]] better by itself: `cognition_league`. It keeps the
+  [[champion]], runs [[generation]]s of [[challenger]]s, and writes what it did in the folder
+  `league`.
+
+Term: Champion
+  The best executor that the [[league]] found so far: a [[tuning]], tactics and code.
+
+Term: Challenger
+  A new executor that a [[strategy]] gives to the [[league]], to play against the
+  [[champion]].
+
+Term: Generation
+  One turn of the [[league]]: the strategies give challengers, the [[fast arena]] plays them,
+  and the league promotes the best one that passes, or none.
+
+Term: Strategy
+  A way to make [[challenger]]s: the evolution strategy, the Claude tuner or the Claude
+  engineer.
+
+Term: Tuning
+  The numbers that set how the [[executor]] flies its primitives: the gains of its guidance,
+  its height and speed control, and how it pursues and evades. Each number has limits. The
+  [[safety envelope]] is not in the tuning.
+
+Term: Fast arena
+  A game of [[tag]] with no window and no [[SITL]], many times faster than real time: the
+  executor and three [[computer pilot]]s on the flight model of the sim. `cognition_arena`.

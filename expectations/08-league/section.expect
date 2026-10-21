@@ -1,0 +1,89 @@
+# Making the executor better (domains/cognition/arena, domains/cognition/league). The fast arena
+# plays games of tag with no window and no SITL, and the league keeps the best executor it has
+# found. One driver runs this section:
+#   domains/cognition/league/tests/acceptance.rs   the real arena and the real league, in a
+#       folder of its own. The Claude strategies run a stand-in for `claude` (SIM001_CLAUDE), so
+#       that the tests do not need an account; the league's checks of what comes back are real.
+
+Section: Making the executor better
+  In this section, the computer makes the [[executor]] better by itself. The [[league]] keeps
+  the best executor that it found: the [[champion]]. Each [[generation]], [[strategy|strategies]]
+  give new executors, the [[challenger]]s. Each challenger plays the same games as the champion
+  in the [[fast arena]]. A challenger that wins clearly, and that is safe, is the new champion.
+
+  An executor is its [[tuning]], the tactics of its [[ground control agent]] and its code. The
+  league changes the tuning and the tactics. A Claude strategy can also change the code. The
+  [[safety envelope]] is not in the tuning, and the league refuses code that changes it.
+
+  Use this section when you run the league, or when you write a new strategy. [[Games in the
+  fast arena]] tells you how a candidate is scored. [[Promotion]] tells you when a challenger
+  becomes the champion. [[The loop]] tells you how to run the league for many generations.
+
+  The commands are for the `cognition_league` program. Run them from the top folder of the
+  repository.
+
+Vocabulary:
+  # What plays.
+  State: the champion is the default executor | the slow executor
+    Shows: the default executor: the champion is the executor with its default tuning and the tactics of Kestrel
+    Shows: the slow executor: the champion is the slow executor. Its pursuit does not close on the target, and it does not evade fast or far
+  State: the challenger is the default executor | the slow executor
+    Shows: the default executor: the challenger is the executor with its default tuning
+    Shows: the slow executor: the challenger is the slow executor
+  State: the league is new | started from the slow executor
+    Set: new: delete the folder `league`
+    Set: started from the slow executor: type `cargo run --release -p cognition_league -- start --champion slow`
+    Shows: new: there is no folder `league`. The first champion is the default executor
+    Shows: started from the slow executor: the folder `league` has a champion, the slow executor
+
+  # A game in the arena, and many.
+  State: the length of the game is 0..1000 s
+    Shows: 120 s: the game lasts 120 s
+  State: the players in the game are 0..10
+    Shows: 4: four planes play: the candidate and the three computer pilots
+  State: the time the candidate flew by plan is 0..1000 s
+    Shows: above 90 s: the candidate flew by plan for more than 90 s of the game
+  State: the crashes of the candidate are 0..100
+    Shows: 0: the candidate did not crash
+    Shows: 1: the candidate crashed once
+  State: the two games are the same | different
+    Shows: the same: the two games give the same score, to the last digit
+  State: the speed of the arena is 0..1000000 times real time
+    Shows: at least 200 times real time: the arena plays the games at least 200 times faster than real time, on this computer
+
+  # The judgement of a challenger.
+  State: the verdict is none | promoted | kept out | refused
+    Shows: promoted: the league says `promoted`. The challenger is the new champion
+    Shows: kept out: the league says `kept out`: the challenger is not better. The champion stays
+    Shows: refused: the league says `refused` and the reason. The champion stays
+  State: the reason is none | it crashed | its tests fail | it changes the envelope
+    Shows: it crashed: the reason is `crashed`
+    Shows: its tests fail: the reason is `tests fail`
+    Shows: it changes the envelope: the reason is `envelope changed`
+
+  # The loop.
+  State: the challengers in the history are 0..100000
+    Shows: 8: the file `league/history.jsonl` has 8 lines, one for each challenger
+  State: the report of the generation is written | missing
+    Shows: written: the file `league/generations/001.md` gives the scores of the generation
+  State: the champion file is written | missing
+    Shows: written: the file `league/champion.json` holds the tuning, the tactics and the hash of the champion
+  State: the score of the champion against the slow executor is -100..100
+    Shows: at least 0.05: on the same games, the mean score of the champion is at least 0.05 more than that of the slow executor
+
+  Event: the arena plays a game with the default executor
+    Say: type `cargo run --release -p cognition_league -- play --seeds 1`
+  Event: the arena plays the same seed twice
+    Say: type `cargo run --release -p cognition_league -- play --seeds 1` two times
+  Event: the arena plays 64 games with the default executor
+    Say: type `cargo run --release -p cognition_league -- play --seeds 64`
+  Event: the league judges the challenger
+    Say: type `cargo run --release -p cognition_league -- judge --champion CHAMPION --challenger CHALLENGER`. Use `default`, `slow` or the name of a JSON file
+  Event: the league runs one generation with the evolution strategy
+    Say: type `cargo run --release -p cognition_league -- run --generations 1 --strategies es`
+  Event: the league runs 5 generations with the evolution strategy
+    Say: type `cargo run --release -p cognition_league -- run --generations 5 --strategies es`
+  Event: a Claude strategy gives a challenger whose tests fail
+    Say: the Claude engineer changes the code of the executor, and `cargo test -p cognition_executor` fails in its worktree
+  Event: a Claude strategy gives a challenger that changes the envelope
+    Say: the Claude engineer changes the safety envelope of the executor
