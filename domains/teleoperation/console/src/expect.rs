@@ -987,6 +987,9 @@ impl ConsoleDriver {
             if self.call(move |g, _, _| d(g))? {
                 return Ok(());
             }
+            if let Some(why) = crate::station::autopilot_gave_up() {
+                return Err(format!("{what} can't happen: {why}"));
+            }
             if Instant::now() > end {
                 return Err(format!("{what} didn't happen within {secs} s"));
             }

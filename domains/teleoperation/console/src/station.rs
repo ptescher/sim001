@@ -189,9 +189,15 @@ fn logs_folder(instance: usize) -> PathBuf {
 /// Starts again any of `children` that has exited, each in its own folder: the log gets a line that
 /// it died, and what is said is returned. (ArduPlane panics now and then as it comes up, and a
 /// station with no autopilot waits for ever.)
-fn restart_dead(children: &mut Vec<(usize, Child)>, folder_of: impl Fn(usize) -> PathBuf, mut respawn: impl FnMut(usize) -> Result<Child, String>) -> Vec<String> {
+fn restart_dead(
+    children: &mut Vec<(usize, Child)>,
+    tries: &mut Tries,
+    folder_of: impl Fn(usize) -> PathBuf,
+    mut respawn: impl FnMut(usize) -> Result<Child, String>,
+) -> Vec<String> {
     use std::io::Write;
     let mut said = vec![];
+    let mut given_up = vec![];
     for (instance, child) in children.iter_mut() {
         let log_path = folder_of(*instance).join("arduplane.log");
         // A panic since the last start: it may be hung rather than gone, so make it gone.
@@ -208,6 +214,16 @@ fn restart_dead(children: &mut Vec<(usize, Child)>, folder_of: impl Fn(usize) ->
         if let Ok(mut log) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
             let _ = writeln!(log, "--- exited ({status}) ---");
         }
+        // One that panics at every start is not started for ever: the run is better failed at once.
+        if let Some(panic) = &panicked {
+            if tries.panicked(*instance) > MAX_PANIC_RESTARTS {
+                let why = format!("ArduPlane {instance} panicked {} starts in a row ({panic}); giving up on it", MAX_PANIC_RESTARTS + 1);
+                said.push(why.clone());
+                tries.gave_up.push(why);
+                given_up.push(*instance);
+                continue;
+            }
+        }
         match respawn(*instance) {
             Ok(new) => {
                 *child = new;
@@ -216,7 +232,44 @@ fn restart_dead(children: &mut Vec<(usize, Child)>, folder_of: impl Fn(usize) ->
             Err(e) => said.push(format!("ArduPlane {instance} exited ({status}) and would not start again: {e}")),
         }
     }
+    children.retain(|(i, _)| !given_up.contains(i));
     said
+}
+
+/// How often an autopilot has panicked at its start in a row; a start that lived on resets it.
+const MAX_PANIC_RESTARTS: usize = 3;
+const HEALTHY_FOR: std::time::Duration = std::time::Duration::from_secs(30);
+
+#[derive(Default)]
+struct Tries {
+    panics: std::collections::HashMap<usize, (usize, std::time::Instant)>,
+    gave_up: Vec<String>,
+}
+
+impl Tries {
+    /// Counts a panic of `instance`; returns how many in a row (the start before lived long: one).
+    fn panicked(&mut self, instance: usize) -> usize {
+        let now = std::time::Instant::now();
+        let entry = self.panics.entry(instance).or_insert((0, now));
+        if now.duration_since(entry.1) > HEALTHY_FOR {
+            entry.0 = 0;
+        }
+        entry.0 += 1;
+        entry.1 = now;
+        entry.0
+    }
+
+    /// Why a start was given up, if one was.
+    fn gave_up(&self) -> Option<String> {
+        self.gave_up.first().cloned()
+    }
+}
+
+/// Set when the supervisor gave up on an autopilot: the run reads it and fails at once.
+static GAVE_UP: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub fn autopilot_gave_up() -> Option<String> {
+    GAVE_UP.lock().unwrap().clone()
 }
 
 /// Watches the autopilots this station started, and starts one again that dies, for as long as it runs.
@@ -227,14 +280,16 @@ fn watch_native(program: &Path, aircraft: &str, home_loc: Option<&str>) {
     }
     STOPPING.store(false, std::sync::atomic::Ordering::SeqCst);
     let (program, aircraft, home_loc) = (program.to_path_buf(), aircraft.to_string(), home_loc.map(str::to_string));
-    std::thread::spawn(move || loop {
+    std::thread::spawn(move || {
+        let mut tries = Tries::default();
+        loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         if STOPPING.load(std::sync::atomic::Ordering::SeqCst) {
             WATCHING.store(false, std::sync::atomic::Ordering::SeqCst);
             return;
         }
         let mut children = NATIVE.lock().unwrap();
-        let said = restart_dead(&mut children, logs_folder, |instance| {
+        let said = restart_dead(&mut children, &mut tries, logs_folder, |instance| {
             let logs = logs_folder(instance);
             let (out, err) = process_log(&logs).map_err(|e| e.to_string())?;
             Command::new(&program)
@@ -248,6 +303,10 @@ fn watch_native(program: &Path, aircraft: &str, home_loc: Option<&str>) {
         });
         for line in said {
             eprintln!("station: {line}");
+        }
+        if let Some(why) = tries.gave_up() {
+            *GAVE_UP.lock().unwrap() = Some(why);
+        }
         }
     });
 }
@@ -728,7 +787,7 @@ mod tests {
         let running_pid = children[1].1.id();
         std::thread::sleep(std::time::Duration::from_millis(200));
         let mut respawned = vec![];
-        let said = restart_dead(&mut children, |_| dir.clone(), |instance| {
+        let said = restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |instance| {
             respawned.push(instance);
             Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string())
         });
@@ -741,7 +800,7 @@ mod tests {
         let log = std::fs::read_to_string(dir.join("arduplane.log")).unwrap_or_default();
         assert!(log.contains("--- exited"), "{log}");
         // Nothing dead, nothing done.
-        assert!(restart_dead(&mut children, |_| dir.clone(), |_| panic!("nothing is dead")).is_empty());
+        assert!(restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| panic!("nothing is dead")).is_empty());
         for (_, c) in &mut children {
             let _ = c.kill();
         }
@@ -759,7 +818,7 @@ mod tests {
         let hung = Command::new("sleep").arg("30").spawn().unwrap();
         let hung_pid = hung.id();
         let mut children = vec![(0, hung)];
-        let said = restart_dead(&mut children, |_| dir.clone(), |_| Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string()));
+        let said = restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string()));
         assert_eq!(said.len(), 1);
         assert!(said[0].contains("panicked") && said[0].contains("again"), "{said:?}");
         assert_ne!(children[0].1.id(), hung_pid);
@@ -767,10 +826,36 @@ mod tests {
         assert!(log.contains("--- exited (panicked"), "{log}");
         // A panic of an earlier start, with a start since, is history.
         std::fs::write(dir.join("arduplane.log"), "--- started 1 ---\nPANIC: old\n--- exited (killed) ---\n--- started 2 ---\nStarting SITL\n").unwrap();
-        assert!(restart_dead(&mut children, |_| dir.clone(), |_| panic!("it is fine")).is_empty());
+        assert!(restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| panic!("it is fine")).is_empty());
         for (_, c) in &mut children {
             let _ = c.kill();
         }
+    }
+
+    /// An autopilot that panics at every start is not started for ever: after a few in a row the
+    /// station gives up, says why, and the run can fail at once instead of waiting out its budgets.
+    #[test]
+    fn an_autopilot_that_keeps_panicking_is_given_up_on() {
+        let dir = std::env::temp_dir().join(format!("sim001-giveup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let panics = "--- started 1 ---\nPANIC: Should not be called on invalid location\n";
+        std::fs::write(dir.join("arduplane.log"), panics).unwrap();
+        let mut children = vec![(0, Command::new("sleep").arg("30").spawn().unwrap())];
+        let mut tries = Tries::default();
+        let mut starts = 0;
+        for _ in 0..10 {
+            restart_dead(&mut children, &mut tries, |_| dir.clone(), |_| {
+                starts += 1;
+                // The new start panics at once, as the last did.
+                std::fs::write(dir.join("arduplane.log"), panics).unwrap();
+                Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string())
+            });
+        }
+        assert_eq!(starts, MAX_PANIC_RESTARTS, "started again only so many times");
+        assert!(children.is_empty(), "and then left alone");
+        let why = tries.gave_up();
+        assert!(why.as_deref().is_some_and(|w| w.contains("ArduPlane 0") && w.contains("PANIC") && w.contains("giving up")), "{why:?}");
     }
 
     #[test]
