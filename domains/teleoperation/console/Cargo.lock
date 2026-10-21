@@ -462,6 +462,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aviation_computer"
+version = "0.1.0"
+dependencies = [
+ "aviation_crsf",
+ "illustration_theme",
+]
+
+[[package]]
+name = "aviation_crsf"
+version = "0.1.0"
+
+[[package]]
+name = "aviation_line"
+version = "0.1.0"
+dependencies = [
+ "aviation_computer",
+ "aviation_crsf",
+ "simulation_aircraft",
+]
+
+[[package]]
 name = "avif-serialize"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5584,6 +5605,7 @@ dependencies = [
 name = "teleoperation_console"
 version = "0.1.0"
 dependencies = [
+ "aviation_line",
  "communication_telemetry",
  "communication_traffic",
  "expectation_harness",

@@ -40,10 +40,22 @@ pub struct Config {
     pub vtol: bool,
     /// The names on the radio's mode switch, in order (empty without a flight controller).
     pub rc_modes: Vec<&'static str>,
-    /// The TX15 is on the flight computer's serial line, not a USB controller (`--flight-computer`).
-    pub serial_line: bool,
-    /// Where the simulated TX15 writes its screen, with the serial line.
-    pub tx15_screen: Option<PathBuf>,
+    /// The tests' own TX15, hosted on the flight computer's serial line (with the station).
+    pub radio: Option<aviation_line::Hosted>,
+    /// The vehicle, for the radio of a test that doesn't use it.
+    pub vehicle: std::sync::Arc<std::sync::Mutex<crate::vehicle::Vehicle>>,
+}
+
+/// Where a pilot who flies without the radio (a keyboard pilot) has the throttle: mid-way in the
+/// modes that climb on the stick once the plane is armed, down otherwise.
+fn idle_throttle(armed: bool, mode: &str) -> f32 {
+    if armed && (mode.starts_with('Q') || mode == "GUIDED") { 0.5 } else { 0.0 }
+}
+
+/// The test's elevator is -1 for a stick pulled back (as the sim's USB radio read it); the pilot of the
+/// serial line has back as positive.
+fn pilot_of(r: &RadioState) -> aviation_line::Pilot {
+    aviation_line::Pilot { roll: r.roll, pitch: -r.pitch, yaw: r.yaw, throttle: r.throttle, arm: r.arm, mode: r.mode }
 }
 
 /// What the pilot does with the radio.
@@ -286,8 +298,8 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
         only,
         vtol,
         rc_modes,
-        serial_line,
-        tx15_screen,
+        radio,
+        vehicle,
     } = config;
     let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
         Ok(a) => a.with_coverage(),
@@ -335,10 +347,26 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
         eprintln!("expect: the run took more than {} s: stopping (SIM001_EXPECT_TOTAL sets the limit)", total.as_secs());
         crate::station::exit(2);
     });
+    // A radio that the test doesn't use is held like a keyboard pilot's: the sticks centred, and
+    // the throttle where the sim put it for a pilot with no radio.
+    let in_use = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    if let Some(line) = radio.clone() {
+        let in_use = in_use.clone();
+        std::thread::spawn(move || loop {
+            if !in_use.load(Ordering::SeqCst) {
+                let (armed, mode) = {
+                    let v = vehicle.lock().unwrap();
+                    (v.armed, v.mode().to_string())
+                };
+                line.fly(aviation_line::Pilot { throttle: idle_throttle(armed, &mode), ..aviation_line::Pilot::AT_REST });
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        });
+    }
     std::thread::spawn(move || {
         let mut driver = ConsoleDriver::new(tx, vtol, rc_modes);
-        driver.serial_line = serial_line;
-        driver.tx15_screen = tx15_screen;
+        driver.line = radio;
+        driver.in_use = in_use.clone();
         let opts = RunOptions {
             docs_dir: docs.clone(),
             patience: 480,
@@ -773,9 +801,10 @@ struct ConsoleDriver {
     /// How long the next test has, from when its plane is ready, and when it is up.
     budget: Duration,
     deadline: Option<Instant>,
-    /// The TX15 is on the flight computer's serial line, and writes its screen to this file.
-    serial_line: bool,
-    tx15_screen: Option<PathBuf>,
+    /// The TX15 on the flight computer's serial line, which the console hosts.
+    line: Option<aviation_line::Hosted>,
+    /// The test uses the radio (the keeper leaves the sticks to it).
+    in_use: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl ConsoleDriver {
@@ -798,16 +827,32 @@ impl ConsoleDriver {
             arms_seen: 0,
             budget: Duration::from_secs(35),
             deadline: None,
-            serial_line: false,
-            tx15_screen: None,
+            line: None,
+            in_use: Default::default(),
         }
     }
 
-    /// What the lamps of the simulated TX15 show now (the sim writes them down every quarter second).
+    fn serial_line(&self) -> bool {
+        self.line.is_some()
+    }
+
+    /// What the lamps of the simulated TX15 show now.
     fn tx15_lamps(&self) -> Result<crate::tx15_screen::Lamps, String> {
-        let path = self.tx15_screen.as_ref().ok_or("the TX15 is not on the serial line: start the station with --flight-computer")?;
-        let text = std::fs::read_to_string(path).map_err(|e| format!("the simulated TX15 has not written its screen yet ({e})"))?;
-        crate::tx15_screen::parse(&text).ok_or_else(|| format!("can't read the screen of the TX15: {text}"))
+        let line = self.line.as_ref().ok_or("the TX15 is not on the serial line: start the station (--station)")?;
+        let lamps = line.lamps();
+        Ok(crate::tx15_screen::Lamps { mode: lamps.mode, armed: lamps.armed })
+    }
+
+    /// Give the radio the state the test has put it in: on the serial line the sticks go to the
+    /// hosted TX15; with none (a console on its own) they go to the sim over the feed.
+    fn deliver_radio(&self, radio: RadioState) -> Result<(), String> {
+        self.in_use.store(radio.connected, Ordering::SeqCst);
+        if let Some(line) = &self.line {
+            line.fly(pilot_of(&radio));
+            return Ok(());
+        }
+        let sent = self.call(move |g, _, _| g.sensor.as_ref().map(|s| s.send_radio(radio)).is_some())?;
+        if sent { Ok(()) } else { Err("there is no link to the sim to carry the radio: start the station (--station)".into()) }
     }
 
     /// Move the stand-in radio and tell the sim.
@@ -829,17 +874,7 @@ impl ConsoleDriver {
                 self.radio.mode = slot.min(5) as u8;
             }
         }
-        let radio = self.radio;
-        let sent =
-            self.call(move |g, _, _| g.sensor.as_ref().map(|s| s.send_radio(radio)).is_some())?;
-        if sent {
-            Ok(())
-        } else {
-            Err(
-                "there is no link to the sim to carry the radio: start the station (--station)"
-                    .into(),
-            )
-        }
+        self.deliver_radio(self.radio)
     }
 
     /// Which way the radio's three inputs read to ArduPilot: the throttle stick, the arm
@@ -849,7 +884,7 @@ impl ConsoleDriver {
         // On the serial line the console's RC readback (the RC 1-4 line) comes down through the
         // flight computer and the TX15 and does not follow the sticks, so the sticks and switches
         // read where the pilot put them (as the arm switch does with any radio).
-        if self.serial_line && self.radio.connected {
+        if self.serial_line() && self.radio.connected {
             let r = &self.radio;
             return Ok(match key {
                 "throttle stick" => Value::from(if r.throttle < 0.25 {
@@ -964,7 +999,7 @@ impl ConsoleDriver {
             return self.rc_reading(key);
         }
         if key == "radio line" {
-            return Ok(Value::from(if self.serial_line { "serial" } else { "USB" }));
+            return Ok(Value::from(if self.serial_line() { "serial" } else { "USB" }));
         }
         if key == "tx15 screen mode" || key == "tx15 screen arming" {
             let lamps = self.tx15_lamps()?;
@@ -1082,10 +1117,11 @@ impl ConsoleDriver {
             "expect: starting the next test from a fresh plane (the autopilot restarts, about a minute)"
         );
         self.radio = radio_for_a_fresh_plane(self.radio);
-        let radio = self.radio;
-        self.call(move |g, _, _| {
+        self.deliver_radio(self.radio)?;
+        // The sim starts again, as with the R key.
+        self.call(|g, _, _| {
             if let Some(s) = &g.sensor {
-                s.send_radio(radio);
+                s.press_key(Key::Reset);
             }
         })?;
         // The station restarts the autopilot: its link drops, and then comes back.
@@ -1164,12 +1200,7 @@ impl Driver for ConsoleDriver {
             // A test that doesn't use the radio flies without one, like a keyboard pilot, and the
             // switches are where a fresh radio has them: the arm switch out, the first mode.
             self.radio = radio_at_rest(self.radio);
-            let radio = self.radio;
-            self.call(move |g, _, _| {
-                if let Some(s) = &g.sensor {
-                    s.send_radio(radio);
-                }
-            })?;
+            self.deliver_radio(self.radio)?;
         }
         self.call(|g, _, _| {
             g.map.tool = Tool::Pan;
@@ -1556,8 +1587,8 @@ impl Driver for ConsoleDriver {
         let _ = std::fs::remove_file(&path);
         let bytes = bytes.filter(|b| !b.is_empty());
         // With the TX15 on the serial line, its screen goes above the console's.
-        if let (Some(jpg), Some(file)) = (&bytes, &self.tx15_screen) {
-            if let Some(svg) = std::fs::read_to_string(file.with_extension("svg")).ok().and_then(|s| crate::tx15_screen::composite(jpg, &s)) {
+        if let (Some(jpg), Some(line)) = (&bytes, &self.line) {
+            if let Some(svg) = crate::tx15_screen::composite(jpg, &line.svg()) {
                 return Ok(Some(Screenshot::svg(svg)));
             }
         }
@@ -1581,6 +1612,29 @@ mod tests {
     /// must not hand that to the restarted autopilot: ArduPlane enters the switch's mode before it
     /// knows where it is, and in QRTL SITL panics with "Location cannot be (0, 0, 0)", at
     /// every start, for as long as the switch stays there.
+    #[test]
+    fn the_stick_pulled_back_raises_the_pitch_channel() {
+        // The elevator of the radio moves as the sim's USB radio did: -1 is back (nose up), and a
+        // stick pulled back sends more than 1500 us on the pitch channel of ArduPlane.
+        let back = RadioState { pitch: ELEVATOR_A_LITTLE_BACK, connected: true, ..radio_at_rest(radio_state_for_test()) };
+        assert!(pilot_of(&back).channels()[1] > 1500, "{:?}", pilot_of(&back).channels());
+        let forward = RadioState { pitch: 0.5, ..back };
+        assert!(pilot_of(&forward).channels()[1] < 1500);
+    }
+
+    fn radio_state_for_test() -> RadioState {
+        RadioState { connected: false, roll: 0.0, pitch: 0.0, yaw: 0.0, throttle: 0.0, arm: false, mode: 0, reset_presses: 0 }
+    }
+
+    #[test]
+    fn a_test_that_flies_without_the_radio_leaves_the_throttle_where_the_sim_did() {
+        // A keyboard pilot's throttle sits mid-way in the modes that climb on the stick, and low otherwise.
+        assert_eq!(idle_throttle(true, "QHOVER"), 0.5);
+        assert_eq!(idle_throttle(true, "GUIDED"), 0.5);
+        assert_eq!(idle_throttle(true, "AUTO"), 0.0);
+        assert_eq!(idle_throttle(false, "QHOVER"), 0.0, "a plane on the ground has its throttle down to arm");
+    }
+
     #[test]
     fn a_fresh_plane_starts_with_the_radio_at_rest() {
         let left = RadioState {

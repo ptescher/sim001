@@ -37,6 +37,9 @@ pub struct Options {
     /// A real TX15 on its USB cable (a serial device): the sim's flight computer is on that line,
     /// and the console's telemetry comes through the radio.
     pub tx15_serial: Option<String>,
+    /// The tests' own TX15 is hosted by the console on the flight computer's line: the sim
+    /// carries the console's MAVLink through the radio relay at this address.
+    pub hosted_radio: Option<std::net::SocketAddr>,
 }
 
 /// Where the sim's TX15 stand-in listens. Below 5760: ArduPlane SITL instance N takes 5760 + 10·N (and the
@@ -699,6 +702,8 @@ pub fn start_sim(
         ]);
         if let Some(device) = &opts.tx15_serial {
             cmd.args(["--flight-computer", device]);
+        } else if let Some(relay) = opts.hosted_radio {
+            cmd.args(["--flight-computer", &format!("tcp:{UART_PORT}"), "--radio-upstream", &relay.to_string()]);
         } else if opts.flight_computer {
             if let Some(path) = &opts.tx15_screen {
                 cmd.arg("--tx15-screen").arg(path);

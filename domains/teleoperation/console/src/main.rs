@@ -94,6 +94,13 @@ fn main() {
     } else {
         Mode::Auto
     };
+    // The tests' TX15 is the console's own, on the flight computer's serial line.
+    let hosted = (radio_port.is_some() && flag("--expect") && arg("--tx15-serial").is_none()).then(|| {
+        aviation_line::Hosted::host(&format!("127.0.0.1:{}", station::UART_PORT)).unwrap_or_else(|e| {
+            eprintln!("the TX15 for the tests has no line: {e}");
+            std::process::exit(1);
+        })
+    });
     let feed_addr =
         arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", teleoperation_shared::feed::DEFAULT_PORT));
     let opts = station::Options {
@@ -107,13 +114,14 @@ fn main() {
         direct: flag("--direct"),
         map: map.clone(),
         aircraft: arg("--aircraft"),
-        test_radio: flag("--expect"),
+        test_radio: flag("--expect") && hosted.is_none(),
         radio_port,
         flight_computer: radio_port.is_some() && flag("--flight-computer"),
         // The simulated TX15 on the serial line writes its screen here, for the tests to read.
         tx15_screen: (radio_port.is_some() && flag("--flight-computer") && flag("--expect"))
             .then(|| std::env::temp_dir().join(format!("sim001_tx15_screen_{}.json", std::process::id()))),
         tx15_serial: radio_port.and(arg("--tx15-serial")),
+        hosted_radio: hosted.as_ref().map(|(_, relay)| *relay),
     };
     let aircraft = match &opts.aircraft {
         None => simulation_aircraft::default(),
@@ -196,8 +204,8 @@ fn main() {
             only: arg("--only"),
             vtol,
             rc_modes: (aircraft.params)().rc_modes,
-            serial_line: opts.flight_computer,
-            tx15_screen: opts.tx15_screen.clone(),
+            radio: hosted.map(|(radio, _)| radio),
+            vehicle: vehicle.clone(),
         }
     });
     Application::new().run(move |cx: &mut App| {

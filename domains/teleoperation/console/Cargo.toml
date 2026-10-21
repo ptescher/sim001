@@ -9,6 +9,7 @@ gpui = "0.2.2"
 mavlink = { version = "0.19", default-features = false, features = ["std", "transport-tcp", "transport-udp", "dialect-ardupilotmega", "dialect-common", "mav2-message-extensions"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 teleoperation_shared = { path = "../shared" }
+aviation_line = { path = "../../aviation/line" }
 # The link, the vehicle and the map geometry, without a screen (the iOS app uses them too).
 teleoperation_core = { path = "../core" }
 # The map pack format: the console shows a real place's map.
