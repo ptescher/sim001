@@ -63,6 +63,19 @@ enum RadioMove {
     Mode(&'static str),
 }
 
+/// The stand-in radio as a pilot leaves it when the next test starts: unplugged, the sticks let go
+/// with the throttle down, the arm switch off and the mode switch on its first slot.
+fn radio_at_rest(r: RadioState) -> RadioState {
+    RadioState { connected: false, roll: 0.0, pitch: 0.0, yaw: 0.0, throttle: STICK_LOW, arm: false, mode: 0, ..r }
+}
+
+/// The radio that presses the sim's reset for a fresh plane: at rest already, since the autopilot
+/// restarts with whatever it sends. ArduPlane takes the mode switch's mode before it knows where it
+/// is, and SITL panics entering QRTL there ("Location cannot be (0, 0, 0)"), at every start.
+fn radio_for_a_fresh_plane(r: RadioState) -> RadioState {
+    RadioState { reset_presses: r.reset_presses.wrapping_add(1), ..radio_at_rest(r) }
+}
+
 /// Where the throttle stick is for each of its values in the vocabulary.
 const STICK_LOW: f32 = 0.0;
 const STICK_MIDDLE: f32 = 0.5;
@@ -1068,7 +1081,7 @@ impl ConsoleDriver {
         println!(
             "expect: starting the next test from a fresh plane (the autopilot restarts, about a minute)"
         );
-        self.radio.reset_presses = self.radio.reset_presses.wrapping_add(1);
+        self.radio = radio_for_a_fresh_plane(self.radio);
         let radio = self.radio;
         self.call(move |g, _, _| {
             if let Some(s) = &g.sensor {
@@ -1148,12 +1161,9 @@ impl Driver for ConsoleDriver {
         }
         // The throttle stick starts down, as a pilot leaves it before arming.
         if self.vtol {
-            // A test that doesn't use the radio flies without one, like a keyboard pilot.
-            self.radio.connected = false;
-            self.radio.throttle = STICK_LOW;
-            // And the switches are where a fresh radio has them: the arm switch out, the first mode.
-            self.radio.arm = false;
-            self.radio.mode = 0;
+            // A test that doesn't use the radio flies without one, like a keyboard pilot, and the
+            // switches are where a fresh radio has them: the arm switch out, the first mode.
+            self.radio = radio_at_rest(self.radio);
             let radio = self.radio;
             self.call(move |g, _, _| {
                 if let Some(s) = &g.sensor {
@@ -1566,6 +1576,29 @@ impl Driver for ConsoleDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A test that ends with the mode switch on QRTL (the VTOL's last slot) and the arm switch on
+    /// must not hand that to the restarted autopilot: ArduPlane enters the switch's mode before it
+    /// knows where it is, and in QRTL SITL panics with "Location cannot be (0, 0, 0)", at
+    /// every start, for as long as the switch stays there.
+    #[test]
+    fn a_fresh_plane_starts_with_the_radio_at_rest() {
+        let left = RadioState {
+            connected: true,
+            roll: 0.3,
+            pitch: -0.2,
+            yaw: 0.1,
+            throttle: 0.8,
+            arm: true,
+            mode: 5,
+            reset_presses: 255,
+        };
+        let r = radio_for_a_fresh_plane(left);
+        assert_eq!(r.reset_presses, 0, "the reset is pressed once");
+        assert!(!r.connected && !r.arm, "unplugged, the arm switch off");
+        assert_eq!(r.mode, 0, "the mode switch on its first slot");
+        assert_eq!((r.roll, r.pitch, r.yaw, r.throttle), (0.0, 0.0, 0.0, STICK_LOW), "the sticks let go");
+    }
 
     /// The suite checks clean, and the driver can do everything the console's plain UI tests
     /// need. Running them needs the window and a vehicle: `--station --expect`.
