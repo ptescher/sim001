@@ -162,6 +162,14 @@ pub struct Config {
     pub autopilot: String,
     /// The pilot box, where the sim's origin is on the earth.
     pub home: Position,
+    /// The bytes a second that MAVLink may use on the line (`--mavlink-rate`), if not the default.
+    pub mavlink_rate: Option<f32>,
+}
+
+/// What the line carries of MAVLink: what was asked for, else a real radio's thin share, else the
+/// virtual line's.
+fn mavlink_rate(on_radio: bool, asked: Option<f32>) -> f32 {
+    asked.unwrap_or(if on_radio { 1000.0 } else { aviation_computer::MAVLINK_RATE })
 }
 
 /// The plane as the flight computer reports it.
@@ -268,7 +276,7 @@ fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpLis
     let on_radio = matches!(line, Line::Device(_));
     #[cfg(not(unix))]
     let on_radio = false;
-    let mut fc = FlightComputer::with_mavlink_rate(if on_radio { 1000.0 } else { aviation_computer::MAVLINK_RATE });
+    let mut fc = FlightComputer::with_mavlink_rate(mavlink_rate(on_radio, cfg.mavlink_rate));
     let mut autopilot: Option<TcpStream> = None;
     let mut next_connect = 0.0;
     let mut buf = [0u8; 4096];
@@ -438,6 +446,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_mavlink_rate_can_be_asked_for() {
+        assert_eq!(mavlink_rate(false, None), aviation_computer::MAVLINK_RATE);
+        assert_eq!(mavlink_rate(true, None), 1000.0);
+        assert_eq!(mavlink_rate(true, Some(20_000.0)), 20_000.0);
+    }
+
+    #[test]
     fn the_screen_is_written_for_the_station_as_json_and_a_picture() {
         let dir = std::env::temp_dir().join(format!("sim001_screen_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -488,7 +503,7 @@ mod tests {
         let core: Core =
             Arc::new(Mutex::new(SimCore::new((simulation_aircraft::find("t1s-vtol").unwrap().params)(), vec![], true, 9002)));
         let home = Position::new(-35.363261, 149.16523, 584.0);
-        let gs_addr = spawn(core.clone(), Config { line: name, autopilot: "127.0.0.1:1".into(), home }).unwrap().expect("a ground station port");
+        let gs_addr = spawn(core.clone(), Config { line: name, autopilot: "127.0.0.1:1".into(), home, mavlink_rate: None }).unwrap().expect("a ground station port");
 
         let mut radio = master;
         let mut ground_station = TcpStream::connect(gs_addr).unwrap();
@@ -563,7 +578,7 @@ mod tests {
         }
         let port = free_port();
         let home = Position::new(-35.363261, 149.16523, 584.0);
-        spawn(core.clone(), Config { line: format!("tcp:{port}"), autopilot: ap_addr, home }).unwrap();
+        spawn(core.clone(), Config { line: format!("tcp:{port}"), autopilot: ap_addr, home, mavlink_rate: None }).unwrap();
         let tx15_addr = tx15(core.clone(), &format!("tcp:127.0.0.1:{port}")).unwrap();
         // The station connects where the radio relay would.
         let mut station = TcpStream::connect(tx15_addr).unwrap();

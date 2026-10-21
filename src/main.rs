@@ -9,7 +9,7 @@
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `sim001_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --test-radio                                a TX15 stand-in that the ground station's tests move
-//!   --flight-computer tcp:PORT|DEVICE [--autopilot ADDR] [--tx15-screen FILE]
+//!   --flight-computer tcp:PORT|DEVICE [--autopilot ADDR] [--tx15-screen FILE] [--mavlink-rate BYTES/S]
 //!                                               a flight computer between the TX15 (on a UART, in CRSF) and ArduPilot
 //!   --radio PORT [--radio-uart tcp:HOST:PORT] [--radio-upstream ADDR] [--radio-rate B] [--home LAT,LON,ALT]
 //!                                               the TX15 stand-in: the station connects to PORT, and gets the
@@ -259,7 +259,12 @@ fn main() {
         flight_computer::set_screen_file(path.into());
     }
     if let Some(line) = arg("--flight-computer") {
-        let cfg = flight_computer::Config { line: line.clone(), autopilot: autopilot.clone(), home };
+        let cfg = flight_computer::Config {
+            line: line.clone(),
+            autopilot: autopilot.clone(),
+            home,
+            mavlink_rate: arg("--mavlink-rate").and_then(|r| r.parse().ok()),
+        };
         match flight_computer::spawn(core.clone(), cfg) {
             Ok(addr) => ground_station_via_radio = addr,
             Err(e) => {
