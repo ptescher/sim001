@@ -7,5 +7,5 @@ description = "Simulation domain: the ArduPilot SITL side, headless. The JSON ph
 [dependencies]
 simulation_aircraft = { path = "../aircraft" }
 simulation_physics = { path = "../physics" }
-expectation_service = { path = "../../expectation/service" }
+expectation_service = { git = "https://github.com/ptescher/expectation" }
 glam = "0.33"

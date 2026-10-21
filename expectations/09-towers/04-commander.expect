@@ -1,0 +1,40 @@
+Feature: The computer commander
+  A computer can command a team. It looks at the map of its team once each second, and it gives
+  each drone an order. It sends one drone to each tower that its team does not hold, nearest
+  towers first. Each tower goes to the drone that is nearest to it. A drone keeps its order
+  until its team holds the tower.
+
+  When drones of the two teams circle a tower, the drone that arrived later is often behind:
+  the control is on the side of the other team. A drone that is behind at a contested tower for
+  10 s gives up. It goes to a tower that no drone of its team is sent to, and it does not come
+  back for 30 s. Thus two commanders do not stop each other at every tower.
+
+  When the commander sees an enemy drone within 120 m of a tower that its team holds, it defends
+  the tower first. That is two circles out: an enemy drone that circles the next tower is not a
+  danger. It sends the drone that is nearest to the tower. The commander uses only the map of its
+  team. Thus it does not know about an enemy drone in the fog.
+
+  Expectation: At the start, the commander sends a drone to each neutral tower
+    The centre tower is the nearest to the base, so it goes to the drone in the middle. The
+    flank towers go to the drones at each end.
+
+    When the computer commander of Blue decides
+    Then the order of the first Blue drone is take the west tower
+    And the order of the second Blue drone is take the centre tower
+    And the order of the third Blue drone is take the east tower
+
+  Expectation: The commander defends a tower that an enemy drone comes near
+    Overrides: At the start, the commander sends a drone to each neutral tower
+    A tower that the team holds comes first. The other drones go on to the neutral towers.
+
+    Given the Red scout is near the Blue home tower
+    When the computer commander of Blue decides
+    Then the order of the second Blue drone is take the Blue home tower
+
+  Expectation: A drone that is behind at a contested tower goes somewhere else
+    Given the control of the west tower is -20 %
+    And the order of the first Blue drone is take the west tower
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 1
+    When the computer commander of Blue plays for 15 seconds
+    Then the order of the first Blue drone is take the Red home tower

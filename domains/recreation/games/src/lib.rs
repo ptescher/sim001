@@ -135,13 +135,14 @@ pub struct Opponent {
     /// Who it chases, when it is it, and when it chose.
     target: Option<(usize, f32)>,
     /// With an autopilot: how far through its preflight it is.
-    stage: Stage,
+    preflight: Preflight,
 }
 
-/// A computer pilot's preflight with an autopilot, done on its radio as a pilot does it.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// Where a preflight is.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 enum Stage {
     /// Before GO, or its plane is being set down: switch off, throttle down.
+    #[default]
     Cold,
     /// The arm switch is on, with the throttle down, for this long.
     Arming(f32),
@@ -162,6 +163,64 @@ pub struct Radio {
     pub sticks: Controls,
     pub arm: bool,
     pub mode: usize,
+}
+
+/// A pilot's preflight with an autopilot, done on its radio as a pilot does it: at GO it arms
+/// with the throttle down, and tries again if the props don't turn. Once they turn it climbs in
+/// QHOVER, pushes FBWA at height, and once the wing has taken over the plane is on the wing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Preflight {
+    stage: Stage,
+}
+
+impl Preflight {
+    /// Back to the start: switch off, throttle down.
+    pub fn reset(&mut self) {
+        self.stage = Stage::Cold;
+    }
+
+    /// The take-off is done: the plane flies on the wing in FBWA.
+    pub fn on_the_wing(&self) -> bool {
+        self.stage == Stage::Flying
+    }
+
+    /// What the radio sends for the next `dt` of the preflight, for the plane `state` of `params`
+    /// at `agl` above the ground; `None` once it is on the wing, when the pilot flies it in FBWA.
+    pub fn radio(&mut self, params: &AircraftParams, state: &FlightState, agl: f32, dt: f32) -> Option<Radio> {
+        let (qhover, fbwa) = (mode_slot(params, "QHOVER"), mode_slot(params, "FBWA"));
+        let props = params.motors.iter().zip(&state.spool).any(|(m, &spool)| m.lift && spool > 0.03);
+        let off = Radio { sticks: Controls::default(), arm: false, mode: qhover };
+        let on =
+            |throttle: f32, mode: usize| Radio { sticks: Controls { throttle, ..Default::default() }, arm: true, mode };
+        self.stage = match self.stage {
+            Stage::Cold => Stage::Arming(0.0),
+            Stage::Arming(_) if props => Stage::Climbing,
+            Stage::Arming(t) if t > ARM_TRY => Stage::Resting(0.0),
+            Stage::Arming(t) => Stage::Arming(t + dt),
+            Stage::Resting(t) if t > ARM_REST => Stage::Arming(0.0),
+            Stage::Resting(t) => Stage::Resting(t + dt),
+            Stage::Climbing if agl > TAKEOFF_HEIGHT => Stage::Transition(0.0),
+            Stage::Transition(t) if t > 3.0 && state.airspeed > 15.0 => Stage::Flying,
+            Stage::Transition(t) => Stage::Transition(t + dt),
+            stage => stage,
+        };
+        match self.stage {
+            Stage::Cold | Stage::Resting(_) => Some(off),
+            Stage::Arming(_) => Some(on(0.0, qhover)),
+            // Above the middle of the stick, QHOVER climbs.
+            Stage::Climbing => Some(on(0.9, qhover)),
+            // Wings level and a little nose up while the wing takes over.
+            Stage::Transition(_) => {
+                Some(Radio { sticks: Controls { elevator: 0.2, throttle: 1.0, ..Default::default() }, arm: true, mode: fbwa })
+            }
+            Stage::Flying => None,
+        }
+    }
+}
+
+/// The slot of the mode switch that gives `mode` on the plane `params`.
+pub fn mode_slot(params: &AircraftParams, mode: &str) -> usize {
+    params.rc_modes.iter().position(|m| *m == mode).unwrap_or(0)
 }
 
 /// The computer pilots' planes and autopilots, when they fly with them.
@@ -232,7 +291,7 @@ impl Session {
                     thrown_at: None,
                     down_for: 0.0,
                     target: None,
-                    stage: Stage::Cold,
+                    preflight: Preflight::default(),
                 }
             })
             .collect();
@@ -263,10 +322,9 @@ impl Session {
             o.state = plane;
             o.pilot = Pilot::with_radio(o.skill, fbwa);
             o.line = Path::closed(self.course.outside_line(o.skill.turn_radius * RADIO_TURN, 1.0));
-            o.stage = Stage::Cold;
+            o.preflight.reset();
         }
-        let slot = |name: &str| params.rc_modes.iter().position(|m| *m == name).unwrap_or(0);
-        self.autopilots = Some(Autopilots { qhover: slot("QHOVER"), fbwa: slot("FBWA"), params });
+        self.autopilots = Some(Autopilots { qhover: mode_slot(&params, "QHOVER"), fbwa: mode_slot(&params, "FBWA"), params });
         self.clock = Clock::CountingDown { left: COUNTDOWN };
         self
     }
@@ -288,9 +346,7 @@ impl Session {
     pub fn radio(&mut self, i: usize, ground: &dyn Terrain, dt: f32) -> Radio {
         let Some(ap) = &self.autopilots else { return Radio::default() };
         let (qhover, fbwa) = (ap.qhover, ap.fbwa);
-        let props = ap.params.motors.iter().zip(&self.opponents[i].state.spool).any(|(m, &spool)| m.lift && spool > 0.03);
         let off = Radio { sticks: Controls::default(), arm: false, mode: qhover };
-        let on = |throttle: f32, mode: usize| Radio { sticks: Controls { throttle, ..Default::default() }, arm: true, mode };
         let started = self.since_go() >= 0.0 && matches!(self.clock, Clock::Running { .. } | Clock::Stopped { .. });
         let tag = self.kind == Kind::Tag;
         let o = &mut self.opponents[i];
@@ -300,39 +356,20 @@ impl Session {
             if tag && o.down_for > DOWN_TIME {
                 o.down_for = 0.0;
                 o.state.reset_to_hand(&ap.params, &o.start);
-                o.stage = Stage::Cold;
+                o.preflight.reset();
             }
             return off;
         }
         if !started || o.state.carry.is_some() || o.state.phase == Phase::Held {
-            o.stage = Stage::Cold;
+            o.preflight.reset();
             return off;
         }
         let agl = o.state.pos.y - ground.height(o.state.pos.x, o.state.pos.z);
-        o.stage = match o.stage {
-            Stage::Cold => Stage::Arming(0.0),
-            Stage::Arming(_) if props => Stage::Climbing,
-            Stage::Arming(t) if t > ARM_TRY => Stage::Resting(0.0),
-            Stage::Arming(t) => Stage::Arming(t + dt),
-            Stage::Resting(t) if t > ARM_REST => Stage::Arming(0.0),
-            Stage::Resting(t) => Stage::Resting(t + dt),
-            Stage::Climbing if agl > TAKEOFF_HEIGHT => Stage::Transition(0.0),
-            Stage::Transition(t) if t > 3.0 && o.state.airspeed > 15.0 => Stage::Flying,
-            Stage::Transition(t) => Stage::Transition(t + dt),
-            stage => stage,
-        };
-        match o.stage {
-            Stage::Cold | Stage::Resting(_) => off,
-            Stage::Arming(_) => on(0.0, qhover),
-            // Above the middle of the stick, QHOVER climbs.
-            Stage::Climbing => on(0.9, qhover),
-            // Wings level and a little nose up while the wing takes over.
-            Stage::Transition(_) => Radio { sticks: Controls { elevator: 0.2, throttle: 1.0, ..Default::default() }, arm: true, mode: fbwa },
-            Stage::Flying => {
-                let planes = self.planes();
-                Radio { sticks: self.steer(i, &planes, ground, dt), arm: true, mode: fbwa }
-            }
+        if let Some(radio) = o.preflight.radio(&ap.params, &o.state, agl, dt) {
+            return radio;
         }
+        let planes = self.planes();
+        Radio { sticks: self.steer(i, &planes, ground, dt), arm: true, mode: fbwa }
     }
 
     /// Every player's position, velocity and whether it is in the air (0 is you, as of the last
@@ -561,7 +598,7 @@ impl Session {
     /// With autopilots: computer pilot `i` has taken off and is flying the game on the wing (in
     /// FBWA, the transition done). A ground agent takes over from here.
     pub fn on_the_wing(&self, i: usize) -> bool {
-        self.opponents[i].stage == Stage::Flying
+        self.opponents[i].preflight.on_the_wing()
     }
 }
 

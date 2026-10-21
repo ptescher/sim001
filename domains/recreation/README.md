@@ -1,6 +1,6 @@
 # Recreation
 
-Games and trials to fly against computer pilots. Each computer pilot flies a T1-S on the same
+Games and trials to fly against computer pilots, and Towers, a team game flown by plan. Each computer pilot flies a T1-S on the same
 flight model as yours (`simulation_physics`), in the same wind, over the same ground and trees.
 It moves the same controls a pilot's hands move (aileron, elevator, rudder, throttle), so it can
 stall, tip-stall and crash like you. Nothing here draws anything; the sim shows the games (see
@@ -15,9 +15,11 @@ In the sim, **G** starts a pylon race and **T** a game of tag. The same key agai
 | `recreation_racing` | [racing/](racing) | The pylon race: the leagues' course and its referee (laps, cuts, places, times). Depends only on `glam` |
 | `recreation_tag` | [tag/](tag) | Tag: the arena and its referee (who is it, touches, no tag-backs, leaving the arena, the clock). Depends only on `glam` |
 | `recreation_pilot` | [pilot/](pilot) | The computer pilot: hands that hold a bank and a climb rate, and steering to a point, along a line or onto another plane. Its [`Skill`](pilot/src/lib.rs) sets how hard it turns and how fast it flies |
+| `recreation_towers` | [towers/](towers) | Towers, a team game for drones flown by plan: the towers and their circles, capture, points, the end of the game, and what each team sees through the fog. Depends only on `glam`. See [plans/towers.md](../../plans/towers.md) |
+| `recreation_towers_server` | [towers_server/](towers_server) | The game server of Towers (binary `towers_server`): an ArduPlane SITL in AGENT mode for each drone, the flight model, the referee, and a seat for each team over TCP |
 | `recreation_games` | [games/](games) | A game in play: the countdown, the computer pilots (Kestrel the ace, Merlin the club pilot, Swift the rookie) and what they decide to do, their planes on the flight model, and the referee. Also a stand-in that flies your plane, which the acceptance tests use |
 
-`recreation_games` depends on the other three and on the simulation domain; the others don't
+`recreation_games` depends on racing, tag and pilot, and on the simulation domain; the others don't
 depend on each other.
 
 ## Games with ArduPilot
@@ -106,10 +108,50 @@ line's curvature fed forward, and its distance and drift from the line fed back)
 `intercept` closes on another plane. In a steep bank the elevator mostly tightens the turn, so
 the pilot asks less of it for height; without that, height and turn swing against each other.
 
+## Towers
+
+Two teams of three drones fight for five radio towers. A drone counts for a tower while it flies
+within 60 m of it, below 120 m. The tower's control (−1 Red to +1 Blue) moves 1/20 a second for
+each drone one team has there more than the other; a team holds the tower at its end of the bar
+and loses it at the middle. Each held tower scores a point a second; 500 points, or the most
+after 8 minutes, wins. Each team sees 150 m round its drones and base and 200 m round its towers,
+and its map (`Game::maps`) keeps what it last saw of the rest.
+
+`recreation_towers::Game` is only the referee. `recreation_towers::Commander` is the computer
+commander: once a second it sends one drone to each tower its team does not hold (nearest the
+base first, each to the drone nearest it), keeps a drone on its tower until the team holds it, and
+first defends a held tower when it sees an enemy drone near it. It knows only its team's map.
+
+### The game server
+
+```bash
+SIM001_BIN=.ardupilot-agent/build/sitl/bin cargo run --release -p recreation_towers_server -- --speedup 10
+```
+
+`towers_server` starts six ArduPlane SITL drones with the AGENT mode (instances 30 to 35, system
+ids 1 to 6, `ardupilot/towers.parm` for the field's fence and ceiling) and is their physics host,
+as the runner is. At GO each drone's radio takes it off (`recreation_games::Preflight`: arm,
+QHOVER to 15 m, FBWA); once it flies on the wing, the ground switches it to AGENT and sends the
+plan for its order about once a second (a tower: an orbit 40 m out, at a height of its own) and the
+other drones as `ADSB_VEHICLE` traffic. A crashed drone is back at its base after 15 s.
+
+Each team has a seat on TCP port 5955 (`recreation_towers::seat`, a JSON message a line): a
+computer commander, or a person (`--blue person`, `--red person`; GO waits for them). A seat that
+commands or watches a team gets only that team's map, four times a second; a spectator gets the
+whole game. At the end the server prints `RESULT` lines (the outcome, drones in AGENT, refused
+commands, crashes, towers each team took).
+
+The rules and the commander are specified in [expectations/09-towers](../../expectations/09-towers)
+and run with no window by `cargo test --release -p recreation_towers`; a whole game with
+ArduPilot, with the fog checked from a seat against a spectator, by
+`cargo test --release -p recreation_towers_server` (about two minutes; "not supported yet"
+without the AGENT build). The commander app is still to come: see
+[plans/towers.md](../../plans/towers.md).
+
 ## Tests
 
 ```bash
-cargo test --release -p recreation_racing -p recreation_tag -p recreation_pilot -p recreation_games
+cargo test --release -p recreation_racing -p recreation_tag -p recreation_pilot -p recreation_games -p recreation_towers -p recreation_towers_server
 ```
 
 Every test of the pilot and the games flies the real flight model: a steep turn without losing

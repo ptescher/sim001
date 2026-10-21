@@ -20,7 +20,7 @@ Section: Ground control station
 
 Vocabulary:
   # The suite is about the desktop console, and the iOS app does the same job. Lines tagged
-  # [iOS] are what differs there; see domains/expectation/README.md, "Platforms".
+  # [iOS] are what differs there; see the expectation README, "Platforms" (https://github.com/ptescher/expectation).
   Platform: desktop | iOS
   State: the link is connected | lost
   State: the vehicle is disarmed | armed
@@ -205,11 +205,12 @@ Vocabulary:
     Shows: serial: the station was started with --flight-computer, and the sim reads the TX15 from the flight computer's serial line
 
   Phrase: the TX15 is ready
-    Say: plug the TX15 in over USB, and choose USB Joystick (HID) when EdgeTX asks. Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8, calibrate the sticks in the sim with F2, and copy the channels of the switches from controls.cfg.example. Then put the throttle stick all the way down, SE out and press button 1
-    Given the radio line is USB
+    Say: connect the TX15 to the flight computer's serial line (start the station with --flight-computer, or give the radio a serial device with --tx15-serial). Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8. Then put the throttle stick all the way down, SE out and press button 1
+    Given the radio line is serial
     And the throttle stick is low
     And the arm switch is off
     And the mode switch is QHOVER
+    And the TX15 screen arming is disarmed
 
   # A VTOL (see Flying a VTOL)
   State: the airframe is conventional | VTOL

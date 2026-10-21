@@ -1,8 +1,0 @@
-[package]
-name = "expectation_language"
-version = "0.1.0"
-edition = "2024"
-description = "Expectation domain: the .expect file format (parser and name resolution)"
-
-[dependencies]
-expectation_model = { path = "../model" }

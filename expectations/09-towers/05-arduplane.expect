@@ -1,0 +1,32 @@
+Feature: Playing Towers with ArduPilot drones
+  The game server plays Towers with real ArduPilot drones. Each drone is a T1-S VTOL with an
+  ArduPlane [[SITL]] of its own, with the AGENT mode. The server flies each drone on the flight
+  model of the sim, and it is the referee.
+
+  At GO, each drone arms at its base and climbs in QHOVER. At 15 m it changes to FBWA, and then
+  the server switches it to [[AGENT mode]]. From then on, the server sends each drone the plan
+  for its order about once each second. To take a tower, a drone circles it 40 m out, inside its
+  circle.
+
+  Each team has a [[seat]]. A computer commander or a person at the commander app sits in it.
+  A seat gets only the map of its team, four times each second. Thus the fog is the same for a
+  person and for a computer. Other seats can watch a team, or the whole game.
+
+  Expectation: Every drone flies the game in AGENT mode
+    When two computer teams play a game of Towers
+    Then the drones in AGENT mode are 6
+    And the commands that the drones refused are 0
+
+  Expectation: Each computer team takes towers
+    When two computer teams play a game of Towers
+    Then the towers that Blue took are at least 1
+    And the towers that Red took are at least 1
+
+  Expectation: A seat gets only what its team sees
+    When two computer teams play a game of Towers
+    Then the sightings from the fog on the Blue seat are 0
+    And the Red drones that the Blue seat saw are at least 1
+
+  Expectation: No drone crashes in a game
+    When two computer teams play a game of Towers
+    Then the drones that crashed are 0

@@ -462,6 +462,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aviation_computer"
+version = "0.1.0"
+dependencies = [
+ "aviation_crsf",
+ "illustration_theme",
+]
+
+[[package]]
+name = "aviation_crsf"
+version = "0.1.0"
+
+[[package]]
+name = "aviation_line"
+version = "0.1.0"
+dependencies = [
+ "aviation_computer",
+ "aviation_crsf",
+ "simulation_aircraft",
+]
+
+[[package]]
 name = "avif-serialize"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1601,24 +1622,27 @@ dependencies = [
 [[package]]
 name = "expectation_docs"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_graph",
  "expectation_model",
  "expectation_story",
- "illustration_theme",
+ "expectation_theme",
 ]
 
 [[package]]
 name = "expectation_graph"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_model",
- "illustration_theme",
+ "expectation_theme",
 ]
 
 [[package]]
 name = "expectation_harness"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_docs",
  "expectation_graph",
@@ -1631,6 +1655,7 @@ dependencies = [
 [[package]]
 name = "expectation_language"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_model",
 ]
@@ -1638,18 +1663,26 @@ dependencies = [
 [[package]]
 name = "expectation_model"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 
 [[package]]
 name = "expectation_service"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 
 [[package]]
 name = "expectation_story"
 version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 dependencies = [
  "expectation_graph",
  "expectation_model",
 ]
+
+[[package]]
+name = "expectation_theme"
+version = "0.1.0"
+source = "git+https://github.com/ptescher/expectation#eadaeccb3d7d0f3be88fbff3891cfb543030e9b0"
 
 [[package]]
 name = "exr"
@@ -5572,6 +5605,7 @@ dependencies = [
 name = "teleoperation_console"
 version = "0.1.0"
 dependencies = [
+ "aviation_line",
  "communication_telemetry",
  "communication_traffic",
  "expectation_harness",

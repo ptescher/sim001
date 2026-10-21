@@ -1,7 +1,0 @@
-[package]
-name = "expectation_model"
-version = "0.1.0"
-edition = "2024"
-description = "Expectation domain: vocabulary, conditions, expectations and stories as plain data"
-
-[dependencies]

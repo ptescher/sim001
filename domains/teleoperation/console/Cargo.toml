@@ -9,6 +9,7 @@ gpui = "0.2.2"
 mavlink = { version = "0.19", default-features = false, features = ["std", "transport-tcp", "transport-udp", "dialect-ardupilotmega", "dialect-common", "mav2-message-extensions"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 teleoperation_shared = { path = "../shared" }
+aviation_line = { path = "../../aviation/line" }
 # The link, the vehicle and the map geometry, without a screen (the iOS app uses them too).
 teleoperation_core = { path = "../core" }
 # The map pack format: the console shows a real place's map.
@@ -23,10 +24,10 @@ communication_telemetry = { path = "../../communication/telemetry" }
 # The shared look (the docs and the sim's HUD use it too).
 illustration_theme = { path = "../../illustration/theme" }
 raw-window-handle = "0.6"
-# Acceptance tests (`--expect`): see domains/expectation and expectations/.
-expectation_harness = { path = "../../expectation/harness" }
-expectation_model = { path = "../../expectation/model" }
-expectation_story = { path = "../../expectation/story" }
+# Acceptance tests (`--expect`): see github.com/ptescher/expectation and expectations/.
+expectation_harness = { git = "https://github.com/ptescher/expectation" }
+expectation_model = { git = "https://github.com/ptescher/expectation" }
+expectation_story = { git = "https://github.com/ptescher/expectation" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

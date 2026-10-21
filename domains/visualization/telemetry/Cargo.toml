@@ -10,6 +10,6 @@ mavlink = { version = "0.19", default-features = false, features = ["std", "dial
 glam = "0.33"
 
 [dev-dependencies]
-expectation_harness = { path = "../../expectation/harness" }
-expectation_model = { path = "../../expectation/model" }
-expectation_story = { path = "../../expectation/story" }
+expectation_harness = { git = "https://github.com/ptescher/expectation" }
+expectation_model = { git = "https://github.com/ptescher/expectation" }
+expectation_story = { git = "https://github.com/ptescher/expectation" }

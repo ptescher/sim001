@@ -28,9 +28,9 @@ audit). This skill is the order of work and the rules around it. Read writing-sp
 | --- | --- | --- |
 | the sim (keys, HUD, flight) | `cargo run --release -- --expect` | `src/acceptance.rs` |
 | the ground station (buttons, map, vehicle commands) | `cd domains/teleoperation/console && cargo run --release -- --station --expect` (needs Docker; add `--aircraft ID` for another plane) | `domains/teleoperation/console/src/expect.rs` |
-| the flight model alone (no window, no ArduPilot) | a `#[test]` that loads the suite and runs it through `expectation_harness::Bindings`, as in `domains/expectation/harness/examples/hand_launch` | the test's own bindings |
+| the flight model alone (no window, no ArduPilot) | a `#[test]` that loads the suite and runs it through `expectation_harness::Bindings`, as in the kettle example of [expectation](https://github.com/ptescher/expectation) (`crates/harness/examples/kettle`) | the test's own bindings |
 
-Checking a suite needs no run: `cargo run -p expectation_cli -- check expectations` and
+Checking a suite needs no run: `cargo run -p expectation -- check expectations` and
 `... -- plan expectations`.
 
 ## The cycle

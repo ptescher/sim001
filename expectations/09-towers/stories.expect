@@ -1,0 +1,204 @@
+Story: Taking a tower
+  As a commander of a team
+  I want to know how long my drones need at a tower
+  So that I send enough drones, and not too many
+
+  You send drones to circle the west tower, and you watch its control bar. One drone takes the
+  tower in 20 s. Two drones take it in 10 s. A drone that lands next to the tower does not help.
+
+  Scenario: One drone gets half way in 10 seconds
+    Given the Blue drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is 50 %
+    And the west tower is neutral
+
+  Scenario: One drone takes the tower in 20 seconds
+    Given the Blue drones in the west circle are 1
+    When the game runs for 20 seconds
+    Then the west tower is held by Blue
+    And the control of the west tower is 100 %
+
+  Scenario: Two drones take the tower in 10 seconds
+    Given the Blue drones in the west circle are 2
+    When the game runs for 10 seconds
+    Then the west tower is held by Blue
+
+  Scenario: A drone on the ground does not help
+    Given the Blue drones on the ground in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is 0 %
+
+Story: Fighting for a tower
+  As a commander of a team
+  I want to know what happens when both teams are at a tower
+  So that I know when to send more drones
+
+  Drones of the two teams meet at the west tower. The control bar moves only for the team with
+  more drones. When nobody is at the tower, the bar stays where it is. A team keeps its tower
+  until the bar gets back to the middle.
+
+  Scenario: Equal teams stop the bar
+    Given the control of the west tower is 50 %
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is 50 %
+    And the circle of the west tower is contested
+
+  Scenario: The bigger team moves the bar
+    Given the Blue drones in the west circle are 2
+    And the Red drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is 50 %
+    And the circle of the west tower is contested
+
+  Scenario: An empty circle keeps the bar
+    Given the control of the west tower is 50 %
+    When the game runs for 1 minute
+    Then the control of the west tower is 50 %
+    And the circle of the west tower is quiet
+
+  Scenario: Red keeps the tower while the bar is on its side
+    Given the west tower is held by Red
+    And the control of the west tower is -100 %
+    And the Blue drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is -50 %
+    And the west tower is held by Red
+
+  Scenario: Red loses the tower when the bar gets to the middle
+    Given the west tower is held by Red
+    And the control of the west tower is -50 %
+    And the Blue drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the west tower is neutral
+    And the control of the west tower is 0 %
+
+Story: Winning a game
+  As a commander of a team
+  I want to know how a game ends
+  So that I know when to hold and when to attack
+
+  Each tower gives its team one point each second. The first team to 500 points wins. If the
+  clock gets to 0 first, the team with more points wins.
+
+  Scenario: Two towers give two points each second
+    Given the towers held by Blue are 2
+    When the game runs for 10 seconds
+    Then the score of Blue is 20 points
+
+  Scenario: Blue gets to 500 points
+    Given the score of Blue is 495 points
+    And the score of Red is 300 points
+    When the game runs for 10 seconds
+    Then the game of Towers is won by Blue
+    And the score of Blue is 500 points
+
+  Scenario: Red has more points at the end of the clock
+    Given the time left is 5 s
+    And the score of Blue is 200 points
+    And the score of Red is 300 points
+    When the game runs for 10 seconds
+    Then the game of Towers is won by Red
+    And the time left is 0 s
+
+  Scenario: Equal points at the end of the clock
+    Given the time left is 5 s
+    And the score of Blue is 300 points
+    And the score of Red is 300 points
+    When the game runs for 10 seconds
+    Then the game of Towers is a draw
+
+  Scenario: After the end, nothing changes
+    Given the game of Towers is won by Blue
+    And the score of Blue is 500 points
+    And the score of Red is 300 points
+    When the game runs for 1 minute
+    Then the score of Blue is 500 points
+    And the score of Red is 300 points
+
+Story: Scouting in the fog
+  As a commander of a team
+  I want to know what my map shows me
+  So that I do not trust what I cannot see
+
+  A Red scout flies across the field. Your map shows it while your drones or your towers see
+  it. When it goes into the fog, your map keeps the place where you last saw it. A tower in the
+  fog can change sides, and your map does not show it until you look again.
+
+  Scenario: A drone sees the scout
+    Given the Red scout is near a Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+  Scenario: A tower sees the scout
+    Given the Red scout is near the Blue home tower
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+  Scenario: The scout in the fog
+    Given the Red scout is far from anything Blue
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is unknown
+
+  Scenario: The scout goes into the fog
+    Given the Red scout is near a Blue drone
+    When the Red scout flies into the fog for 10 seconds
+    Then the Red scout on the Blue map is last seen
+    And the age of the Red scout on the Blue map is 10 s
+
+  Scenario: Red takes a tower in the fog
+    Given the control of the east tower is -90 %
+    And the Red drones in the east circle are 1
+    When the game runs for 10 seconds
+    Then the east tower is held by Red
+    And the east tower on the Blue map is neutral
+    When a Blue drone flies near the east tower
+    Then the east tower on the Blue map is held by Red
+
+Story: The computer commander
+  As a commander of a team
+  I want to know what the computer does with its drones
+  So that I can play against it
+
+  The computer commander spreads its drones over the towers that it does not hold. When it sees
+  an enemy drone near one of its towers, it sends a drone back to defend it. A drone that is
+  behind in a fight for a tower goes somewhere else.
+
+  Scenario: The first orders
+    When the computer commander of Blue decides
+    Then the order of the first Blue drone is take the west tower
+    And the order of the second Blue drone is take the centre tower
+    And the order of the third Blue drone is take the east tower
+
+  Scenario: Defending the home tower
+    Given the Red scout is near the Blue home tower
+    When the computer commander of Blue decides
+    Then the order of the second Blue drone is take the Blue home tower
+
+  Scenario: Giving up a lost fight
+    Given the control of the west tower is -20 %
+    And the order of the first Blue drone is take the west tower
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 1
+    When the computer commander of Blue plays for 15 seconds
+    Then the order of the first Blue drone is take the Red home tower
+
+Story: Watching two computer teams play
+  As a developer of a commander
+  I want to watch two computer commanders play a game with real ArduPilot drones
+  So that I have a baseline for my own commander
+
+  The game server starts six ArduPlane SITL drones, and it plays a whole game with a computer
+  commander for each team. At the end, its report tells you how the drones flew and what each
+  team took.
+
+  Scenario: Play and watch
+    When two computer teams play a game of Towers
+    Then the drones in AGENT mode are 6
+    And the commands that the drones refused are 0
+    And the towers that Blue took are at least 1
+    And the towers that Red took are at least 1
+    And the sightings from the fog on the Blue seat are 0
+    And the Red drones that the Blue seat saw are at least 1
+    And the drones that crashed are 0

@@ -88,7 +88,7 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
             may_fail: true,
         });
     }
-    out.push(cargo("the manual", root, &["run", "-q", "-p", "expectation_cli", "--", "docs", "expectations", &docs_arg], 600));
+    out.push(cargo("the manual", root, &["run", "-q", "-p", "expectation", "--", "docs", "expectations", &docs_arg], 600));
     out
 }
 

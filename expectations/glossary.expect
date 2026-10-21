@@ -352,3 +352,29 @@ Term: Tuning
 Term: Fast arena
   A game of [[tag]] with no window and no [[SITL]], many times faster than real time: the
   executor and three [[computer pilot]]s on the flight model of the sim. `cognition_arena`.
+
+Term: Base
+  In [[Towers]], the place where the drones of a team start and come back to. It is at one end
+  of the field. A team sees 150 m round its base.
+
+Term: Tower
+  In [[Towers]], a radio tower on the field. A team that holds a tower gets one point each
+  second from it, and it sees 200 m round it. A team takes a tower when its drones fly in the
+  [[circle]] of the tower.
+
+Term: Circle
+  In [[Towers]], the area round a [[tower]] where a drone counts for it: within 60 m of the
+  tower, and not more than 120 m high. Only a drone that flies counts.
+
+Term: Control
+  In [[Towers]], how far a [[tower]] is towards each team, from −100 % (Red) to +100 % (Blue).
+  A team holds the tower when the control gets to its end. The tower becomes neutral when the
+  control gets back to 0.
+
+Term: Fog
+  In [[Towers]], the parts of the field that a team does not see. An enemy drone in the fog is
+  not on the map of the team, or it is where the team last saw it.
+
+Term: Seat
+  In [[Towers]], the place of a commander of a team on the game server. A computer commander
+  or a person at the commander app sits in it. A seat gets only the map of its team.
