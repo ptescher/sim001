@@ -1,0 +1,25 @@
+[package]
+name = "recreation_towers_server"
+version = "0.1.0"
+edition = "2024"
+description = "Recreation domain: the game server of Towers: an ArduPlane SITL for each drone, the flight model, the referee, and a seat for each team (a computer commander or a person) over TCP"
+
+[[bin]]
+name = "towers_server"
+path = "src/main.rs"
+
+[dependencies]
+recreation_towers = { path = "../towers" }
+recreation_games = { path = "../games" }
+simulation_aircraft = { path = "../../simulation/aircraft" }
+simulation_physics = { path = "../../simulation/physics" }
+simulation_sitl = { path = "../../simulation/sitl" }
+cognition_agent = { path = "../../cognition/agent" }
+cognition_plan = { path = "../../cognition/plan" }
+glam = "0.33"
+
+[dev-dependencies]
+# The acceptance tests (tests/acceptance.rs): the section "Towers" with real ArduPlane SITL.
+expectation_harness = { git = "https://github.com/ptescher/expectation" }
+expectation_model = { git = "https://github.com/ptescher/expectation" }
+expectation_story = { git = "https://github.com/ptescher/expectation" }

@@ -1,0 +1,94 @@
+Feature: Taking a tower
+  A drone counts for a tower when it flies in the [[circle]] of the tower: within 60 m of the
+  tower, and not more than 120 m high. The [[control]] of each tower goes from −100 % (Red) to
+  +100 % (Blue). Each second, it moves towards the team with more drones in the circle. One
+  drone more moves it 5 % each second, so one drone takes a neutral tower in 20 s. Each drone
+  more adds 5 % each second.
+
+  A team holds a tower when the control gets to its end of the bar. It loses the tower when the
+  control gets back to 0. Between, the tower is neutral, and it gives no points and no vision.
+
+  Expectation: One drone moves the control 5 % each second
+    Given the west tower is neutral
+    And the control of the west tower is 0 %
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 0
+    When the game runs for 10 seconds
+    Then the control of the west tower is 50 %
+    And the west tower is neutral
+
+  Expectation: One drone takes a neutral tower in 20 seconds
+    Given the west tower is neutral
+    And the control of the west tower is 0 %
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 0
+    When the game runs for 20 seconds
+    Then the west tower is held by Blue
+    And the control of the west tower is 100 %
+
+  Expectation: Two drones take a tower in half the time
+    Given the west tower is neutral
+    And the control of the west tower is 0 %
+    And the Blue drones in the west circle are 2
+    And the Red drones in the west circle are 0
+    When the game runs for 10 seconds
+    Then the west tower is held by Blue
+
+  Expectation: The same number of drones from each team stops the control
+    A circle with drones of the two teams in it is contested. The control moves only by the
+    difference between the two teams.
+
+    Given the control of the west tower is 50 %
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is 50 %
+    And the circle of the west tower is contested
+
+  Expectation: The team with more drones moves the control by the difference
+    Given the west tower is neutral
+    And the control of the west tower is 0 %
+    And the Blue drones in the west circle are 2
+    And the Red drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is 50 %
+    And the circle of the west tower is contested
+
+  Expectation: An empty circle keeps its control
+    A team does not have to stay at a tower to keep the work that it did. It can come back
+    later and finish.
+
+    Given the control of the west tower is 50 %
+    And the Blue drones in the west circle are 0
+    And the Red drones in the west circle are 0
+    When the game runs for 1 minute
+    Then the control of the west tower is 50 %
+    And the circle of the west tower is quiet
+
+  Expectation: A team keeps a tower while the control is on its side
+    Given the west tower is held by Red
+    And the control of the west tower is -100 %
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 0
+    When the game runs for 10 seconds
+    Then the control of the west tower is -50 %
+    And the west tower is held by Red
+
+  Expectation: A held tower becomes neutral when its control gets back to 0
+    Given the west tower is held by Red
+    And the control of the west tower is -50 %
+    And the Blue drones in the west circle are 1
+    And the Red drones in the west circle are 0
+    When the game runs for 10 seconds
+    Then the west tower is neutral
+    And the control of the west tower is 0 %
+
+  Expectation: A drone on the ground does not count
+    A drone must fly in the circle. A drone that lands next to a tower does not take it.
+
+    Given the west tower is neutral
+    And the control of the west tower is 0 %
+    And the Blue drones in the west circle are 0
+    And the Blue drones on the ground in the west circle are 1
+    When the game runs for 10 seconds
+    Then the control of the west tower is 0 %

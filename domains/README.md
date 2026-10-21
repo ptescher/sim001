@@ -20,7 +20,7 @@ the compiler enforce that.
 | [teleoperation](teleoperation/README.md) | The pilot's end of the link: the TX15's EdgeTX models and themes (laid out as its SD card so EdgeTX Companion can simulate them), and the GPUI ground control station that flies ArduPlane SITL and the sim, with the feed protocol and window layout it shares with the sim. |
 | [illustration](illustration/README.md) | The look shared by the ground station, the sim's HUD and the docs: palettes, type and corners. |
 | [simulation](simulation/README.md) | The flight model and the planes it flies: aircraft descriptions and the physics, headless and independent of any renderer. |
-| [recreation](recreation/README.md) | Games and trials against computer pilots who fly the same plane on the same physics: a pylon race and tag. |
+| [recreation](recreation/README.md) | Games and trials against computer pilots who fly the same plane on the same physics: a pylon race and tag. And Towers, a team game for drones flown by plan, with a fog of war. |
 | [visualization](visualization/README.md) | The 3D view (terrain, forest, water, sky, the planes and the cameras) and the place it shows. It draws a scene that the simulator or a real plane's telemetry fills in, and it saves pictures for camera-based systems. |
 | [communication](communication/README.md) | How the station finds out where other aircraft are, using only what the radio passes on: Remote ID, a MAVLink network and ADS-B, the radios between aircraft, and the tracker that joins them into one picture. |
 | [aviation](aviation/README.md) | The flight computer between the TX15 and ArduPilot: the TX15 on a UART in CRSF instead of a USB controller, channels in, failsafe, telemetry and the ground station's MAVLink carried on the same line. |

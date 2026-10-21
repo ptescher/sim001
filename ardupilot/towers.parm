@@ -1,0 +1,7 @@
+# Towers (domains/recreation/towers_server): the AGENT mode's envelope for the Towers field, on
+# top of t1s.parm. The field is a circle 420 m round SITL's home; the fence is a little wider. The
+# drones circle the towers between 40 m and 60 m, under the tower circles' 120 m.
+AGENT_FENCE_N 0
+AGENT_FENCE_E 0
+AGENT_FENCE_R 440
+AGENT_CEIL 100

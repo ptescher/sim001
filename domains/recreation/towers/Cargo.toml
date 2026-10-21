@@ -1,0 +1,17 @@
+[package]
+name = "recreation_towers"
+version = "0.1.0"
+edition = "2024"
+description = "Recreation domain: Towers, a team game for drones flown by plan: the towers, capture, points, vision and the fog of each team"
+
+[dependencies]
+glam = { version = "0.33", features = ["serde"] }
+# The seat protocol: JSON lines (see seat.rs).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+# The acceptance tests (tests/acceptance.rs): the section "Towers" with no window.
+expectation_harness = { git = "https://github.com/ptescher/expectation" }
+expectation_model = { git = "https://github.com/ptescher/expectation" }
+expectation_story = { git = "https://github.com/ptescher/expectation" }

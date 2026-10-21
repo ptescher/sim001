@@ -1,0 +1,145 @@
+# Towers, a team game for drones flown by plan (domains/recreation/towers, plans/towers.md).
+# Run with no window by domains/recreation/towers/tests/acceptance.rs: the real referee
+# (recreation_towers::Game), with drones that the test puts where each step says. The rules do
+# not depend on how a drone flies; the host's tests fly the game with ArduPlane SITL.
+
+Section: Towers
+  Towers is a game for two teams of drones, Blue and Red. Each team has three T1-S VTOL
+  drones and a [[base]] at one end of the field. Five radio [[tower]]s stand on the field. At
+  the start, each team holds its home tower. The centre tower and the two flank towers are
+  neutral.
+
+  You do not fly the drones with sticks. You give each drone an order from the ground, and the
+  drone flies it by plan in [[AGENT mode]]. To take a tower, send drones to circle it. Each
+  tower that your team holds gives you one point each second. The first team to 500 points
+  wins. If no team has 500 points after 8 minutes, the team with more points wins.
+
+  A team does not see the whole field. It sees round its drones, its base and the towers that
+  it holds. The rest of the field is in [[fog]]. An enemy drone in the fog is not on your map,
+  or it is where you last saw it.
+
+  [[Taking a tower]] tells you how a tower changes sides. [[Points and the end of the game]]
+  tells you how to win. [[What a team sees]] tells you what the fog hides.
+
+Vocabulary:
+  State: the game of Towers is in play | won by Blue | won by Red | a draw
+    Shows: in play: the clock runs, and the scores go up
+    Shows: won by Blue: the game stops, and it says BLUE WINS
+    Shows: won by Red: the game stops, and it says RED WINS
+    Shows: a draw: the game stops, and it says DRAW
+  State: the time left is 0..480 s
+    Set: wait until the clock shows {value}
+    Shows: the clock shows {value} left
+  State: the score of Blue is 0..1000 points
+    Set: play until Blue has {value}
+    Shows: the score of Blue is {value}
+  State: the score of Red is 0..1000 points
+    Set: play until Red has {value}
+    Shows: the score of Red is {value}
+  State: the towers held by Blue are 0..5
+    Set: take towers until Blue holds {value}
+    Shows: Blue holds {value} towers
+
+  # The west and the east flank towers, and the drones in their circles.
+  State: the west tower is held by Blue | held by Red | neutral
+    Shows: held by Blue: the west tower is blue
+    Shows: held by Red: the west tower is red
+    Shows: neutral: the west tower is grey
+  State: the control of the west tower is -100..100 %
+    Shows: the control bar of the west tower is at {value}. Plus is towards Blue, minus towards Red
+  State: the circle of the west tower is contested | quiet
+    Shows: contested: the circle of the west tower flashes, because drones of the two teams are in it
+    Shows: quiet: the circle of the west tower does not flash
+  State: the Blue drones in the west circle are 0..3
+    Set: order {value} Blue drones to take the west tower, and wait until they circle it
+  State: the Red drones in the west circle are 0..3
+    Set: order {value} Red drones to take the west tower, and wait until they circle it
+  State: the Blue drones on the ground in the west circle are 0..3
+    Set: land {value} Blue drones in the circle of the west tower
+  State: the east tower is held by Blue | held by Red | neutral
+    Shows: held by Blue: the east tower is blue
+    Shows: held by Red: the east tower is red
+    Shows: neutral: the east tower is grey
+  State: the control of the east tower is -100..100 %
+    Shows: the control bar of the east tower is at {value}
+  State: the Red drones in the east circle are 0..3
+    Set: order {value} Red drones to take the east tower, and wait until they circle it
+
+  # What Blue knows: the map of the Blue team.
+  State: the Red scout is at its base | near a Blue drone | far from anything Blue | near the Blue home tower
+    Shows: at its base: the Red scout is on the ground at the Red base
+    Shows: near a Blue drone: the Red scout flies 100 m from a Blue drone, over the middle of the field
+    Shows: far from anything Blue: the Red scout flies 100 m north of the east tower, and no Blue drone is near
+    Shows: near the Blue home tower: the Red scout flies 100 m north of the Blue home tower
+  State: the Red scout on the Blue map is seen | last seen | unknown
+    Shows: seen: the Blue map shows the Red scout where it is now
+    Shows: last seen: the Blue map shows the Red scout dim, where Blue last saw it, with the time since then
+    Shows: unknown: the Blue map does not show the Red scout
+  State: the age of the Red scout on the Blue map is 0..600 s
+    Shows: the Blue map shows the Red scout with the age {value} s
+  State: the east tower on the Blue map is held by Blue | held by Red | neutral
+    Shows: held by Red: the Blue map shows the east tower red
+    Shows: neutral: the Blue map shows the east tower grey
+
+  Event: the game runs for 10 seconds
+    Say: wait 10 seconds
+  Event: the game runs for 20 seconds
+    Say: wait 20 seconds
+  Event: the game runs for 1 minute
+    Say: wait 1 minute
+  Event: the Red scout flies into the fog for 10 seconds
+    Say: watch the Red scout fly away to the north-east, far from the Blue drones, and wait 10 seconds
+  Event: a Blue drone flies near the east tower
+    Say: order a Blue drone to fly to a point 70 m south-west of the east tower, outside its circle
+
+  # The computer commander of a team (recreation_towers::Commander): its orders to the Blue
+  # drones. The first Blue drone stands at the west end of the Blue base, the third at the east end.
+  State: the order of the first Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower
+    Shows: {value}: the first Blue drone gets the order to {value}
+  State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower
+    Shows: {value}: the second Blue drone gets the order to {value}
+  State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower
+    Shows: {value}: the third Blue drone gets the order to {value}
+  Event: the computer commander of Blue decides
+    Say: wait for the next decision of the computer commander. It decides once each second
+  Event: the computer commander of Blue plays for 15 seconds
+    Say: wait 15 seconds while the computer commander gives its orders, once each second
+
+  # A whole game on the game server, with an ArduPlane SITL for each drone (the server's report).
+  State: the drones in AGENT mode are 0..6
+    Shows: 6: the report of the server says `RESULT in_agent=6`. All six drones flew the game in AGENT mode
+  State: the commands that the drones refused are 0..100000
+    Shows: 0: the report of the server says `RESULT refused=0`. The drones accepted every plan and every mode change
+  State: the drones that crashed are 0..100
+    Shows: 0: the report of the server says `RESULT crashes=0`
+  State: the towers that Blue took are 0..100
+    Shows: at least 1: the report of the server says `RESULT taken_blue=` with 1 or more
+  State: the towers that Red took are 0..100
+    Shows: at least 1: the report of the server says `RESULT taken_red=` with 1 or more
+  State: the sightings from the fog on the Blue seat are 0..100000
+    Shows: 0: a seat that watches Blue never gets a Red drone that Blue does not see, or the place of a Red drone that Blue does not see now
+  State: the Red drones that the Blue seat saw are 0..3
+    Shows: at least 1: a seat that watches Blue gets Red drones when Blue sees them
+  Event: two computer teams play a game of Towers
+    Say: run `cargo run --release -p recreation_towers_server -- --speedup 10`, and wait for the end of the game. The server starts six ArduPlane SITL drones, and a computer commander for each team
+
+  Phrase: a game of Towers is in play
+    Say: start a game of Towers. All the drones stand at their bases
+    Given the game of Towers is in play
+    And the time left is 480 s
+    And the score of Blue is 0 points
+    And the score of Red is 0 points
+    And the towers held by Blue are 1
+    And the west tower is neutral
+    And the control of the west tower is 0 %
+    And the Blue drones in the west circle are 0
+    And the Red drones in the west circle are 0
+    And the Blue drones on the ground in the west circle are 0
+    And the east tower is neutral
+    And the control of the east tower is 0 %
+    And the Red drones in the east circle are 0
+    And the east tower on the Blue map is neutral
+    And the Red scout is at its base
+
+Background:
+  Given a game of Towers is in play

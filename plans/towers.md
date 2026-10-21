@@ -1,0 +1,97 @@
+# Plan: Towers, a team game flown from a ground station
+
+Two teams of drones fight for radio towers on a field. Each drone is a T1-S VTOL with its own
+ArduPlane SITL (the fork with the AGENT mode), and a team is commanded the way the real station
+commands a plane: by plans (`cognition_plan`), not sticks. A team holds a tower by circling it.
+Towers it holds score, and they let it see: a team only knows what its towers and its drones
+can see, so the rest of the field is in fog.
+
+Each team has a **seat**. A seat is filled by a person at the commander app or by a ground control
+agent (a `Brain`), and both use the same seat protocol, so human against computer, human
+against human and computer against computer are the same game.
+
+## Rules (version 1)
+
+Numbers to tune, not measurements; they live in `recreation_towers::Rules`.
+
+| Rule | Value |
+| --- | --- |
+| Field | Flat, a circle 420 m round the centre (the AGENT fence). North is up |
+| Teams | Blue (south base, 300 m south of the centre) and Red (north base, 300 m north) |
+| Drones | 3 a team, taking off from their base |
+| Towers | Five: each team's home tower (220 m from the centre, towards its base, held by that team at the start), the centre, and the east and west flanks (220 m out), neutral at the start |
+| In a tower's circle | Flying, within 60 m of the tower across, and at most 120 m up |
+| Capture | A tower's control goes from −1 (Red) to +1 (Blue). Each second it moves towards the team with more drones in the circle, by 1/20 for one drone more and 1/20 more for each drone after that. With the same number of each team's drones in the circle (and at least one), it is contested and does not move. With none, it stays |
+| Holding | A team holds a tower when its control reaches its end (±1). It loses it when the control crosses 0. A tower between is neutral |
+| Score | One point a second for each tower a team holds |
+| End | 500 points, or the clock (8 min): the most points wins; equal points is a draw |
+| Vision | A held tower sees 200 m round it (the centre tower, 220 m out, stays in fog from both home towers), a drone 150 m (on the ground too), a base 150 m |
+| Fog | A team sees an enemy drone only while something of its own sees it. Out of sight, the drone stays on its map where it was last seen, with its age. A tower's holder and control are known only while the team sees the tower; otherwise the team has what it last saw |
+| Crash | The drone is out, and it is back at its base after 15 s (phase 2) |
+
+There is no fighting in version 1: a team keeps the other out of a tower by being there too.
+
+## Architecture
+
+```text
+ SEAT (one per team)                 SERVER (recreation_towers_server)             DRONES
+ ┌─────────────────────┐  JSON     ┌───────────────────────────────────┐ MAVLink ┌───────────────────┐
+ │ commander app (GPUI)│◀─lines──▶│ seats: the team's view, 4 Hz       │◀──────▶│ ArduPlane SITL ×6 │
+ │   or a Brain        │  on TCP  │   orders in → plans out            │  tcp    │  AGENT mode       │
+ └─────────────────────┘           │ referee: recreation_towers::Game  │         │  executor         │
+                                   │ physics: simulation_physics,      │◀──────▶│                   │
+                                   │   lockstep with each SITL          │ UDP JSON│                   │
+                                   └───────────────────────────────────┘         └───────────────────┘
+```
+
+- **The fog is the host's.** A seat gets only its team's view (`Game::view(team)`), so a seat
+  cannot see more than its team does, whatever is in it. A seat never talks to the drones; it
+  sends orders, and the host turns each order into a plan for that drone.
+- **Orders** are what an operator wants, not what the executor flies: `Capture(tower)` (orbit
+  it inside the circle), `Goto(point)`, `Orbit(point, radius)`, `Hold` (loiter where it is),
+  `Home` (back over the base). The host keeps each drone's order and re-sends its plan before it
+  expires.
+- **The host** is the runner (`cognition_runner`) grown up: N SITL instances in lockstep, the
+  take-off sequence of `recreation_games` (arm, QHOVER to 15 m, FBWA, then AGENT), the AGENT
+  fence and ceiling set for the field, and the referee stepped with the physics.
+
+## Crates
+
+| Crate | Path | Role |
+| --- | --- | --- |
+| `recreation_towers` | `domains/recreation/towers` | The rules, the referee, vision and fog, the team view, orders, the seat protocol's messages and the scripted brain. Depends on `glam` and `serde`. No I/O |
+| `recreation_towers_server` | `domains/recreation/towers_server` | The game server (`towers_server`): SITL fleet, physics, referee, seats over TCP, orders to plans |
+| `teleoperation_command` | `domains/teleoperation/command` | The commander app (binary `sim001_command`): the field with its fog, the towers, the roster, select and order. GPUI, outside the workspace like the console, reusing its theme and drawing |
+
+## Phases
+
+Done: 1 and 2. A whole game between two computer commanders plays on six real ArduPlane SITL
+drones at about 6.5 times real time (a 4.5 minute game in about 45 s), and the server's
+acceptance test checks the fog from a seat against a spectator.
+
+Settled on the way:
+
+- The SITL instances are 30 to 35 (`--first-instance`), clear of the station's 0 to 3 and of
+  TCP 5900 (macOS screen sharing took instance 14's MAVLink port). Seats are on TCP 5955.
+- The server looks again just before it sends the maps, so that every map is of the same moment
+  as the spectator's game (each drone's physics thread moves it between the referee's steps).
+- The commander's "near a held tower" is two circles (120 m), not the tower's sight (200 m): the
+  towers are 220 m apart, so with 200 m an enemy circling the next tower pinned a defender.
+- Two commanders deadlocked one against one at every tower. A drone that is behind at a
+  contested tower for 10 s gives it up and stays away 30 s; who arrived first decides.
+- Red won both full games so far (500 to 394, 500 to 409). Red circles 4 m higher; whether that
+  or something else favours it is not known yet.
+
+1. **Rules** (`recreation_towers`). The referee, vision and fog, the team view, orders and the
+   scripted brain, specified in `expectations/09-towers` and run headless with drones that fly
+   straight to their orders (the rules don't depend on how a drone flies).
+2. **Host.** Six SITL drones and two brain seats play a whole game headless, faster than real
+   time. An acceptance test plays the section's game tests on real ArduPlane (skipped without
+   the AGENT build, as the runner's are).
+3. **Commander app.** A person takes a seat: the field, fog, towers, score and clock, the
+   roster, click a drone and click a tower or a point to order it. Its expect driver clicks as
+   the console's does.
+4. **Two people.** Seats by name on the host's command line (`--blue app --red brain`, or
+   both `app`), with the host on another machine.
+5. **Later:** terrain and line of sight for vision, a real place (`--map`), the 3D view of the
+   sim showing the towers, tagging enemy drones out, battery as a resource, replays.

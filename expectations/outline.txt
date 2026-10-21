@@ -24,6 +24,7 @@ Part: The ground station
 Part: Games
   Section: Recreation
   Section: Games with ArduPilot
+  Section: Towers
 
 Part: Beyond the cockpit
   Section: Other aircraft
