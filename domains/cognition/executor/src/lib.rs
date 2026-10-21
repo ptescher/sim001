@@ -27,6 +27,7 @@
 #![cfg_attr(feature = "ffi-static", no_std)]
 
 mod math;
+mod primitives;
 
 use math::*;
 
@@ -35,83 +36,25 @@ pub use cognition_plan::{Demand, Fallback, Limits, MAX_TRACKS, Plan, Primitive, 
 /// Bumped when the C ABI changes, so the C++ side can refuse a library that does not match.
 pub const ABI_VERSION: u32 = 2;
 
-/// The numbers that shape how the executor flies. Distances in m, speeds in m/s, angles in rad.
-pub mod tuning {
+/// The numbers that shape how the executor flies (see the module's own docs).
+pub mod tuning;
+
+/// The safety envelope's numbers: the track and step checks, the fence, the floor and ceiling,
+/// separation and the stall margin. Distances in m, speeds in m/s, angles in rad. Not part of
+/// [`Tuning`], and not to be changed by the league.
+pub mod safety {
     /// A track not heard for longer than this is ignored (s).
     pub const TRACK_STALE: f32 = 3.0;
     /// The longest step taken as sane (s).
     pub const DT_MAX: f32 = 0.5;
-
-    /// L1 guidance: period (s) and damping, as ArduPilot's `NAVL1_PERIOD` / `NAVL1_DAMPING`. The
-    /// L1 distance is `period * damping * v / π` (about 43 m at 18 m/s), or the distance to the
-    /// point if that is shorter, but not under `L1_MIN`.
-    pub const L1_PERIOD: f32 = 10.0;
-    pub const L1_DAMPING: f32 = 0.75;
-    pub const L1_MIN: f32 = 8.0;
-    /// Course-error gain (1/s): turn rate asked per radian of course error.
-    pub const K_COURSE: f32 = 0.9;
-    /// Vector-field gain round a circle: how hard the course bends towards the circle.
-    pub const K_CIRCLE: f32 = 2.0;
-    /// Loiter radius: at least this, and at least `LOITER_TURN_MARGIN` turn radii at the cruise
-    /// speed and `LOITER_BANK` of the bank limit.
-    pub const LOITER_RADIUS_MIN: f32 = 25.0;
-    pub const LOITER_BANK: f32 = 0.75;
-    pub const LOITER_TURN_MARGIN: f32 = 1.15;
-    /// An orbit's radius is at least `ORBIT_TURN_MARGIN` turn radii at the cruise speed and
-    /// `ORBIT_BANK` of the bank limit.
-    pub const ORBIT_BANK: f32 = 0.85;
-    pub const ORBIT_TURN_MARGIN: f32 = 1.1;
-    /// Goto: L1 to the point until within `GOTO_OVER` of it (or it is behind and within
-    /// `GOTO_ARRIVED` loiter radii), then circle it at the loiter radius.
-    pub const GOTO_OVER: f32 = 10.0;
-    pub const GOTO_ARRIVED: f32 = 1.2;
-    /// Band: wander round the point at this fraction of the fence radius (or the loiter radius).
-    pub const BAND_WANDER: f32 = 0.45;
     /// Circles are kept this far inside the fence, plus what the fence itself needs (its buffer,
     /// `FENCE_LAG_MIN` seconds of flight and the wind's drift in half a turn).
     pub const CIRCLE_FENCE_MARGIN: f32 = 8.0;
-
-    /// Height: climb rate asked per metre of height error (1/s), and the most climb and sink.
-    pub const K_HEIGHT: f32 = 0.35;
-    pub const CLIMB_MAX: f32 = 4.0;
-    pub const SINK_MAX: f32 = 4.0;
-    /// Pitch per m/s of climb-rate error, its integral, and the integrator's limit (rad).
-    pub const K_CLIMB: f32 = 0.05;
-    pub const K_CLIMB_I: f32 = 0.03;
-    pub const PITCH_I_MAX: f32 = 0.12;
     /// Height targets stay this far inside the floor and the ceiling.
     pub const HEIGHT_MARGIN: f32 = 8.0;
-    /// Throttle: trim, per m/s of airspeed error, per m/s of climb asked, the integral and its limit.
-    pub const THR_TRIM: f32 = 0.45;
-    pub const K_THR_SPEED: f32 = 0.1;
-    pub const K_THR_CLIMB: f32 = 0.06;
-    pub const K_THR_I: f32 = 0.05;
-    pub const THR_I_MAX: f32 = 0.4;
-    /// Below the target airspeed by more than `UNDERSPEED`, lower the nose this much per m/s.
-    pub const UNDERSPEED: f32 = 2.0;
-    pub const K_UNDERSPEED_PITCH: f32 = 0.03;
-
-    /// Pursue: airspeed added per metre the plane is behind the target (1/s), the most added and
-    /// taken off, and the longest look-ahead to the intercept point (s; the look-ahead is the
-    /// range over the plane's speed).
-    pub const K_CLOSE: f32 = 0.5;
-    pub const CLOSE_MAX: f32 = 5.0;
-    pub const OPEN_MAX: f32 = 4.0;
-    pub const LEAD_MAX: f32 = 3.0;
-    /// The shortest look-ahead (s): close behind, the plane follows the target's path to a point
-    /// this far ahead of it, as L1 follows a track, instead of chasing a point it is on top of.
-    pub const LEAD_MIN: f32 = 1.5;
-    /// The target's turn rate is estimated from its velocity, filtered with this time constant
-    /// (s), and believed up to `TURN_RATE_MAX` (rad/s).
-    pub const TURN_FILTER: f32 = 1.0;
-    pub const TURN_RATE_MAX: f32 = 1.0;
-    /// With separation on, pursue sits this much beyond the separation zone, behind the target.
-    pub const STANDOFF_EXTRA: f32 = 3.0;
-    /// Evade: aim this far above or below the threat, at this fraction of the way from cruise to
-    /// top speed; the arena edge starts to bend the escape inwards at `EVADE_EDGE` of the fence radius.
-    pub const EVADE_HEIGHT: f32 = 20.0;
-    pub const EVADE_SPEED: f32 = 0.6;
-    pub const EVADE_EDGE: f32 = 0.5;
+    /// A separation escape that neither climbs nor is faster than cruise holds at least this
+    /// throttle (the default trim, whatever the tuning).
+    pub const ESCAPE_THROTTLE: f32 = 0.45;
 
     /// Fence: the turn back is predicted as `FENCE_LAG_MIN` s more as the plane is, then a roll
     /// to the full bank at `ROLL_RATE` rad/s (slower than the stock roll controller, to be safe),
@@ -167,6 +110,8 @@ pub mod tuning {
     pub const STALL_BANK: f32 = 0.17;
 }
 
+use primitives::*;
+use safety::*;
 use tuning::*;
 
 /// Bits of [`Executor::rules`]: which of the envelope's rules changed the demand.
@@ -215,10 +160,12 @@ struct Lims {
     grace: f32,
     /// The wind's speed (filtered), set each step: the fence allows for its drift.
     wind: f32,
+    /// The guidance and energy numbers.
+    t: Tuning,
 }
 
 impl Lims {
-    fn new(l: &Limits) -> Option<Lims> {
+    fn new(l: &Limits, t: &Tuning) -> Option<Lims> {
         let all = [
             l.fence_centre[0],
             l.fence_centre[1],
@@ -254,6 +201,7 @@ impl Lims {
             separation: l.separation,
             grace: l.grace.max(0.0),
             wind: 0.0,
+            t: *t,
         })
     }
 
@@ -268,7 +216,7 @@ impl Lims {
     }
 
     fn loiter_radius(&self) -> f32 {
-        (LOITER_TURN_MARGIN * self.turn_radius(self.v_cruise, LOITER_BANK)).max(LOITER_RADIUS_MIN)
+        (self.t.loiter_turn_margin * self.turn_radius(self.v_cruise, self.t.loiter_bank)).max(self.t.loiter_radius_min)
     }
 
     /// How far inside the fence a turn back, begun after `lag` seconds at speed `v`, must stay:
@@ -419,46 +367,6 @@ fn plan_ok(p: &Plan) -> bool {
         && p.ttl >= 0.0
 }
 
-/// Roll for a lateral acceleration (m/s², positive to the right), within the bank limit.
-fn roll_for(a: f32, l: &Lims) -> f32 {
-    atan(a / G).within(-l.bank, l.bank)
-}
-
-/// L1 guidance to a point: the lateral acceleration (positive right).
-fn l1_to(c: &Ctx, target: [f32; 2]) -> f32 {
-    let d = sub2(target, c.pos);
-    let dist = norm2(d);
-    if dist < 0.1 {
-        return 0.0;
-    }
-    let eta = wrap_pi(atan2(d[1], d[0]) - c.course);
-    let l1 = (L1_PERIOD * L1_DAMPING * c.v / PI).min(dist).max(L1_MIN);
-    let k = 2.0 * c.v * c.v / l1;
-    if eta.abs() > HALF_PI { k.copysign(eta) } else { k * sin(eta) }
-}
-
-/// Course hold: the lateral acceleration towards course `chi`.
-fn course_to(c: &Ctx, chi: f32) -> f32 {
-    K_COURSE * c.v * wrap_pi(chi - c.course)
-}
-
-/// A vector field round a circle: the lateral acceleration to join it and stay on it.
-fn circle(c: &Ctx, centre: [f32; 2], radius: f32, dir: f32) -> f32 {
-    let radius = radius.max(1.0);
-    let r = sub2(c.pos, centre);
-    let d = norm2(r);
-    // At the centre, the bearing from it is taken as if the plane were already going round.
-    let phi = if d > 1.0 { atan2(r[1], r[0]) } else { c.course - dir * HALF_PI };
-    let chi = phi + dir * (HALF_PI + atan(K_CIRCLE * (d - radius) / radius));
-    let near = (1.0 - (d - radius).abs() / radius).within(0.0, 1.0);
-    dir * c.v * c.v / radius * near + course_to(c, chi)
-}
-
-/// Which way round a circle the plane is already going (+1 clockwise), from where it is and its velocity.
-fn natural_dir(c: &Ctx, centre: [f32; 2]) -> f32 {
-    if cross2(sub2(c.pos, centre), c.vel) >= 0.0 { 1.0 } else { -1.0 }
-}
-
 /// The plan executor. Holds the plan being flown and the controllers' memory; `step` once per
 /// control step. [`Executor::new`] is the state after `agent_exec_reset`.
 #[derive(Clone, Copy, Debug)]
@@ -486,6 +394,8 @@ pub struct Executor {
     flown: Primitive,
     /// The envelope's rules that changed the last step's demand (`rules`).
     rules: u8,
+    /// The guidance and energy numbers it flies with.
+    tuning: Tuning,
 }
 
 impl Default for Executor {
@@ -510,12 +420,25 @@ impl Executor {
             wind: [0.0, 0.0],
             flown: Primitive::None,
             rules: 0,
+            tuning: Tuning::DEFAULT,
         }
     }
 
-    /// Forget the plan and all memory.
+    /// An executor that flies with `tuning` instead of the defaults.
+    pub const fn with_tuning(tuning: Tuning) -> Executor {
+        let mut e = Executor::new();
+        e.tuning = tuning;
+        e
+    }
+
+    /// The tuning it flies with.
+    pub fn tuning(&self) -> &Tuning {
+        &self.tuning
+    }
+
+    /// Forget the plan and all memory, but not the tuning.
     pub fn reset(&mut self) {
-        *self = Executor::new();
+        *self = Executor::with_tuning(self.tuning);
     }
 
     /// The plan held (the last adopted), expired or not.
@@ -540,7 +463,7 @@ impl Executor {
 
     /// One control step. `tracks` may be any length (the C side passes `MAX_TRACKS`).
     pub fn step(&mut self, s: &State, plan: Option<&Plan>, tracks: &[Track], limits: &Limits) -> Demand {
-        let mut lims = match Lims::new(limits) {
+        let mut lims = match Lims::new(limits, &self.tuning) {
             Some(l) if state_ok(s) => l,
             _ => {
                 self.rules = 0;
@@ -607,7 +530,7 @@ impl Executor {
     }
 
     fn orbit_radius(&self, p: &Plan, l: &Lims) -> f32 {
-        p.radius.max(ORBIT_TURN_MARGIN * l.turn_radius(l.v_cruise, ORBIT_BANK))
+        p.radius.max(l.t.orbit_turn_margin * l.turn_radius(l.v_cruise, l.t.orbit_bank))
     }
 
     /// The primitive's demand (within the attitude limits), and the fallback taken, if any.
@@ -638,13 +561,13 @@ impl Executor {
             (Primitive::Loiter, _) => return (self.loiter(c, anchor, l, dt), Fallback::NotAtAll),
             (Primitive::Orbit, _) => {
                 let (centre, radius) = l.fit_circle([p.point[0], p.point[1]], self.orbit_radius(&p, l));
-                (circle(c, centre, radius, anchor.dir), -p.point[2], l.v_cruise)
+                (circle(c, l, centre, radius, anchor.dir), -p.point[2], l.v_cruise)
             }
             (Primitive::Band, _) => {
                 let (centre, radius) = l.fit_circle([p.point[0], p.point[1]], band_radius(l));
                 let (low, high) = (p.band[0].min(p.band[1]), p.band[0].max(p.band[1]));
                 let h = if high - low > 2.0 { anchor.height.within(low + 1.0, high - 1.0) } else { 0.5 * (low + high) };
-                (circle(c, centre, radius, anchor.dir), h, l.v_cruise)
+                (circle(c, l, centre, radius, anchor.dir), h, l.v_cruise)
             }
             (Primitive::Goto, _) => {
                 let r = l.loiter_radius();
@@ -652,14 +575,14 @@ impl Executor {
                 let to = sub2(point, c.pos);
                 let dist = norm2(to);
                 // There when over it, or when it is close and behind (passed, or inside the turn).
-                let passed = dist < GOTO_ARRIVED * r && wrap_pi(atan2(to[1], to[0]) - c.course).abs() > HALF_PI;
-                let a = if dist > GOTO_OVER && !passed && self.goto_dir == 0.0 {
-                    l1_to(c, point)
+                let passed = dist < l.t.goto_arrived * r && wrap_pi(atan2(to[1], to[0]) - c.course).abs() > HALF_PI;
+                let a = if dist > l.t.goto_over && !passed && self.goto_dir == 0.0 {
+                    l1_to(c, l, point)
                 } else {
                     if self.goto_dir == 0.0 {
                         self.goto_dir = natural_dir(c, point);
                     }
-                    circle(c, point, l.fit_circle(point, r).1, self.goto_dir)
+                    circle(c, l, point, l.fit_circle(point, r).1, self.goto_dir)
                 };
                 (a, -p.point[2], l.v_cruise)
             }
@@ -689,8 +612,9 @@ impl Executor {
             k.seen = true;
             let v2 = dot2(o.vel, o.vel);
             if v2 > 4.0 {
-                let w = (cross2(k.vel, o.vel) / (v2 * dt)).within(-TURN_RATE_MAX, TURN_RATE_MAX);
-                k.rate += (w - k.rate) * (dt / TURN_FILTER).min(1.0);
+                let w =
+                    (cross2(k.vel, o.vel) / (v2 * dt)).within(-self.tuning.turn_rate_max, self.tuning.turn_rate_max);
+                k.rate += (w - k.rate) * (dt / self.tuning.turn_filter).min(1.0);
             } else {
                 k.rate = 0.0;
             }
@@ -712,7 +636,7 @@ impl Executor {
 
     fn loiter(&mut self, c: &Ctx, a: Anchor, l: &Lims, dt: f32) -> Cmd {
         let (centre, radius) = l.fit_circle(a.centre, l.loiter_radius());
-        let accel = circle(c, centre, radius, a.dir);
+        let accel = circle(c, l, centre, radius, a.dir);
         let (pitch, throttle) = self.vertical(c, a.height, l.v_cruise, l, dt);
         Cmd { roll: roll_for(accel, l), pitch, throttle }
     }
@@ -722,20 +646,20 @@ impl Executor {
     fn vertical(&mut self, c: &Ctx, height: f32, speed: f32, l: &Lims, dt: f32) -> (f32, f32) {
         let height = l.safe_height(c, height);
         let speed = speed.within(l.v_min + STALL_MARGIN, l.v_max);
-        let climb = (K_HEIGHT * (height - c.h)).within(-SINK_MAX, CLIMB_MAX);
+        let climb = (l.t.k_height * (height - c.h)).within(-l.t.sink_max, l.t.climb_max);
         let e_climb = climb - c.climb;
-        let mut pitch = climb / c.air.max(5.0) + K_CLIMB * e_climb + self.pitch_i;
-        let under = speed - UNDERSPEED - c.air;
+        let mut pitch = climb / c.air.max(5.0) + l.t.k_climb * e_climb + self.pitch_i;
+        let under = speed - l.t.underspeed - c.air;
         if under > 0.0 {
-            pitch -= K_UNDERSPEED_PITCH * under;
+            pitch -= l.t.k_underspeed_pitch * under;
         }
         if !((pitch >= l.pitch_up && e_climb > 0.0) || (pitch <= -l.pitch_down && e_climb < 0.0)) {
-            self.pitch_i = (self.pitch_i + K_CLIMB_I * e_climb * dt).within(-PITCH_I_MAX, PITCH_I_MAX);
+            self.pitch_i = (self.pitch_i + l.t.k_climb_i * e_climb * dt).within(-l.t.pitch_i_max, l.t.pitch_i_max);
         }
         let e_speed = speed - c.air;
-        let throttle = THR_TRIM + K_THR_SPEED * e_speed + K_THR_CLIMB * climb + self.thr_i;
+        let throttle = l.t.thr_trim + l.t.k_thr_speed * e_speed + l.t.k_thr_climb * climb + self.thr_i;
         if !((throttle >= 1.0 && e_speed > 0.0) || (throttle <= 0.0 && e_speed < 0.0)) {
-            self.thr_i = (self.thr_i + K_THR_I * e_speed * dt).within(-THR_I_MAX, THR_I_MAX);
+            self.thr_i = (self.thr_i + l.t.k_thr_i * e_speed * dt).within(-l.t.thr_i_max, l.t.thr_i_max);
         }
         (pitch.within(-l.pitch_down, l.pitch_up), throttle.within(0.0, 1.0))
     }
@@ -801,7 +725,7 @@ impl Executor {
                 } else if c.air > l.v_cruise {
                     0.0
                 } else {
-                    cmd.throttle.max(THR_TRIM)
+                    cmd.throttle.max(ESCAPE_THROTTLE)
                 };
             } else {
                 self.sep_option = 0;
@@ -1025,12 +949,6 @@ fn escape(option: u8) -> (f32, f32) {
 const ESCAPES: [(f32, f32); 9] =
     [(0.0, 1.0), (0.0, -1.0), (1.0, 0.0), (-1.0, 0.0), (1.0, 1.0), (-1.0, 1.0), (1.0, -1.0), (-1.0, -1.0), (0.0, 0.0)];
 
-/// Band: the radius wandered round its point.
-fn band_radius(l: &Lims) -> f32 {
-    let r = l.loiter_radius();
-    if l.fenced() { r.max(BAND_WANDER * l.fence_radius) } else { r }
-}
-
 /// The wind, roughly: ground velocity less the air velocity along the heading.
 fn wind(c: &Ctx) -> [f32; 2] {
     let (s, co) = sin_cos(c.yaw);
@@ -1039,66 +957,10 @@ fn wind(c: &Ctx) -> [f32; 2] {
     if n > 20.0 { [w[0] * 20.0 / n, w[1] * 20.0 / n] } else { w }
 }
 
-/// Pursue: lead pursuit to where the target will be when the plane gets there (along the arc it
-/// is turning on), from behind it (beyond the separation zone, when
-/// separation is on), at its airspeed plus a closing speed; at its height.
-fn pursue(c: &Ctx, t: &Other, l: &Lims) -> (f32, f32, f32) {
-    let turn = t.turn;
-    let rel = sub2(t.pos, c.pos);
-    let range = norm2(rel).max(0.1);
-    let lead = (range / c.v.max(5.0)).within(LEAD_MIN, LEAD_MAX);
-    let standoff = if l.separation > 0.0 {
-        l.separation + (SEP_BUFFER * l.separation).max(SEP_BUFFER_MIN) + STANDOFF_EXTRA
-    } else {
-        0.0
-    };
-    let vt = norm2(t.vel);
-    let dir = if vt > 1.0 { [t.vel[0] / vt, t.vel[1] / vt] } else { [rel[0] / range, rel[1] / range] };
-    // The chord of the arc: the velocity turned half way, for the lead time.
-    let chord = rotate(t.vel, 0.5 * turn * lead);
-    let back = rotate(dir, turn * lead);
-    let aim = [t.pos[0] + chord[0] * lead - back[0] * standoff, t.pos[1] + chord[1] * lead - back[1] * standoff];
-    let accel = l1_to(c, aim);
-
-    // How far behind the target the plane is, along the target's track, past the standoff.
-    let behind = dot2(rel, dir) - standoff;
-    let t_air = norm2(sub2(t.vel, wind(c)));
-    let speed = t_air + (K_CLOSE * behind).within(-OPEN_MAX, CLOSE_MAX);
-    (accel, t.h, speed)
-}
-
 /// The north-east vector turned clockwise (seen from above) by `a` rad.
 fn rotate(v: [f32; 2], a: f32) -> [f32; 2] {
     let (s, co) = sin_cos(a);
     [v[0] * co - v[1] * s, v[0] * s + v[1] * co]
-}
-
-/// Evade: away from the threat, bent back into the arena near its edge; well above or below it;
-/// fast, but less so near the edge, where a wide turn would take it out.
-fn evade(c: &Ctx, t: &Other, l: &Lims) -> (f32, f32, f32) {
-    let away = sub2(c.pos, t.pos);
-    let n = norm2(away);
-    let mut dir = if n > 0.5 { [away[0] / n, away[1] / n] } else { [cos(c.course), sin(c.course)] };
-    // 0 well inside the arena, rising to 1 at its edge.
-    let mut edge = 0.0;
-    if l.fenced() {
-        let to_c = sub2(l.fence_centre, c.pos);
-        let d = norm2(to_c);
-        edge = ((d / l.fence_radius - EVADE_EDGE) / (1.0 - EVADE_EDGE)).within(0.0, 1.0);
-        if d > 0.5 {
-            dir = [dir[0] + 2.0 * to_c[0] / d * edge, dir[1] + 2.0 * to_c[1] / d * edge];
-        }
-    }
-    let accel = course_to(c, atan2(dir[1], dir[0]));
-    let height = if t.h >= c.h { t.h - EVADE_HEIGHT } else { t.h + EVADE_HEIGHT };
-    // If the floor or the ceiling stops that, go the other way.
-    let safe = l.safe_height(c, height);
-    let height = if (safe - t.h).abs() < 0.5 * EVADE_HEIGHT {
-        if height < t.h { t.h + EVADE_HEIGHT } else { t.h - EVADE_HEIGHT }
-    } else {
-        height
-    };
-    (accel, height, lerp(l.v_cruise, l.v_max, EVADE_SPEED * (1.0 - 0.5 * edge)))
 }
 
 /// Whether two demands differ by as much as the C side can see.

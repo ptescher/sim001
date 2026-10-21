@@ -770,7 +770,7 @@ fn driver() -> Windowless {
 ///
 /// - «The envelope leaves a safe plan alone»: with `ardupilot/t1s.parm` the cruise airspeed
 ///   (`AIRSPEED_CRUISE` 15) is the edge of the executor's stall margin (`AIRSPEED_MIN` 11 +
-///   `AGENT_ASPD_MRG` 2 + `tuning::STALL_MARGIN` 2), so the stall rule changes the demand on about
+///   `AGENT_ASPD_MRG` 2 + `safety::STALL_MARGIN` 2), so the stall rule changes the demand on about
 ///   one step in eight of a calm orbit. With a cruise of 18 m/s it never does. The fix is in the
 ///   tuning (the parameters or the margin), not the spec.
 const KNOWN_FAILURES: &[&str] = &["A repeated plan id changes nothing", "The envelope leaves a safe plan alone"];

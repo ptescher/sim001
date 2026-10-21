@@ -336,7 +336,7 @@ fn goto_reaches_the_point_and_stays_by_it() {
 }
 
 fn l_loiter(l: &Limits) -> f32 {
-    Lims::new(l).unwrap().loiter_radius()
+    Lims::new(l, &Tuning::DEFAULT).unwrap().loiter_radius()
 }
 
 #[test]
@@ -740,7 +740,7 @@ fn random_inputs_always_give_a_finite_demand_within_the_limits() {
         let n = (r.next() % (MAX_TRACKS as u32 + 1)) as usize;
         let d = x.step(&s, plan, &t[..n], &l);
         assert!(d.throttle.is_finite(), "{s:?} {p:?} {l:?}");
-        if Lims::new(&l).is_some() && state_ok(&s) {
+        if Lims::new(&l, &Tuning::DEFAULT).is_some() && state_ok(&s) {
             assert_ne!(d.fallback, Fallback::BadInput as u8);
             assert_within(&d, &l);
         } else {
@@ -916,4 +916,47 @@ fn an_intruder_flying_through_is_kept_outside_the_separation() {
         }
         assert!(closest > l.separation, "intruder from ({n}, {e}): {closest}");
     }
+}
+
+// ---- Tuning ---------------------------------------------------------------------------------
+
+#[test]
+fn the_default_tuning_is_the_constants_and_within_its_bounds() {
+    let t = Tuning::DEFAULT;
+    assert_eq!((t.l1_period, t.evade_height, t.k_close), (L1_PERIOD, EVADE_HEIGHT, K_CLOSE));
+    assert_eq!(Tuning::from_array(&t.to_array()), Some(t));
+    assert_eq!(Executor::new().tuning(), &t);
+}
+
+#[test]
+fn a_tuning_out_of_bounds_or_not_finite_is_refused() {
+    let mut a = Tuning::DEFAULT.to_array();
+    a[0] = Tuning::BOUNDS[0].1 + 1.0;
+    assert_eq!(Tuning::from_array(&a), None);
+    a[0] = f32::NAN;
+    assert_eq!(Tuning::from_array(&a), None);
+}
+
+#[test]
+fn each_tuning_has_its_own_hash() {
+    let t = Tuning { evade_height: 30.0, ..Tuning::DEFAULT };
+    assert_ne!(t.hash(), Tuning::DEFAULT.hash());
+    assert_eq!(t.hash(), Tuning { ..t }.hash());
+}
+
+#[test]
+fn a_tuned_executor_flies_its_tuning_and_keeps_it_through_a_reset() {
+    // Evading a threat level with it: the default goes 20 m above or below it (a climb at the
+    // limit), this one 6 m (a gentler climb).
+    let t = Tuning { evade_height: 6.0, ..Tuning::DEFAULT };
+    let threat = [track(2, [60.0, 0.0, -40.0], [-18.0, 0.0, 0.0])];
+    let l = Limits { ceiling: 120.0, ..Limits::default() };
+    let s = State { pos: [0.0, 0.0, -40.0], agl: 40.0, ..cruise_state() };
+    let p = Plan { target: 2, ..plan(1, Primitive::Evade) };
+    let pitch = |e: &mut Executor| e.step(&s, Some(&p), &threat, &l).pitch_cd;
+    let mut tuned = Executor::with_tuning(t);
+    let (d, k) = (pitch(&mut Executor::new()), pitch(&mut tuned));
+    assert!(k.abs() < d.abs(), "6 m asks a gentler climb or dive than 20 m: {k} vs {d}");
+    tuned.reset();
+    assert_eq!(tuned.tuning(), &t);
 }
