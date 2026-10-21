@@ -39,6 +39,59 @@ pub const ACE: AgentSkill = AgentSkill { name: "ace", awareness: 80.0, stick: 1.
 pub const CLUB: AgentSkill = AgentSkill { name: "club", awareness: 60.0, stick: 1.5, lead: 1.0, edge: 0.8 };
 pub const ROOKIE: AgentSkill = AgentSkill { name: "rookie", awareness: 40.0, stick: 2.0, lead: 0.0, edge: 0.85 };
 
+/// How one plane plays, as numbers that can be tuned: its [`AgentSkill`], its height band and
+/// how long each plan is good for. Each number has bounds ([`Tactics::BOUNDS`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tactics {
+    pub awareness: f32,
+    pub stick: f32,
+    pub lead: f32,
+    pub edge: f32,
+    /// Lowest height (m above home) and thickness of its band.
+    pub band_low: f32,
+    pub band_thickness: f32,
+    /// How long each plan is good for (s).
+    pub ttl: f32,
+}
+
+impl Tactics {
+    pub const LEN: usize = 7;
+    pub const NAMES: [&'static str; Tactics::LEN] =
+        ["awareness", "stick", "lead", "edge", "band_low", "band_thickness", "ttl"];
+    /// Least and most of each. The band stays above the executor's floor (12 m) and under the
+    /// arena's ceiling (60 m); a plan is good for at least the second until the next one.
+    pub const BOUNDS: [(f32, f32); Tactics::LEN] =
+        [(10.0, 150.0), (1.0, 4.0), (0.0, 4.0), (0.4, 0.95), (15.0, 55.0), (2.0, 30.0), (1.5, 6.0)];
+
+    /// A computer pilot's skill, in the first band, with the plans' usual ttl.
+    pub fn of(skill: &AgentSkill) -> Tactics {
+        Tactics {
+            awareness: skill.awareness,
+            stick: skill.stick,
+            lead: skill.lead,
+            edge: skill.edge,
+            band_low: BANDS[0].0,
+            band_thickness: BANDS[0].1,
+            ttl: TTL,
+        }
+    }
+
+    pub fn to_array(&self) -> [f32; Tactics::LEN] {
+        [self.awareness, self.stick, self.lead, self.edge, self.band_low, self.band_thickness, self.ttl]
+    }
+
+    /// `None` unless each number is finite and within its bounds.
+    pub fn from_array(a: &[f32; Tactics::LEN]) -> Option<Tactics> {
+        let ok = a.iter().zip(Tactics::BOUNDS).all(|(v, (lo, hi))| v.is_finite() && (lo..=hi).contains(v));
+        let [awareness, stick, lead, edge, band_low, band_thickness, ttl] = *a;
+        ok.then_some(Tactics { awareness, stick, lead, edge, band_low, band_thickness, ttl })
+    }
+
+    fn skill(&self) -> AgentSkill {
+        AgentSkill { name: "tactics", awareness: self.awareness, stick: self.stick, lead: self.lead, edge: self.edge }
+    }
+}
+
 /// One of the brain's planes.
 #[derive(Clone, Debug)]
 struct Player {
@@ -50,6 +103,8 @@ struct Player {
     target: Option<u8>,
     /// The id of its last plan.
     plan_id: u16,
+    /// How long each of its plans is good for (s).
+    ttl: f32,
 }
 
 /// The scripted ground agent.
@@ -67,9 +122,29 @@ impl ScriptedBrain {
         let players = roster
             .iter()
             .enumerate()
-            .map(|(k, &(id, skill))| Player { id, skill, band: BANDS[k % BANDS.len()], target: None, plan_id: 0 })
+            .map(|(k, &(id, skill))| Player {
+                id,
+                skill,
+                band: BANDS[k % BANDS.len()],
+                target: None,
+                plan_id: 0,
+                ttl: TTL,
+            })
             .collect();
         ScriptedBrain { players, default_skill: CLUB }
+    }
+
+    /// One plane, `id`, that plays by `tactics`.
+    pub fn with_tactics(id: u8, tactics: &Tactics) -> ScriptedBrain {
+        let player = Player {
+            id,
+            skill: tactics.skill(),
+            band: (tactics.band_low, tactics.band_thickness),
+            target: None,
+            plan_id: 0,
+            ttl: tactics.ttl,
+        };
+        ScriptedBrain { players: vec![player], default_skill: CLUB }
     }
 
     /// The computer pilots of `recreation_games::PILOTS` with ids 1, 2 and 3: the ace, the club
@@ -93,7 +168,7 @@ impl ScriptedBrain {
             return &mut self.players[k];
         }
         let band = BANDS[self.players.len() % BANDS.len()];
-        self.players.push(Player { id, skill: self.default_skill, band, target: None, plan_id: 0 });
+        self.players.push(Player { id, skill: self.default_skill, band, target: None, plan_id: 0, ttl: TTL });
         self.players.last_mut().unwrap()
     }
 }
@@ -179,7 +254,7 @@ impl Brain for ScriptedBrain {
             let alt = alt.clamp(g.floor, g.ceiling);
             orders.push(Order {
                 plane: me.id,
-                plan: WirePlan { id: p.plan_id, primitive, target, lat, lon, alt, radius, ttl: TTL },
+                plan: WirePlan { id: p.plan_id, primitive, target, lat, lon, alt, radius, ttl: p.ttl },
             });
         }
         orders
@@ -355,5 +430,21 @@ mod tests {
                 "{back:?} {o:?}"
             );
         }
+    }
+
+    #[test]
+    fn tactics_set_one_plane_s_skill_band_and_ttl() {
+        let t = Tactics { awareness: 25.0, band_low: 40.0, band_thickness: 6.0, ttl: 4.0, ..Tactics::of(&ACE) };
+        let mut brain = ScriptedBrain::with_tactics(1, &t);
+        assert_eq!(brain.band(1), Some((40.0, 6.0)));
+        // The chaser 30 m away: beyond 25 m, so the plane holds its band instead of evading.
+        let pic = picture(2, vec![craft(1, 70.0, 0.0, 42.0, 18.0), craft(2, 70.0, 30.0, 42.0, 18.0)]);
+        let p = order(&brain.decide(&pic), 1);
+        assert_eq!((p.primitive, p.ttl), (Primitive::Band, 4.0));
+        assert_eq!(Tactics::of(&ACE).to_array().len(), Tactics::LEN);
+        assert_eq!(Tactics::from_array(&Tactics::of(&ACE).to_array()), Some(Tactics::of(&ACE)));
+        let mut wild = t.to_array();
+        wild[0] = 1.0e6;
+        assert_eq!(Tactics::from_array(&wild), None);
     }
 }

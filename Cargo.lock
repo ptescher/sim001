@@ -2267,6 +2267,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cognition_arena"
+version = "0.1.0"
+dependencies = [
+ "cognition_agent",
+ "cognition_executor",
+ "cognition_plan",
+ "fastrand",
+ "glam",
+ "recreation_games",
+ "recreation_pilot",
+ "recreation_tag",
+ "serde",
+ "simulation_aircraft",
+ "simulation_physics",
+]
+
+[[package]]
 name = "cognition_executor"
 version = "0.1.0"
 dependencies = [
@@ -2276,6 +2293,21 @@ dependencies = [
  "expectation_model",
  "expectation_story",
  "glam",
+]
+
+[[package]]
+name = "cognition_league"
+version = "0.1.0"
+dependencies = [
+ "cognition_agent",
+ "cognition_arena",
+ "cognition_executor",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+ "fastrand",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

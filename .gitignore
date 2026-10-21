@@ -47,3 +47,4 @@ maps/*/build/
 /.ardupilot/
 /.ardupilot-venv/
 .ardupilot-agent/
+/league/

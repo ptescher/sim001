@@ -16,7 +16,7 @@ pub mod link;
 pub mod scripted;
 
 pub use cognition_plan::{Primitive, WireGame, WirePlan, wire::Role};
-pub use scripted::{AgentSkill, ScriptedBrain};
+pub use scripted::{AgentSkill, ScriptedBrain, Tactics};
 
 use glam::Vec3;
 

@@ -1,0 +1,18 @@
+[package]
+name = "cognition_arena"
+version = "0.1.0"
+edition = "2024"
+description = "Cognition domain: the fast arena (F0). A game of tag with no window and no SITL: a candidate (the executor with a tuning, the scripted brain with tactics) against the three computer pilots, seeded and randomised, many games at once"
+
+[dependencies]
+cognition_agent = { path = "../agent" }
+cognition_executor = { path = "../executor" }
+cognition_plan = { path = "../plan" }
+recreation_games = { path = "../../recreation/games" }
+recreation_pilot = { path = "../../recreation/pilot" }
+recreation_tag = { path = "../../recreation/tag" }
+simulation_aircraft = { path = "../../simulation/aircraft" }
+simulation_physics = { path = "../../simulation/physics" }
+fastrand = "2"
+glam = "0.33"
+serde = { version = "1", features = ["derive"] }
