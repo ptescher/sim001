@@ -41,7 +41,7 @@ drone an order, it circles over your base (HOME).
 ## Tests
 
 `cargo run --release -- --expect` runs the app's tests of the "Towers" section
-(expectations/09-towers/06-app.expect and its stories): each on a fresh practice game of its own
+(expectations/09-towers/app/ and its stories): each on a fresh practice game of its own
 server at ten times real time, clicking the real buttons and the map.
 
 ## Code
