@@ -805,3 +805,366 @@ step	1	unsupported	0	-	-
 plan	launcher--coverage--render-docs-writes-the-manual	unsupported	c4bb06fa1cd825bb
 step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the launch button, arrange the launch target and 12 more things yet.
 step	1	unsupported	0	-	-
+plan	sim--state--chase-follows-the-plane	unsupported	af15262a00061f92
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--tkof-puts-a-takeoff-first	unsupported	eeb04837f5fb7d9d
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--rtl-ends-the-plan-with-a-return	unsupported	0267632a38848256
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--measuring-between-two-points-shows-the-distance	unsupported	d3e43f318157e28c
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--arming-sets-home	unsupported	aadbf1e779d2d1e2
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--qland-brings-the-plane-straight-down	unsupported	0fc5f533b53f2e3c
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--cruise-changes-a-hover-into-forward-flight	unsupported	29b867354131fe17
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	f3b3f6ebd589179a
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 33 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--the-mode-switch-picks-the-mode	unsupported	feda03d2c75ea4e6
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--a-race-starts-with-every-plane-on-the-ground	unsupported	7d9a804170f572d1
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--state--the-screen-shows-that-the-plane-is-armed	unsupported	0486a2d6ab1be344
+step	0	unsupported	0	-	The driver can't arrange the arm switch, arrange the autopilot mode, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--rtl-ends-the-plan-with-a-return	unsupported	535e475ff05f13ff
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--arming-sets-home	unsupported	6eda147b24096ebb
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--auto-twice-goes-anyway	unsupported	f15d7d2a5c54d9ab
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--qland-brings-the-plane-straight-down	unsupported	3a9c2d4eb786e6bf
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--cruise-changes-a-hover-into-forward-flight	unsupported	38fbfeda5e6bb622
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	532fe399dad66691
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 33 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--the-mode-switch-picks-the-mode	unsupported	e893a0cf37cac7f3
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--f2-calibrates-the-radio	unsupported	18fdaacc5880e30c
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--a-race-starts-with-every-plane-on-the-ground	unsupported	d49a2277ba806c62
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--planning--state--the-screen-shows-that-the-plane-is-armed	unsupported	9564517103d96c91
+step	0	unsupported	0	-	The driver can't arrange the arm switch, arrange the autopilot mode, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--plan-picks-the-planning-tool	unsupported	c47e52d3b0d5f7b7
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--goto-picks-the-fly-to-tool	unsupported	ef9f28737eb64635
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--waypoints-already-planned-keep-their-altitude	unsupported	7582bfcfea5f15c9
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--a-height-check-raises-waypoints-above-the-terrain	unsupported	42162dc7c4352a0c
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--tkof-puts-a-takeoff-first	unsupported	4f0ddc53d0e70867
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--saving-keeps-the-plan-in-a-file	unsupported	fd9de9d0bfa00c82
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--measuring-between-two-points-shows-the-distance	unsupported	e8e495c3e5fd55fd
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--qland-brings-the-plane-straight-down	unsupported	6a1e2178009c9767
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--cruise-changes-a-hover-into-forward-flight	unsupported	6be24d48e7f9fcf6
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	d465d2595f524715
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 33 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	710e3d22d6a124f2
+step	0	unsupported	0	-	The driver can't arrange the arm switch, arrange the autopilot mode, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--qhover-is-a-hover-mode	unsupported	54258854e0e3fb69
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 36 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--cruise-changes-a-hover-into-forward-flight-with-the-radio	unsupported	49b5c885541e2501
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 36 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--f2-calibrates-the-radio	unsupported	54527386cf4baeea
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--flying--state--a-race-starts-with-every-plane-on-the-ground	unsupported	2c4ac10965e3ecb2
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--plan-picks-the-planning-tool	unsupported	459d7ce87e863f9b
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--goto-picks-the-fly-to-tool	unsupported	c837c1c504307dc5
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--tkof-puts-a-takeoff-first	unsupported	a56c9b97cd184be8
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--rtl-ends-the-plan-with-a-return	unsupported	bc073ac8fb43f1d3
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--measuring-between-two-points-shows-the-distance	unsupported	f61f95f37f08c375
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--auto-twice-goes-anyway	unsupported	7b5826bcfd6eb85f
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--qland-brings-the-plane-straight-down	unsupported	7b3521d75235d9ab
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the flight and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--cruise-changes-a-hover-into-forward-flight	unsupported	5d2e7e316727a04e
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the flight and 36 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--the-mode-switch-picks-the-mode	unsupported	8ddeb33e3d174551
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--f2-calibrates-the-radio	unsupported	fd13182b8fbc2412
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--a-race-starts-with-every-plane-on-the-ground	unsupported	3fa089e2aa8991f6
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the autopilot mode, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--vtol--state--the-screen-shows-that-the-plane-is-armed	unsupported	168bdce94edb0a0b
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 36 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--plan-picks-the-planning-tool	unsupported	7aed12059f9e054b
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--goto-picks-the-fly-to-tool	unsupported	a6568d24a22dce15
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--tkof-puts-a-takeoff-first	unsupported	823572ba58050578
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--rtl-ends-the-plan-with-a-return	unsupported	0c10604a000de343
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--measuring-between-two-points-shows-the-distance	unsupported	b05bed930a7b5fe5
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--arming-sets-home	unsupported	73ae9de80a634a3f
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--auto-twice-goes-anyway	unsupported	2fd637e7824a126f
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--qland-brings-the-plane-straight-down	unsupported	36cf3a53ec8ff821
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 42 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--cruise-changes-a-hover-into-forward-flight	unsupported	9bc0c405739261e0
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 44 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	078522ab8a970d6b
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 43 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--the-mode-switch-picks-the-mode	unsupported	d5eadaa1f8cce815
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio--state--f2-calibrates-the-radio	unsupported	500e1fca02eb476a
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 42 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--plan-picks-the-planning-tool	unsupported	0e77cf0ecfd65a02
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--goto-picks-the-fly-to-tool	unsupported	5ce5bf5074b4c640
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--tkof-puts-a-takeoff-first	unsupported	33a07ddacd4035d9
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--rtl-ends-the-plan-with-a-return	unsupported	fc5fb334861a8c32
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--measuring-between-two-points-shows-the-distance	unsupported	a3d1e81fa450f4d8
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--arming-sets-home	unsupported	a42c8f91eca19aee
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--auto-twice-goes-anyway	unsupported	ee8ef0545c54d300
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 32 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--qland-brings-the-plane-straight-down	unsupported	8f491897794538a0
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--cruise-changes-a-hover-into-forward-flight	unsupported	576077ff0767d82b
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 36 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	d46ff0ac1b733906
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the flight, arrange the game clock and 35 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--the-mode-switch-picks-the-mode	unsupported	ad2b3751c9e2479a
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--a-race-starts-with-every-plane-on-the-ground	unsupported	2b77ccae6b7f951d
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 34 more things yet.
+step	1	unsupported	0	-	-
+plan	gcs--radio-setup--state--the-screen-shows-that-the-plane-is-armed	unsupported	7eb505e1127bbfb0
+step	0	unsupported	0	-	The driver can't arrange the arm switch, arrange the autopilot mode, arrange the game clock and 36 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--a-malformed-plan-is-refused-with-a-reason	unsupported	e43ece62fd70e93b
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 8 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-game-in-the-fast-arena-is-a-game-of-towers	unsupported	308022d63386c32d
+step	0	unsupported	0	-	The driver can't make it happen that the arena plays a game of Towers between two default captains, observe the captain game and observe the drones that flew in the captain game yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-that-is-better-from-both-sides-becomes-the-champion	unsupported	22ca7e65c375b4d7
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, make it happen that the league judges the captain challenger and 3 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it	unsupported	a2cb44779a2b796d
+step	0	unsupported	0	-	The driver can't arrange the selected drone, make it happen that the commander sends the selected drone to the west tower, observe the order of the first Blue drone and 1 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it	unsupported	18429975ec14e044
+step	0	unsupported	0	-	The driver can't arrange the order of the first Blue drone, make it happen that the game runs for 2 minutes, observe the order of the first Blue drone and 1 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--state--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it	unsupported	19d71b0c2ca4a65d
+step	0	unsupported	0	-	The driver can't arrange the Red scout, make it happen that the Red scout flies into the fog for 10 seconds, observe the Red scout and 2 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--state--a-team-sees-the-side-of-a-tower-again-when-its-drone-comes-near	unsupported	749abe662114901e
+step	0	unsupported	0	-	The driver can't arrange the east tower, arrange the east tower on the Blue map, make it happen that a Blue drone flies near the east tower and 2 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--state--the-commander-defends-a-tower-that-an-enemy-drone-comes-near	unsupported	6e64b1f525204811
+step	0	unsupported	0	-	The driver can't arrange the Red scout, make it happen that the computer commander of Blue decides, observe the Red scout and 1 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--state--a-drone-that-is-behind-at-a-contested-tower-goes-somewhere-else	unsupported	d1a9ceaad09977ba
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Red drones in the west circle, arrange the control of the west tower and 6 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--rules--state--the-app-takes-the-blue-seat	unsupported	2ee5c5e0f6c0517d
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones on the ground in the west circle, arrange the Red drones in the east circle and 30 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--rules--state--a-click-on-a-drone-selects-it	unsupported	0957af600e74ef56
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones on the ground in the west circle, arrange the Red drones in the east circle and 29 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--rules--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it	unsupported	9cc85b3afdbde19a
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones on the ground in the west circle, arrange the Red drones in the east circle and 31 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--rules--state--hold-makes-the-selected-drone-circle-where-it-is	unsupported	a90f121acd6491d3
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones on the ground in the west circle, arrange the Red drones in the east circle and 31 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--rules--state--home-sends-the-selected-drone-back-over-its-base	unsupported	7fc133e89cc083f2
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones on the ground in the west circle, arrange the Red drones in the east circle and 31 more things yet.
+step	1	unsupported	0	-	-
+plan	towers--rules--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it	unsupported	372bdcba44cda525
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones on the ground in the west circle, arrange the Red drones in the east circle and 31 more things yet.
+step	1	unsupported	0	-	-
+plan	launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger	unsupported	0c17e2aa4d3408a6
+step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the launch button, arrange the launch target and 13 more things yet.
+step	1	unsupported	0	-	-
+plan	flight-controller--state--angle-levels-the-plane-for-you	unsupported	6472a9333a58939c
+step	0	unsupported	0	-	The driver can't arrange the autopilot, arrange the flight controller, arrange the flight mode and 12 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--the-plane-stays-inside-the-fence	unsupported	1f4ea03fe59dd8e5
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 14 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--the-plane-stays-above-the-floor	unsupported	81e3bbb80c48a22e
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--the-plane-stays-below-the-ceiling	unsupported	da056034ad010540
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--under-the-stall-margin-the-plane-gets-its-airspeed-back-first	unsupported	23e8cbcebb51e8a0
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 12 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--after-a-recovery-the-plane-flies-on	unsupported	1e31a6011f1638fb
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 15 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--the-plane-keeps-clear-of-an-aircraft-that-crosses-its-path	unsupported	fe5ad26e59b7ef7b
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the other aircraft, arrange the reply to the plan and 11 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--bad-input-gives-wings-level-and-the-throttle-to-the-pilot	unsupported	bda1f18b4180e59d
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 10 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--the-plane-flies-again-when-the-position-estimate-comes-back	unsupported	64eff9907a29a228
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported fallback and 11 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--the-plane-that-is-it-pursues-the-plane-it-can-catch-soonest	unsupported	e5557b0d4ff20335
+step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the flight mode of the plane, arrange the reply to the plan and 11 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--a-plane-that-is-not-it-holds-its-own-height-band	unsupported	9d48be9caa6f2188
+step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the flight mode of the plane, arrange the reply to the plan and 14 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--a-plane-that-is-not-it-breaks-away-from-a-chaser-that-comes-near	unsupported	9d976836c63a6cec
+step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the flight mode of the plane, arrange the reply to the plan and 13 more things yet.
+step	1	unsupported	0	-	-
+plan	cognition--state--a-plane-that-is-not-it-never-pursues	unsupported	ad34f4e19bb4abb6
+step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 12 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--the-same-seed-plays-the-same-game	unsupported	89776fc5807e8f93
+step	0	unsupported	0	-	The driver can't arrange the league, make it happen that the arena plays the same seed twice, observe the league and 1 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-challenger-that-scores-worse-stays-out	unsupported	c10e3a7d0423e92b
+step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the champion, arrange the league and 5 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-challenger-that-crashes-stays-out-whatever-it-scores	unsupported	bcda384c16a45824
+step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the champion, arrange the crashes of the candidate and 8 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-game-in-the-fast-arena-is-a-game-of-towers-2	unsupported	1893ac17b57eab65
+step	0	unsupported	0	-	The driver can't arrange the league, make it happen that the arena plays a game of Towers between two default captains, observe the captain game and 2 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-that-is-better-from-both-sides-becomes-the-champion-2	unsupported	74b742c7a8cc1843
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, arrange the league and 5 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-that-is-worse-stays-out	unsupported	0053c5a532d31f19
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, arrange the league and 5 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-changed-in-code-plays-with-its-own-code	unsupported	b105f45fa97d6822
+step	0	unsupported	0	-	The driver can't arrange the league, make it happen that a Claude strategy gives a captain whose code sends every drone home, observe the league and 2 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-that-changes-the-referee-stays-out	unsupported	1a6b0dcca2ebd5f3
+step	0	unsupported	0	-	The driver can't arrange the league, make it happen that a Claude strategy gives a captain that changes the referee, observe the league and 2 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--the-same-seed-plays-the-same-game-2	unsupported	b694aabc2002916f
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, make it happen that the arena plays the same seed twice and 3 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-challenger-that-scores-worse-stays-out-2	unsupported	316eaaede0e3aca7
+step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger captain, arrange the champion and 7 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-challenger-that-crashes-stays-out-whatever-it-scores-2	unsupported	34bbf1652c6ff400
+step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger captain, arrange the champion and 10 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--each-generation-is-written-down	unsupported	7a89d97bde1a30cc
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, arrange the league and 7 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--the-evolution-strategy-improves-on-a-slow-start	unsupported	48c8d8a6e9ba85ea
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, arrange the league and 5 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-challenger-whose-tests-fail-stays-out	unsupported	4882331ddc8c0ed7
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, arrange the league and 6 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-challenger-that-changes-the-envelope-stays-out	unsupported	e0db3111ab944bff
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, arrange the league and 6 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-changed-in-code-plays-with-its-own-code-2	unsupported	bb6e832c4abf5a66
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, make it happen that a Claude strategy gives a captain whose code sends every drone home and 4 more things yet.
+step	1	unsupported	0	-	-
+plan	league--state--a-captain-that-changes-the-referee-stays-out-2	unsupported	4ae91a224ebfe31f
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, make it happen that a Claude strategy gives a captain that changes the referee and 4 more things yet.
+step	1	unsupported	0	-	-
+plan	launcher--state--launch-starts-the-station-with-ardupilot	unsupported	295c7cd3e43a3bca
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the flight controller choice, arrange the launch button and 15 more things yet.
+step	1	unsupported	0	-	-
+plan	launcher--state--render-docs-writes-the-manual	unsupported	c0926c856d36b3c7
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the flight controller choice, arrange the launch button and 14 more things yet.
+step	1	unsupported	0	-	-
