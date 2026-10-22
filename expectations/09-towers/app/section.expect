@@ -1,0 +1,7 @@
+# The commander app (domains/teleoperation/command), in the Blue seat of a practice game. Its
+# driver (`towers_commander --expect`) starts a fresh game server for each test.
+
+Section: The commander app
+  Launch: start the commander app on a practice game. Run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`. The app starts a game server with six ArduPilot drones, and takes the Blue seat. With `--red nobody`, nobody commands Red, and its drones circle over their base
+  The commander app is the seat of a person in a game of Towers. These pages assume that the
+  app is open on a practice game.
