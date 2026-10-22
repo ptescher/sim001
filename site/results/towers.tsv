@@ -39,10 +39,6 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
-plan	sim--checking-the-controls-before-a-flight--open-the-help-and-close-it-again	unsupported	ea15abc77e6a50b6
-step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
-step	1	unsupported	0	-	-
-step	2	unsupported	0	-	-
 plan	gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home	unsupported	85412d5dd1147fcc
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 34 more things yet.
 step	1	unsupported	0	-	-
@@ -168,43 +164,44 @@ step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
-plan	communication--losing-the-radio-link--the-link-drops	unsupported	36a623d7295b5a8c
-step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the crowd, arrange the distance to the other plane and 15 more things yet.
+plan	communication--losing-the-radio-link--the-link-drops	unsupported	dfc0d2bfe64887f4
+step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the crowd, arrange the distance to the other plane and 16 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
 plan	visualization--watching-a-flight-from-the-pilot-box--the-plane-takes-off-turns-and-goes-quiet	unsupported	5398d8fee01cbe67
 step	0	unsupported	0	-	The driver can't arrange the plane in the view, arrange the reported bank, arrange the reported distance north of home and 20 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
-plan	aviation--flying-with-a-tx15-on-the-serial-line--fly-and-watch-the-screen	unsupported	55c85582c301aa70
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 33 more things yet.
+plan	aviation--checking-the-sticks-on-the-serial-line--centre-full-travel-half-travel-arm	unsupported	6fb2be653c9b3c6e
+step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 38 more things yet.
 step	1	unsupported	0	-	-
-plan	aviation--flying-with-a-tx15-on-the-serial-line--full-travel-on-the-sticks	unsupported	d8fb1975e5b4f896
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+plan	aviation--losing-the-tx15-and-getting-it-back--unplug-then-plug-in-again	unsupported	44bbb6c830d572a7
 step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 34 more things yet.
 step	1	unsupported	0	-	-
-plan	aviation--flying-with-a-tx15-on-the-serial-line--sticks-centred	unsupported	c2cbc8bd38f9ad91
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 32 more things yet.
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	aviation--commanding-the-plane-from-the-ground-station--hear-the-plane-follow-it-command-it-lose-it	unsupported	9949d06122fa3eca
+step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 39 more things yet.
 step	1	unsupported	0	-	-
-plan	aviation--flying-with-a-tx15-on-the-serial-line--a-damaged-line	unsupported	e8e097c7e0c9d845
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 31 more things yet.
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+plan	aviation--reading-the-flight-display--from-prearm-to-rtl	unsupported	ef0cad1f377c3623
+step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 40 more things yet.
 step	1	unsupported	0	-	-
-plan	aviation--losing-the-tx15-and-getting-it-back--unplug	unsupported	89efd4d36947f2bc
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 33 more things yet.
-step	1	unsupported	0	-	-
-plan	aviation--losing-the-tx15-and-getting-it-back--plug-in-again	unsupported	eeede0ee408e79c7
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 33 more things yet.
-step	1	unsupported	0	-	-
-plan	aviation--commanding-the-plane-from-the-ground-station--command-through-the-line	unsupported	b89cd007675b53b8
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 34 more things yet.
-step	1	unsupported	0	-	-
-plan	aviation--commanding-the-plane-from-the-ground-station--the-line-is-narrow	unsupported	fbbd27d7b6440e0f
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 31 more things yet.
-step	1	unsupported	0	-	-
-plan	aviation--reading-the-flight-display--armed-banked-and-climbing	unsupported	0a5a4bb905b92f4a
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 32 more things yet.
-step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+step	7	unsupported	0	-	-
 plan	cognition--watching-a-game-of-tag-by-plan--play-and-watch	unsupported	a46ba355a09cbde2
 step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 15 more things yet.
 step	1	unsupported	0	-	-
@@ -222,451 +219,26 @@ step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, ar
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
-plan	towers--taking-a-tower--one-drone-gets-half-way-in-10-seconds	passed	9e6b16bf8ff871f0
-step	0	passed	1	screenshots/towers--taking-a-tower--one-drone-gets-half-way-in-10-seconds/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--taking-a-tower--one-drone-gets-half-way-in-10-seconds/01.svg	-
-check	1	e:neutral	-
-check	1	n:50	-
-plan	towers--taking-a-tower--one-drone-takes-the-tower-in-20-seconds	passed	ae6d48e9feb7c24b
-step	0	passed	1	screenshots/towers--taking-a-tower--one-drone-takes-the-tower-in-20-seconds/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--taking-a-tower--one-drone-takes-the-tower-in-20-seconds/01.svg	-
-check	1	e:held by Blue	-
-check	1	n:100	-
-plan	towers--taking-a-tower--two-drones-take-the-tower-in-10-seconds	passed	05ddadcb97440d3d
-step	0	passed	1	screenshots/towers--taking-a-tower--two-drones-take-the-tower-in-10-seconds/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:2	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--taking-a-tower--two-drones-take-the-tower-in-10-seconds/01.svg	-
-check	1	e:held by Blue	-
-plan	towers--taking-a-tower--a-drone-on-the-ground-does-not-help	passed	7b23f8b2ff275b00
-step	0	passed	1	screenshots/towers--taking-a-tower--a-drone-on-the-ground-does-not-help/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--taking-a-tower--a-drone-on-the-ground-does-not-help/01.svg	-
-check	1	n:0	-
-plan	towers--fighting-for-a-tower--equal-teams-stop-the-bar	passed	0f8af25d10732d67
-step	0	passed	1	screenshots/towers--fighting-for-a-tower--equal-teams-stop-the-bar/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:50	-
-check	1	n:1	-
-check	1	n:1	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--fighting-for-a-tower--equal-teams-stop-the-bar/01.svg	-
-check	1	n:50	-
-check	1	e:contested	-
-plan	towers--fighting-for-a-tower--the-bigger-team-moves-the-bar	passed	e3acd81a981fdac9
-step	0	passed	1	screenshots/towers--fighting-for-a-tower--the-bigger-team-moves-the-bar/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:2	-
-check	1	n:1	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--fighting-for-a-tower--the-bigger-team-moves-the-bar/01.svg	-
-check	1	n:50	-
-check	1	e:contested	-
-plan	towers--fighting-for-a-tower--an-empty-circle-keeps-the-bar	passed	a6dd6d0730c8038a
-step	0	passed	1	screenshots/towers--fighting-for-a-tower--an-empty-circle-keeps-the-bar/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:50	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--fighting-for-a-tower--an-empty-circle-keeps-the-bar/01.svg	-
-check	1	n:50	-
-check	1	e:quiet	-
-plan	towers--fighting-for-a-tower--red-keeps-the-tower-while-the-bar-is-on-its-side	passed	a0290aae50e80b35
-step	0	passed	1	screenshots/towers--fighting-for-a-tower--red-keeps-the-tower-while-the-bar-is-on-its-side/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:held by Red	-
-check	1	n:-100	-
-check	1	n:1	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--fighting-for-a-tower--red-keeps-the-tower-while-the-bar-is-on-its-side/01.svg	-
-check	1	e:held by Red	-
-check	1	n:-50	-
-plan	towers--fighting-for-a-tower--red-loses-the-tower-when-the-bar-gets-to-the-middle	passed	589d1be8183f2269
-step	0	passed	1	screenshots/towers--fighting-for-a-tower--red-loses-the-tower-when-the-bar-gets-to-the-middle/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:held by Red	-
-check	1	n:-50	-
-check	1	n:1	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--fighting-for-a-tower--red-loses-the-tower-when-the-bar-gets-to-the-middle/01.svg	-
-check	1	e:neutral	-
-check	1	n:0	-
-plan	towers--winning-a-game--two-towers-give-two-points-each-second	passed	a6f517f4703389e6
-step	0	passed	1	screenshots/towers--winning-a-game--two-towers-give-two-points-each-second/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:2	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--winning-a-game--two-towers-give-two-points-each-second/01.svg	-
-check	1	n:20	-
-plan	towers--winning-a-game--blue-gets-to-500-points	passed	dae1bb16791bdc73
-step	0	passed	1	screenshots/towers--winning-a-game--blue-gets-to-500-points/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:495	-
-check	1	n:300	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--winning-a-game--blue-gets-to-500-points/01.svg	-
-check	1	e:won by Blue	-
-check	1	n:500	-
-plan	towers--winning-a-game--red-has-more-points-at-the-end-of-the-clock	passed	ae437529484ccee5
-step	0	passed	1	screenshots/towers--winning-a-game--red-has-more-points-at-the-end-of-the-clock/00.svg	-
-check	1	e:in play	-
-check	1	n:5	-
-check	1	n:200	-
-check	1	n:300	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--winning-a-game--red-has-more-points-at-the-end-of-the-clock/01.svg	-
-check	1	e:won by Red	-
-check	1	n:0	-
-plan	towers--winning-a-game--equal-points-at-the-end-of-the-clock	passed	a984c2673f08a430
-step	0	passed	1	screenshots/towers--winning-a-game--equal-points-at-the-end-of-the-clock/00.svg	-
-check	1	e:in play	-
-check	1	n:5	-
-check	1	n:300	-
-check	1	n:300	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--winning-a-game--equal-points-at-the-end-of-the-clock/01.svg	-
-check	1	e:a draw	-
-plan	towers--winning-a-game--after-the-end-nothing-changes	passed	516f1ed4ebd3d1b6
-step	0	passed	1	screenshots/towers--winning-a-game--after-the-end-nothing-changes/00.svg	-
-check	1	e:won by Blue	-
-check	1	n:480	-
-check	1	n:500	-
-check	1	n:300	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--winning-a-game--after-the-end-nothing-changes/01.svg	-
-check	1	n:500	-
-check	1	n:300	-
-plan	towers--scouting-in-the-fog--a-drone-sees-the-scout	passed	e72e75f7d5c782dd
-step	0	passed	1	screenshots/towers--scouting-in-the-fog--a-drone-sees-the-scout/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:near a Blue drone	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--scouting-in-the-fog--a-drone-sees-the-scout/01.svg	-
-check	1	e:seen	-
-plan	towers--scouting-in-the-fog--a-tower-sees-the-scout	passed	5428c2fde6a1cc67
-step	0	passed	1	screenshots/towers--scouting-in-the-fog--a-tower-sees-the-scout/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:near the Blue home tower	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--scouting-in-the-fog--a-tower-sees-the-scout/01.svg	-
-check	1	e:seen	-
-plan	towers--scouting-in-the-fog--the-scout-in-the-fog	passed	8f1fe81b3f859631
-step	0	passed	1	screenshots/towers--scouting-in-the-fog--the-scout-in-the-fog/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:far from anything Blue	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--scouting-in-the-fog--the-scout-in-the-fog/01.svg	-
-check	1	e:unknown	-
-plan	towers--scouting-in-the-fog--the-scout-goes-into-the-fog	passed	591a033095e3a2cc
-step	0	passed	1	screenshots/towers--scouting-in-the-fog--the-scout-goes-into-the-fog/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:near a Blue drone	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--scouting-in-the-fog--the-scout-goes-into-the-fog/01.svg	-
-check	1	e:last seen	-
-check	1	n:10	-
-plan	towers--scouting-in-the-fog--red-takes-a-tower-in-the-fog	passed	da218d575a840d6f
-step	0	passed	1	screenshots/towers--scouting-in-the-fog--red-takes-a-tower-in-the-fog/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:-90	-
-check	1	n:1	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--scouting-in-the-fog--red-takes-a-tower-in-the-fog/01.svg	-
-check	1	e:held by Red	-
-check	1	e:neutral	-
-step	2	passed	1	screenshots/towers--scouting-in-the-fog--red-takes-a-tower-in-the-fog/02.svg	-
-check	1	e:held by Red	-
-plan	towers--the-computer-commander--the-first-orders	passed	992569678bf14f86
-step	0	passed	1	screenshots/towers--the-computer-commander--the-first-orders/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--the-computer-commander--the-first-orders/01.svg	-
-check	1	e:take the west tower	-
-check	1	e:take the centre tower	-
-check	1	e:take the east tower	-
-plan	towers--the-computer-commander--defending-the-home-tower	passed	969b006559593701
-step	0	passed	1	screenshots/towers--the-computer-commander--defending-the-home-tower/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:near the Blue home tower	-
-check	1	e:neutral	-
-step	1	passed	1	screenshots/towers--the-computer-commander--defending-the-home-tower/01.svg	-
-check	1	e:take the Blue home tower	-
-plan	towers--the-computer-commander--giving-up-a-lost-fight	passed	7cf583680a358bdf
-step	0	passed	1	screenshots/towers--the-computer-commander--giving-up-a-lost-fight/00.svg	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:-20	-
-check	1	n:1	-
-check	1	n:1	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-check	1	e:take the west tower	-
-step	1	passed	1	screenshots/towers--the-computer-commander--giving-up-a-lost-fight/01.svg	-
-check	1	e:take the Red home tower	-
-plan	towers--watching-two-computer-teams-play--play-and-watch	unsupported	bf11d96156cc1603
+plan	league--your-first-league-run--one-game-64-games-one-generation	unsupported	a231f84d5f11389b
+step	0	unsupported	0	-	The driver can't arrange the league, make it happen that the arena plays 64 games with the default executor, make it happen that the arena plays a game with the default executor and 10 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	league--judging-a-towers-captain--one-game-a-fair-test-a-judgement	unsupported	ae5da7a900743f3e
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, make it happen that the arena plays a game of Towers between two default captains and 8 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+plan	towers--arduplane--watching-two-computer-teams-play--play-and-watch	unsupported	ae9038f6ea3c64d8
 step	0	unsupported	0	-	The driver can't make it happen that two computer teams play a game of Towers, observe the Red drones that the Blue seat saw, observe the commands that the drones refused and 5 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--your-first-tower--take-the-west-tower	unsupported	fec7b68ca9e0e61d
+plan	towers--your-first-tower--take-the-west-tower	unsupported	855149c473e1fae8
 step	0	unsupported	0	-	The driver can't make it happen that the commander joins the game, make it happen that the commander selects the first Blue drone, make it happen that the commander sends the selected drone to the west tower and 5 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
-plan	towers--changing-your-mind--hold-then-home	unsupported	9587b6336e1fc62b
+plan	towers--changing-your-mind--hold-then-home	unsupported	cc1884d69f965cc6
 step	0	unsupported	0	-	The driver can't make it happen that the commander holds the selected drone, make it happen that the commander selects the first Blue drone, make it happen that the commander sends the selected drone home and 1 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
@@ -676,14 +248,14 @@ step	0	unsupported	0	-	The driver can't arrange the flight controller choice, ar
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
-plan	launcher--picking-the-plane-and-the-place--the-vtol-at-cypress-ray-traced	unsupported	76ae55ddf5ad2424
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the launch button, arrange the launch target and 18 more things yet.
+plan	launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot	unsupported	c1fb4092c338989a
+step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the launch button, arrange the launch target and 21 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
-plan	launcher--picking-the-plane-and-the-place--the-station-with-the-sticks-direct	unsupported	febdfe548402b362
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the launch button, arrange the launch target and 14 more things yet.
-step	1	unsupported	0	-	-
-step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
 plan	launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping	unsupported	86d59164f41546a8
 step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the flight controller choice, arrange the launch button and 16 more things yet.
 step	1	unsupported	0	-	-
@@ -720,6 +292,10 @@ plan	sim--coverage--auto-zoom-off	unsupported	a2e4f62318ed06ea
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
 step	1	unsupported	0	-	-
 plan	sim--coverage--auto-zoom-on	unsupported	8a010ecb111494eb
+step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+plan	sim--coverage--h-again-hides-it	unsupported	3e0ead76b0efd11b
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential thrust, arrange the battery and 30 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
@@ -876,8 +452,8 @@ step	3	unsupported	0	-	-
 plan	communication--coverage--your-own-transmitter-is-not-another-plane	unsupported	bddb0013e623238a
 step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the crowd, arrange the distance to the other plane and 10 more things yet.
 step	1	unsupported	0	-	-
-plan	aviation--coverage--without-the-tx15-the-ground-station-hears-nothing	unsupported	77a0e9bb53a6f816
-step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 32 more things yet.
+plan	aviation--coverage--a-frame-with-a-wrong-checksum-does-nothing	unsupported	c99895cdbd599270
+step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 pitch stick and 31 more things yet.
 step	1	unsupported	0	-	-
 plan	cognition--coverage--a-repeated-plan-id-changes-nothing	unsupported	7d3ddec7230d2e29
 step	0	unsupported	0	-	The driver can't arrange the flight mode of the plane, arrange the reply to the plan, arrange the reported plan and 9 more things yet.
@@ -966,14 +542,8 @@ step	1	unsupported	0	-	-
 plan	cognition--coverage--a-plane-that-is-not-it-breaks-away-from-a-chaser-that-comes-near	unsupported	62f942608eff1eb7
 step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the flight mode of the plane, arrange the reply to the plan and 13 more things yet.
 step	1	unsupported	0	-	-
-plan	league--coverage--a-game-in-the-arena-is-a-game-of-tag-with-the-computer-pilots	unsupported	9dbb82aac7587fef
-step	0	unsupported	0	-	The driver can't make it happen that the arena plays a game with the default executor, observe the crashes of the candidate, observe the length of the game and 2 more things yet.
-step	1	unsupported	0	-	-
 plan	league--coverage--the-same-seed-plays-the-same-game	unsupported	1120c8dfdf6518cb
 step	0	unsupported	0	-	The driver can't make it happen that the arena plays the same seed twice and observe the two games yet.
-step	1	unsupported	0	-	-
-plan	league--coverage--the-arena-plays-much-faster-than-real-time	unsupported	4f81c2c4ae36ca8b
-step	0	unsupported	0	-	The driver can't make it happen that the arena plays 64 games with the default executor and observe the speed of the arena yet.
 step	1	unsupported	0	-	-
 plan	league--coverage--a-challenger-that-scores-better-on-the-same-seeds-becomes-the-champion	unsupported	89298006ac6a5f35
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the champion, make it happen that the arena plays a game with the default executor and 8 more things yet.
@@ -985,9 +555,6 @@ step	1	unsupported	0	-	-
 plan	league--coverage--a-challenger-that-crashes-stays-out-whatever-it-scores	unsupported	442a3275f760f768
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the champion, arrange the crashes of the candidate and 6 more things yet.
 step	1	unsupported	0	-	-
-plan	league--coverage--each-generation-is-written-down	unsupported	5dd380bae376a7ec
-step	0	unsupported	0	-	The driver can't arrange the league, make it happen that the league runs one generation with the evolution strategy, observe the challengers in the history and 3 more things yet.
-step	1	unsupported	0	-	-
 plan	league--coverage--the-evolution-strategy-improves-on-a-slow-start	unsupported	cb29fd55fd0c029a
 step	0	unsupported	0	-	The driver can't arrange the league, make it happen that the league runs 5 generations with the evolution strategy, observe the league and 1 more things yet.
 step	1	unsupported	0	-	-
@@ -996,15 +563,6 @@ step	0	unsupported	0	-	The driver can't arrange the league, make it happen that 
 step	1	unsupported	0	-	-
 plan	league--coverage--a-challenger-that-changes-the-envelope-stays-out	unsupported	e8df25150b77dd1f
 step	0	unsupported	0	-	The driver can't arrange the league, make it happen that a Claude strategy gives a challenger that changes the envelope, observe the league and 2 more things yet.
-step	1	unsupported	0	-	-
-plan	league--coverage--a-captain-game-in-the-fast-arena-is-a-game-of-towers	unsupported	308022d63386c32d
-step	0	unsupported	0	-	The driver can't make it happen that the arena plays a game of Towers between two default captains, observe the captain game and observe the drones that flew in the captain game yet.
-step	1	unsupported	0	-	-
-plan	league--coverage--a-captain-playing-itself-from-both-sides-scores-nothing	unsupported	9f708200241fb402
-step	0	unsupported	0	-	The driver can't make it happen that the default captain plays itself from both sides and observe the score of the captain against itself yet.
-step	1	unsupported	0	-	-
-plan	league--coverage--a-captain-that-is-better-from-both-sides-becomes-the-champion	unsupported	22ca7e65c375b4d7
-step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, make it happen that the league judges the captain challenger and 3 more things yet.
 step	1	unsupported	0	-	-
 plan	league--coverage--a-captain-that-is-worse-stays-out	unsupported	0dba897ea841b885
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the champion captain, make it happen that the league judges the captain challenger and 3 more things yet.
@@ -1015,6 +573,457 @@ step	1	unsupported	0	-	-
 plan	league--coverage--a-captain-that-changes-the-referee-stays-out	unsupported	78a9557889b27eeb
 step	0	unsupported	0	-	The driver can't make it happen that a Claude strategy gives a captain that changes the referee, observe the reason and observe the verdict yet.
 step	1	unsupported	0	-	-
+plan	towers--rules--coverage--one-drone-moves-the-control-5-each-second	passed	ade3d2e6135e4e1e
+step	0	passed	1	screenshots/towers--rules--coverage--one-drone-moves-the-control-5-each-second/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--one-drone-moves-the-control-5-each-second/01.svg	-
+check	1	e:neutral	-
+check	1	n:50	-
+plan	towers--rules--coverage--one-drone-takes-a-neutral-tower-in-20-seconds	passed	72f8a398466f808a
+step	0	passed	1	screenshots/towers--rules--coverage--one-drone-takes-a-neutral-tower-in-20-seconds/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--one-drone-takes-a-neutral-tower-in-20-seconds/01.svg	-
+check	1	e:held by Blue	-
+check	1	n:100	-
+plan	towers--rules--coverage--two-drones-take-a-tower-in-half-the-time	passed	c36c86fc660b2a58
+step	0	passed	1	screenshots/towers--rules--coverage--two-drones-take-a-tower-in-half-the-time/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:2	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--two-drones-take-a-tower-in-half-the-time/01.svg	-
+check	1	e:held by Blue	-
+plan	towers--rules--coverage--a-drone-on-the-ground-does-not-count	passed	9e80c8a879a8d9bf
+step	0	passed	1	screenshots/towers--rules--coverage--a-drone-on-the-ground-does-not-count/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-drone-on-the-ground-does-not-count/01.svg	-
+check	1	n:0	-
+plan	towers--rules--coverage--the-same-number-of-drones-from-each-team-stops-the-control	passed	f658fda8b9713c71
+step	0	passed	1	screenshots/towers--rules--coverage--the-same-number-of-drones-from-each-team-stops-the-control/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:50	-
+check	1	n:1	-
+check	1	n:1	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--the-same-number-of-drones-from-each-team-stops-the-control/01.svg	-
+check	1	n:50	-
+check	1	e:contested	-
+plan	towers--rules--coverage--the-team-with-more-drones-moves-the-control-by-the-difference	passed	d956a8d70188511b
+step	0	passed	1	screenshots/towers--rules--coverage--the-team-with-more-drones-moves-the-control-by-the-difference/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:2	-
+check	1	n:1	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--the-team-with-more-drones-moves-the-control-by-the-difference/01.svg	-
+check	1	n:50	-
+check	1	e:contested	-
+plan	towers--rules--coverage--an-empty-circle-keeps-its-control	passed	0072f32ac36d9d6f
+step	0	passed	1	screenshots/towers--rules--coverage--an-empty-circle-keeps-its-control/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:50	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--an-empty-circle-keeps-its-control/01.svg	-
+check	1	n:50	-
+check	1	e:quiet	-
+plan	towers--rules--coverage--a-team-keeps-a-tower-while-the-control-is-on-its-side	passed	2e139fb3d2081a2e
+step	0	passed	1	screenshots/towers--rules--coverage--a-team-keeps-a-tower-while-the-control-is-on-its-side/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:held by Red	-
+check	1	n:-100	-
+check	1	n:1	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-team-keeps-a-tower-while-the-control-is-on-its-side/01.svg	-
+check	1	e:held by Red	-
+check	1	n:-50	-
+plan	towers--rules--coverage--a-held-tower-becomes-neutral-when-its-control-gets-back-to-0	passed	ad5d9b572c04925c
+step	0	passed	1	screenshots/towers--rules--coverage--a-held-tower-becomes-neutral-when-its-control-gets-back-to-0/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:held by Red	-
+check	1	n:-50	-
+check	1	n:1	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-held-tower-becomes-neutral-when-its-control-gets-back-to-0/01.svg	-
+check	1	e:neutral	-
+check	1	n:0	-
+plan	towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second	passed	9e52abbc2a90de63
+step	0	passed	1	screenshots/towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:2	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second/01.svg	-
+check	1	n:20	-
+plan	towers--rules--coverage--the-first-team-to-500-points-wins	passed	6efcb29f9fbac102
+step	0	passed	1	screenshots/towers--rules--coverage--the-first-team-to-500-points-wins/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:495	-
+check	1	n:200	-
+check	1	n:2	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--the-first-team-to-500-points-wins/01.svg	-
+check	1	e:won by Blue	-
+check	1	n:500	-
+plan	towers--rules--coverage--when-the-clock-gets-to-0-the-team-with-more-points-wins	passed	3416abaa7164d507
+step	0	passed	1	screenshots/towers--rules--coverage--when-the-clock-gets-to-0-the-team-with-more-points-wins/00.svg	-
+check	1	e:in play	-
+check	1	n:5	-
+check	1	n:200	-
+check	1	n:300	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--when-the-clock-gets-to-0-the-team-with-more-points-wins/01.svg	-
+check	1	e:won by Red	-
+check	1	n:0	-
+plan	towers--rules--coverage--equal-points-when-the-clock-gets-to-0-is-a-draw	passed	dab8912a779fef53
+step	0	passed	1	screenshots/towers--rules--coverage--equal-points-when-the-clock-gets-to-0-is-a-draw/00.svg	-
+check	1	e:in play	-
+check	1	n:5	-
+check	1	n:300	-
+check	1	n:300	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--equal-points-when-the-clock-gets-to-0-is-a-draw/01.svg	-
+check	1	e:a draw	-
+plan	towers--rules--coverage--a-game-that-has-stopped-does-not-change	passed	4fa45f568ecf7bad
+step	0	passed	1	screenshots/towers--rules--coverage--a-game-that-has-stopped-does-not-change/00.svg	-
+check	1	e:won by Blue	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-game-that-has-stopped-does-not-change/01.svg	-
+check	1	n:0	-
+plan	towers--rules--coverage--a-team-sees-an-enemy-drone-near-one-of-its-drones	passed	104357992541e362
+step	0	passed	1	screenshots/towers--rules--coverage--a-team-sees-an-enemy-drone-near-one-of-its-drones/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:near a Blue drone	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-team-sees-an-enemy-drone-near-one-of-its-drones/01.svg	-
+check	1	e:seen	-
+plan	towers--rules--coverage--a-team-sees-an-enemy-drone-near-a-tower-that-it-holds	passed	4bab62123e67c83c
+step	0	passed	1	screenshots/towers--rules--coverage--a-team-sees-an-enemy-drone-near-a-tower-that-it-holds/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:near the Blue home tower	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-team-sees-an-enemy-drone-near-a-tower-that-it-holds/01.svg	-
+check	1	e:seen	-
+plan	towers--rules--coverage--a-team-does-not-see-an-enemy-drone-in-the-fog	passed	fef691ee058731d3
+step	0	passed	1	screenshots/towers--rules--coverage--a-team-does-not-see-an-enemy-drone-in-the-fog/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:far from anything Blue	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-team-does-not-see-an-enemy-drone-in-the-fog/01.svg	-
+check	1	e:unknown	-
+plan	towers--rules--coverage--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it	passed	8aaa75de0cfe41d8
+step	0	passed	1	screenshots/towers--rules--coverage--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:near a Blue drone	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it/01.svg	-
+check	1	e:last seen	-
+check	1	n:10	-
+plan	towers--rules--coverage--a-tower-in-the-fog-shows-the-side-it-had-when-the-team-last-saw-it	passed	7efbaf4d19d8a459
+step	0	passed	1	screenshots/towers--rules--coverage--a-tower-in-the-fog-shows-the-side-it-had-when-the-team-last-saw-it/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-tower-in-the-fog-shows-the-side-it-had-when-the-team-last-saw-it/01.svg	-
+check	1	e:held by Red	-
+check	1	e:neutral	-
+plan	towers--rules--coverage--a-team-sees-the-side-of-a-tower-again-when-its-drone-comes-near	passed	341322d3d4ec880f
+step	0	passed	1	screenshots/towers--rules--coverage--a-team-sees-the-side-of-a-tower-again-when-its-drone-comes-near/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:held by Red	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-team-sees-the-side-of-a-tower-again-when-its-drone-comes-near/01.svg	-
+check	1	e:held by Red	-
+plan	towers--rules--coverage--at-the-start-the-commander-sends-a-drone-to-each-neutral-tower	passed	7dccfd258a5e20ca
+step	0	passed	1	screenshots/towers--rules--coverage--at-the-start-the-commander-sends-a-drone-to-each-neutral-tower/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--at-the-start-the-commander-sends-a-drone-to-each-neutral-tower/01.svg	-
+check	1	e:take the west tower	-
+check	1	e:take the centre tower	-
+check	1	e:take the east tower	-
+plan	towers--rules--coverage--the-commander-defends-a-tower-that-an-enemy-drone-comes-near	passed	2522c2dd76da3674
+step	0	passed	1	screenshots/towers--rules--coverage--the-commander-defends-a-tower-that-an-enemy-drone-comes-near/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:near the Blue home tower	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--coverage--the-commander-defends-a-tower-that-an-enemy-drone-comes-near/01.svg	-
+check	1	e:take the Blue home tower	-
+plan	towers--rules--coverage--a-drone-that-is-behind-at-a-contested-tower-goes-somewhere-else	passed	7a6663060d236b75
+step	0	passed	1	screenshots/towers--rules--coverage--a-drone-that-is-behind-at-a-contested-tower-goes-somewhere-else/00.svg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:-20	-
+check	1	n:1	-
+check	1	n:1	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+check	1	e:take the west tower	-
+step	1	passed	1	screenshots/towers--rules--coverage--a-drone-that-is-behind-at-a-contested-tower-goes-somewhere-else/01.svg	-
+check	1	e:take the Red home tower	-
 plan	launcher--coverage--launch-starts-the-station-with-ardupilot	unsupported	aea5f3c468c6da8e
 step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the launch button, arrange the launch target and 13 more things yet.
 step	1	unsupported	0	-	-

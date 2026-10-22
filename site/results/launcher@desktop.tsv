@@ -1,6 +1,6 @@
 expectation-results 1
-plan	launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop	failed	5812900d95d32426
-step	0	passed	1	-	-
+plan	launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop	passed	5812900d95d32426
+step	0	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/00.jpg	-
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -8,16 +8,18 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
-step	1	passed	1	-	-
+step	1	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/01.jpg	-
 check	1	e:SIMULATOR ONLY	-
-step	2	passed	1	-	-
+step	2	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/02.jpg	-
 check	1	e:the simulator	-
 check	1	e:the T1-S Ranger	-
 check	1	e:STOP	-
 check	1	e:running	-
-step	3	failed	0	-	couldn't make it happen that the pilot stops the program: the stop button isn't on screen
-plan	launcher--picking-the-plane-and-the-place--the-vtol-at-cypress-ray-traced	passed	76ae55ddf5ad2424
-step	0	passed	1	-	-
+step	3	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/03.jpg	-
+check	1	e:LAUNCH	-
+check	1	e:stopped	-
+plan	launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot	passed	c1fb4092c338989a
+step	0	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/00.jpg	-
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -25,33 +27,28 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
-step	1	passed	1	-	-
+step	1	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/01.jpg	-
+step	2	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/02.jpg	-
 check	1	e:CYPRESS	-
-step	2	passed	1	-	-
+step	3	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/03.jpg	-
 check	1	e:the simulator	-
 check	1	e:the T1-S VTOL	-
 check	1	e:Cypress	-
 check	1	e:on	-
 check	1	e:STOP	-
 check	1	e:running	-
-plan	launcher--picking-the-plane-and-the-place--the-station-with-the-sticks-direct	passed	febdfe548402b362
-step	0	passed	1	-	-
-check	1	e:GROUND STATION	-
-check	1	e:WITH ARDUPILOT	-
-check	1	e:ALPINE VALLEY	-
-check	1	e:off	-
+step	4	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/04.jpg	-
 check	1	e:LAUNCH	-
-check	1	e:nothing	-
-check	1	e:idle	-
-step	1	passed	1	-	-
+check	1	e:stopped	-
+step	5	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/05.jpg	-
 check	1	e:WITHOUT ARDUPILOT	-
-step	2	passed	1	-	-
+step	6	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/06.jpg	-
 check	1	e:the ground station	-
 check	1	e:direct	-
-check	1	e:STOP	-
-check	1	e:running	-
+check	1	e:Cypress	-
+check	1	e:on	-
 plan	launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping	passed	86d59164f41546a8
-step	0	passed	1	-	-
+step	0	passed	1	screenshots/launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping/00.jpg	-
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -60,13 +57,13 @@ check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
 check	1	e:missing	-
-step	1	passed	1	-	-
+step	1	passed	1	screenshots/launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping/01.jpg	-
 check	1	e:the radio wizard	-
 check	1	e:the T1-S Ranger	-
-step	2	passed	1	-	-
+step	2	passed	1	screenshots/launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping/02.jpg	-
 check	1	e:mapped	-
 plan	launcher--coverage--launch-starts-the-station-with-ardupilot	passed	aea5f3c468c6da8e
-step	0	passed	1	-	-
+step	0	passed	1	screenshots/launcher--coverage--launch-starts-the-station-with-ardupilot/00.jpg	-
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -74,13 +71,13 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
-step	1	passed	1	-	-
+step	1	passed	1	screenshots/launcher--coverage--launch-starts-the-station-with-ardupilot/01.jpg	-
 check	1	e:the ground station	-
 check	1	e:through ArduPilot	-
 check	1	e:STOP	-
 check	1	e:running	-
 plan	launcher--coverage--render-docs-writes-the-manual	passed	c4bb06fa1cd825bb
-step	0	passed	1	-	-
+step	0	passed	1	screenshots/launcher--coverage--render-docs-writes-the-manual/00.jpg	-
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -88,5 +85,5 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
-step	1	passed	1	-	-
+step	1	passed	1	screenshots/launcher--coverage--render-docs-writes-the-manual/01.jpg	-
 check	1	e:the manual build	-
