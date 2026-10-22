@@ -42,7 +42,9 @@ Track these as a checklist. Do not skip ahead.
 1. Say the behaviour in one sentence a user would agree with. If you can't, ask them.
 2. Write the vocabulary, the expectation and, if a reader would follow it as a task, the
    story (writing-specs steps 2 to 4). Name the real controls. Add a glossary term for any
-   new word.
+   new word. A new rule goes on its topic page; it does not need a story of its own, because
+   the suite tests it on its own. Never add a scenario per rule to a story: each scenario is a
+   tutorial page. Extend a tutorial only if the rule is a step a reader takes on the way.
 3. `check` the suite. Fix conflicts, add `Overrides:` for exceptions. Run `plan` and read the
    test steps: they must say what you meant.
 4. Run the suite's own unit test (`cargo test --release the_suite_checks_clean` for the sim,

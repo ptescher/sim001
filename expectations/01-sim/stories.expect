@@ -73,17 +73,3 @@ Story: Taking a break
     Then the help screen is hidden
     When the pilot toggles pause
     Then the sim is running
-
-Story: Checking the controls before a flight
-  As a new pilot
-  I want to look up the keys before I throw
-  So that I know how to fly before the plane is in the air
-
-  The help screen shows all the keys and what they do. Open it before your first throw. Open
-  it again when you forget a key.
-
-  Scenario: Open the help and close it again
-    When the pilot toggles the help
-    Then the help screen is shown
-    When the pilot toggles the help
-    Then the help screen is hidden

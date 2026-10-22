@@ -205,13 +205,13 @@ fn bindings() -> Bindings<World> {
         .observe("the time left", |w| tenth(w.game.time_left()))
         .arrange("the time left", |w, v| w.game.time = w.game.rules.duration - v.as_f64().unwrap() as f32)
         .observe("the score of Blue", |w| w.game.score[0].floor() as f64)
-        .arrange("the score of Blue", |w, v| w.game.score[0] = v.as_f64().unwrap() as f32)
+        .set("the score of Blue", |w, v| w.game.score[0] = v.as_f64().unwrap() as f32)
         .observe("the score of Red", |w| w.game.score[1].floor() as f64)
         .arrange("the score of Red", |w, v| w.game.score[1] = v.as_f64().unwrap() as f32)
         .observe("the towers held by Blue", |w| {
             w.game.towers.iter().filter(|t| t.holder == Some(Team::Blue)).count() as f64
         })
-        .arrange("the towers held by Blue", move |w, v| w.blue_holds(count(v)))
+        .set("the towers held by Blue", move |w, v| w.blue_holds(count(v)))
         // The flank towers and their circles.
         .observe("the west tower", |w| holder_name(w.tower("west").holder))
         .arrange("the west tower", |w, v| w.hold("west", v))
@@ -221,11 +221,11 @@ fn bindings() -> Bindings<World> {
         })
         .observe("the circle of the west tower", |w| if w.tower("west").contested { "contested" } else { "quiet" })
         .observe("the Blue drones in the west circle", |w| w.count(Team::Blue, "west", true))
-        .arrange("the Blue drones in the west circle", move |w, v| w.in_circle(Team::Blue, "west", count(v), true))
+        .set("the Blue drones in the west circle", move |w, v| w.in_circle(Team::Blue, "west", count(v), true))
         .observe("the Red drones in the west circle", |w| w.count(Team::Red, "west", true))
-        .arrange("the Red drones in the west circle", move |w, v| w.in_circle(Team::Red, "west", count(v), true))
+        .set("the Red drones in the west circle", move |w, v| w.in_circle(Team::Red, "west", count(v), true))
         .observe("the Blue drones on the ground in the west circle", |w| w.count(Team::Blue, "west", false))
-        .arrange("the Blue drones on the ground in the west circle", move |w, v| {
+        .set("the Blue drones on the ground in the west circle", move |w, v| {
             w.in_circle(Team::Blue, "west", count(v), false)
         })
         .observe("the east tower", |w| holder_name(w.tower("east").holder))
@@ -235,7 +235,7 @@ fn bindings() -> Bindings<World> {
             w.tower_mut("east").control = v.as_f64().unwrap() as f32 / 100.0
         })
         .observe("the Red drones in the east circle", |w| w.count(Team::Red, "east", true))
-        .arrange("the Red drones in the east circle", move |w, v| w.in_circle(Team::Red, "east", count(v), true))
+        .set("the Red drones in the east circle", move |w, v| w.in_circle(Team::Red, "east", count(v), true))
         // What Blue knows.
         .observe("the Red scout", |w| {
             let d = w.game.drones[w.scout()];
@@ -336,7 +336,7 @@ fn every_test_of_the_section_passes_with_no_window() {
     }
     println!("{}", report.failures(&a.suite, &a.plans));
     let passed = ran.iter().filter(|(_, r)| r.status == Status::Passed).count();
-    assert!(passed >= 22, "only {passed} tests of the section ran and passed");
+    assert!(passed >= 23, "only {passed} tests of the section ran and passed");
     // The game server's tests are not this driver's: they stay "not supported yet" here.
     let not_passed: Vec<_> = ran
         .iter()
@@ -359,7 +359,8 @@ fn the_section_documents_itself_with_pictures_of_the_map() {
     } else {
         a.docs(Some(&report)).write(&out).unwrap();
     }
-    let shot = out.join("screenshots/towers--winning-a-game--two-towers-give-two-points-each-second/01.svg");
+    let shot = out
+        .join("screenshots/towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second/01.svg");
     let svg = std::fs::read_to_string(&shot).unwrap_or_else(|e| panic!("{}: {e}", shot.display()));
     assert!(svg.contains("BLUE 20"), "the score after 10 s with two towers: {svg}");
 }

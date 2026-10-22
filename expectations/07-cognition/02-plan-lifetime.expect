@@ -1,0 +1,45 @@
+Feature: Replacing and ending a plan
+  The ground sends a new plan about once a second, with a new plan id each time. The plane
+  flies the newest plan. If no new plan comes before the time to live ends, the plane circles
+  where it is. Thus a plane that loses the ground does not fly away.
+
+  Expectation: A new plan id replaces the plan
+    The plane does not finish the old plan first. It turns to the new plan at once.
+
+    Given the reported primitive is go to
+    When the ground sends an orbit plan
+    Then the reported plan goes up by 1
+    And the reported primitive is orbit
+
+  Expectation: A repeated plan id changes nothing
+    The plane flies a plan id only once. If a plan comes again with the same id, the plane
+    keeps the plan that it has, even if the new message has another primitive. Thus a plan
+    that the link sends twice does not restart.
+
+    Known bug: the plane keeps its plan, but today AG_PRIM shows the primitive of the new
+    message (`prim=4`), not 3. Until this is repaired, do not use AG_PRIM to see what the plane
+    flies after a repeated plan id. The test of this rule fails until then.
+
+    Given the reported primitive is go to
+    When the ground sends the plan id again with an orbit
+    Then the reply to the plan is accepted
+    And the reported plan stays the same
+    And the reported primitive is go to
+
+  Expectation: A plan that runs out makes the plane circle
+    If the time to live of the plan ends before a new plan comes, the plane circles where
+    it is. It tells the ground why, with AG_FALL and the message "Agent: fallback 1". A short
+    [[recovery]] can also show, as `recoveries` in the console. To give
+    each plan more time, set `AGENT_GRACE`. It is in seconds, and it is 0 by default.
+
+    Given the time to live of the plan is 5 s
+    When the plane flies on for 10 seconds
+    Then the reported fallback is plan expired
+
+  Expectation: A new plan ends the circle
+    The plane flies the new plan at once. With the parameters of `ardupilot/t1s.parm`, a short
+    [[recovery]] can show in AG_FALL as 3 at the same time.
+
+    Given the time to live of the plan is 5 s
+    When the ground sends a go-to plan
+    Then the reported fallback is none or recovery

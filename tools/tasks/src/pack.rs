@@ -25,16 +25,71 @@ pub fn screenshot_refs(html: &str) -> BTreeSet<String> {
         .collect()
 }
 
+/// `img` as a JPEG `WIDTH` wide (never enlarged), at `QUALITY`.
+fn shrunk(img: image::DynamicImage) -> Result<Vec<u8>, String> {
+    let img = if img.width() > WIDTH { img.resize(WIDTH, u32::MAX, FilterType::Lanczos3) } else { img };
+    let mut out = Vec::new();
+    JpegEncoder::new_with_quality(&mut out, QUALITY).encode_image(&img.to_rgb8()).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
 /// `src` as a JPEG `WIDTH` wide (never enlarged), at `QUALITY`.
 pub fn shrink_jpeg(src: &Path, dst: &Path) -> Result<(), String> {
     let img = image::open(src).map_err(|e| format!("{}: {e}", src.display()))?;
-    let img = if img.width() > WIDTH { img.resize(WIDTH, u32::MAX, FilterType::Lanczos3) } else { img };
-    let mut out = Vec::new();
-    JpegEncoder::new_with_quality(&mut out, QUALITY)
-        .encode_image(&img.to_rgb8())
-        .map_err(|e| format!("{}: {e}", dst.display()))?;
+    let out = shrunk(img).map_err(|e| format!("{}: {e}", dst.display()))?;
     std::fs::create_dir_all(dst.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(dst, out).map_err(|e| format!("{}: {e}", dst.display()))
+}
+
+const JPEG_DATA: &str = "data:image/jpeg;base64,";
+
+/// `svg` with each JPEG in it shrunk as `shrink_jpeg` shrinks a file (the console's screenshot
+/// with the TX15's screen above it is an SVG round a JPEG of the window). The `<image>` keeps
+/// its size on the page.
+pub fn shrink_svg(svg: &str) -> Result<String, String> {
+    let mut out = String::with_capacity(svg.len());
+    let mut rest = svg;
+    while let Some(at) = rest.find(JPEG_DATA) {
+        let (before, after) = rest.split_at(at + JPEG_DATA.len());
+        let end = after.find(['"', '\'']).unwrap_or(after.len());
+        let jpeg = base64::decode(&after[..end]).ok_or("an image in the SVG isn't base64")?;
+        let img = image::load_from_memory(&jpeg).map_err(|e| e.to_string())?;
+        out.push_str(before);
+        out.push_str(&base64::encode(&shrunk(img)?));
+        rest = &after[end..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// Standard base64, for the pictures inside an SVG.
+mod base64 {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    pub fn encode(bytes: &[u8]) -> String {
+        let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+        for chunk in bytes.chunks(3) {
+            let n = chunk.iter().enumerate().fold(0u32, |n, (i, &b)| n | (b as u32) << (16 - 8 * i));
+            for i in 0..4 {
+                out.push(if i <= chunk.len() { ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+            }
+        }
+        out
+    }
+
+    pub fn decode(text: &str) -> Option<Vec<u8>> {
+        let mut out = Vec::with_capacity(text.len() / 4 * 3);
+        let (mut n, mut bits) = (0u32, 0);
+        for c in text.bytes().filter(|c| !c.is_ascii_whitespace() && *c != b'=') {
+            n = n << 6 | ALPHABET.iter().position(|&a| a == c)? as u32;
+            bits += 6;
+            if bits >= 8 {
+                bits -= 8;
+                out.push((n >> bits) as u8);
+            }
+        }
+        Some(out)
+    }
 }
 
 fn pages(dir: &Path) -> Vec<PathBuf> {
@@ -71,8 +126,10 @@ pub fn pack(root: &Path) -> Result<usize, String> {
         if r.ends_with(".jpg") {
             shrink_jpeg(&from, &to)?;
         } else {
+            let svg = std::fs::read_to_string(&from).map_err(|e| format!("{}: {e}", from.display()))?;
+            let svg = shrink_svg(&svg).map_err(|e| format!("{}: {e}", from.display()))?;
             std::fs::create_dir_all(to.parent().unwrap()).map_err(|e| e.to_string())?;
-            std::fs::copy(&from, &to).map_err(|e| format!("{}: {e}", from.display()))?;
+            std::fs::write(&to, svg).map_err(|e| format!("{}: {e}", to.display()))?;
         }
     }
     Ok(refs.len())
@@ -100,6 +157,24 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn a_jpeg_in_an_svg_is_shrunk() {
+        assert_eq!(base64::encode(b"Man"), "TWFu");
+        assert_eq!(base64::encode(b"Ma"), "TWE=");
+        assert_eq!(base64::decode("TWE=").unwrap(), b"Ma");
+        let mut jpeg = Vec::new();
+        JpegEncoder::new_with_quality(&mut jpeg, 95).encode_image(&image::RgbImage::new(1920, 1080)).unwrap();
+        let svg = format!("<svg><image width=\"1920\" href=\"{JPEG_DATA}{}\"/></svg>", base64::encode(&jpeg));
+        let out = shrink_svg(&svg).unwrap();
+        assert!(
+            out.starts_with("<svg><image width=\"1920\" href=\"data:image/jpeg;base64,") && out.ends_with("\"/></svg>")
+        );
+        let inner = &out[out.find(JPEG_DATA).unwrap() + JPEG_DATA.len()..out.rfind('"').unwrap()];
+        let img = image::load_from_memory(&base64::decode(inner).unwrap()).unwrap();
+        assert_eq!((img.width(), img.height()), (960, 540));
+        assert_eq!(shrink_svg("<svg><rect/></svg>").unwrap(), "<svg><rect/></svg>");
     }
 
     #[test]

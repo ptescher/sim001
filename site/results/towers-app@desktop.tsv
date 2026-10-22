@@ -1,50 +1,20 @@
 expectation-results 1
-plan	towers--your-first-tower--take-the-west-tower	passed	fec7b68ca9e0e61d
-step	0	passed	1	-	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	-	-
+plan	towers--your-first-tower--take-the-west-tower	passed	855149c473e1fae8
+step	0	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/00.jpg	-
+step	1	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/01.jpg	-
 check	1	e:Blue	-
 check	1	n:5	-
-step	2	passed	1	-	-
+step	2	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/02.jpg	-
 check	1	e:the first Blue drone	-
-step	3	passed	1	-	-
+step	3	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/03.jpg	-
 check	1	e:take the west tower	-
-step	4	passed	1	-	-
+step	4	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/04.jpg	-
 check	1	e:held by Blue	-
-plan	towers--changing-your-mind--hold-then-home	passed	9587b6336e1fc62b
-step	0	passed	1	-	-
-check	1	e:in play	-
-check	1	n:480	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:1	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:neutral	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:at its base	-
-check	1	e:neutral	-
-step	1	passed	1	-	-
+plan	towers--changing-your-mind--hold-then-home	passed	cc1884d69f965cc6
+step	0	passed	1	screenshots/towers--changing-your-mind--hold-then-home/00.jpg	-
+step	1	passed	1	screenshots/towers--changing-your-mind--hold-then-home/01.jpg	-
 check	1	e:the first Blue drone	-
-step	2	passed	1	-	-
+step	2	passed	1	screenshots/towers--changing-your-mind--hold-then-home/02.jpg	-
 check	1	e:hold	-
-step	3	passed	1	-	-
+step	3	passed	1	screenshots/towers--changing-your-mind--hold-then-home/03.jpg	-
 check	1	e:go home	-

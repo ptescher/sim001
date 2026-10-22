@@ -7,7 +7,6 @@ Part: Getting started
   Page: installing [desktop]
   Section: The launcher
   Page: controls [desktop]
-  Section: Setting up the radio
 
 Part: Flying in the sim
   Section: The simulator
@@ -19,6 +18,8 @@ Part: Flying the VTOL
 
 Part: The ground station
   Section: Ground control station
+  Section: Setting up the radio
+  Section: Other aircraft
   Page: ground-station-screens [desktop]
 
 Part: Games
@@ -26,13 +27,14 @@ Part: Games
   Section: Games with ArduPilot
   Section: Towers
 
-Part: Beyond the cockpit
-  Section: Other aircraft
+Part: For developers
+  Section: Flying by plan
+  Section: Making the executor better
+
+Part: Real hardware
   Section: The flight computer
   Section: The TX15 on the serial line
   Section: Watching a real plane
-  Section: Flying by plan
-  Section: Making the executor better
 
 Part: Reference
   Page: places-and-scenery [desktop]

@@ -20,7 +20,7 @@ Story: Your first flight from the launcher
     When the pilot stops the program
     Then the program is stopped
 
-Story: Picking the plane and the place
+Story: Picking what to launch
   As a pilot
   I want to choose what the launcher starts
   So that I fly the plane that I want, where I want
@@ -28,11 +28,13 @@ Story: Picking the plane and the place
   The LAUNCH screen has a pair of buttons for what to start, a pair for the flight controller,
   a button for each place, and RAY TRACING. The buttons that are lit green are what LAUNCH
   starts. The first line of the LOG screen shows the command that the launcher ran, so you can
-  see what it chose.
+  see what it chose. First you fly the VTOL at Cypress, ray traced. Then you start the station
+  with the sticks direct.
 
-  Scenario: The VTOL at Cypress, ray traced
+  Scenario: The VTOL at Cypress, then the station without ArduPilot
     When the launch target is SIMULATOR ONLY
-    And the place choice is CYPRESS
+    And the flight controller choice is WITH ARDUPILOT
+    When the place choice is CYPRESS
     And the ray tracing choice is on
     Then the place choice is CYPRESS
     When the pilot launches
@@ -40,9 +42,10 @@ Story: Picking the plane and the place
     And the plane of the started sim is the T1-S VTOL
     And the place of the started program is Cypress
     And the ray tracing of the started program is on
-
-  Scenario: The station with the sticks direct
-    When the flight controller choice is WITHOUT ARDUPILOT
+    When the pilot stops the program
+    Then the program is stopped
+    When the launch target is GROUND STATION
+    And the flight controller choice is WITHOUT ARDUPILOT
     Then the flight controller choice is WITHOUT ARDUPILOT
     When the pilot launches
     Then the program in the log is the ground station

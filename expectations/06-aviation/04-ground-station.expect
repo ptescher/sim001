@@ -13,8 +13,7 @@ Feature: The ground station gets the telemetry of the flight computer
     Given the ground station telemetry is flowing
     And the ground station map distance is 400 m
     When 5 seconds pass
-    Then the ground station map distance is at least 399 m
-    And the ground station map distance is at most 401 m
+    Then the ground station map distance is 400 m
 
   Expectation: Commands of the ground station reach ArduPilot
     Given the ground station telemetry is flowing

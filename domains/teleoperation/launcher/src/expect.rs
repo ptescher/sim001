@@ -223,21 +223,14 @@ impl LauncherDriver {
         self.call(|l, _, _| Seen::of(l))
     }
 
-    /// Clicks the button with this id where it was last painted, and lets the window repaint. A
-    /// button that has just appeared (STOP after LAUNCH) may not be painted yet: wait for it.
+    /// Clicks the button with this id where it is painted, and lets the window repaint. The window
+    /// is drawn first: a button that has just appeared (STOP after LAUNCH) is only painted on the
+    /// next frame, and a window the system doesn't show (the screen locked or asleep, or the window
+    /// covered) gets no frames at all, so a click would land on the frame before. (GPUI draws a
+    /// dirty window before a key press the same way.)
     fn click_button(&self, id: String) -> Result<(), String> {
-        let end = Instant::now() + Duration::from_secs(5);
-        let probe = id.clone();
-        while !self.with_window({
-            let probe = probe.clone();
-            move |_, _| app::button_bounds(&probe).is_some()
-        })? {
-            if Instant::now() > end {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
         self.with_window(move |w, cx| {
+            w.draw(cx).clear();
             let b = app::button_bounds(&id).ok_or_else(|| format!("the {id} button isn't on screen"))?;
             click(w, cx, b.center());
             Ok::<(), String>(())
@@ -381,7 +374,7 @@ impl Driver for LauncherDriver {
 
     /// The launcher's window as the system draws it.
     fn screenshot(&mut self) -> Result<Option<Screenshot>, String> {
-        Ok(self.with_window(|w, _| crate::snapshot::window_jpeg(w))?.map(Screenshot::jpeg))
+        Ok(self.with_window(crate::snapshot::window_jpeg)?.map(Screenshot::jpeg))
     }
 
     fn supports(&self, need: Need<'_>) -> bool {

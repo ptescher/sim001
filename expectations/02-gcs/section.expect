@@ -205,7 +205,7 @@ Vocabulary:
     Shows: serial: the station was started with --flight-computer, and the sim reads the TX15 from the flight computer's serial line
 
   Phrase: the TX15 is ready
-    Say: connect the TX15 to the flight computer's serial line (start the station with --flight-computer, or give the radio a serial device with --tx15-serial). Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8. Then put the throttle stick all the way down, SE out and press button 1
+    Say: connect the TX15. By USB, put it in joystick mode. On the serial line of the flight computer, start the station with --flight-computer, or give the radio a serial device with --tx15-serial. Set the radio up once, as [[Setting up the TX15]] shows: load the model with the six buttons on channel 8. Then put the throttle stick all the way down, SE out and press button 1
     Given the radio line is serial
     And the throttle stick is low
     And the arm switch is off

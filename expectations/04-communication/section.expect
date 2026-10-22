@@ -18,7 +18,10 @@ Section: Other aircraft
 
 Vocabulary:
   State: the other plane is silent | sending Remote ID | sending MAVLink | sending both
-    Set: ask the other pilot to be {value}
+    Set: silent: ask the other pilot to switch off the radios of the other plane
+    Set: sending Remote ID: ask the other pilot to switch on Remote ID
+    Set: sending MAVLink: ask the other pilot to join your MAVLink network
+    Set: sending both: ask the other pilot to switch on Remote ID and to join your MAVLink network
     Shows: silent: the other plane has no marker after a while
     Shows: sending Remote ID: the other plane broadcasts its position and its ID
     Shows: sending MAVLink: the other plane shares its position on the MAVLink network
@@ -37,6 +40,8 @@ Vocabulary:
     Shows: MAVLink: the label of the marker says MAV
     Shows: Remote ID and MAVLink: the label of the marker says MAV RID
   State: the TX15 link is up | lost
+    Set: lost: switch off the TX15
+    Set: up: switch on the TX15
     Shows: lost: the LINK annunciator flashes
   State: your Remote ID is on | off
     Shows: on: the transmitter on your plane broadcasts the ID and the position of your plane

@@ -9,7 +9,7 @@ Section: The launcher
   On: desktop
   The launcher is the window that you start SIM001 from. It starts the sim alone, or the whole
   ground station. It also sets up your controllers and opens this manual. In the app bundle,
-  open `SIM001.app`. From source, type `cd domains/teleoperation/launcher && cargo run --release`.
+  open `SIM001.app`. From source, type `cargo run --release` in the top folder of the repository.
 
   The window has four screens. LAUNCH starts the sim or the station. CONTROLLERS lists the
   radios and gamepads that are plugged in, and what `controls.cfg` maps. DOCS opens this
@@ -28,13 +28,13 @@ Vocabulary:
   # The choices on the LAUNCH screen: the lit button of each pair.
   State: the launch target is SIMULATOR ONLY | GROUND STATION
     Set: click {value}
-    Shows: {value}: the {value} button is lit green
+    Shows: the {value} button is lit green
   State: the flight controller choice is WITH ARDUPILOT | WITHOUT ARDUPILOT
     Set: click {value}
-    Shows: {value}: the {value} button is lit green
+    Shows: the {value} button is lit green
   State: the place choice is ALPINE VALLEY | CYPRESS | BERKELEY
     Set: click {value} under Place
-    Shows: {value}: the {value} button is lit green
+    Shows: the {value} button is lit green
   State: the ray tracing choice is on | off
     Set: click RAY TRACING until it is {value}
     Shows: on: the RAY TRACING button is lit green
@@ -46,8 +46,8 @@ Vocabulary:
   # and its command line in the first line of the log.
   State: the program in the log is nothing | the simulator | the ground station | the radio wizard | the manual build
     Shows: nothing: the LOG screen says "Nothing running"
-    Shows: the simulator: the LOG screen names the simulator, for example "Simulator, T1-S Ranger"
-    Shows: the ground station: the LOG screen names the ground station, for example "Ground station with ArduPilot"
+    Shows: the simulator: the name of the program on the LOG screen starts with "Simulator"
+    Shows: the ground station: the name of the program on the LOG screen starts with "Ground station"
     Shows: the radio wizard: the LOG screen says "Controller setup"
     Shows: the manual build: the LOG screen says "Render the docs"
   State: the program is idle | running | stopped
@@ -70,6 +70,7 @@ Vocabulary:
 
   # What the CONTROLLERS screen says about controls.cfg.
   State: the controls file is missing | mapped
+    Set: missing: if you have a `controls.cfg`, delete it. It is in `~/Library/Application Support/SIM001` on macOS
     Shows: missing: the CONTROLLERS screen says "No controls.cfg yet"
     Shows: mapped: the CONTROLLERS screen says "controls.cfg maps" and the number of channels
 
@@ -85,7 +86,7 @@ Vocabulary:
     Say: click RENDER DOCS
 
   Phrase: the launcher has just opened
-    Say: start the launcher. In the app bundle, open `SIM001.app`. From source, type `cd domains/teleoperation/launcher && cargo run --release`
+    Say: start the launcher. In the app bundle, open `SIM001.app`. From source, type `cargo run --release` in the top folder of the repository
     Given the launch target is GROUND STATION
     And the flight controller choice is WITH ARDUPILOT
     And the place choice is ALPINE VALLEY

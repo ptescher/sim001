@@ -10,19 +10,21 @@ Feature: Sending plans
   511.75 m, and the radius from 0 m to 1023 m. The encoder clamps a value outside its range. In
   Rust, `cognition_plan::WirePlan::to_command` does this.
 
+  In the console of the [[runner]], type `plan PRIMITIVE NORTH EAST ALT RADIUS TTL [TARGET]`: the
+  primitive, the point in metres north and east of home, the altitude and the radius in metres,
+  the time to live in seconds, and the id of the target aircraft, if the primitive needs one.
+
   The plane answers each plan with a `COMMAND_ACK`. If the plane refuses the plan, the reason
   is in `result_param2`: 1 if the plane is not in [[AGENT mode]], 2 if the plan is malformed,
   3 if the plane has no home yet, and 4 if the plane has no [[executor]].
 
-  The ground sends a new plan about once a second, with a new plan id each time. The plane
-  flies the newest plan. If no new plan comes before the time to live ends, the plane circles
-  where it is. Thus a plane that loses the ground does not fly away.
-
   In AGENT mode, the plane sends its [[agent status]], four `NAMED_VALUE_INT` messages, once a
-  second. AG_PLAN is
-  the id of its plan. AG_PRIM is the primitive of that plan. AG_ENV counts the steps where the
+  second. AG_PLAN is the id of its plan. AG_PRIM is the primitive of that plan. AG_ENV counts the steps where the
   [[safety envelope]] changed what the plan asked for. AG_FALL tells you if the plane stopped
   the plan, and why.
+
+  [[Replacing and ending a plan]] tells you what the plane does when a new plan comes, or when
+  no plan comes.
 
   Expectation: AGENT mode takes a go-to plan
     Given the flight mode of the plane is AGENT
@@ -68,47 +70,6 @@ Feature: Sending plans
     When the flight mode of the plane is AGENT
     Then the reported plan is 0
     And the reported primitive is none
-
-  Expectation: A new plan id replaces the plan
-    The plane does not finish the old plan first. It turns to the new plan at once.
-
-    Given the reported primitive is go to
-    When the ground sends an orbit plan
-    Then the reported plan goes up by 1
-    And the reported primitive is orbit
-
-  Expectation: A repeated plan id changes nothing
-    The plane flies a plan id only once. If a plan comes again with the same id, the plane
-    keeps the plan that it has, even if the new message has another primitive. Thus a plan
-    that the link sends twice does not restart.
-
-    The rule below is what the plane must do. It does not do it yet. The plane flies the first
-    plan, but AG_PRIM shows the primitive of the new message (`prim=4`). Until this is
-    repaired, do not use AG_PRIM to see what the plane flies after a repeated plan id.
-
-    Given the reported primitive is go to
-    When the ground sends the plan id again with an orbit
-    Then the reply to the plan is accepted
-    And the reported plan stays the same
-    And the reported primitive is go to
-
-  Expectation: A plan that runs out makes the plane circle
-    If the time to live of the plan ends before a new plan comes, the plane circles where
-    it is. It tells the ground why, with AG_FALL and the message "Agent: fallback 1". A short
-    [[recovery]] can also show, as `recoveries` in the console. To give
-    each plan more time, set `AGENT_GRACE`. It is in seconds, and it is 0 by default.
-
-    Given the time to live of the plan is 5 s
-    When the plane flies on for 10 seconds
-    Then the reported fallback is plan expired
-
-  Expectation: A new plan ends the circle
-    The plane flies the new plan at once. With the parameters of `ardupilot/t1s.parm`, a short
-    [[recovery]] can show in AG_FALL as 3 at the same time.
-
-    Given the time to live of the plan is 5 s
-    When the ground sends a go-to plan
-    Then the reported fallback is none or recovery
 
   Expectation: The plane reports its plan once a second
     The plane sends AG_PLAN, AG_PRIM, AG_ENV and AG_FALL once a second while it is in AGENT

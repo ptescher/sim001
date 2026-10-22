@@ -24,10 +24,11 @@ Section: Flying by plan
   and the work of the envelope once a second.
 
   Use this section when you write a ground control agent, or when you fly planes by plan.
-  [[Sending plans]] tells you how a plan gets to the plane. [[What each primitive does]] tells
-  you how the plane flies each plan. [[What the envelope prevents]] tells you what the plane
-  does not do, whatever the plan says. [[Tag by plan]] shows the ground control agent in a
-  game of [[tag]].
+  [[Sending plans]] and [[Replacing and ending a plan]] tell you how a plan gets to the plane.
+  [[Flying to a point and round it]] and [[Flying after other aircraft]] tell you how the plane
+  flies each plan. [[What the envelope prevents]] and [[Other aircraft and bad data]] tell you
+  what the plane does not do, whatever the plan says. [[Tag by plan]] shows the ground control
+  agent in a game of [[tag]].
 
   The pilot always wins. If the pilot moves the mode switch of the radio, the plane leaves
   AGENT mode at once.

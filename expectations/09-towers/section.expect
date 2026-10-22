@@ -1,25 +1,29 @@
 # Towers, a team game for drones flown by plan (domains/recreation/towers, plans/towers.md).
-# Run with no window by domains/recreation/towers/tests/acceptance.rs: the real referee
-# (recreation_towers::Game), with drones that the test puts where each step says. The rules do
-# not depend on how a drone flies; the host's tests fly the game with ArduPlane SITL.
+# This section is the commander app (domains/teleoperation/command), in the Blue seat of a
+# practice game: its driver (`towers_commander --expect`) starts a fresh game server for each
+# test. rules/ is the referee on its own, with no window; arduplane/ is the game server with
+# ArduPlane SITL drones. The vocabulary here is shared by all three.
 
 Section: Towers
+  Launch: start the commander app on a practice game. Run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`. The app starts a game server with six ArduPilot drones, and takes the Blue seat. With `--red nobody`, nobody commands Red, and its drones circle over their base
   Towers is a game for two teams of drones, Blue and Red. Each team has three T1-S VTOL
   drones and a [[base]] at one end of the field. Five radio [[tower]]s stand on the field. At
   the start, each team holds its home tower. The centre tower and the two flank towers are
   neutral.
 
-  You do not fly the drones with sticks. You give each drone an order from the ground, and the
-  drone flies it by plan in [[AGENT mode]]. To take a tower, send drones to circle it. Each
-  tower that your team holds gives you one point each second. The first team to 500 points
-  wins. If no team has 500 points after 8 minutes, the team with more points wins.
+  You do not fly the drones with sticks. You command your team from the commander app: you
+  give each drone an order, and the drone flies it by plan in [[AGENT mode]]. To take a tower,
+  send drones to circle it. Each tower that your team holds gives you one point each second.
+  The first team to 500 points wins. If no team has 500 points after 8 minutes, the team with
+  more points wins.
 
   A team does not see the whole field. It sees round its drones, its base and the towers that
-  it holds. The rest of the field is in [[fog]]. An enemy drone in the fog is not on your map,
-  or it is where you last saw it.
+  it holds. The rest of the field is in [[fog]].
 
-  [[Taking a tower]] tells you how a tower changes sides. [[Points and the end of the game]]
-  tells you how to win. [[What a team sees]] tells you what the fog hides.
+  The pages here assume that the app is open on a practice game. [[The rules of Towers]] tells
+  you how a tower changes sides, how to win and what the fog hides. [[The game with ArduPlane
+  drones]] plays a whole game between two computer teams. To make a computer commander better,
+  see [[Captains for Towers]].
 
 Vocabulary:
   State: the game of Towers is in play | won by Blue | won by Red | a draw
@@ -46,24 +50,24 @@ Vocabulary:
     Shows: held by Red: the west tower is red
     Shows: neutral: the west tower is grey
   State: the control of the west tower is -100..100 %
-    Shows: the control bar of the west tower is at {value}. Plus is towards Blue, minus towards Red
+    Shows: the control bar of the west tower is at {value} %
   State: the circle of the west tower is contested | quiet
     Shows: contested: the circle of the west tower flashes, because drones of the two teams are in it
     Shows: quiet: the circle of the west tower does not flash
   State: the Blue drones in the west circle are 0..3
-    Set: order {value} Blue drones to take the west tower, and wait until they circle it
+    Set: send Blue drones to the west tower until {value} of them circle it
   State: the Red drones in the west circle are 0..3
-    Set: order {value} Red drones to take the west tower, and wait until they circle it
+    Set: wait until {value} Red drones circle the west tower
   State: the Blue drones on the ground in the west circle are 0..3
-    Set: land {value} Blue drones in the circle of the west tower
+    Set: land Blue drones in the circle of the west tower until {value} of them stand there
   State: the east tower is held by Blue | held by Red | neutral
     Shows: held by Blue: the east tower is blue
     Shows: held by Red: the east tower is red
     Shows: neutral: the east tower is grey
   State: the control of the east tower is -100..100 %
-    Shows: the control bar of the east tower is at {value}
+    Shows: the control bar of the east tower is at {value} %
   State: the Red drones in the east circle are 0..3
-    Set: order {value} Red drones to take the east tower, and wait until they circle it
+    Set: wait until {value} Red drones circle the east tower
 
   # What Blue knows: the map of the Blue team.
   State: the Red scout is at its base | near a Blue drone | far from anything Blue | near the Blue home tower
@@ -95,11 +99,11 @@ Vocabulary:
   # The computer commander of a team (recreation_towers::Commander): its orders to the Blue
   # drones. The first Blue drone stands at the west end of the Blue base, the third at the east end.
   State: the order of the first Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
-    Shows: {value}: the first Blue drone gets the order to {value}
+    Shows: the first Blue drone gets the order to {value}. In the app, the list of drones shows the order beside B1
   State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
-    Shows: {value}: the second Blue drone gets the order to {value}
+    Shows: the second Blue drone gets the order to {value}
   State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
-    Shows: {value}: the third Blue drone gets the order to {value}
+    Shows: the third Blue drone gets the order to {value}
   # The commander app (domains/teleoperation/command), in the Blue seat of a game on the server.
   State: the seat of the app is none | Blue | refused
     Shows: Blue: the top bar of the app says BLUE COMMANDER
@@ -149,7 +153,7 @@ Vocabulary:
     Say: wait for the end of the game. The server flies the drones with a computer commander for each team
 
   Phrase: a game of Towers is in play
-    Say: start a game of Towers. All the drones stand at their bases
+    Say: wait until all the drones stand at their bases, and the clock shows 480 s
     Given the game of Towers is in play
     And the time left is 480 s
     And the score of Blue is 0 points
@@ -165,6 +169,3 @@ Vocabulary:
     And the Red drones in the east circle are 0
     And the east tower on the Blue map is neutral
     And the Red scout is at its base
-
-Background:
-  Given a game of Towers is in play

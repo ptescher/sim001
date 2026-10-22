@@ -1,0 +1,86 @@
+Feature: What the envelope prevents
+  The [[safety envelope]] checks each demand of the [[executor]] before the plane flies it,
+  50 times a second. It keeps the plane inside the [[fence]], above the [[floor]] and below
+  the [[ceiling]]. It keeps the plane clear of other aircraft by the [[separation]] limit, and
+  it keeps the plane above the [[stall margin]]. If the plan and the envelope disagree, the
+  envelope wins.
+
+  The envelope applies its rules in this order: separation, fence, ceiling, floor and stall.
+  A later rule wins over an earlier one. Thus the floor and the stall margin always win. Each
+  step where the envelope changes the demand is an [[intervention]]. AG_ENV counts them.
+
+  Set the limits with the AGENT parameters: `AGENT_FENCE_N`, `AGENT_FENCE_E` and
+  `AGENT_FENCE_R` for the fence, `AGENT_CEIL`, `AGENT_FLOOR`, `AGENT_SEP` and
+  `AGENT_ASPD_MRG`. The bank, the pitch and the airspeeds come from `ROLL_LIMIT_DEG`,
+  `PTCH_LIM_MAX_DEG`, `PTCH_LIM_MIN_DEG` and `AIRSPEED_*`. `ardupilot/t1s.parm` sets a fence
+  of 85 m round a point 70 m north of home, a ceiling of 60 m, a floor of 12 m and a
+  separation of 4 m.
+
+  We measured the results on this page in a simulation of the T1-S that uses the same
+  [[executor]]. The console cannot start the plane in these states, and it does not show the
+  distances or the heights.
+
+  [[Other aircraft and bad data]] tells you how the envelope keeps planes apart, and what the
+  plane does when its data is bad.
+
+  Expectation: The envelope leaves a safe plan alone
+    A plan that keeps clear of the limits needs no help. Thus AG_ENV stays the same, and a
+    rise of AG_ENV shows a problem. A ground control agent that the envelope must often
+    correct flies too near the limits.
+
+    The rule below is what the plane must do. With the parameters of `ardupilot/t1s.parm`, it
+    does not do it yet. Their cruise airspeed, 15 m/s, is at the edge of the stall margin. Thus
+    the envelope changes the throttle and the pitch on about one step in three. AG_ENV goes up
+    by hundreds each minute, also on a safe orbit. With a cruise airspeed of 18 m/s, AG_ENV
+    stays the same.
+
+    Given the reported primitive is orbit
+    When the plane flies on for 10 minutes
+    Then the interventions in the last minute are 0
+
+  Expectation: The plane stays inside the fence
+    The envelope looks ahead. If a turn back that starts now only just stays inside the fence,
+    the envelope starts the turn at full bank. It allows for the wind.
+
+    Given the start is a run at the fence
+    And the other aircraft is far away
+    When the plane flies on for 30 seconds
+    Then the farthest distance from the arena centre is at most 85 m
+    And the reported interventions are above 0
+
+  Expectation: The plane stays above the floor
+    Near the floor, the envelope lifts the nose and opens the throttle. Below the floor, it
+    also makes the bank smaller, and AG_FALL shows a [[recovery]].
+
+    Given the start is a dive at the ground
+    And the other aircraft is far away
+    When the plane flies on for 30 seconds
+    Then the lowest height of the flight is above 12 m
+
+  Expectation: The plane stays below the ceiling
+    Near the ceiling, the envelope lowers the nose. A fast climb can take the plane up to 2 m
+    over the ceiling before it comes back down.
+
+    Given the start is a steep climb
+    And the other aircraft is far away
+    When the plane flies on for 30 seconds
+    Then the highest height of the flight is at most 62 m
+
+  Expectation: Under the stall margin, the plane gets its airspeed back first
+    Below the minimum airspeed, the envelope lowers the nose, sets the wings nearly level and
+    sets full throttle. Near the floor, it holds the nose level instead. The plane says
+    "Agent: fallback 3" when the recovery starts. The recovery is often shorter than the 1 s
+    between two AG_FALL reports.
+
+    Given the start is a slow climb
+    When the plane flies on for 1 second
+    Then the messages about a recovery are above 0
+    And the throttle of the plane is the executor's
+
+  Expectation: After a recovery, the plane flies on
+    Given the start is a slow climb
+    And the other aircraft is far away
+    When the plane flies on for 30 seconds
+    Then the airspeed of the plane is at least 14 m/s
+    And the lowest height of the flight is above 12 m
+    And the reported fallback is none

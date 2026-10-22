@@ -176,6 +176,11 @@ impl World {
     }
 }
 
+/// To a tenth, as the screen of the TX15 shows a reading.
+fn tenth(x: f32) -> f64 {
+    (x as f64 * 10.0).round() / 10.0
+}
+
 fn stick(pct: f64) -> u16 {
     (1500.0 + 5.0 * pct).round() as u16
 }
@@ -199,22 +204,16 @@ fn driver() -> Bindings<World> {
         .observe("the TX15 screen arming", |w| {
             if if w.warm { w.vehicle.armed } else { w.handset.screen.armed } { "armed" } else { "disarmed" }
         })
-        .observe(
-            "the TX15 screen battery",
-            |w| if w.warm { w.vehicle.volts as f64 } else { w.handset.screen.volts as f64 },
-        )
+        .observe("the TX15 screen battery", |w| tenth(if w.warm { w.vehicle.volts } else { w.handset.screen.volts }))
         .observe("the TX15 screen bank", |w| {
             // (Degrees to radians and back is not exact: the pilot reads whole tenths.)
             let deg = if w.warm { w.vehicle.roll.to_degrees() } else { w.handset.screen.roll };
-            (deg as f64 * 10.0).round() / 10.0
+            tenth(deg)
         })
         .observe("the TX15 screen airspeed", |w| {
-            if w.warm { w.vehicle.airspeed as f64 } else { w.handset.screen.airspeed as f64 }
+            tenth(if w.warm { w.vehicle.airspeed } else { w.handset.screen.airspeed })
         })
-        .observe(
-            "the TX15 screen climb",
-            |w| if w.warm { w.vehicle.climb as f64 } else { w.handset.screen.climb as f64 },
-        )
+        .observe("the TX15 screen climb", |w| tenth(if w.warm { w.vehicle.climb } else { w.handset.screen.climb }))
         .observe("the TX15 screen satellites", |w| {
             if w.warm { w.vehicle.sats as f64 } else { w.handset.screen.sats as f64 }
         })

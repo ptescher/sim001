@@ -1,0 +1,44 @@
+Feature: What a team sees
+  A team sees 150 m round each of its drones, in the air or on the ground. It sees 150 m round
+  its base, and 200 m round each tower that it holds. Each team has a map of its own. The map
+  shows the enemy drones that the team sees, where they are now. All the rest of the field is
+  in [[fog]].
+
+  When an enemy drone goes into the fog, the map keeps it where the team last saw it. The map
+  shows it dim, with the time since then. The map of a team also shows each tower as the team
+  last saw it. Thus a tower in the fog can change sides, and your map does not show it.
+
+  Expectation: A team sees an enemy drone near one of its drones
+    Given the Red scout is near a Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+  Expectation: A team sees an enemy drone near a tower that it holds
+    Given the Red scout is near the Blue home tower
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+  Expectation: A team does not see an enemy drone in the fog
+    Given the Red scout is far from anything Blue
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is unknown
+
+  Expectation: An enemy drone that goes into the fog stays where the team last saw it
+    Given the Red scout is near a Blue drone
+    When the Red scout flies into the fog for 10 seconds
+    Then the Red scout on the Blue map is last seen
+    And the age of the Red scout on the Blue map is 10 s
+
+  Expectation: A tower in the fog shows the side it had when the team last saw it
+    Given the east tower is neutral
+    And the control of the east tower is 0 %
+    And the Red drones in the east circle are 1
+    When the game runs for 20 seconds
+    Then the east tower is held by Red
+    And the east tower on the Blue map is neutral
+
+  Expectation: A team sees the side of a tower again when its drone comes near
+    Given the east tower is held by Red
+    And the east tower on the Blue map is neutral
+    When a Blue drone flies near the east tower
+    Then the east tower on the Blue map is held by Red

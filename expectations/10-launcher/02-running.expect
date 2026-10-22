@@ -1,0 +1,21 @@
+Feature: Running and stopping a program
+  When you click LAUNCH, the launcher starts the program and opens the LOG screen. The LOG
+  screen shows the output of the program, and its state beside its name. While the program
+  runs, LAUNCH becomes STOP. Click STOP to end the program.
+
+  Expectation: LAUNCH starts the program, and becomes STOP
+    The LOG screen shows the output of the program, and its command line in the first line.
+    The launcher runs one program at a time. To start another, stop the one that runs.
+
+    Given the program is idle
+    When the pilot launches
+    Then the program is running
+    And the launch button is STOP
+
+  Expectation: STOP ends the program
+    STOP ends the program and all that it started: the sim, ArduPilot and the console.
+
+    Given the program is running
+    When the pilot stops the program
+    Then the program is stopped
+    And the launch button is LAUNCH

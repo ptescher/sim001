@@ -204,8 +204,12 @@ impl AppDriver {
         }
     }
 
+    /// Clicks the button `id` where it is painted. The window is drawn first, as GPUI does before a
+    /// key press: a window that gets no frames (the screen locked or asleep, or the window
+    /// covered) would otherwise take the click on the frame before.
     fn click_button(&self, id: &'static str) -> Result<(), String> {
         self.with_window(move |w, cx| {
+            w.draw(cx).clear();
             let b = ui::button_bounds(id).ok_or_else(|| format!("the {id} button isn't on screen"))?;
             click(w, cx, b.center());
             Ok::<(), String>(())
@@ -223,7 +227,10 @@ impl AppDriver {
             let tower = view.towers.iter().find(|t| t.name == name).ok_or(format!("no {name} tower"))?;
             Ok(MapView::new(v.map_bounds.get(), &rules).to_screen(tower.at))
         })??;
-        self.with_window(move |w, cx| click(w, cx, point(px(x), px(y))))
+        self.with_window(move |w, cx| {
+            w.draw(cx).clear();
+            click(w, cx, point(px(x), px(y)))
+        })
     }
 
     /// Waits for the server's echo of drone `k`'s order.
@@ -365,7 +372,7 @@ impl Driver for AppDriver {
 
     /// The app's window as the system draws it.
     fn screenshot(&mut self) -> Result<Option<Screenshot>, String> {
-        Ok(self.with_window(|w, _| crate::snapshot::window_jpeg(w))?.map(Screenshot::jpeg))
+        Ok(self.with_window(crate::snapshot::window_jpeg)?.map(Screenshot::jpeg))
     }
 
     fn supports(&self, need: Need<'_>) -> bool {

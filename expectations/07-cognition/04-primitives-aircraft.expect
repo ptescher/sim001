@@ -1,0 +1,62 @@
+Feature: Flying after other aircraft
+  Two primitives fly with another aircraft: pursue chases it, and evade breaks away from it. The
+  plan names the other aircraft as its target.
+
+  The other aircraft come from [[track]]s. The ground sends each one as an `ADSB_VEHICLE`
+  message. The low byte of its ICAO address is the id that a plan names as its target. The
+  plane ignores a track that it has not heard for 3 s. In the runner, the ids of the planes
+  are 1 for Kestrel, 2 for Merlin and 3 for Swift. After the game, the console sends the tracks
+  of Merlin and Swift to Kestrel twice a second. Type `silent` to stop them, and `heard` to send
+  them again.
+
+  We measured the distances and the heights on this page in a simulation of the T1-S that uses
+  the same [[executor]]. The plane starts at 30 m over the [[arena centre]], to the north, at
+  15 m/s. The console does not show these distances and heights. In the simulation, the other
+  aircraft is a model plane too.
+
+  Expectation: A pursue plan chases another aircraft
+    Given the flight mode of the plane is AGENT
+    And the other aircraft is round the arena
+    When the ground sends a pursue plan
+    Then the reply to the plan is accepted
+    And the reported plan goes up by 1
+    And the reported primitive is pursue
+    And the time to live of the plan is 600 s
+
+  Expectation: Pursue closes on the target and stays on its tail
+    The plane flies to the place where the target will be, and it matches the speed of the
+    target. It stays just outside the [[separation]] zone, behind the target. Then the target
+    cannot turn away from it easily.
+
+    Given the reported primitive is pursue
+    And the other aircraft is round the arena
+    When the plane flies on for 2 minutes
+    Then the greatest distance from the other aircraft in the last minute is at most 25 m
+    And the closest distance to the other aircraft is above 4 m
+
+  Expectation: An evade plan breaks away from another aircraft
+    Given the flight mode of the plane is AGENT
+    And the other aircraft is after your plane
+    When the ground sends an evade plan
+    Then the reply to the plan is accepted
+    And the reported plan goes up by 1
+    And the reported primitive is evade
+    And the time to live of the plan is 600 s
+
+  Expectation: Evade opens the distance from a chaser
+    The plane turns away from the other aircraft and flies fast, 20 m above or below it. Near the edge
+    of the arena, it turns back in, so that it does not fly out.
+
+    Given the reported primitive is evade
+    And the other aircraft is after your plane
+    When the plane flies on for 10 seconds
+    Then the distance to the other aircraft is at least 35 m
+
+  Expectation: A target that goes silent ends the chase
+    If the plane does not hear its target for 3 s, it cannot chase it or break away from it.
+    It circles where it is, as for a plan that runs out.
+
+    Given the reported primitive is pursue
+    When the track of the other aircraft is not heard
+    And the plane flies on for 5 seconds
+    Then the reported fallback is plan expired
