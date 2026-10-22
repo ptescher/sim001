@@ -5412,34 +5412,6 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 [[package]]
 name = "sim001"
 version = "0.1.0"
-dependencies = [
- "aviation_computer",
- "aviation_crsf",
- "bevy",
- "communication_air",
- "communication_radio",
- "communication_telemetry",
- "communication_traffic",
- "expectation_harness",
- "expectation_model",
- "expectation_service",
- "expectation_story",
- "hidapi",
- "illustration_theme",
- "image",
- "libc",
- "objc2 0.6.5",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "objc2-game-controller",
- "recreation_games",
- "simulation_aircraft",
- "simulation_physics",
- "simulation_sitl",
- "teleoperation_shared",
- "visualization_engine",
- "visualization_world",
-]
 
 [[package]]
 name = "sim001_tasks"
@@ -5483,6 +5455,38 @@ version = "0.1.0"
 dependencies = [
  "glam",
  "simulation_aircraft",
+]
+
+[[package]]
+name = "simulation_sim"
+version = "0.1.0"
+dependencies = [
+ "aviation_computer",
+ "aviation_crsf",
+ "bevy",
+ "communication_air",
+ "communication_radio",
+ "communication_telemetry",
+ "communication_traffic",
+ "expectation_harness",
+ "expectation_model",
+ "expectation_service",
+ "expectation_story",
+ "hidapi",
+ "illustration_theme",
+ "image",
+ "libc",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "objc2-game-controller",
+ "recreation_games",
+ "simulation_aircraft",
+ "simulation_physics",
+ "simulation_sitl",
+ "teleoperation_shared",
+ "visualization_engine",
+ "visualization_world",
 ]
 
 [[package]]

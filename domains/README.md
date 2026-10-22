@@ -26,7 +26,7 @@ the compiler enforce that.
 | [aviation](aviation/README.md) | The flight computer between the TX15 and ArduPilot: the TX15 on a UART in CRSF instead of a USB controller, channels in, failsafe, telemetry and the ground station's MAVLink carried on the same line. |
 | [cognition](cognition/README.md) | AI control of planes, from the sim to the real thing: the plan executor that runs on board, the plan protocol, the fast arena, the league that keeps making the executor better, and the ground control agent (see [plans/sim2real-tag.md](../plans/sim2real-tag.md) and [plans/league.md](../plans/league.md)). |
 
-The sim (`src/`) predates the layout and will move into a domain as the work goes on.
+The sim is `simulation/sim`. The root package is only the wrapper that makes `cargo run` start the launcher.
 `teleoperation/console` and `visualization/mapbuild` are excluded from the workspace for now
 because they keep their own lockfiles.
 

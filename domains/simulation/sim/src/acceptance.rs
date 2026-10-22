@@ -925,7 +925,7 @@ mod tests {
     /// the driver can do everything its tests need. Running it needs the window: `--expect`.
     #[test]
     fn the_suite_checks_clean_and_the_driver_covers_it() {
-        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations");
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../..")).join("expectations");
         let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
         let (tx, _rx) = channel();
         let driver = SimDriver { tx, flight_controller: false, ardupilot_flying: false, standin: Default::default(), deadline: Mutex::new(None), needs: vec![] };

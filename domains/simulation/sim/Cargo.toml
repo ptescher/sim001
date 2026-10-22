@@ -1,0 +1,47 @@
+[package]
+name = "simulation_sim"
+version = "0.1.0"
+edition = "2024"
+description = "Simulation domain: the sim, the 3D flight simulator app (binary sim001) that joins the flight model, the view, the games, the radios and ArduPilot"
+
+[[bin]]
+name = "sim001"
+path = "src/main.rs"
+
+[dependencies]
+teleoperation_shared = { path = "../../teleoperation/shared" }
+# The flight model and the planes it flies: see domains/simulation.
+simulation_aircraft = { path = "../../simulation/aircraft" }
+simulation_physics = { path = "../../simulation/physics" }
+simulation_sitl = { path = "../../simulation/sitl" }
+# The 3D view and the place it shows: see domains/visualization.
+visualization_engine = { path = "../../visualization/engine" }
+visualization_world = { path = "../../visualization/world" }
+# Games against computer pilots: see domains/recreation.
+recreation_games = { path = "../../recreation/games" }
+# Map packs (real places): aerial photos and land cover. Same version Bevy uses.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+# The flight computer between the TX15 and ArduPilot: see domains/aviation.
+aviation_computer = { path = "../../aviation/computer" }
+aviation_crsf = { path = "../../aviation/crsf" }
+# What the radios tell the pilot about other aircraft: see domains/communication.
+communication_air = { path = "../../communication/air" }
+communication_radio = { path = "../../communication/radio" }
+communication_telemetry = { path = "../../communication/telemetry" }
+communication_traffic = { path = "../../communication/traffic" }
+# The shared look: the HUD and overlays use the same theme as the ground station and the docs.
+illustration_theme = { path = "../../illustration/theme" }
+# Acceptance tests (`--expect`): see github.com/ptescher/expectation and expectations/.
+expectation_harness = { git = "https://github.com/ptescher/expectation" }
+expectation_model = { git = "https://github.com/ptescher/expectation" }
+expectation_story = { git = "https://github.com/ptescher/expectation" }
+expectation_service = { git = "https://github.com/ptescher/expectation" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+hidapi = "2"
+libc = "0.2"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSResponder", "NSRunningApplication"] }
+objc2-foundation = "0.3"
+objc2-game-controller = { version = "0.3.2", features = ["GCController", "GCExtendedGamepad", "GCControllerAxisInput", "GCControllerButtonInput", "GCControllerDirectionPad", "GCControllerElement", "GCPhysicalInputProfile", "GCDevice"] }

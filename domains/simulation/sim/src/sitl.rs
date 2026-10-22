@@ -14,7 +14,7 @@ const ARDUPILOTMEGA: u32 = 3;
 
 /// Where the sim's files are: the checkout, or the app bundle's resources (`SIM001_HOME`, set by the launcher).
 pub fn resource_root() -> PathBuf {
-    std::env::var_os("SIM001_HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+    std::env::var_os("SIM001_HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../..")))
 }
 
 /// Where what the sim writes goes (flight logs): the checkout, or the user's data folder (`SIM001_DATA`).

@@ -221,7 +221,7 @@ pub fn fbwa_from_parms(files: &[&str]) -> Fbwa {
 
 /// The T1-S's ArduPilot parameters, as ardupilot/start.sh gives them to SITL.
 fn t1s_fbwa() -> Fbwa {
-    fbwa_from_parms(&[include_str!("../ardupilot/t1s.parm"), include_str!("../ardupilot/t1s-vtol.parm")])
+    fbwa_from_parms(&[include_str!("../../../../ardupilot/t1s.parm"), include_str!("../../../../ardupilot/t1s-vtol.parm")])
 }
 
 fn expo(x: f32, e: f32) -> f32 {

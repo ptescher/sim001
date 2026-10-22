@@ -187,7 +187,7 @@ fn main() {
     // `--expect [suite]` runs the suite (default expectations/); `--docs [dir]` writes the docs.
     let value = |name: &str| arg(name).filter(|v| !v.starts_with("--")).cloned();
     let expect = flag("--expect").then(|| {
-        value("--expect").map_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations"), Into::into)
+        value("--expect").map_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../..")).join("expectations"), Into::into)
     });
     let docs = flag("--docs").then(|| value("--docs").unwrap_or_else(|| "docs".into()).into());
     let shots = flag("--shots") || expect.is_some();

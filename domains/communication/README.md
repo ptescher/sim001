@@ -37,7 +37,7 @@ Each module depends only on the ones above it in the table.
 ## In the simulator station
 
 `gcs --station` starts the sim with `--radio 5750 --home LAT,LON,ALT` and connects the console to
-port 5750, not to ArduPilot. The sim then stands in for the TX15 (`src/radio.rs`):
+port 5750, not to ArduPilot. The sim then stands in for the TX15 (`domains/simulation/sim/src/radio.rs`):
 
 - It connects to ArduPilot at `127.0.0.1:5760`, and relays between that and the console
   (`communication_radio::serve`). What the console sends goes up as it is. What ArduPilot sends

@@ -350,7 +350,7 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
         run(
             Command::new(cargo)
-                .args(["build", "--release"])
+                .args(["build", "--release", "-p", "simulation_sim"])
                 .current_dir(&root),
             "building the sim",
         )?;

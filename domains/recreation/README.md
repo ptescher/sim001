@@ -4,7 +4,7 @@ Games and trials to fly against computer pilots, and Towers, a team game flown b
 flight model as yours (`simulation_physics`), in the same wind, over the same ground and trees.
 It moves the same controls a pilot's hands move (aileron, elevator, rudder, throttle), so it can
 stall, tip-stall and crash like you. Nothing here draws anything; the sim shows the games (see
-`src/games.rs`, and `domains/visualization/engine/src/model.rs` for the planes).
+`domains/simulation/sim/src/games.rs`, and `domains/visualization/engine/src/model.rs` for the planes).
 
 In the sim, **G** starts a pylon race and **T** a game of tag. The same key again stops the game.
 
