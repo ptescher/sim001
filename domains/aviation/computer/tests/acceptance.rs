@@ -122,12 +122,12 @@ impl World {
             }
         }
         // What ArduPilot says, once the line is up.
-        if let (Some(text), false) = (&self.message, self.message_sent) {
-            if t > 0.5 {
-                self.seq = self.seq.wrapping_add(1);
-                self.fc.from_autopilot(&status_text(self.seq, text));
-                self.message_sent = true;
-            }
+        if let (Some(text), false) = (&self.message, self.message_sent)
+            && t > 0.5
+        {
+            self.seq = self.seq.wrapping_add(1);
+            self.fc.from_autopilot(&status_text(self.seq, text));
+            self.message_sent = true;
         }
         // The flight computer to the TX15, and the TX15 to the ground station.
         let down = self.fc.to_line(&self.vehicle, t);
@@ -202,7 +202,7 @@ fn driver() -> Bindings<World> {
             |w| if w.warm { w.vehicle.mode.clone() } else { w.handset.screen.mode.clone() },
         )
         .observe("the TX15 screen arming", |w| {
-            if (if w.warm { w.vehicle.armed } else { w.handset.screen.armed }) { "armed" } else { "disarmed" }
+            if if w.warm { w.vehicle.armed } else { w.handset.screen.armed } { "armed" } else { "disarmed" }
         })
         .observe("the TX15 screen battery", |w| tenth(if w.warm { w.vehicle.volts } else { w.handset.screen.volts }))
         .observe("the TX15 screen bank", |w| {
@@ -228,7 +228,7 @@ fn driver() -> Bindings<World> {
             if w.warm { if w.handset.connected() { 100.0 } else { 0.0 } } else { w.handset.quality(w.t) as f64 }
         })
         .observe("the ground station telemetry", |w| {
-            if (if w.warm { w.telemetry } else { w.last_heartbeat.is_some_and(|h| w.t - h < 3.0) }) {
+            if if w.warm { w.telemetry } else { w.last_heartbeat.is_some_and(|h| w.t - h < 3.0) } {
                 "flowing"
             } else {
                 "silent"
