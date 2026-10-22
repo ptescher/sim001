@@ -46,8 +46,8 @@ Vocabulary:
   # and its command line in the first line of the log.
   State: the program in the log is nothing | the simulator | the ground station | the radio wizard | the manual build
     Shows: nothing: the LOG screen says "Nothing running"
-    Shows: the simulator: the LOG screen names the simulator: "Simulator, T1-S Ranger", or "Simulator, T1-S VTOL with ArduPilot"
-    Shows: the ground station: the LOG screen names the ground station: "Ground station with ArduPilot", or "Ground station, sticks direct"
+    Shows: the simulator: the name of the program on the LOG screen starts with "Simulator"
+    Shows: the ground station: the name of the program on the LOG screen starts with "Ground station"
     Shows: the radio wizard: the LOG screen says "Controller setup"
     Shows: the manual build: the LOG screen says "Render the docs"
   State: the program is idle | running | stopped

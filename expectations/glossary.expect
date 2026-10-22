@@ -406,3 +406,7 @@ Term: Scout
 Term: Seed
   The number that starts the random parts of a game in the [[fast arena]]. The same seed plays
   the same game, so the [[league]] plays a champion and a challenger on the same seeds.
+
+Term: Home tower
+  In [[Towers]], the [[tower]] next to the [[base]] of a team. Each team holds its home tower
+  at the start. The centre tower and the two flank towers, west and east, start neutral.

@@ -50,7 +50,7 @@ Vocabulary:
     Shows: held by Red: the west tower is red
     Shows: neutral: the west tower is grey
   State: the control of the west tower is -100..100 %
-    Shows: the control bar of the west tower is at {value}. Plus is towards Blue, minus towards Red
+    Shows: the control bar of the west tower is at {value} %
   State: the circle of the west tower is contested | quiet
     Shows: contested: the circle of the west tower flashes, because drones of the two teams are in it
     Shows: quiet: the circle of the west tower does not flash
@@ -65,7 +65,7 @@ Vocabulary:
     Shows: held by Red: the east tower is red
     Shows: neutral: the east tower is grey
   State: the control of the east tower is -100..100 %
-    Shows: the control bar of the east tower is at {value}
+    Shows: the control bar of the east tower is at {value} %
   State: the Red drones in the east circle are 0..3
     Set: wait until {value} Red drones circle the east tower
 
@@ -153,7 +153,7 @@ Vocabulary:
     Say: wait for the end of the game. The server flies the drones with a computer commander for each team
 
   Phrase: a game of Towers is in play
-    Say: start a practice game in the commander app, as [[Towers]] says. All the drones stand at their bases
+    Say: wait until all the drones stand at their bases, and the clock shows 480 s
     Given the game of Towers is in play
     And the time left is 480 s
     And the score of Blue is 0 points

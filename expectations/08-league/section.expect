@@ -79,7 +79,7 @@ Vocabulary:
   Event: the arena plays 64 games with the default executor
     Say: type `cargo run --release -p cognition_league -- play --seeds 64`
   Event: the league judges the challenger
-    Say: type `cargo run --release -p cognition_league -- judge --champion slow --challenger default`, with the names of your champion and your challenger: `default`, `slow` or a JSON file
+    Say: type `cargo run --release -p cognition_league -- judge --champion slow --challenger default`
   Event: the league runs one generation with the evolution strategy
     Say: type `cargo run --release -p cognition_league -- run --generations 1 --strategies es`
   Event: the league runs 5 generations with the evolution strategy
@@ -116,7 +116,7 @@ Vocabulary:
   Event: the default captain plays itself from both sides
     Say: type `cargo run --release -p cognition_league -- judge --game captain --champion default --challenger default`
   Event: the league judges the captain challenger
-    Say: type `cargo run --release -p cognition_league -- judge --game captain --champion timid --challenger default`, with the names of your champion and your challenger: `default`, `timid` or a JSON file
+    Say: type `cargo run --release -p cognition_league -- judge --game captain --champion timid --challenger default`
   Event: a Claude strategy gives a captain whose code sends every drone home
     Say: the Claude engineer changes `commander.rs` so that every drone goes home, and the league plays it as a process of its own
   Event: a Claude strategy gives a captain that changes the referee

@@ -19,7 +19,8 @@ Section: The flight computer
   [[Flying a VTOL with the TX15]] flies a whole flight this way, with the screen of the TX15 beside the
   console.
 
-  Start the simulator with `--flight-computer PORT`. The simulator then ignores the USB
+  Start the simulator with `--flight-computer PORT`, where PORT is the serial device of the
+  flight computer, for example `/dev/tty.usbserial-0001`. The simulator then ignores the USB
   controller. Only the serial line moves the plane.
 
 Vocabulary:
@@ -55,7 +56,7 @@ Vocabulary:
     Set: fly the plane at {value}
     Shows: the AS reading on the screen of the TX15 is {value} m/s
   State: the TX15 screen climb is -10..10 m/s
-    Set: fly the plane so that it climbs at {value}
+    Set: fly the plane until the VS reading is {value}
     Shows: the VS reading on the screen of the TX15 is {value} m/s, with its sign
   State: the TX15 screen satellites is 0..30
     Set: wait until the GPS of the plane has {value} satellites
@@ -67,15 +68,15 @@ Vocabulary:
   State: the TX15 uplink quality is 0..100 %
     Shows: the link lamp on the screen of the TX15 shows an uplink quality of {value} %
   State: the ground station telemetry is silent | flowing
-    Set: flowing: switch on the plane, so that ArduPilot sends its MAVLink telemetry
-    Set: silent: switch off the plane
+    Set: flowing: start ArduPilot, so that it sends its MAVLink telemetry
+    Set: silent: stop ArduPilot
     Shows: flowing: the ground station hears the HEARTBEAT of the plane
     Shows: silent: the ground station hears nothing from the plane
   State: the ground station map distance is 0..2000 m
     Set: fly the plane {value} north of home
     Shows: the plane on the map of the ground station is {value} m north of home
   State: the ground station command is not sent | sent
-    Set: send a command to the plane from the ground station
+    Set: sent: press RTL on the ground station
   State: the autopilot command is not received | received
     Shows: received: ArduPilot gets the command of the ground station
   State: the ground station telemetry rate is 0..10000 bytes per second
@@ -83,7 +84,7 @@ Vocabulary:
 
   # The setup in one line, so the manual can tell the reader what to do.
   Phrase: the TX15 is connected and the plane is at rest
-    Say: connect the TX15 to the flight computer with the sticks centred, the throttle stick all the way down and the arm switch off. Start the simulator with --flight-computer PORT. Wait until the screen of the TX15 shows MANUAL and DISARMED
+    Say: connect the TX15 to the flight computer with the sticks centred, the throttle stick all the way down and the arm switch off. Start the simulator with --flight-computer PORT, where PORT is the serial device of the flight computer. Wait until the screen of the TX15 shows MANUAL and DISARMED
     Given the TX15 is connected
     And the TX15 roll stick is 0 %
     And the TX15 pitch stick is 0 %

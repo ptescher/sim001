@@ -16,9 +16,9 @@ Feature: Replacing and ending a plan
     keeps the plan that it has, even if the new message has another primitive. Thus a plan
     that the link sends twice does not restart.
 
-    The rule below is what the plane must do. It does not do it yet. The plane flies the first
-    plan, but AG_PRIM shows the primitive of the new message (`prim=4`). Until this is
-    repaired, do not use AG_PRIM to see what the plane flies after a repeated plan id.
+    Known bug: the plane keeps its plan, but today AG_PRIM shows the primitive of the new
+    message (`prim=4`), not 3. Until this is repaired, do not use AG_PRIM to see what the plane
+    flies after a repeated plan id. The test of this rule fails until then.
 
     Given the reported primitive is go to
     When the ground sends the plan id again with an orbit
