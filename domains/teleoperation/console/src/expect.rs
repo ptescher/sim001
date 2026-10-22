@@ -1581,10 +1581,15 @@ impl Driver for ConsoleDriver {
     }
 
     /// The console's window, rendered off screen by GPUI (`Window::capture_image`): it needs
-    /// neither the window nor the display to be visible, nor the Screen Recording permission.
+    /// neither the window nor the display to be visible, nor the Screen Recording permission. At
+    /// one pixel a point: the docs show it smaller still, and the picture with the TX15's screen
+    /// (an SVG) is published as it is.
     fn screenshot(&mut self) -> Result<Option<Screenshot>, String> {
         let bytes = self.with_window(|w, cx| {
-            let rgb = image::DynamicImage::ImageRgba8(w.capture_image(cx)?).into_rgb8();
+            let scale = w.scale_factor().max(1.0);
+            let image = image::DynamicImage::ImageRgba8(w.capture_image(cx)?);
+            let (width, height) = ((image.width() as f32 / scale) as u32, (image.height() as f32 / scale) as u32);
+            let rgb = image.resize_exact(width, height, image::imageops::FilterType::Triangle).into_rgb8();
             let mut jpeg = Vec::new();
             image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90).encode_image(&rgb).ok()?;
             Some(jpeg)
