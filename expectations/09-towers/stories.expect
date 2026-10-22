@@ -1,88 +1,32 @@
-# Tutorials: each story is one page that walks through a game, step by step. The rules that no
-# story shows (the computer commander, a draw) are tested on their own.
-
-Story: Taking a tower from Red
+Story: Your first tower
   As a commander of a team
-  I want to see how my drones take a tower
-  So that I send enough drones, and not too many
+  I want to take a tower from the app
+  So that I learn how to give orders
 
-  Red holds the west tower. You send one drone to circle it, and you watch the control bar of the
-  tower. Red keeps the tower until the bar gets back to the middle. Then a Red drone comes to
-  fight, and the bar stops.
+  The game is a practice game, where nobody commands Red. You select a drone and send it to the
+  west tower. The drone takes off, flies to the tower and circles it until the tower is yours.
 
-  Scenario: One drone against the west tower
-    Given the west tower is held by Red
-    And the control of the west tower is -100 %
-    When the Blue drones in the west circle are 1
-    When the game runs for 10 seconds
-    Then the control of the west tower is -50 %
-    And the west tower is held by Red
-    When the game runs for 10 seconds
-    Then the west tower is neutral
-    And the control of the west tower is 0 %
-    When the game runs for 10 seconds
-    Then the control of the west tower is 50 %
-    When the Red drones in the west circle are 1
-    When the game runs for 10 seconds
-    Then the control of the west tower is 50 %
-    And the circle of the west tower is contested
+  Scenario: Take the west tower
+    When the commander joins the game
+    Then the seat of the app is Blue
+    And the towers on the app's map are 5
+    When the commander selects the first Blue drone
+    Then the selected drone is the first Blue drone
+    When the commander sends the selected drone to the west tower
+    Then the order of the first Blue drone is take the west tower
+    When the game runs for 2 minutes
+    Then the west tower on the Blue map is held by Blue
 
-Story: Sending enough drones
+Story: Changing your mind
   As a commander of a team
-  I want to know how many drones a tower needs
-  So that I take it fast
+  I want to stop a drone or call it back
+  So that I can use it somewhere else
 
-  A drone must fly in the circle of a tower to count. You land a drone next to the west tower,
-  and nothing happens. Then you send two drones to circle it, and they take it in 10 s: half the
-  time of one drone.
+  You select a drone. You make it circle where it is, and then you send it back over the base.
 
-  Scenario: A landed drone, then two drones in the air
-    When the Blue drones on the ground in the west circle are 1
-    When the game runs for 10 seconds
-    Then the control of the west tower is 0 %
-    When the Blue drones in the west circle are 2
-    When the game runs for 10 seconds
-    Then the west tower is held by Blue
-
-Story: Winning a game
-  As a commander of a team
-  I want to know how a game ends
-  So that I know when to hold and when to attack
-
-  Each tower that your team holds gives one point each second. You take a second tower, and your
-  score goes up twice as fast. At 500 points, your team wins, and the game stops.
-
-  Scenario: Two towers, then 500 points
-    When the towers held by Blue are 2
-    When the game runs for 10 seconds
-    Then the score of Blue is 20 points
-    When the score of Blue is 495 points
-    When the game runs for 10 seconds
-    Then the game of Towers is won by Blue
-    And the score of Blue is 500 points
-    When the game runs for 1 minute
-    Then the game of Towers is won by Blue
-    And the score of Blue is 500 points
-
-Story: Scouting in the fog
-  As a commander of a team
-  I want to know what my map shows me
-  So that I do not trust what I cannot see
-
-  A Red scout flies near one of your drones, and your map shows it. It flies away into the fog,
-  and your map keeps it where you last saw it. Then Red takes the east tower in the fog. Your
-  map does not show it until a drone of yours looks again.
-
-  Scenario: The scout, then the east tower
-    Given the Red scout is near a Blue drone
-    When the game runs for 10 seconds
-    Then the Red scout on the Blue map is seen
-    When the Red scout flies into the fog for 10 seconds
-    Then the Red scout on the Blue map is last seen
-    And the age of the Red scout on the Blue map is 10 s
-    When the Red drones in the east circle are 1
-    When the game runs for 20 seconds
-    Then the east tower is held by Red
-    And the east tower on the Blue map is neutral
-    When a Blue drone flies near the east tower
-    Then the east tower on the Blue map is held by Red
+  Scenario: Hold, then home
+    When the commander selects the first Blue drone
+    When the commander holds the selected drone
+    Then the order of the first Blue drone is hold
+    When the commander sends the selected drone home
+    Then the order of the first Blue drone is go home
