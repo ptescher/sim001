@@ -703,7 +703,16 @@ pub fn start_sim(
         if let Some(device) = &opts.tx15_serial {
             cmd.args(["--flight-computer", device]);
         } else if let Some(relay) = opts.hosted_radio {
-            cmd.args(["--flight-computer", &format!("tcp:{UART_PORT}"), "--radio-upstream", &relay.to_string()]);
+            // The tests' line carries what the console asks of ArduPilot: a UART has room for far more than
+            // the radio link it models, and a mission upload must not wait on a thin share.
+            cmd.args([
+                "--flight-computer",
+                &format!("tcp:{UART_PORT}"),
+                "--radio-upstream",
+                &relay.to_string(),
+                "--mavlink-rate",
+                "20000",
+            ]);
         } else if opts.flight_computer {
             if let Some(path) = &opts.tx15_screen {
                 cmd.arg("--tx15-screen").arg(path);

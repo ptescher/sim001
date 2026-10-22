@@ -1411,14 +1411,23 @@ impl Driver for ConsoleDriver {
                 }
                 match want.as_str() {
                     "empty" => {
-                        self.send(Cmd::ClearMission)?;
-                        std::thread::sleep(Duration::from_millis(500));
-                        // Read it back, rather than trusting what the console remembers.
-                        self.send(Cmd::Download)?;
-                        self.wait_for(20, "the vehicle's mission being cleared", |g| {
-                            let v = g.vehicle.lock().unwrap();
-                            v.mission.len() <= 1 && v.mission_status == "no mission on vehicle"
-                        })
+                        // Just after the line comes up a first clear can be lost, so ask again
+                        // a few times before giving up.
+                        let mut cleared = Err(String::new());
+                        for _ in 0..3 {
+                            self.send(Cmd::ClearMission)?;
+                            std::thread::sleep(Duration::from_millis(500));
+                            // Read it back, rather than trusting what the console remembers.
+                            self.send(Cmd::Download)?;
+                            cleared = self.wait_for(8, "the vehicle's mission being cleared", |g| {
+                                let v = g.vehicle.lock().unwrap();
+                                v.mission.len() <= 1 && v.mission_status == "no mission on vehicle"
+                            });
+                            if cleared.is_ok() {
+                                break;
+                            }
+                        }
+                        cleared
                     }
                     "up to date" => {
                         let plan = self.call(|g, _, _| g.map.plan.clone())?;

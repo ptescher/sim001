@@ -44,7 +44,7 @@ step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange differential 
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 plan	gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home	passed	d76d878f967f1a1d
-step	0	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -61,30 +61,30 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/01.svg	-
 check	1	n:1	-
 check	1	e:planned	-
 check	1	e:TAKEOFF	-
-step	2	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/02.jpg	-
+step	2	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/02.svg	-
 check	1	n:2	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
-step	3	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/03.jpg	-
+step	3	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/03.svg	-
 check	1	n:3	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
-step	4	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/04.jpg	-
+step	4	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/04.svg	-
 check	1	n:4	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
-step	5	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/05.jpg	-
+step	5	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/05.svg	-
 check	1	n:5	-
 check	1	e:RTL	-
-step	6	passed	1	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/06.jpg	-
+step	6	passed	2	screenshots/gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home/06.svg	-
 check	1	e:pan	-
 check	1	e:up to date	-
 plan	gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click	passed	1b660436853ce909
-step	0	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -101,15 +101,15 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/01.svg	-
 check	1	n:1	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
-step	2	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/02.jpg	-
+step	2	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/02.svg	-
 check	1	n:2	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
-step	3	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/03.jpg	-
+step	3	passed	1	screenshots/gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click/03.svg	-
 check	1	n:1	-
 plan	gcs--planning--clearing-the-ridge--raise-the-plan-add-a-waypoint-check-it	unsupported	57914c47ba3aedb0
 step	0	unsupported	0	-	The driver can't make it happen that the operator checks the heights against the terrain yet.
@@ -129,7 +129,7 @@ step	0	unsupported	0	-	The driver can't make it happen that the operator draws a
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 plan	gcs--planning--planning-at-the-altitude-limit--alt-from-290-m	passed	3fe5dc936a35bae8
-step	0	passed	1	screenshots/gcs--planning--planning-at-the-altitude-limit--alt-from-290-m/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--planning-at-the-altitude-limit--alt-from-290-m/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -146,10 +146,10 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--planning-at-the-altitude-limit--alt-from-290-m/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--planning-at-the-altitude-limit--alt-from-290-m/01.svg	-
 check	1	n:300	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--planning--planning-at-the-altitude-limit--alt-from-290-m/02.jpg	-
+step	2	passed	1	screenshots/gcs--planning--planning-at-the-altitude-limit--alt-from-290-m/02.svg	-
 check	1	n:300	-
 check	1	e:none	-
 plan	gcs--flying--flying-the-circuit-and-coming-home--three-waypoints-then-home	unsupported	4ed628e8dfe2cd63
@@ -161,8 +161,8 @@ plan	gcs--flying--flying-the-circuit-again--back-to-the-first-waypoint	unsupport
 step	0	unsupported	0	-	The driver can't make it happen that the plane reaches a waypoint yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
-plan	gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land	failed	f9e94ce037824f1b
-step	0	passed	1	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/00.jpg	-
+plan	gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land	passed	f9e94ce037824f1b
+step	0	passed	1	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -180,21 +180,33 @@ check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:VTOL	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/01.jpg	-
+step	1	passed	1	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/01.svg	-
 check	1	e:armed	-
 check	1	e:set	-
 check	1	e:none	-
-step	2	failed	481	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/02.jpg	-
+step	2	passed	21	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/02.svg	-
 check	1	e:hovering	-
-check	1	n:39.77000045776367	-
-check	0	n:36.459999084472656	-
-check	0	n:13.375000953674316	-
+check	1	n:40.08100128173828	-
+check	1	n:18.299999237060547	-
+check	1	n:16.25200080871582	-
 check	1	e:none	-
-step	3	skipped	0	-	-
-step	4	skipped	0	-	-
-step	5	skipped	0	-	-
-plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	failed	8d823740ed274f32
-step	0	passed	1	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/00.jpg	-
+step	3	passed	5	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/03.svg	-
+check	1	e:CRUISE	-
+check	1	e:cruising	-
+check	1	n:38.41400146484375	-
+check	1	n:4.869999885559082	-
+check	1	e:none	-
+step	4	passed	7	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/04.svg	-
+check	1	e:QLOITER	-
+check	1	e:hovering	-
+check	1	n:35.25600051879883	-
+check	1	e:none	-
+step	5	passed	71	screenshots/gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land/05.svg	-
+check	1	e:disarmed	-
+check	1	e:on the ground	-
+check	1	e:none	-
+plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	passed	52d71af43d0b054f
+step	0	passed	1	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -213,25 +225,33 @@ check	1	n:0	-
 check	1	e:low	-
 check	1	e:off	-
 check	1	e:QHOVER	-
-check	1	e:USB	-
+check	1	e:serial	-
 check	1	e:VTOL	-
+check	1	e:disarmed	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/01.jpg	-
+step	1	passed	1	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/01.svg	-
+check	1	e:armed	-
 check	1	e:armed	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/02.jpg	-
+step	2	passed	1	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/02.svg	-
+check	1	e:QLOITER	-
 check	1	e:QLOITER	-
 check	1	e:none	-
-step	3	failed	481	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/03.jpg	-
-check	0	e:grounded	-
-check	0	n:0.14500001072883606	-
-check	0	e:on the ground	-
+step	3	passed	9	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/03.svg	-
+check	1	e:hovering	-
+check	1	n:16.051000595092773	-
+check	1	e:flying	-
 check	1	e:none	-
-check	0	n:0.14500001072883606	-
-step	4	skipped	0	-	-
-step	5	skipped	0	-	-
-plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	failed	390d16bf2a758a1e
-step	0	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/00.jpg	-
+check	1	n:16.964000701904297	-
+step	4	passed	1	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/04.svg	-
+check	1	e:hovering	-
+check	1	n:21.832000732421875	-
+check	1	e:none	-
+step	5	passed	11	screenshots/gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land/05.svg	-
+check	1	e:on the ground	-
+check	1	e:none	-
+plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	passed	0f2a95e6bcc6503d
+step	0	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -250,27 +270,49 @@ check	1	n:0	-
 check	1	e:low	-
 check	1	e:off	-
 check	1	e:QHOVER	-
-check	1	e:USB	-
+check	1	e:serial	-
 check	1	e:VTOL	-
+check	1	e:disarmed	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/01.jpg	-
+step	1	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/01.svg	-
+check	1	e:armed	-
 check	1	e:armed	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/02.jpg	-
+step	2	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/02.svg	-
+check	1	e:QLOITER	-
 check	1	e:QLOITER	-
 check	1	e:none	-
-step	3	failed	481	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/03.jpg	-
-check	0	e:grounded	-
-check	0	n:0.024000000208616257	-
-check	0	e:on the ground	-
+step	3	passed	13	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/03.svg	-
+check	1	e:hovering	-
+check	1	n:16.244001388549805	-
+check	1	e:flying	-
 check	1	e:none	-
-step	4	skipped	0	-	-
-step	5	skipped	0	-	-
-step	6	skipped	0	-	-
-step	7	skipped	0	-	-
-step	8	skipped	0	-	-
-plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	failed	e785728ef515c9bc
-step	0	passed	1	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/00.jpg	-
+step	4	passed	6	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/04.svg	-
+check	1	e:FBWA	-
+check	1	e:cruising	-
+check	1	n:18.08700180053711	-
+check	1	e:FBWA	-
+check	1	e:none	-
+step	5	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/05.svg	-
+check	1	e:banked	-
+check	1	e:none	-
+step	6	passed	1	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/06.svg	-
+check	1	e:level	-
+check	1	e:none	-
+step	7	passed	9	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/07.svg	-
+check	1	e:QLOITER	-
+check	1	e:hovering	-
+check	1	n:48.62000274658203	-
+check	1	e:QLOITER	-
+check	1	e:none	-
+step	8	passed	75	screenshots/gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/08.svg	-
+check	1	e:QRTL	-
+check	1	e:soft	-
+check	1	e:on the ground	-
+check	1	e:disarmed	-
+check	1	e:none	-
+plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	passed	57b92d5a10dc864e
+step	0	passed	1	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -289,25 +331,39 @@ check	1	n:0	-
 check	1	e:low	-
 check	1	e:off	-
 check	1	e:QHOVER	-
-check	1	e:USB	-
+check	1	e:serial	-
 check	1	e:VTOL	-
+check	1	e:disarmed	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/01.jpg	-
+step	1	passed	1	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/01.svg	-
+check	1	e:armed	-
 check	1	e:armed	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/02.jpg	-
+step	2	passed	1	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/02.svg	-
+check	1	e:QLOITER	-
 check	1	e:QLOITER	-
 check	1	e:none	-
-step	3	failed	481	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/03.jpg	-
-check	0	e:grounded	-
-check	0	n:-0.06100000441074371	-
-check	0	e:on the ground	-
+step	3	passed	23	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/03.svg	-
+check	1	e:hovering	-
+check	1	n:15.544000625610352	-
+check	1	e:flying	-
 check	1	e:none	-
-step	4	skipped	0	-	-
-step	5	skipped	0	-	-
-step	6	skipped	0	-	-
-plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	passed	40a4fa78f44fd4cb
-step	0	passed	1	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/00.jpg	-
+step	4	passed	1	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/04.svg	-
+check	1	e:QHOVER	-
+check	1	e:hovering	-
+check	1	e:none	-
+step	5	passed	2	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/05.svg	-
+check	1	e:CRUISE	-
+check	1	e:cruising	-
+check	1	e:none	-
+step	6	passed	78	screenshots/gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home/06.svg	-
+check	1	e:QRTL	-
+check	1	e:soft	-
+check	1	e:on the ground	-
+check	1	e:disarmed	-
+check	1	e:none	-
+plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	passed	05786749d70772f3
+step	0	passed	1	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -326,33 +382,85 @@ check	1	n:0	-
 check	1	e:low	-
 check	1	e:off	-
 check	1	e:QHOVER	-
-check	1	e:USB	-
+check	1	e:serial	-
 check	1	e:VTOL	-
+check	1	e:disarmed	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/01.jpg	-
+step	1	passed	5	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/01.svg	-
 check	1	e:on the ground	-
 check	1	e:a race	-
 check	1	e:counting down	-
 check	1	e:disarmed	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/02.jpg	-
+step	2	passed	1	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/02.svg	-
 check	1	e:disarmed	-
 check	1	e:none	-
-step	3	passed	13	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/03.jpg	-
+step	3	passed	17	screenshots/gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go/03.svg	-
 check	1	e:running	-
 check	1	e:armed	-
 check	1	e:flying	-
 check	1	e:none	-
-plan	gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	failed	3df9eb69430e6b08
-step	0	failed	0	-	couldn't arrange the radio line is serial: radio line is USB, not serial (start the station with --flight-computer for the serial line)
-step	1	skipped	0	-	-
-step	2	skipped	0	-	-
-step	3	skipped	0	-	-
-step	4	skipped	0	-	-
-step	5	skipped	0	-	-
-step	6	skipped	0	-	-
-step	7	skipped	0	-	-
-step	8	skipped	0	-	-
+plan	gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	passed	3df9eb69430e6b08
+step	0	passed	1	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/00.svg	-
+check	1	e:off	-
+check	1	e:connected	-
+check	1	e:disarmed	-
+check	1	e:MANUAL	-
+check	1	e:pan	-
+check	1	n:0	-
+check	1	n:40	-
+check	1	e:none	-
+check	1	e:not planned	-
+check	1	e:empty	-
+check	1	e:set	-
+check	1	e:unchecked	-
+check	1	e:missing	-
+check	1	e:hidden	-
+check	1	n:0	-
+check	1	e:low	-
+check	1	e:off	-
+check	1	e:QHOVER	-
+check	1	e:serial	-
+check	1	e:VTOL	-
+check	1	e:disarmed	-
+check	1	e:on the ground	-
+step	1	passed	1	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/01.svg	-
+check	1	e:armed	-
+check	1	e:armed	-
+check	1	e:none	-
+step	2	passed	1	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/02.svg	-
+check	1	e:QLOITER	-
+check	1	e:QLOITER	-
+check	1	e:none	-
+step	3	passed	9	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/03.svg	-
+check	1	e:hovering	-
+check	1	n:15.342000961303711	-
+check	1	e:flying	-
+check	1	e:none	-
+step	4	passed	2	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/04.svg	-
+check	1	e:FBWA	-
+check	1	e:cruising	-
+check	1	n:15.426000595092773	-
+check	1	e:FBWA	-
+check	1	e:none	-
+step	5	passed	1	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/05.svg	-
+check	1	e:banked	-
+check	1	e:none	-
+step	6	passed	1	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/06.svg	-
+check	1	e:level	-
+check	1	e:none	-
+step	7	passed	9	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/07.svg	-
+check	1	e:QLOITER	-
+check	1	e:hovering	-
+check	1	n:42.303001403808594	-
+check	1	e:QLOITER	-
+check	1	e:none	-
+step	8	passed	104	screenshots/gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly/08.svg	-
+check	1	e:QRTL	-
+check	1	e:soft	-
+check	1	e:on the ground	-
+check	1	e:disarmed	-
+check	1	e:none	-
 plan	gcs--from-plan-to-flight--plan-upload-arm-auto-throw	unsupported	d409cf0f07753984
 step	0	unsupported	0	-	The driver can't make it happen that the operator switches to AUTO and make it happen that the pilot throws the plane in the sim yet.
 step	1	unsupported	0	-	-
@@ -513,7 +621,7 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 plan	gcs--coverage--plan-again-goes-back-to-panning	passed	f260f623bd9201d8
-step	0	passed	1	screenshots/gcs--coverage--plan-again-goes-back-to-panning/00.jpg	-
+step	0	passed	1	screenshots/gcs--coverage--plan-again-goes-back-to-panning/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -530,14 +638,14 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--coverage--plan-again-goes-back-to-panning/01.jpg	-
+step	1	passed	1	screenshots/gcs--coverage--plan-again-goes-back-to-panning/01.svg	-
 check	1	e:PLAN	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--coverage--plan-again-goes-back-to-panning/02.jpg	-
+step	2	passed	1	screenshots/gcs--coverage--plan-again-goes-back-to-panning/02.svg	-
 check	1	e:pan	-
 check	1	e:none	-
 plan	gcs--coverage--goto-picks-the-fly-to-tool	passed	143575b653b09151
-step	0	passed	1	screenshots/gcs--coverage--goto-picks-the-fly-to-tool/00.jpg	-
+step	0	passed	1	screenshots/gcs--coverage--goto-picks-the-fly-to-tool/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -554,11 +662,11 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--coverage--goto-picks-the-fly-to-tool/01.jpg	-
+step	1	passed	1	screenshots/gcs--coverage--goto-picks-the-fly-to-tool/01.svg	-
 check	1	e:GOTO	-
 check	1	e:none	-
 plan	gcs--coverage--a-goto-click-flies-the-plane-there	passed	e2cbaa8bc62102aa
-step	0	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/00.jpg	-
+step	0	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -575,19 +683,19 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/01.jpg	-
+step	1	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/01.svg	-
 check	1	e:GOTO	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/02.jpg	-
+step	2	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/02.svg	-
 check	1	e:armed	-
 check	1	e:set	-
 check	1	e:none	-
-step	3	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/03.jpg	-
+step	3	passed	1	screenshots/gcs--coverage--a-goto-click-flies-the-plane-there/03.svg	-
 check	1	e:GUIDED	-
 check	1	e:pan	-
 check	1	e:none	-
 plan	gcs--planning--coverage--right-click-on-an-empty-plan-does-nothing	passed	9926e2bb405efe2a
-step	0	passed	1	screenshots/gcs--planning--coverage--right-click-on-an-empty-plan-does-nothing/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--right-click-on-an-empty-plan-does-nothing/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -604,11 +712,11 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--right-click-on-an-empty-plan-does-nothing/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--right-click-on-an-empty-plan-does-nothing/01.svg	-
 check	1	n:0	-
 check	1	e:none	-
 plan	gcs--planning--coverage--clear-empties-the-plan	passed	14c58026eed146a4
-step	0	passed	1	screenshots/gcs--planning--coverage--clear-empties-the-plan/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--clear-empties-the-plan/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -625,12 +733,12 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--clear-empties-the-plan/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--clear-empties-the-plan/01.svg	-
 check	1	n:0	-
 check	1	e:not planned	-
 check	1	e:none	-
 plan	gcs--planning--coverage--alt-lowers-the-plan-altitude	passed	cb9f8488ed1a12f6
-step	0	passed	1	screenshots/gcs--planning--coverage--alt-lowers-the-plan-altitude/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--alt-lowers-the-plan-altitude/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -647,11 +755,11 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--alt-lowers-the-plan-altitude/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--alt-lowers-the-plan-altitude/01.svg	-
 check	1	n:30	-
 check	1	e:none	-
 plan	gcs--planning--coverage--alt-stops-at-10-m	passed	7ee452c94b9f65d4
-step	0	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -668,20 +776,20 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/01.svg	-
 check	1	n:30	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/02.jpg	-
+step	2	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/02.svg	-
 check	1	n:20	-
 check	1	e:none	-
-step	3	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/03.jpg	-
+step	3	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/03.svg	-
 check	1	n:10	-
 check	1	e:none	-
-step	4	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/04.jpg	-
+step	4	passed	1	screenshots/gcs--planning--coverage--alt-stops-at-10-m/04.svg	-
 check	1	n:10	-
 check	1	e:none	-
 plan	gcs--planning--coverage--waypoints-already-planned-keep-their-altitude	passed	c6fa16be2a469995
-step	0	passed	1	screenshots/gcs--planning--coverage--waypoints-already-planned-keep-their-altitude/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--waypoints-already-planned-keep-their-altitude/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -698,11 +806,11 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--waypoints-already-planned-keep-their-altitude/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--waypoints-already-planned-keep-their-altitude/01.svg	-
 check	1	n:1	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
-step	2	passed	1	screenshots/gcs--planning--coverage--waypoints-already-planned-keep-their-altitude/02.jpg	-
+step	2	passed	1	screenshots/gcs--planning--coverage--waypoints-already-planned-keep-their-altitude/02.svg	-
 check	1	n:50	-
 check	1	e:at another altitude	-
 plan	gcs--planning--coverage--a-new-waypoint-needs-a-new-height-check	unsupported	a54c8b8fbc9407f7
@@ -711,7 +819,7 @@ step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 plan	gcs--planning--coverage--the-plan-has-only-one-takeoff	passed	de818678d8426eac
-step	0	passed	1	screenshots/gcs--planning--coverage--the-plan-has-only-one-takeoff/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--the-plan-has-only-one-takeoff/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -728,11 +836,11 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--the-plan-has-only-one-takeoff/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--the-plan-has-only-one-takeoff/01.svg	-
 check	1	n:1	-
 check	1	e:planned	-
 check	1	e:TAKEOFF	-
-step	2	passed	1	screenshots/gcs--planning--coverage--the-plan-has-only-one-takeoff/02.jpg	-
+step	2	passed	1	screenshots/gcs--planning--coverage--the-plan-has-only-one-takeoff/02.svg	-
 check	1	n:1	-
 plan	gcs--planning--coverage--changing-a-command-keeps-the-item-in-its-place	unsupported	bb38f8b7b87565a5
 step	0	unsupported	0	-	The driver can't set the last plan item yet.
@@ -744,7 +852,7 @@ step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 plan	gcs--planning--coverage--upload-does-not-send-an-empty-plan	passed	fb1ecf88248a8598
-step	0	passed	1	screenshots/gcs--planning--coverage--upload-does-not-send-an-empty-plan/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--upload-does-not-send-an-empty-plan/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -761,11 +869,11 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--upload-does-not-send-an-empty-plan/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--upload-does-not-send-an-empty-plan/01.svg	-
 check	1	e:empty	-
 check	1	e:none	-
 plan	gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date	passed	3fc2fa281250e008
-step	0	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -782,22 +890,22 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/01.svg	-
 check	1	n:1	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
-step	2	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/02.jpg	-
+step	2	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/02.svg	-
 check	1	e:pan	-
 check	1	e:up to date	-
-step	3	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/03.jpg	-
+step	3	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/03.svg	-
 check	1	e:PLAN	-
-step	4	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/04.jpg	-
+step	4	passed	1	screenshots/gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date/04.svg	-
 check	1	n:2	-
 check	1	e:WAYPOINT	-
 check	1	e:at the plan altitude	-
 check	1	e:out of date	-
 plan	gcs--planning--coverage--download-only-reads	passed	00e07c56a43951bb
-step	0	passed	1	screenshots/gcs--planning--coverage--download-only-reads/00.jpg	-
+step	0	passed	1	screenshots/gcs--planning--coverage--download-only-reads/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -814,7 +922,7 @@ check	1	e:missing	-
 check	1	e:hidden	-
 check	1	n:0	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--planning--coverage--download-only-reads/01.jpg	-
+step	1	passed	1	screenshots/gcs--planning--coverage--download-only-reads/01.svg	-
 check	1	n:0	-
 check	1	e:empty	-
 check	1	e:none	-
@@ -856,8 +964,8 @@ step	1	unsupported	0	-	-
 plan	gcs--coverage--auto-twice-goes-anyway	unsupported	97a0c342ae06c08b
 step	0	unsupported	0	-	The driver can't make it happen that the operator switches to AUTO anyway yet.
 step	1	unsupported	0	-	-
-plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	passed	465cb87be3a3784d
-step	0	passed	1	screenshots/gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle/00.jpg	-
+plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	passed	33dc467a22f5e1d7
+step	0	passed	1	screenshots/gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle/00.svg	-
 check	1	e:off	-
 check	1	e:connected	-
 check	1	e:disarmed	-
@@ -876,13 +984,15 @@ check	1	n:0	-
 check	1	e:low	-
 check	1	e:off	-
 check	1	e:QHOVER	-
-check	1	e:USB	-
+check	1	e:serial	-
 check	1	e:VTOL	-
+check	1	e:disarmed	-
 check	1	e:on the ground	-
-step	1	passed	1	screenshots/gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle/01.jpg	-
+step	1	passed	1	screenshots/gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle/01.svg	-
+check	1	e:armed	-
 check	1	e:armed	-
 check	1	e:none	-
-step	2	passed	1	screenshots/gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle/02.jpg	-
+step	2	passed	1	screenshots/gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle/02.svg	-
 check	1	e:disarmed	-
 check	1	e:none	-
 plan	gcs--radio-setup--coverage--f2-calibrates-the-radio	unsupported	9abcbc49d7cda3ee

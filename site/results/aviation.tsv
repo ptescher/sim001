@@ -93,14 +93,14 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
-plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	unsupported	8d823740ed274f32
+plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	unsupported	52d71af43d0b054f
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 44 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
-plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	390d16bf2a758a1e
+plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	0f2a95e6bcc6503d
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 50 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
@@ -110,7 +110,7 @@ step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
 step	7	unsupported	0	-	-
 step	8	unsupported	0	-	-
-plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	unsupported	e785728ef515c9bc
+plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	unsupported	57b92d5a10dc864e
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
@@ -118,7 +118,7 @@ step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
-plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	unsupported	40a4fa78f44fd4cb
+plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	unsupported	05786749d70772f3
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 44 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
@@ -577,7 +577,7 @@ step	1	unsupported	0	-	-
 plan	gcs--coverage--auto-twice-goes-anyway	unsupported	97a0c342ae06c08b
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the game clock, arrange the home position and 30 more things yet.
 step	1	unsupported	0	-	-
-plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	465cb87be3a3784d
+plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	33dc467a22f5e1d7
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
