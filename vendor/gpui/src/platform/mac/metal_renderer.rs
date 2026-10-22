@@ -371,7 +371,7 @@ impl MetalRenderer {
             let mut instance_buffer = self.instance_buffer_pool.lock().acquire(&self.device);
 
             let command_buffer =
-                self.draw_primitives(scene, &mut instance_buffer, drawable, viewport_size);
+                self.draw_primitives(scene, &mut instance_buffer, drawable.texture(), viewport_size);
 
             match command_buffer {
                 Ok(command_buffer) => {
@@ -416,11 +416,57 @@ impl MetalRenderer {
         }
     }
 
+    /// Renders `scene` into a texture of the layer's size, off screen, and reads it back as RGBA:
+    /// a picture of the window that needs neither the window nor the display to be visible (for a
+    /// program's own screenshots; sim001's acceptance tests).
+    pub fn capture(&mut self, scene: &Scene) -> Option<image::RgbaImage> {
+        let drawable_size = self.layer.drawable_size();
+        let (width, height) = (drawable_size.width.ceil() as u64, drawable_size.height.ceil() as u64);
+        if width == 0 || height == 0 {
+            return None;
+        }
+        let viewport_size: Size<DevicePixels> = size((width as i32).into(), (height as i32).into());
+        let descriptor = metal::TextureDescriptor::new();
+        descriptor.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+        descriptor.set_width(width);
+        descriptor.set_height(height);
+        descriptor.set_storage_mode(metal::MTLStorageMode::Managed);
+        descriptor.set_usage(metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead);
+        let texture = self.device.new_texture(&descriptor);
+        let mut instance_buffer = self.instance_buffer_pool.lock().acquire(&self.device);
+        let result = self.draw_primitives(scene, &mut instance_buffer, &texture, viewport_size);
+        let command_buffer = match result {
+            Ok(command_buffer) => command_buffer,
+            Err(err) => {
+                log::error!("failed to capture: {err}");
+                self.instance_buffer_pool.lock().release(instance_buffer);
+                return None;
+            }
+        };
+        let blit = command_buffer.new_blit_command_encoder();
+        blit.synchronize_resource(&texture);
+        blit.end_encoding();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+        self.instance_buffer_pool.lock().release(instance_buffer);
+        let mut bgra = vec![0u8; (width * height * 4) as usize];
+        texture.get_bytes(
+            bgra.as_mut_ptr() as *mut c_void,
+            width * 4,
+            metal::MTLRegion::new_2d(0, 0, width, height),
+            0,
+        );
+        for pixel in bgra.chunks_exact_mut(4) {
+            pixel.swap(0, 2);
+        }
+        image::RgbaImage::from_raw(width as u32, height as u32, bgra)
+    }
+
     fn draw_primitives(
         &mut self,
         scene: &Scene,
         instance_buffer: &mut InstanceBuffer,
-        drawable: &metal::MetalDrawableRef,
+        target: &metal::TextureRef,
         viewport_size: Size<DevicePixels>,
     ) -> Result<metal::CommandBuffer> {
         let command_queue = self.command_queue.clone();
@@ -430,7 +476,7 @@ impl MetalRenderer {
 
         let mut command_encoder = new_command_encoder(
             command_buffer,
-            drawable,
+            target,
             viewport_size,
             |color_attachment| {
                 color_attachment.set_load_action(metal::MTLLoadAction::Clear);
@@ -467,7 +513,7 @@ impl MetalRenderer {
 
                     command_encoder = new_command_encoder(
                         command_buffer,
-                        drawable,
+                        target,
                         viewport_size,
                         |color_attachment| {
                             color_attachment.set_load_action(metal::MTLLoadAction::Load);
@@ -1158,7 +1204,7 @@ impl MetalRenderer {
 
 fn new_command_encoder<'a>(
     command_buffer: &'a metal::CommandBufferRef,
-    drawable: &'a metal::MetalDrawableRef,
+    target: &'a metal::TextureRef,
     viewport_size: Size<DevicePixels>,
     configure_color_attachment: impl Fn(&RenderPassColorAttachmentDescriptorRef),
 ) -> &'a metal::RenderCommandEncoderRef {
@@ -1167,7 +1213,7 @@ fn new_command_encoder<'a>(
         .color_attachments()
         .object_at(0)
         .unwrap();
-    color_attachment.set_texture(Some(drawable.texture()));
+    color_attachment.set_texture(Some(target));
     color_attachment.set_store_action(metal::MTLStoreAction::Store);
     configure_color_attachment(color_attachment);
 

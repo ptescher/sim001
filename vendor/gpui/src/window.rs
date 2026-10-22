@@ -2007,6 +2007,16 @@ impl Window {
     }
 
     #[profiling::function]
+    /// A picture of the window as it is now, rendered off screen: it needs neither the window nor
+    /// the display to be visible, nor the permission to record the screen. Draws the window
+    /// first when it has changed. `None` where the platform can't (only macOS can).
+    pub fn capture_image(&mut self, cx: &mut App) -> Option<image::RgbaImage> {
+        if self.invalidator.is_dirty() {
+            self.draw(cx).clear();
+        }
+        self.platform_window.capture(&self.rendered_frame.scene)
+    }
+
     fn present(&self) {
         self.platform_window.draw(&self.rendered_frame.scene);
         self.needs_present.set(false);

@@ -16,8 +16,8 @@ teleoperation_core = { path = "../core" }
 expectation_harness = { git = "https://github.com/ptescher/expectation" }
 expectation_model = { git = "https://github.com/ptescher/expectation" }
 expectation_story = { git = "https://github.com/ptescher/expectation" }
-# The window's number for its screenshots (snapshot.rs).
-raw-window-handle = "0.6"
+# The screenshots' JPEGs (snapshot.rs); the same image crate as GPUI's.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
 # Keep `cargo run` (debug) usable: optimize dependencies.
 [profile.dev.package."*"]
@@ -36,8 +36,6 @@ path = "src/main.rs"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2-app-kit = { version = "0.3.2", features = ["NSWindow", "NSResponder", "NSView"] }
 
 # Its own workspace (the root one excludes it): it builds on its own, also from a checkout inside
 # another checkout (a worktree under .claude/worktrees).

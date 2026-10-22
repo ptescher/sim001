@@ -1580,21 +1580,15 @@ impl Driver for ConsoleDriver {
         Progress::Advanced
     }
 
-    /// The console's window as the system draws it (macOS `screencapture`; it needs the
-    /// window on screen and the Screen Recording permission).
+    /// The console's window, rendered off screen by GPUI (`Window::capture_image`): it needs
+    /// neither the window nor the display to be visible, nor the Screen Recording permission.
     fn screenshot(&mut self) -> Result<Option<Screenshot>, String> {
-        let Some(number) = self.with_window(|w, _| crate::screens::window_number(w))? else {
-            return Ok(None);
-        };
-        let path = std::env::temp_dir().join(format!("sim001_gcs_expect_{}.jpg", std::process::id()));
-        let ok = std::process::Command::new("screencapture")
-            .args(["-x", "-o", "-t", "jpg", "-l", &number.to_string()])
-            .arg(&path)
-            .status()
-            .is_ok_and(|s| s.success());
-        let bytes = if ok { std::fs::read(&path).ok() } else { None };
-        let _ = std::fs::remove_file(&path);
-        let bytes = bytes.filter(|b| !b.is_empty());
+        let bytes = self.with_window(|w, cx| {
+            let rgb = image::DynamicImage::ImageRgba8(w.capture_image(cx)?).into_rgb8();
+            let mut jpeg = Vec::new();
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90).encode_image(&rgb).ok()?;
+            Some(jpeg)
+        })?;
         // With the TX15 on the serial line, its screen goes above the console's.
         if let (Some(jpg), Some(line)) = (&bytes, &self.line) {
             if let Some(svg) = crate::tx15_screen::composite(jpg, &line.svg()) {

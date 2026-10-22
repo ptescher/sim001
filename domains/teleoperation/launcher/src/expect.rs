@@ -374,7 +374,7 @@ impl Driver for LauncherDriver {
 
     /// The launcher's window as the system draws it.
     fn screenshot(&mut self) -> Result<Option<Screenshot>, String> {
-        Ok(self.with_window(|w, _| crate::snapshot::window_jpeg(w))?.map(Screenshot::jpeg))
+        Ok(self.with_window(crate::snapshot::window_jpeg)?.map(Screenshot::jpeg))
     }
 
     fn supports(&self, need: Need<'_>) -> bool {
