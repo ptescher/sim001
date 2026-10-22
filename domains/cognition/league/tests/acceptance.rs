@@ -9,7 +9,7 @@ use cognition_league::contest::executor::ExecutorContest;
 use cognition_league::contest::{Code, Contest};
 use cognition_league::strategy::{Claude, Es};
 use cognition_league::{Entry, Generation, Judgement, League, Options, Strategy, judge};
-use expectation_harness::{Acceptance, Bindings, Progress, RunOptions};
+use expectation_harness::{Acceptance, Bindings, Progress, RunOptions, Screenshot};
 use expectation_story::Status;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -111,6 +111,73 @@ impl World {
     /// generation.
     fn judged(&self) -> Option<&Judgement> {
         self.judgement.as_ref().or_else(|| self.last.as_ref().and_then(|g| g.judged.first().map(|(_, j)| j)))
+    }
+}
+
+impl World {
+    /// What the league has to say now, one line each: the games played, the judgement, the
+    /// generation and the champion, as `cognition_league` reports them.
+    fn report(&self) -> Vec<String> {
+        let mut out = vec![format!("champion: {}   challenger: {}", self.champion.name, self.challenger.name)];
+        if let [g] = self.games.as_slice() {
+            out.push(format!(
+                "game {}: score {:+.3}, {:.0} s, {} players, by plan {:.0} s, {} crashes",
+                g.seed, g.score, g.length, g.players, g.by_plan, g.crashes
+            ));
+        } else if !self.games.is_empty() {
+            let mean = self.games.iter().map(|g| g.score as f64).sum::<f64>() / self.games.len() as f64;
+            out.push(format!("{} games: mean score {mean:+.3}, {:.0} times real time", self.games.len(), self.speed));
+        }
+        if let Some(same) = self.same {
+            out.push(format!("the same seed twice: {}", if same { "the same game" } else { "different games" }));
+        }
+        if let Some(j) = self.judged() {
+            out.push(format!(
+                "{}{}: mean difference {:+.3} (lower bound {:+.3}) over {} games",
+                j.verdict.label(),
+                j.reason.map_or(String::new(), |r| format!(" ({})", r.label())),
+                j.mean,
+                j.lower,
+                j.challenger.games
+            ));
+        }
+        if let Some(g) = &self.last {
+            out.push(g.summary());
+        }
+        if self.against_slow != 0.0 {
+            out.push(format!("champion against the slow executor: {:+.3}", self.against_slow));
+        }
+        if let Some(t) = &self.towers {
+            out.push(format!(
+                "Towers, seed {}: {:?}, Blue {:.0} Red {:.0} after {:.0} s, {} drones flew",
+                t.seed, t.outcome, t.score[0], t.score[1], t.length, t.flew
+            ));
+        }
+        if self.against_itself.is_finite() {
+            out.push(format!("the default captain against itself: {:.3}", self.against_itself));
+        }
+        out
+    }
+
+    /// The report as a screen of the console's theme.
+    fn svg(&self) -> String {
+        let lines = self.report();
+        let h = 44 + 18 * lines.len();
+        let esc = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let mut s = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 {h}" width="720" height="{h}" font-family="Menlo, ui-monospace, monospace" font-size="12"><rect width="720" height="{h}" fill="#050806"/><text x="14" y="22" fill="#919c91">COGNITION_LEAGUE</text>"##
+        );
+        for (i, l) in lines.iter().enumerate() {
+            let colour = if l.starts_with("promoted") {
+                "#4cff7a"
+            } else if l.starts_with("refused") {
+                "#ff5a4f"
+            } else {
+                "#dfe8df"
+            };
+            s += &format!(r##"<text x="14" y="{}" fill="{colour}">{}</text>"##, 46 + 18 * i, esc(l));
+        }
+        s + "</svg>"
     }
 }
 
@@ -251,6 +318,7 @@ fn bindings() -> Bindings<World> {
         .observe("the mean difference of the captain challenger", |w| w.judged().map_or(f64::NAN, |j| j.mean as f64))
         .on_reset(|w| *w = World::new())
         .on_advance(|_| Progress::Static)
+        .on_screenshot(|w| Screenshot::svg(w.svg()))
 }
 
 fn suite() -> Acceptance {
@@ -263,7 +331,12 @@ fn every_test_of_the_section_passes() {
     let a = suite();
     let section = a.suite.sections.iter().find(|s| s.slug == "league").expect("a league section").id;
     let ours = a.suite.subtree(section);
-    let report = a.run(&mut bindings(), &RunOptions::default());
+    // With SIM001_DOCS=DIR the results and pictures of the league's report go into the project's docs.
+    let docs = std::env::var("SIM001_DOCS").ok().map(PathBuf::from);
+    let report = a.run(&mut bindings(), &RunOptions { docs_dir: docs.clone(), ..Default::default() });
+    if let Some(dir) = &docs {
+        a.publish(dir, "league", &report).unwrap();
+    }
     let ran: Vec<_> = a.plans.iter().zip(&report.results).filter(|(p, _)| ours.contains(&p.section)).collect();
     for (p, r) in &ran {
         println!("{:?} {} {:?}", r.status, p.title, r.start.error);

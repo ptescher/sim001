@@ -5,7 +5,7 @@
 
 Part: Getting started
   Page: installing [desktop]
-  Page: the-launcher [desktop]
+  Section: The launcher
   Page: controls [desktop]
   Section: Setting up the radio
 

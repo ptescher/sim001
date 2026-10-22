@@ -10,7 +10,7 @@
 use crate::seat::Status;
 use crate::server::Server;
 use crate::ui::{self, CommanderView, MapView};
-use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions};
+use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screenshot};
 use expectation_model::{Event, Value, Variable};
 use expectation_story::Status as TestStatus;
 use gpui::{
@@ -31,6 +31,8 @@ pub static EXIT: AtomicI32 = AtomicI32::new(0);
 pub struct Config {
     pub suite: PathBuf,
     pub only: Option<String>,
+    /// Where the results and the screenshots go (`--docs`).
+    pub docs: Option<PathBuf>,
     pub server: Arc<Mutex<Option<Server>>>,
     pub server_args: Vec<String>,
 }
@@ -361,6 +363,11 @@ impl Driver for AppDriver {
         Progress::Static
     }
 
+    /// The app's window as the system draws it.
+    fn screenshot(&mut self) -> Result<Option<Screenshot>, String> {
+        Ok(self.with_window(|w, _| crate::snapshot::window_jpeg(w))?.map(Screenshot::jpeg))
+    }
+
     fn supports(&self, need: Need<'_>) -> bool {
         match need {
             Need::Arrange(v) => {
@@ -379,7 +386,7 @@ impl Driver for AppDriver {
 
 /// Loads the suite, then runs the section's tests on a thread of their own and quits.
 pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
-    let Config { suite, only, server, server_args } = config;
+    let Config { suite, only, docs, server, server_args } = config;
     let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
         Ok(a) => a.with_coverage(),
         Err(e) => {
@@ -418,7 +425,7 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
                 &acceptance.suite,
                 std::slice::from_ref(plan),
                 &mut driver,
-                &RunOptions::default(),
+                &RunOptions { docs_dir: docs.clone(), ..Default::default() },
             );
             let r = r.results.into_iter().next().unwrap();
             match r.status {
@@ -428,6 +435,13 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
             report.results.push(r);
         }
         let acceptance = Acceptance { plans, ..acceptance };
+        if let Some(dir) = &docs {
+            // Saved as the app's results, and merged with the other runners' when the manual is written.
+            match acceptance.publish(dir, "towers-app", &report) {
+                Ok(_) => println!("expect: wrote the results to {}", dir.display()),
+                Err(e) => eprintln!("expect: couldn't write the results to {}: {e}", dir.display()),
+            }
+        }
         if !report.passed() {
             eprint!("{}", report.failures(&acceptance.suite, &acceptance.plans));
             EXIT.store(1, Ordering::SeqCst);

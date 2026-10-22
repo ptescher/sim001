@@ -3,7 +3,7 @@
 //! the placement that the view draws.
 
 use communication_telemetry::frame;
-use expectation_harness::{Acceptance, Bindings, RunOptions};
+use expectation_harness::{Acceptance, Bindings, RunOptions, Screenshot};
 use expectation_story::Status;
 use glam::Vec3;
 use mavlink::dialects::common::*;
@@ -89,6 +89,65 @@ impl World {
     }
 }
 
+/// Where the view puts the plane: from above (the pilot box, the plane and its nose, north up),
+/// and from behind (its wings, as banked), with what the telemetry says along the bottom.
+fn view_svg(w: &World) -> String {
+    let (green, grey, text, cyan) = ("#4cff7a", "#919c91", "#dfe8df", "#45d4ff");
+    let mut s = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="Menlo, ui-monospace, monospace" font-size="11"><rect width="640" height="360" fill="#050806"/><text x="14" y="22" fill="{grey}">FROM ABOVE</text><text x="400" y="22" fill="{grey}">FROM BEHIND</text><line x1="380" y1="10" x2="380" y2="320" stroke="#3a403a"/>"##
+    );
+    // From above: 140 px is 200 m; the pilot box in the middle.
+    let (bx, by, k) = (190.0f32, 170.0f32, 140.0 / 200.0);
+    s += &format!(r##"<rect x="{}" y="{}" width="10" height="10" fill="none" stroke="{grey}"/><text x="{}" y="{}" fill="{grey}">PILOT BOX</text><text x="{bx}" y="44" fill="{grey}" text-anchor="middle">N</text>"##, bx - 5.0, by - 5.0, bx + 10.0, by + 18.0);
+    match w.placed() {
+        Some(p) => {
+            let (x, y) = (bx + p.offset.x * k, by + p.offset.z * k);
+            let nose = p.rot * Vec3::NEG_Z;
+            let d = glam::Vec2::new(nose.x, nose.z).normalize_or(glam::Vec2::NEG_Y);
+            let side = glam::Vec2::new(-d.y, d.x);
+            let pt = |a: f32, b: f32| format!("{:.1},{:.1}", x + d.x * a + side.x * b, y + d.y * a + side.y * b);
+            s += &format!(r##"<polygon points="{} {} {}" fill="{green}"/>"##, pt(12.0, 0.0), pt(-8.0, 8.0), pt(-8.0, -8.0));
+            s += &format!(
+                r##"<text x="{:.1}" y="{:.1}" fill="{green}" text-anchor="middle">{:.0} m N, {:.0} m up, heading {}</text>"##,
+                x.clamp(110.0, 270.0),
+                y - 16.0,
+                -p.offset.z,
+                p.offset.y,
+                heading_of(p.rot)
+            );
+            // From behind: the wings, banked, and the horizon.
+            let right = p.rot * Vec3::X;
+            let bank = right.y.atan2(right.x);
+            let (cx, cy, half) = (510.0f32, 170.0f32, 80.0f32);
+            s += &format!(r##"<line x1="400" y1="{cy}" x2="620" y2="{cy}" stroke="{grey}" stroke-dasharray="4 4"/>"##);
+            s += &format!(
+                r##"<line x1="{:.1}" y1="{:.1}" x2="{:.1}" y2="{:.1}" stroke="{green}" stroke-width="5"/><circle cx="{cx}" cy="{cy}" r="9" fill="{green}"/>"##,
+                cx - half * bank.cos(),
+                cy + half * bank.sin(),
+                cx + half * bank.cos(),
+                cy - half * bank.sin()
+            );
+            s += &format!(r##"<text x="{cx}" y="290" fill="{green}" text-anchor="middle">right wing {}</text>"##, match right.y {
+                y if y < -0.1 => "low",
+                y if y > 0.1 => "high",
+                _ => "level",
+            });
+        }
+        None => s += &format!(r##"<text x="320" y="170" fill="#ffb21f" text-anchor="middle">NO PLANE IN THE VIEW</text>"##),
+    }
+    s += &format!(
+        r##"<text x="14" y="345" fill="{}">TELEMETRY {}</text><text x="160" y="345" fill="{text}">reported: {:.0} m N, {:.0} m up, bank {:.0}°, heading {}</text><text x="626" y="345" fill="{cyan}" text-anchor="end">{:.1} s</text></svg>"##,
+        if w.flowing { green } else { "#ff5a4f" },
+        if w.flowing { "FLOWING" } else { "SILENT" },
+        w.north,
+        w.height,
+        w.bank,
+        w.heading,
+        w.t
+    );
+    s
+}
+
 /// The compass point the nose of the plane in the view points to.
 fn heading_of(rot: glam::Quat) -> &'static str {
     let nose = rot * Vec3::NEG_Z;
@@ -136,6 +195,7 @@ fn driver() -> Bindings<World> {
         .on("1 second passes", |w| w.run(1.0))
         .on("10 seconds pass", |w| w.run(10.0))
         .on_reset(|w| *w = World::new())
+        .on_screenshot(|w| Screenshot::svg(view_svg(w)))
 }
 
 #[test]

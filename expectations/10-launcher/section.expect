@@ -1,0 +1,98 @@
+# The launcher (domains/teleoperation/launcher): the window that starts the sim, the station, the
+# radio wizard and the manual build. Its driver (`sim001_launcher --expect`, src/expect.rs) clicks
+# the real buttons of the real window and reads back what the launcher started. In the tests the
+# launcher starts a stand-in of itself in place of each program (`--stand-in`): the stand-in
+# waits until it is stopped, so the log, the job and STOP are real,
+# but nothing flies. The controls.cfg of a test is in a data folder of the test's own.
+
+Section: The launcher
+  On: desktop
+  The launcher is the window that you start SIM001 from. It starts the sim alone, or the whole
+  ground station. It also sets up your controllers and opens this manual. In the app bundle,
+  open `SIM001.app`. From source, type `cd domains/teleoperation/launcher && cargo run --release`.
+
+  The window has four screens. LAUNCH starts the sim or the station. CONTROLLERS lists the
+  radios and gamepads that are plugged in, and what `controls.cfg` maps. DOCS opens this
+  manual. LOG shows the output of the program that runs. The launcher runs one program at a
+  time. Press STOP, or close the launcher, to end that program and all that it started.
+
+  A radio with USB Serial (VCP) set to LUA shows up as a serial device, not as a joystick.
+  The launcher finds it and lists it under CONTROLLERS. With ArduPilot, TX15 ON SERIAL starts
+  the station on that device. The sticks, the telemetry and the MAVLink of the console then go
+  through the radio, as on the real plane. See [[The flight computer]].
+
+  Start with [[Your first flight from the launcher]]. Then set up your controls with
+  [[Setting up your radio]].
+
+Vocabulary:
+  # The choices on the LAUNCH screen: the lit button of each pair.
+  State: the launch target is SIMULATOR ONLY | GROUND STATION
+    Set: click {value}
+    Shows: {value}: the {value} button is lit green
+  State: the flight controller choice is WITH ARDUPILOT | WITHOUT ARDUPILOT
+    Set: click {value}
+    Shows: {value}: the {value} button is lit green
+  State: the place choice is ALPINE VALLEY | CYPRESS | BERKELEY
+    Set: click {value} under Place
+    Shows: {value}: the {value} button is lit green
+  State: the ray tracing choice is on | off
+    Set: click RAY TRACING until it is {value}
+    Shows: on: the RAY TRACING button is lit green
+  State: the launch button is LAUNCH | STOP
+    Shows: LAUNCH: the green button at the bottom of the LAUNCH screen reads LAUNCH
+    Shows: STOP: the button at the bottom of the LAUNCH screen is red and reads STOP
+
+  # The program that the launcher started, as the LOG screen shows it: its name, its state,
+  # and its command line in the first line of the log.
+  State: the program in the log is nothing | the simulator | the ground station | the radio wizard | the manual build
+    Shows: nothing: the LOG screen says "Nothing running"
+    Shows: the simulator: the LOG screen names the simulator, for example "Simulator, T1-S Ranger"
+    Shows: the ground station: the LOG screen names the ground station, for example "Ground station with ArduPilot"
+    Shows: the radio wizard: the LOG screen says "Controller setup"
+    Shows: the manual build: the LOG screen says "Render the docs"
+  State: the program is idle | running | stopped
+    Shows: idle: no program runs
+    Shows: running: the LOG screen says running, in green, beside the name of the program
+    Shows: stopped: the LOG screen says ended, in red, beside the name of the program
+  State: the plane of the started sim is none | the T1-S VTOL | the T1-S Ranger
+    Shows: the T1-S VTOL: the command in the first line of the log has `--aircraft t1s-vtol`
+    Shows: the T1-S Ranger: the command in the first line of the log has `--aircraft t1s-ranger`
+  State: the sticks of the started station are through ArduPilot | direct
+    Shows: through ArduPilot: the command in the first line of the log has `--station`, and not `--direct`
+    Shows: direct: the command in the first line of the log has `--station --direct`
+  State: the place of the started program is the Alpine Valley | Cypress | Berkeley
+    Shows: the Alpine Valley: the command in the first line of the log has no `--map`
+    Shows: Cypress: the command in the first line of the log has `--map cypress`
+    Shows: Berkeley: the command in the first line of the log has `--map berkeley`
+  State: the ray tracing of the started program is on | off
+    Shows: on: the command in the first line of the log has `--raytrace`
+    Shows: off: the command in the first line of the log has no `--raytrace`
+
+  # What the CONTROLLERS screen says about controls.cfg.
+  State: the controls file is missing | mapped
+    Shows: missing: the CONTROLLERS screen says "No controls.cfg yet"
+    Shows: mapped: the CONTROLLERS screen says "controls.cfg maps" and the number of channels
+
+  Event: the pilot launches
+    Say: click LAUNCH
+  Event: the pilot stops the program
+    Say: click STOP
+  Event: the pilot sets up the controller
+    Say: click SET UP CONTROLLER. The sim opens on the plain T1-S, with the radio wizard
+  Event: the radio wizard saves controls.cfg and closes
+    Say: move each stick and switch when the wizard asks. The wizard saves `controls.cfg`. Then close the sim
+  Event: the pilot renders the docs
+    Say: click RENDER DOCS
+
+  Phrase: the launcher has just opened
+    Say: start the launcher. In the app bundle, open `SIM001.app`. From source, type `cd domains/teleoperation/launcher && cargo run --release`
+    Given the launch target is GROUND STATION
+    And the flight controller choice is WITH ARDUPILOT
+    And the place choice is ALPINE VALLEY
+    And the ray tracing choice is off
+    And the program in the log is nothing
+    And the program is idle
+    And the launch button is LAUNCH
+
+Background:
+  Given the launcher has just opened

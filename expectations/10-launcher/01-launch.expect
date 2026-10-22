@@ -1,0 +1,66 @@
+Feature: Launching
+  Pick what to start on the LAUNCH screen, then click LAUNCH. GROUND STATION starts the sim,
+  ArduPilot SITL and the console together. SIMULATOR ONLY starts the sim alone. WITH ARDUPILOT
+  flies the T1-S VTOL. WITHOUT ARDUPILOT flies the plain T1-S Ranger in the sim. In the
+  station, WITHOUT ARDUPILOT gives the sticks to the sim's own modes, and ArduPilot only
+  reports. The launcher opens on the station with ArduPilot, in the Alpine Valley.
+
+  Expectation: LAUNCH starts the station with ArduPilot
+    Given the launch target is GROUND STATION
+    And the flight controller choice is WITH ARDUPILOT
+    When the pilot launches
+    Then the program in the log is the ground station
+    And the sticks of the started station are through ArduPilot
+
+  Expectation: Without ArduPilot, the station gives the sticks to the sim
+    The sim flies the plane through its own modes. ArduPilot still runs, for the telemetry,
+    but the sim does not use its outputs.
+
+    Given the launch target is GROUND STATION
+    And the flight controller choice is WITHOUT ARDUPILOT
+    When the pilot launches
+    Then the program in the log is the ground station
+    And the sticks of the started station are direct
+
+  Expectation: The sim alone with ArduPilot flies the T1-S VTOL
+    The sim starts its own ArduPilot: the native build, or the Docker image.
+
+    Given the launch target is SIMULATOR ONLY
+    And the flight controller choice is WITH ARDUPILOT
+    When the pilot launches
+    Then the program in the log is the simulator
+    And the plane of the started sim is the T1-S VTOL
+
+  Expectation: The sim alone without ArduPilot flies the T1-S Ranger
+    Given the launch target is SIMULATOR ONLY
+    And the flight controller choice is WITHOUT ARDUPILOT
+    When the pilot launches
+    Then the program in the log is the simulator
+    And the plane of the started sim is the T1-S Ranger
+
+  Expectation: The place goes to the program
+    Given the place choice is CYPRESS
+    When the pilot launches
+    Then the place of the started program is Cypress
+
+  Expectation: RAY TRACING goes to the program
+    Given the ray tracing choice is on
+    When the pilot launches
+    Then the ray tracing of the started program is on
+
+  Expectation: LAUNCH starts the program, and becomes STOP
+    The LOG screen shows the output of the program, and its command line in the first line.
+    The launcher runs one program at a time. To start another, stop the one that runs.
+
+    Given the program is idle
+    When the pilot launches
+    Then the program is running
+    And the launch button is STOP
+
+  Expectation: STOP ends the program
+    STOP ends the program and all that it started: the sim, ArduPilot and the console.
+
+    Given the program is running
+    When the pilot stops the program
+    Then the program is stopped
+    And the launch button is LAUNCH

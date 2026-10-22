@@ -3,7 +3,7 @@
 //! not depend on how a drone flies, so a drone here stays where it was put; the host's tests fly
 //! the game with ArduPlane SITL.
 
-use expectation_harness::{Acceptance, Bindings, RunOptions};
+use expectation_harness::{Acceptance, Bindings, RunOptions, Screenshot};
 use expectation_model::Value;
 use expectation_story::Status;
 use glam::Vec2;
@@ -303,6 +303,14 @@ fn bindings() -> Bindings<World> {
             w.blue.decide(&view);
         })
         .on_reset(|w| *w = World::new())
+        // Blue's map, as the commander app draws it, with the computer commander's orders.
+        .on_screenshot(|w| {
+            let mut view = w.game.view(Team::Blue);
+            for d in &mut view.drones {
+                d.order = w.blue.order(d.k);
+            }
+            Screenshot::svg(recreation_towers::svg::map_svg(&view, &w.game.rules))
+        })
 }
 
 fn suite() -> Acceptance {
@@ -336,4 +344,22 @@ fn every_test_of_the_section_passes_with_no_window() {
         .map(|(p, r)| format!("{:?} {}", r.status, p.title))
         .collect();
     assert!(not_passed.is_empty(), "{passed} passed; these did not:\n{}", not_passed.join("\n"));
+}
+
+/// The same, with pictures of Blue's map. With SIM001_DOCS=DIR the results and pictures go into
+/// the project's docs, beside the other runners'.
+#[test]
+fn the_section_documents_itself_with_pictures_of_the_map() {
+    let a = suite();
+    let published = std::env::var("SIM001_DOCS").ok().map(std::path::PathBuf::from);
+    let out = published.clone().unwrap_or_else(|| Path::new(env!("CARGO_TARGET_TMPDIR")).join("towers_docs"));
+    let report = a.run(&mut bindings(), &RunOptions { docs_dir: Some(out.clone()), ..Default::default() });
+    if published.is_some() {
+        a.publish(&out, "towers", &report).unwrap();
+    } else {
+        a.docs(Some(&report)).write(&out).unwrap();
+    }
+    let shot = out.join("screenshots/towers--winning-a-game--two-towers-give-two-points-each-second/01.svg");
+    let svg = std::fs::read_to_string(&shot).unwrap_or_else(|e| panic!("{}: {e}", shot.display()));
+    assert!(svg.contains("BLUE 20"), "the score after 10 s with two towers: {svg}");
 }

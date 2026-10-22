@@ -12,7 +12,7 @@
 //! runner's.
 
 use expectation_harness::service::{Present, Services};
-use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions};
+use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screenshot};
 use expectation_model::{Event, Value, Variable};
 use expectation_story::Status;
 use recreation_towers::seat::{self, Join, ToSeat, ToServer, Truth};
@@ -57,6 +57,8 @@ struct Played {
     red_seen: BTreeSet<usize>,
     /// Blue maps held against the whole game.
     checked: usize,
+    /// The last map the Blue seat got, and the rules: the picture of the end of the game.
+    last_blue: Option<(TeamView, Rules)>,
 }
 
 /// Is `at` in what `team` sees in `truth`?
@@ -196,6 +198,10 @@ fn play(bin: &Path) -> Result<Played, String> {
             played.leaks += n;
         }
     }
+    played.last_blue = blue.lock().unwrap().iter().rev().find_map(|m| match m {
+        ToSeat::View(v) => Some((v.clone(), rules)),
+        _ => None,
+    });
     if played.checked < 20 {
         return Err(format!("only {} Blue maps could be held against the whole game", played.checked));
     }
@@ -298,6 +304,20 @@ impl Driver for Server {
         Progress::Static
     }
 
+    /// The Blue seat's map, as the commander app draws it: a fresh game before it is played, the
+    /// last map the seat got after.
+    fn screenshot(&mut self) -> Result<Option<Screenshot>, String> {
+        let (view, rules) = match &self.played {
+            Some(Ok(Played { last_blue: Some((v, r)), .. })) => (v.clone(), *r),
+            Some(_) => return Ok(None),
+            None => {
+                let game = recreation_towers::Game::new(Rules::default());
+                (game.view(Team::Blue), game.rules)
+            }
+        };
+        Ok(Some(Screenshot::svg(recreation_towers::svg::map_svg(&view, &rules))))
+    }
+
     fn needs(&self) -> Vec<String> {
         vec!["ardupilot-agent".into()]
     }
@@ -324,7 +344,12 @@ fn the_server_plays_a_game_with_arduplane() {
     if let Some(why) = missing.first() {
         println!("not supported yet: {why}");
     }
-    let report = a.run_with(&mut driver, &RunOptions::default(), &mut services);
+    // With SIM001_DOCS=DIR the results and pictures of the map go into the project's docs.
+    let docs = std::env::var("SIM001_DOCS").ok().map(PathBuf::from);
+    let report = a.run_with(&mut driver, &RunOptions { docs_dir: docs.clone(), ..Default::default() }, &mut services);
+    if let Some(dir) = &docs {
+        a.publish(dir, "towers-server", &report).unwrap();
+    }
     let ran: Vec<_> = a.plans.iter().zip(&report.results).filter(|(p, _)| ours.contains(&p.section)).collect();
     for (p, r) in &ran {
         println!("{:?} {} {:?}", r.status, p.title, r.start.error);

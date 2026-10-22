@@ -4,34 +4,137 @@ use crate::controllers::{self, Device, Mapping, SerialRadio};
 use crate::job::{Job, layout};
 use crate::theme::*;
 use teleoperation_core::debug::{self, Level, LogFile};
-use gpui::{AnyElement, Context, Div, IntoElement, Render, SharedString, Stateful, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, Bounds, Context, Div, IntoElement, Pixels, Render, SharedString, Stateful, Window, canvas, div,
+    prelude::*, px,
+};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::time::Duration;
 
-#[derive(Clone, Copy, PartialEq)]
-enum Target {
+thread_local! {
+    /// Where each button was last painted, by id, so `--expect` can click it the way a person
+    /// would. Written while painting, read between frames; both on the UI thread.
+    static BUTTONS: RefCell<HashMap<SharedString, Bounds<Pixels>>> = RefCell::new(HashMap::new());
+}
+
+/// Where the button with this id is on screen now, if it is.
+pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
+    BUTTONS.with(|b| b.borrow().get(id).copied())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Target {
     /// The simulator alone.
     Sim,
     /// The sim, ArduPilot and the ground control console together.
     Station,
 }
 
-pub struct Launcher {
-    target: Target,
+/// What the LAUNCH screen is set to, and the command lines that follow from it.
+#[derive(Clone)]
+pub struct Choices {
+    pub target: Target,
     /// With the ArduPilot flight controller (the T1-S VTOL) or without (the plain Ranger / sticks direct).
-    flight_controller: bool,
-    raytrace: bool,
-    fullscreen: bool,
+    pub flight_controller: bool,
+    pub raytrace: bool,
+    pub fullscreen: bool,
     /// Skip rebuilding before the start.
-    no_build: bool,
+    pub no_build: bool,
     /// `None` is the Alpine Valley.
-    map: Option<String>,
+    pub map: Option<String>,
+    /// Station only: the TX15 on its serial line carries the sticks, telemetry and MAVLink.
+    pub use_serial: bool,
+    pub serial: Vec<SerialRadio>,
+}
+
+impl Default for Choices {
+    /// What the launcher opens on: the station with ArduPilot, in the Alpine Valley.
+    fn default() -> Choices {
+        Choices {
+            target: Target::Station,
+            flight_controller: true,
+            raytrace: false,
+            fullscreen: false,
+            no_build: false,
+            map: None,
+            use_serial: true,
+            serial: vec![],
+        }
+    }
+}
+
+impl Choices {
+    /// The sim's own arguments.
+    pub fn sim_args(&self) -> Vec<String> {
+        let mut a: Vec<String> = vec![];
+        a.push("--aircraft".into());
+        a.push(if self.flight_controller { "t1s-vtol" } else { "t1s-ranger" }.into());
+        if let Some(m) = &self.map {
+            a.extend(["--map".into(), m.clone()]);
+        }
+        if self.raytrace {
+            a.push("--raytrace".into());
+        }
+        if self.fullscreen {
+            a.push("--fullscreen".into());
+        }
+        // A radio on its serial line is not a joystick: the sim's flight computer reads its sticks
+        // from the line (CRSF) and sends them to ArduPilot.
+        if let Some(r) = self.serial_radio() {
+            a.extend(["--flight-computer".into(), r.path.clone()]);
+        }
+        a
+    }
+
+    /// The console's `--station`; without the flight controller the sticks fly the plane
+    /// through the sim's own modes and ArduPilot only watches (`--direct`). A bundle has nothing
+    /// to build.
+    pub fn station_args(&self, bundled: bool) -> Vec<String> {
+        let mut a: Vec<String> = vec!["--station".into()];
+        if let Some(m) = &self.map {
+            a.extend(["--map".into(), m.clone()]);
+        }
+        if self.raytrace {
+            a.push("--raytrace".into());
+        }
+        if !self.flight_controller {
+            a.push("--direct".into());
+        }
+        if let Some(r) = self.serial_radio() {
+            a.extend(["--tx15-serial".into(), r.path.clone()]);
+        }
+        if self.no_build || bundled {
+            a.push("--no-build".into());
+        }
+        a
+    }
+
+    /// The TX15 the station will use on its serial line, if one is plugged in and chosen.
+    pub fn serial_radio(&self) -> Option<&SerialRadio> {
+        if !self.use_serial || !self.flight_controller {
+            return None;
+        }
+        self.serial.iter().find(|r| r.radio)
+    }
+
+    /// The title of what LAUNCH starts, for the log.
+    pub fn title(&self) -> &'static str {
+        match (self.target, self.flight_controller) {
+            (Target::Sim, true) => "Simulator, T1-S VTOL with ArduPilot",
+            (Target::Sim, false) => "Simulator, T1-S Ranger",
+            (Target::Station, true) => "Ground station with ArduPilot",
+            (Target::Station, false) => "Ground station, sticks direct",
+        }
+    }
+}
+
+pub struct Launcher {
+    pub choices: Choices,
     maps: Vec<String>,
     devices: Vec<Device>,
-    serial: Vec<SerialRadio>,
-    /// Station only: the TX15 on its serial line carries the sticks, telemetry and MAVLink.
-    use_serial: bool,
-    mapping: Mapping,
-    job: Option<Job>,
+    pub mapping: Mapping,
+    pub job: Option<Job>,
     notice: String,
     /// The log pane shows the program's output (`None`) or one of the log files of a run: the
     /// console's debug log, what each ArduPlane printed.
@@ -50,6 +153,8 @@ enum Style {
 }
 
 fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, style: Style) -> Stateful<Div> {
+    let id = id.into();
+    let recorded = id.clone();
     let (bg, fg, border) = match style {
         Style::Normal => (CONTROL, WHITE, BEZEL_EDGE),
         Style::Active => (ACTIVE_FILL, GREEN, GREEN_DIM),
@@ -57,7 +162,8 @@ fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, style: Sty
         Style::Danger => (DANGER_FILL, ON_DANGER, RED),
     };
     div()
-        .id(id.into())
+        .id(id)
+        .relative()
         .px_3()
         .py(px(5.0))
         .bg(c(bg))
@@ -69,6 +175,11 @@ fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, style: Sty
         .hover(|s| s.bg(c(CONTROL_HOVER)))
         .active(|s| s.opacity(0.7))
         .child(text.into())
+        .child(
+            canvas(move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(recorded, b)), |_, _, _, _| {})
+                .absolute()
+                .inset_0(),
+        )
 }
 
 fn screen(title: &'static str, body: impl IntoElement) -> Div {
@@ -130,16 +241,9 @@ impl Launcher {
             .collect();
         maps.sort();
         Launcher {
-            target: Target::Station,
-            flight_controller: true,
-            raytrace: false,
-            fullscreen: false,
-            no_build: false,
-            map: None,
+            choices: Choices { serial: controllers::serial_radios(), ..Choices::default() },
             maps,
             devices: controllers::connected(),
-            serial: controllers::serial_radios(),
-            use_serial: true,
             mapping: controllers::mapping(),
             job: None,
             notice: String::new(),
@@ -181,7 +285,17 @@ impl Launcher {
         }
     }
 
-    fn busy(&self) -> bool {
+    /// Back to what the launcher opens on, with nothing running (for `--expect`, between tests).
+    pub fn reset(&mut self) {
+        self.shutdown();
+        self.job = None;
+        self.choices = Choices { serial: std::mem::take(&mut self.choices.serial), ..Choices::default() };
+        self.mapping = controllers::mapping();
+        self.notice.clear();
+        self.log_tab = None;
+    }
+
+    pub fn busy(&self) -> bool {
         self.job.as_ref().is_some_and(Job::running)
     }
 
@@ -211,81 +325,17 @@ impl Launcher {
         }
     }
 
-    /// The sim's own arguments.
-    fn sim_args(&self) -> Vec<String> {
-        let mut a: Vec<String> = vec![];
-        a.push("--aircraft".into());
-        a.push(if self.flight_controller { "t1s-vtol" } else { "t1s-ranger" }.into());
-        if let Some(m) = &self.map {
-            a.extend(["--map".into(), m.clone()]);
-        }
-        if self.raytrace {
-            a.push("--raytrace".into());
-        }
-        if self.fullscreen {
-            a.push("--fullscreen".into());
-        }
-        // A radio on its serial line is not a joystick: the sim's flight computer reads its sticks
-        // from the line (CRSF) and sends them to ArduPilot.
-        if let Some(r) = self.serial_radio() {
-            a.extend(["--flight-computer".into(), r.path.clone()]);
-        }
-        a
-    }
-
-    /// The console's `--station`; without the flight controller the sticks fly the plane
-    /// through the sim's own modes and ArduPilot only watches (`--direct`).
-    fn station_args(&self) -> Vec<String> {
-        let mut a: Vec<String> = vec!["--station".into()];
-        if let Some(m) = &self.map {
-            a.extend(["--map".into(), m.clone()]);
-        }
-        if self.raytrace {
-            a.push("--raytrace".into());
-        }
-        if !self.flight_controller {
-            a.push("--direct".into());
-        }
-        if let Some(r) = self.serial_radio() {
-            a.extend(["--tx15-serial".into(), r.path.clone()]);
-        }
-        // A bundle has nothing to build.
-        if self.no_build || layout().bundled() {
-            a.push("--no-build".into());
-        }
-        a
-    }
-
-    /// The TX15 the station will use on its serial line, if one is plugged in and chosen.
-    fn serial_radio(&self) -> Option<&SerialRadio> {
-        if !self.use_serial || !self.flight_controller {
-            return None;
-        }
-        self.serial.iter().find(|r| r.radio)
-    }
-
     fn launch(&mut self) {
-        match self.target {
-            Target::Sim => {
-                let title = if self.flight_controller {
-                    "Simulator, T1-S VTOL with ArduPilot"
-                } else {
-                    "Simulator, T1-S Ranger"
-                };
-                let (program, args, dir) = self.program("sim001", "", self.sim_args());
-                self.run(title, &program, args, dir);
-            }
-            Target::Station => {
-                let title = if self.flight_controller {
-                    "Ground station with ArduPilot"
-                } else {
-                    "Ground station, sticks direct"
-                };
-                let (program, args, dir) =
-                    self.program("sim001_gcs", "domains/teleoperation/console", self.station_args());
-                self.run(title, &program, args, dir);
-            }
-        }
+        let title = self.choices.title();
+        let (program, args, dir) = match self.choices.target {
+            Target::Sim => self.program("sim001", "", self.choices.sim_args()),
+            Target::Station => self.program(
+                "sim001_gcs",
+                "domains/teleoperation/console",
+                self.choices.station_args(layout().bundled()),
+            ),
+        };
+        self.run(title, &program, args, dir);
     }
 
     fn calibrate(&mut self) {
@@ -330,7 +380,7 @@ impl Launcher {
 
     fn controllers_panel(&self, cx: &mut Context<Self>) -> Div {
         let mut body = div().flex().flex_col().gap_1();
-        if self.devices.is_empty() && self.serial.is_empty() {
+        if self.devices.is_empty() && self.choices.serial.is_empty() {
             body = body.child(
                 div()
                     .text_color(c(AMBER))
@@ -347,7 +397,7 @@ impl Launcher {
                     .child(div().text_color(c(DARK)).child(format!("{:04x}:{:04x}", d.vendor, d.product))),
             );
         }
-        for r in &self.serial {
+        for r in &self.choices.serial {
             body = body.child(
                 div()
                     .flex()
@@ -392,7 +442,7 @@ impl Launcher {
                         })))
                         .child(button("rescan", "RESCAN", Style::Normal).on_click(cx.listener(|this, _, _, cx| {
                             this.devices = controllers::connected();
-                            this.serial = controllers::serial_radios();
+                            this.choices.serial = controllers::serial_radios();
                             this.mapping = controllers::mapping();
                             cx.notify();
                         })))
@@ -445,8 +495,8 @@ impl Launcher {
 
     fn launch_panel(&self, cx: &mut Context<Self>) -> Div {
         let busy = self.busy();
-        let fc = self.flight_controller;
-        let target = self.target;
+        let fc = self.choices.flight_controller;
+        let target = self.choices.target;
         let explain = match (target, fc) {
             (Target::Sim, true) => {
                 "The T1-S VTOL. The sim starts its own ArduPilot (native build or Docker); fly it with your radio."
@@ -459,14 +509,14 @@ impl Launcher {
                 "The station with the sticks flying the plane through the sim's own modes. ArduPilot still runs for telemetry, but its outputs are ignored."
             }
         };
-        let mut maps = row().child(self.choice("map-none", "ALPINE VALLEY", self.map.is_none(), cx, |t| t.map = None));
+        let mut maps = row().child(self.choice("map-none", "ALPINE VALLEY", self.choices.map.is_none(), cx, |t| t.choices.map = None));
         for m in &self.maps {
             let name = m.clone();
             let id: SharedString = format!("map-{m}").into();
             maps = maps.child(
-                button(id, m.to_uppercase(), if self.map.as_ref() == Some(m) { Style::Active } else { Style::Normal })
+                button(id, m.to_uppercase(), if self.choices.map.as_ref() == Some(m) { Style::Active } else { Style::Normal })
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.map = Some(name.clone());
+                        this.choices.map = Some(name.clone());
                         cx.notify();
                     })),
             );
@@ -494,21 +544,21 @@ impl Launcher {
                     row()
                         .child(
                             self.choice("t-sim", "SIMULATOR ONLY", target == Target::Sim, cx, |t| {
-                                t.target = Target::Sim
+                                t.choices.target = Target::Sim
                             }),
                         )
                         .child(self.choice("t-station", "GROUND STATION", target == Target::Station, cx, |t| {
-                            t.target = Target::Station
+                            t.choices.target = Target::Station
                         })),
                 )
                 .child(
                     row()
-                        .child(self.choice("fc-on", "WITH ARDUPILOT", fc, cx, |t| t.flight_controller = true))
-                        .child(self.choice("fc-off", "WITHOUT ARDUPILOT", !fc, cx, |t| t.flight_controller = false)),
+                        .child(self.choice("fc-on", "WITH ARDUPILOT", fc, cx, |t| t.choices.flight_controller = true))
+                        .child(self.choice("fc-off", "WITHOUT ARDUPILOT", !fc, cx, |t| t.choices.flight_controller = false)),
                 )
                 .child(note(explain))
                 .children(
-                    self.serial_radio().map(|r| {
+                    self.choices.serial_radio().map(|r| {
                         note(format!("The {} on {} carries the sticks, telemetry and MAVLink.", r.name, r.path))
                     }),
                 )
@@ -516,15 +566,17 @@ impl Launcher {
                 .child(maps)
                 .child(
                     row()
-                        .child(self.choice("rt", "RAY TRACING", self.raytrace, cx, |t| t.raytrace = !t.raytrace))
+                        .child(self.choice("rt", "RAY TRACING", self.choices.raytrace, cx, |t| t.choices.raytrace = !t.choices.raytrace))
                         .children((target == Target::Sim).then(|| {
-                            self.choice("fs", "FULL SCREEN", self.fullscreen, cx, |t| t.fullscreen = !t.fullscreen)
+                            self.choice("fs", "FULL SCREEN", self.choices.fullscreen, cx, |t| t.choices.fullscreen = !t.choices.fullscreen)
                         }))
-                        .children((fc && self.serial.iter().any(|r| r.radio)).then(|| {
-                            self.choice("ser", "TX15 ON SERIAL", self.use_serial, cx, |t| t.use_serial = !t.use_serial)
+                        .children((fc && self.choices.serial.iter().any(|r| r.radio)).then(|| {
+                            self.choice("ser", "TX15 ON SERIAL", self.choices.use_serial, cx, |t| {
+                                t.choices.use_serial = !t.choices.use_serial
+                            })
                         }))
                         .children((target == Target::Station).then(|| {
-                            self.choice("nb", "SKIP SIM REBUILD", self.no_build, cx, |t| t.no_build = !t.no_build)
+                            self.choice("nb", "SKIP SIM REBUILD", self.choices.no_build, cx, |t| t.choices.no_build = !t.choices.no_build)
                         })),
                 )
                 .child(row().child(go)),
@@ -629,5 +681,72 @@ impl Render for Launcher {
                     .child(div().flex().flex_col().gap(px(GAP)).w(px(520.0)).child(div().flex().flex_col().flex_none().child(launch)).child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(ctrl)))
                     .child(div().flex().flex_col().gap(px(GAP)).flex_1().min_w(px(0.0)).child(div().flex().flex_col().flex_none().child(docs)).child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(log))),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tx15() -> SerialRadio {
+        SerialRadio { name: "TX15".into(), path: "/dev/cu.usbmodem1".into(), radio: true }
+    }
+
+    #[test]
+    fn the_launcher_opens_on_the_station_with_ardupilot_in_the_alpine_valley() {
+        let c = Choices::default();
+        assert_eq!((c.target, c.flight_controller, c.map.clone()), (Target::Station, true, None));
+        assert_eq!(c.station_args(false), ["--station"]);
+        assert_eq!(c.title(), "Ground station with ArduPilot");
+    }
+
+    #[test]
+    fn the_sim_alone_flies_the_vtol_with_ardupilot_and_the_ranger_without() {
+        let mut c = Choices { target: Target::Sim, ..Choices::default() };
+        assert_eq!(c.sim_args(), ["--aircraft", "t1s-vtol"]);
+        c.flight_controller = false;
+        assert_eq!(c.sim_args(), ["--aircraft", "t1s-ranger"]);
+        assert_eq!(c.title(), "Simulator, T1-S Ranger");
+    }
+
+    #[test]
+    fn the_place_ray_tracing_and_full_screen_go_to_the_sim() {
+        let c = Choices { map: Some("cypress".into()), raytrace: true, fullscreen: true, ..Choices::default() };
+        assert_eq!(c.sim_args(), ["--aircraft", "t1s-vtol", "--map", "cypress", "--raytrace", "--fullscreen"]);
+        assert_eq!(c.station_args(false), ["--station", "--map", "cypress", "--raytrace"], "the station has no full screen");
+    }
+
+    #[test]
+    fn without_ardupilot_the_station_flies_the_sticks_direct() {
+        let c = Choices { flight_controller: false, ..Choices::default() };
+        assert_eq!(c.station_args(false), ["--station", "--direct"]);
+        assert_eq!(c.title(), "Ground station, sticks direct");
+    }
+
+    #[test]
+    fn a_bundle_or_skip_rebuild_does_not_build_the_sim() {
+        assert_eq!(Choices::default().station_args(true), ["--station", "--no-build"]);
+        assert_eq!(Choices { no_build: true, ..Choices::default() }.station_args(false), ["--station", "--no-build"]);
+    }
+
+    #[test]
+    fn a_tx15_on_serial_carries_the_line_only_with_ardupilot() {
+        let mut c = Choices { serial: vec![tx15()], ..Choices::default() };
+        assert_eq!(c.station_args(false), ["--station", "--tx15-serial", "/dev/cu.usbmodem1"]);
+        c.target = Target::Sim;
+        assert_eq!(c.sim_args(), ["--aircraft", "t1s-vtol", "--flight-computer", "/dev/cu.usbmodem1"]);
+        c.use_serial = false;
+        assert_eq!(c.sim_args(), ["--aircraft", "t1s-vtol"]);
+        c.use_serial = true;
+        c.flight_controller = false;
+        assert_eq!(c.sim_args(), ["--aircraft", "t1s-ranger"], "the Ranger has no flight computer");
+    }
+
+    #[test]
+    fn a_serial_device_that_is_not_a_radio_is_not_used() {
+        let other = SerialRadio { name: "Serial device".into(), path: "/dev/cu.usbserial9".into(), radio: false };
+        let c = Choices { serial: vec![other], ..Choices::default() };
+        assert!(c.serial_radio().is_none());
+        assert_eq!(c.station_args(false), ["--station"]);
     }
 }

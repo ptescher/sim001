@@ -1,7 +1,9 @@
 //! Runs every acceptance runner, each with a time limit, then writes the manual from what they
-//! left in `docs/`. The runners in the order their results are merged: the domains that run with
-//! no window, the AGENT mode in ArduPilot SITL, the sim's own tests, the VTOL on its own and the
-//! sim with a flight controller beside it, and the ground station's.
+//! left in `docs/`. The runners: the domains that run with no window (Towers among them), the
+//! league, the AGENT mode in ArduPilot SITL, the Towers game server, the sim's own tests, the VTOL
+//! on its own and the sim with a flight controller beside it, the launcher, the Towers commander
+//! app, and the ground station's. Each saves its results in a file of its own, and every runner
+//! that can take screenshots takes them (pictures of a screen for those with no window).
 //!
 //! What a runner needs from outside (ArduPilot, Docker) it asks the expectation framework for: a
 //! runner whose dependency cannot be had says so, and its tests are "not supported yet".
@@ -43,16 +45,43 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     let mut windowless = cargo(
         "the domains with no window",
         root,
-        &["test", "--release", "-p", "communication_radio", "-p", "aviation_computer", "-p", "visualization_telemetry", "-p", "cognition_executor", "--test", "acceptance"],
+        &[
+            "test",
+            "--release",
+            "-p",
+            "communication_radio",
+            "-p",
+            "aviation_computer",
+            "-p",
+            "visualization_telemetry",
+            "-p",
+            "cognition_executor",
+            "-p",
+            "recreation_towers",
+            "--test",
+            "acceptance",
+        ],
         900,
     );
     windowless.env.push(docs_env.clone());
     out.push(windowless);
 
+    // The league plays thousands of games in the fast arena: minutes, with no window.
+    let mut league = cargo("the league", root, &["test", "--release", "-p", "cognition_league", "--test", "acceptance"], 900);
+    league.env.push(docs_env.clone());
+    league.may_fail = true;
+    out.push(league);
+
     let mut agent = cargo("the AGENT mode in ArduPilot SITL", root, &["test", "--release", "-p", "cognition_runner", "--test", "acceptance"], 400);
-    agent.env.push(docs_env);
+    agent.env.push(docs_env.clone());
     agent.may_fail = true;
     out.push(agent);
+
+    // A whole game of Towers between two computer teams, six ArduPlane SITL drones.
+    let mut towers = cargo("the Towers game server", root, &["test", "--release", "-p", "recreation_towers_server", "--test", "acceptance"], 900);
+    towers.env.push(docs_env);
+    towers.may_fail = true;
+    out.push(towers);
 
     out.push(cargo("build the sim", root, &["build", "--release"], 900));
     let sim_plain = Step { name: "the sim", program: sim.clone(), args: s(&["--expect", "--docs", &docs_arg]), dir: root.to_path_buf(), env: vec![], limit: Duration::from_secs(480), may_fail: true };
@@ -75,6 +104,26 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
         dir: root.to_path_buf(),
         env: vec![],
         limit: Duration::from_secs(400),
+        may_fail: true,
+    });
+    // The launcher's window, with a stand-in for each program it starts.
+    out.push(Step {
+        name: "the launcher",
+        program: "cargo".into(),
+        args: s(&["run", "--release", "--", "--expect", "--docs", &docs_arg]),
+        dir: root.join("domains/teleoperation/launcher"),
+        env: vec![],
+        limit: Duration::from_secs(900),
+        may_fail: true,
+    });
+    // The commander app of Towers, each test on a fresh game of its own server.
+    out.push(Step {
+        name: "the Towers commander app",
+        program: "cargo".into(),
+        args: s(&["run", "--release", "--", "--expect", "--docs", &docs_arg]),
+        dir: root.join("domains/teleoperation/command"),
+        env: vec![],
+        limit: Duration::from_secs(1800),
         may_fail: true,
     });
     if !no_station {
@@ -135,11 +184,15 @@ mod tests {
             names(&all),
             [
                 "the domains with no window",
+                "the league",
                 "the AGENT mode in ArduPilot SITL",
+                "the Towers game server",
                 "build the sim",
                 "the sim",
                 "the VTOL on its own",
                 "the sim with a flight controller",
+                "the launcher",
+                "the Towers commander app",
                 "the console (the station)",
                 "the manual"
             ]
@@ -194,6 +247,41 @@ mod tests {
             let writes = step.args.iter().any(|a| a == "/checkout/docs") || step.env.iter().any(|(k, v)| k == "SIM001_DOCS" && v == "/checkout/docs");
             let is_runner = !matches!(step.name, "build the sim");
             assert_eq!(writes, is_runner, "{}", step.name);
+        }
+    }
+}
+
+#[cfg(test)]
+mod every_runner {
+    use super::*;
+
+    /// Every section of the suite has a runner here, so that none of its pages says "not run":
+    /// each acceptance test of the workspace, and each app with an `--expect`.
+    #[test]
+    fn every_acceptance_runner_of_the_repository_is_a_step() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+        let all = steps(&root, false);
+        let line = |st: &Step| format!("{} {} {}", st.dir.display(), st.program, st.args.join(" "));
+        let lines: Vec<String> = all.iter().map(line).collect();
+        let runs = |what: &str| lines.iter().any(|l| l.contains(what));
+        for domain in std::fs::read_dir(root.join("domains")).unwrap().flatten() {
+            for module in std::fs::read_dir(domain.path()).into_iter().flatten().flatten() {
+                let path = module.path();
+                let name = |p: &Path| {
+                    std::fs::read_to_string(p.join("Cargo.toml"))
+                        .ok()
+                        .and_then(|t| t.lines().find_map(|l| l.strip_prefix("name = \"").map(|n| n.trim_end_matches('"').to_string())))
+                };
+                if path.join("tests/acceptance.rs").exists() {
+                    let n = name(&path).unwrap();
+                    assert!(runs(&format!("-p {n} ")) || runs(&format!("-p {n}")), "{n}'s acceptance tests are not run by `tasks docs`");
+                }
+                let main = path.join("src/main.rs");
+                if std::fs::read_to_string(&main).is_ok_and(|m| m.contains("\"--expect\"")) && path.join("Cargo.lock").exists() {
+                    let dir = path.display().to_string();
+                    assert!(lines.iter().any(|l| l.starts_with(&dir) && l.contains("--expect")), "{dir} has an --expect that `tasks docs` does not run");
+                }
+            }
         }
     }
 }

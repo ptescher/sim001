@@ -5116,6 +5116,7 @@ dependencies = [
  "expectation_model",
  "expectation_story",
  "glam",
+ "illustration_theme",
  "serde",
  "serde_json",
 ]

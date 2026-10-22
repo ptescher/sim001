@@ -9,6 +9,7 @@ mod draw;
 mod expect;
 mod seat;
 mod server;
+mod snapshot;
 mod theme;
 mod ui;
 
@@ -33,7 +34,8 @@ sim001_command [options]
   --connect ADDR     the game server (default 127.0.0.1:5955)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../../../expectations) against this app,
                      each on a fresh game of its own server (needs the AGENT build of ArduPlane), and exit
-  --only TEXT        with --expect: run only the tests whose title contains TEXT";
+  --only TEXT        with --expect: run only the tests whose title contains TEXT
+  --docs DIR         with --expect: write the results and screenshots of the window to DIR (merged with the others')";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -91,7 +93,13 @@ fn main() {
             .filter(|a| !a.starts_with("--"))
             .map(PathBuf::from)
             .unwrap_or_else(|| server::root().join("expectations"));
-        expect::Config { suite, only: arg("--only"), server: server.clone().unwrap(), server_args: server_args.clone() }
+        expect::Config {
+            suite,
+            only: arg("--only"),
+            docs: arg("--docs").map(PathBuf::from),
+            server: server.clone().unwrap(),
+            server_args: server_args.clone(),
+        }
     });
 
     let stop = server.clone();

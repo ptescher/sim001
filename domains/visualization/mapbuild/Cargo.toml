@@ -17,3 +17,7 @@ opt-level = 2
 [[bin]]
 name = "mapbuild"
 path = "src/main.rs"
+
+# Its own workspace (the root one excludes it): it builds on its own, also from a checkout inside
+# another checkout (a worktree under .claude/worktrees).
+[workspace]

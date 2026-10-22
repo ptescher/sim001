@@ -13,6 +13,7 @@
 mod commander;
 pub mod flight;
 pub mod seat;
+pub mod svg;
 mod view;
 
 pub use commander::{Commander, CommanderTuning};

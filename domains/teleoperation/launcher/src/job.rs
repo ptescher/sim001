@@ -61,7 +61,9 @@ impl Layout {
         }
         let root =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).ancestors().nth(3).map(Path::to_path_buf).unwrap_or_default();
-        Layout { home: root.clone(), bin: None, data: root }
+        // `SIM001_DATA` moves controls.cfg and the logs elsewhere (`--expect` gives each run its own).
+        let data = std::env::var_os("SIM001_DATA").map(PathBuf::from).unwrap_or_else(|| root.clone());
+        Layout { home: root, bin: None, data }
     }
 
     pub fn bundled(&self) -> bool {
@@ -73,6 +75,34 @@ impl Layout {
         self.bin
             .as_ref()
             .map(|b| b.join(if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }).display().to_string())
+    }
+}
+
+/// In `--expect`, the launcher starts itself in place of each program (`--stand-in`), which waits
+/// until it is stopped. The log and the job are real; nothing flies.
+static STAND_IN: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+pub fn use_stand_in(exe: PathBuf) {
+    let _ = STAND_IN.set(exe);
+}
+
+/// The stand-in's part (`sim001_launcher --stand-in PROGRAM ARGS...`): wait to be stopped, as the
+/// sim and the station do. It says nothing: the log's first line already has the command.
+pub fn stand_in(_program: &[String]) -> ! {
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(3600));
+    }
+}
+
+/// What to spawn for `program args`: the program, or the stand-in for it.
+fn spawned(program: &str, args: &[String]) -> (String, Vec<String>) {
+    match STAND_IN.get() {
+        Some(exe) => {
+            let mut a = vec!["--stand-in".to_string(), program.to_string()];
+            a.extend(args.iter().cloned());
+            (exe.display().to_string(), a)
+        }
+        None => (program.to_string(), args.to_vec()),
     }
 }
 
@@ -139,8 +169,9 @@ impl Job {
     /// Runs `program args` in `dir`.
     pub fn start(title: impl Into<String>, program: &str, args: &[String], dir: &Path) -> Result<Job, String> {
         let title = title.into();
-        let mut cmd = Command::new(program);
-        cmd.args(args).current_dir(dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let (exe, exe_args) = spawned(program, args);
+        let mut cmd = Command::new(&exe);
+        cmd.args(&exe_args).current_dir(dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         // Where the programs find their files (see sitl::resource_root in the sim).
         let l = layout();
         cmd.env("SIM001_HOME", &l.home).env("SIM001_DATA", &l.data);
@@ -185,11 +216,61 @@ impl Job {
         }
     }
 
+    /// The command line it was started with, as the first line of its log shows it.
+    pub fn command(&self) -> String {
+        self.log.lock().unwrap().first().map(|l| l.trim_start_matches("$ ").to_string()).unwrap_or_default()
+    }
+
+    /// The process id, for `--expect` to end a stand-in as a program ends on its own.
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
     /// Ends the whole group now.
     pub fn kill(&mut self) {
         if self.running() {
             self.signal_group(true);
             let _ = self.child.wait();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_log_drops_colours_and_carriage_returns() {
+        assert_eq!(strip_ansi("\x1b[1m\x1b[32m   Compiling\x1b[0m sim001\r"), "   Compiling sim001");
+        assert_eq!(strip_ansi("plain"), "plain");
+    }
+
+    #[test]
+    fn a_program_runs_with_its_output_in_the_log_and_its_command_first() {
+        let mut j = Job::start("echo", "echo", &["hello".to_string(), "there".to_string()], Path::new(".")).unwrap();
+        let t = std::time::Instant::now();
+        while j.running() && t.elapsed().as_secs() < 5 {
+            j.poll();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(j.exit.is_some_and(|s| s.success()));
+        assert_eq!(j.command(), "echo hello there");
+        assert!(j.log.lock().unwrap().iter().any(|l| l == "hello there"), "{:?}", j.log.lock().unwrap());
+    }
+
+    #[test]
+    fn stop_ends_a_program_that_waits() {
+        let mut j = Job::start("sleep", "sleep", &["30".to_string()], Path::new(".")).unwrap();
+        j.poll();
+        assert!(j.running());
+        j.stop();
+        let t = std::time::Instant::now();
+        while j.running() && t.elapsed().as_secs() < 5 {
+            j.poll();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(!j.running() && j.stopping);
+        assert!(!j.exit.unwrap().success());
     }
 }

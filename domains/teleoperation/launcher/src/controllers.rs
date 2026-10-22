@@ -1,6 +1,8 @@
 //! The controllers that are plugged in, and what `controls.cfg` says about the radio.
 
 use crate::job::layout;
+#[cfg(test)]
+use std::path::Path;
 
 #[derive(Clone)]
 pub struct Device {
@@ -33,10 +35,14 @@ pub struct Mapping {
 }
 
 pub fn mapping() -> Mapping {
-    let path = layout().data.join("controls.cfg");
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return Mapping { exists: false, channels: vec![], radios: vec![] };
-    };
+    match std::fs::read_to_string(layout().data.join("controls.cfg")) {
+        Ok(text) => parse_mapping(&text),
+        Err(_) => Mapping { exists: false, channels: vec![], radios: vec![] },
+    }
+}
+
+/// What the text of a `controls.cfg` maps.
+pub fn parse_mapping(text: &str) -> Mapping {
     let mut channels = vec![];
     let mut radios = vec![];
     for line in text.lines().map(str::trim).filter(|l| !l.starts_with('#')) {
@@ -99,4 +105,27 @@ pub fn serial_radios() -> Vec<SerialRadio> {
             SerialRadio { name: name.unwrap_or_else(|| "Serial device".into()), path, radio }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn controls_cfg_maps_its_radio_channels_and_names_its_radios() {
+        let m = parse_mapping(
+            "# made by the wizard\nradio.names = TX15, Pro Controller\nradio.roll = axis 0\nradio.pitch = axis 1 inverted\n\
+             # radio.yaw = axis 3\nkeyboard.throttle = shift\nradio.arm = button 4\n",
+        );
+        assert!(m.exists);
+        assert_eq!(m.radios, ["TX15", "Pro Controller"]);
+        assert_eq!(m.channels, ["roll", "pitch", "arm"]);
+    }
+
+    #[test]
+    fn the_example_controls_cfg_maps_the_tx15() {
+        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../controls.cfg.example")).unwrap();
+        let m = parse_mapping(&text);
+        assert!(m.channels.len() >= 4, "{:?}", m.channels);
+    }
 }

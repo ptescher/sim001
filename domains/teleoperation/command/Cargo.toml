@@ -15,6 +15,11 @@ illustration_theme = { path = "../../illustration/theme" }
 expectation_harness = { git = "https://github.com/ptescher/expectation" }
 expectation_model = { git = "https://github.com/ptescher/expectation" }
 expectation_story = { git = "https://github.com/ptescher/expectation" }
+# The window's number for its screenshots (snapshot.rs).
+raw-window-handle = "0.6"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", features = ["NSWindow", "NSResponder", "NSView"] }
 
 # Keep `cargo run` (debug) usable: optimize dependencies.
 [profile.dev.package."*"]
@@ -29,3 +34,7 @@ xattr = { path = "../../../vendor/xattr" }
 [[bin]]
 name = "sim001_command"
 path = "src/main.rs"
+
+# Its own workspace (the root one excludes it): it builds on its own, also from a checkout inside
+# another checkout (a worktree under .claude/worktrees).
+[workspace]

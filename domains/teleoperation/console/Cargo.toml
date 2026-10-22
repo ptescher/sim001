@@ -49,3 +49,7 @@ xattr = { path = "../../../vendor/xattr" }
 [[bin]]
 name = "sim001_gcs"
 path = "src/main.rs"
+
+# Its own workspace (the root one excludes it): it builds on its own, also from a checkout inside
+# another checkout (a worktree under .claude/worktrees).
+[workspace]

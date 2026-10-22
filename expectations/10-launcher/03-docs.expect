@@ -1,0 +1,9 @@
+Feature: The manual
+  The DOCS screen opens this manual. From source, RENDER DOCS writes the manual again from the
+  specs in `expectations/` and the last saved test results. RE-RUN TESTS + RENDER also runs
+  the tests first. In the app bundle, the manual was written when the app was built, so these
+  two buttons are not there.
+
+  Expectation: RENDER DOCS writes the manual
+    When the pilot renders the docs
+    Then the program in the log is the manual build
