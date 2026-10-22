@@ -19,20 +19,24 @@ Part: Flying the VTOL
 
 Part: The ground station
   Section: Ground control station
+  Section: Other aircraft
   Page: ground-station-screens [desktop]
 
 Part: Games
   Section: Recreation
   Section: Games with ArduPilot
+
+Part: Towers
   Section: Towers
 
-Part: Beyond the cockpit
-  Section: Other aircraft
+Part: Flying by plan
+  Section: Flying by plan
+  Section: Making the executor better
+
+Part: Real hardware
   Section: The flight computer
   Section: The TX15 on the serial line
   Section: Watching a real plane
-  Section: Flying by plan
-  Section: Making the executor better
 
 Part: Reference
   Page: places-and-scenery [desktop]

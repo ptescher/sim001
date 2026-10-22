@@ -15,11 +15,9 @@ Feature: Telemetry on the TX15
   Expectation: The TX15 shows the battery
     Given the TX15 screen battery is 11.1 V
     When 5 seconds pass
-    Then the TX15 screen battery is at least 11 V
-    And the TX15 screen battery is at most 11.2 V
+    Then the TX15 screen battery is 11.1 V
 
   Expectation: The TX15 shows the bank
     Given the TX15 screen bank is 30 degrees
     When 5 seconds pass
-    Then the TX15 screen bank is at least 29 degrees
-    And the TX15 screen bank is at most 31 degrees
+    Then the TX15 screen bank is 30 degrees

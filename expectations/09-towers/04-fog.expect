@@ -31,9 +31,9 @@ Feature: What a team sees
 
   Expectation: A tower in the fog shows the side it had when the team last saw it
     Given the east tower is neutral
-    And the control of the east tower is -90 %
+    And the control of the east tower is 0 %
     And the Red drones in the east circle are 1
-    When the game runs for 10 seconds
+    When the game runs for 20 seconds
     Then the east tower is held by Red
     And the east tower on the Blue map is neutral
 

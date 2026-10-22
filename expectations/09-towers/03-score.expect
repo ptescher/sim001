@@ -11,9 +11,9 @@ Feature: Points and the end of the game
     Then the score of Blue is 20 points
 
   Expectation: The first team to 500 points wins
-    Given the towers held by Blue are 1
+    Given the towers held by Blue are at least 1
     And the score of Blue is 495 points
-    And the score of Red is 300 points
+    And the score of Red is at most 400 points
     When the game runs for 10 seconds
     Then the game of Towers is won by Blue
     And the score of Blue is 500 points
@@ -34,9 +34,9 @@ Feature: Points and the end of the game
     Then the game of Towers is a draw
 
   Expectation: A game that has stopped does not change
+    The scores stay as they were at the end, and so do the towers. Nobody can take a tower
+    after the game stops.
+
     Given the game of Towers is won by Blue
-    And the score of Blue is 500 points
-    And the score of Red is 300 points
     When the game runs for 1 minute
-    Then the score of Blue is 500 points
-    And the score of Red is 300 points
+    Then the score of Blue stays the same

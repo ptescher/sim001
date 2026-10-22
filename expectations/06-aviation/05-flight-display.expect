@@ -9,14 +9,12 @@ Feature: The flight display of the TX15
   Expectation: The screen shows the airspeed
     Given the TX15 screen airspeed is 18 m/s
     When 5 seconds pass
-    Then the TX15 screen airspeed is at least 17.5 m/s
-    And the TX15 screen airspeed is at most 18.5 m/s
+    Then the TX15 screen airspeed is 18 m/s
 
   Expectation: The screen shows the climb with its sign
     Given the TX15 screen climb is -3 m/s
     When 5 seconds pass
-    Then the TX15 screen climb is at least -3.2 m/s
-    And the TX15 screen climb is at most -2.8 m/s
+    Then the TX15 screen climb is -3 m/s
 
   Expectation: The screen counts the satellites
     Given the TX15 screen satellites is 9

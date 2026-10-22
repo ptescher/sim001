@@ -1,57 +1,31 @@
-Story: Flying with a TX15 on the serial line
+# Tutorials: each story is one page that walks the reader through the flight computer, step by
+# step. The rules that no story shows are tested on their own.
+
+Story: Checking the sticks on the serial line
   As a pilot with a TX15
-  I want the sticks to reach the plane through the flight computer
-  So that I fly the way I fly the real plane
+  I want to see that each stick reaches ArduPilot
+  So that I know the plane does what my hands do
 
-  You connect the TX15 to the flight computer with a serial line. The sticks move the
-  channels of the autopilot, and the screen of the TX15 shows what the plane does. You arm
-  the plane, ArduPilot changes its mode, and the TX15 shows the new mode.
+  Before the first flight with the flight computer, move each stick and switch, and look at the
+  channels that ArduPilot reads. A centred stick is 1500 us. The ends of a stick are 1000 us
+  and 2000 us.
 
-  Scenario: Fly and watch the screen
-    Given the TX15 screen mode is AUTO
-    And the TX15 screen arming is armed
-    And the TX15 screen battery is 11.1 V
-    And the TX15 screen bank is 30 degrees
-    And the ground station telemetry is flowing
-    And the ground station map distance is 400 m
-    And the TX15 arm switch is on
-    When 5 seconds pass
-    Then the arm channel is at least 1900 us
-    And the TX15 screen mode is AUTO
-    And the TX15 screen arming is armed
-    And the TX15 screen battery is at least 11 V
-    And the TX15 screen battery is at most 11.2 V
-    And the TX15 screen bank is at least 29 degrees
-    And the TX15 screen bank is at most 31 degrees
-    And the ground station telemetry is flowing
-    And the ground station map distance is at least 399 m
-    And the ground station map distance is at most 401 m
-
-  Scenario: Full travel on the sticks
-    Given the TX15 roll stick is 100 %
-    And the TX15 pitch stick is -50 %
-    And the TX15 throttle stick is 100 %
-    And the TX15 arm switch is on
-    When 5 seconds pass
-    Then the roll channel is at least 1990 us
-    And the pitch channel is at least 1245 us
-    And the pitch channel is at most 1255 us
-    And the throttle channel is at least 1990 us
-    And the arm channel is at least 1900 us
-
-  Scenario: Sticks centred
-    Given the TX15 roll stick is 0 %
-    And the TX15 pitch stick is 0 %
-    And the TX15 throttle stick is 0 %
+  Scenario: Centre, full travel, half travel, arm
     When 5 seconds pass
     Then the roll channel is 1500 us
     And the pitch channel is 1500 us
-
-  Scenario: A damaged line
-    Given the corrupted frames are 100 %
-    And the TX15 roll stick is 100 %
-    When 5 seconds pass
-    Then the roll channel is 1500 us
+    When the TX15 roll stick is 100 %
+    And the TX15 throttle stick is 100 %
+    And 5 seconds pass
+    Then the roll channel is at least 1990 us
+    And the throttle channel is at least 1990 us
+    When the TX15 pitch stick is -50 %
+    And 5 seconds pass
+    Then the pitch channel is at least 1245 us
+    And the pitch channel is at most 1255 us
+    When the TX15 arm switch is on
+    And 5 seconds pass
+    Then the arm channel is at least 1900 us
 
 Story: Losing the TX15 and getting it back
   As a pilot with a TX15
@@ -59,18 +33,14 @@ Story: Losing the TX15 and getting it back
   So that a lost link does not leave the throttle open
 
   You unplug the TX15 while the throttle is at half. The flight computer sets the throttle
-  below the failsafe level of ArduPilot. You plug the TX15 in, and the plane flies again.
+  below the failsafe level of ArduPilot. You plug the TX15 in, and the throttle comes back.
 
-  Scenario: Unplug
-    Given the TX15 throttle stick is 50 %
+  Scenario: Unplug, then plug in again
+    When the TX15 throttle stick is 50 %
     When the TX15 is not connected
     And 5 seconds pass
     Then the throttle channel is at most 900 us
     And the TX15 uplink quality is 0 %
-
-  Scenario: Plug in again
-    Given the TX15 is not connected
-    And the TX15 throttle stick is 50 %
     When the TX15 is connected
     And 5 seconds pass
     Then the throttle channel is at least 1490 us
@@ -78,45 +48,59 @@ Story: Losing the TX15 and getting it back
 
 Story: Commanding the plane from the ground station
   As a pilot with a TX15
-  I want the ground station to command the plane through the TX15
+  I want the ground station to see and command the plane through the TX15
   So that it needs no radio of its own
 
-  The ground station sends a command. It goes up the serial line, and ArduPilot gets it.
-  The TX15 shows the new mode.
+  The ground station gets the telemetry of ArduPilot through the TX15. You fly the plane away
+  from home, and the map follows it. You send a command, and it goes up the same line. When you
+  unplug the TX15, the ground station hears nothing.
 
-  Scenario: Command through the line
-    Given the TX15 screen mode is RTL
-    And the ground station telemetry is flowing
+  Scenario: Hear the plane, follow it, command it, lose it
+    When the ground station telemetry is flowing
+    And 5 seconds pass
+    Then the ground station telemetry is flowing
+    When the ground station map distance is 400 m
+    And 5 seconds pass
+    Then the ground station map distance is 400 m
     When the ground station command is sent
     And 5 seconds pass
     Then the autopilot command is received
-    And the TX15 screen mode is RTL
-
-  Scenario: The line is narrow
-    Given the ground station telemetry is flowing
     When 10 seconds pass
     Then the ground station telemetry rate is at most 4000 bytes per second
+    When the TX15 is not connected
+    And 10 seconds pass
+    Then the ground station telemetry is silent
 
 Story: Reading the flight display
   As a pilot with a TX15
   I want the screen of the TX15 to show the flight as a flight display
   So that I see the mode, the attitude, the speeds, the battery and what ArduPilot says
 
-  The plane is armed in a left bank, flying at 18 m/s and climbing. A PreArm check has failed
-  earlier. The screen shows all of it at once: the horizon is banked, the mode is big on the
-  top left, and the message is on the bottom.
+  You follow a short flight on the screen of the TX15. First, a PreArm check fails. Then the
+  plane arms, flies, banks, and comes home in RTL with a low battery. Each step changes one
+  reading on the screen.
 
-  Scenario: Armed, banked and climbing
-    Given the TX15 screen mode is QHOVER
-    And the TX15 screen arming is armed
-    And the TX15 screen bank is -20 degrees
-    And the TX15 screen airspeed is 18 m/s
-    And the TX15 screen climb is 2 m/s
-    And the TX15 screen satellites is 12
-    And the TX15 screen message is PreArm: Throttle (RC3) is not neutral
-    When 5 seconds pass
-    Then the TX15 screen mode is QHOVER
-    And the TX15 screen arming is armed
-    And the TX15 screen bank is at most -19 degrees
-    And the TX15 screen airspeed is at least 17.5 m/s
-    And the TX15 screen message is PreArm: Throttle (RC3) is not neutral
+  Scenario: From PreArm to RTL
+    When the TX15 screen message is PreArm: Throttle (RC3) is not neutral
+    And 5 seconds pass
+    Then the TX15 screen message is PreArm: Throttle (RC3) is not neutral
+    When the TX15 screen arming is armed
+    And 5 seconds pass
+    Then the TX15 screen arming is armed
+    When the TX15 screen satellites is 9
+    And 5 seconds pass
+    Then the TX15 screen satellites is 9
+    When the TX15 screen airspeed is 18 m/s
+    And 5 seconds pass
+    Then the TX15 screen airspeed is 18 m/s
+    When the TX15 screen bank is 30 degrees
+    And 5 seconds pass
+    Then the TX15 screen bank is 30 degrees
+    When the TX15 screen mode is RTL
+    And the TX15 screen climb is -3 m/s
+    And 5 seconds pass
+    Then the TX15 screen mode is RTL
+    And the TX15 screen climb is -3 m/s
+    When the TX15 screen battery is 11.1 V
+    And 5 seconds pass
+    Then the TX15 screen battery is 11.1 V

@@ -1,0 +1,40 @@
+# Tutorials. Each story is one page that a developer follows at the command line.
+
+Story: Your first league run
+  As a developer of the executor
+  I want to run the league once
+  So that I see how it scores and keeps a better executor
+
+  You play one game in the fast arena, then many, to see how fast the arena is. Then you run
+  one generation of the league. The league writes down each challenger, a report of the
+  generation and the champion.
+
+  Scenario: One game, 64 games, one generation
+    Given the league is new
+    When the arena plays a game with the default executor
+    Then the length of the game is 120 s
+    When the arena plays 64 games with the default executor
+    Then the speed of the arena is at least 200 times real time
+    When the league runs one generation with the evolution strategy
+    Then the challengers in the history are 8
+    And the report of the generation is written
+    And the champion file is written
+
+Story: Judging a Towers captain
+  As a developer of a commander for Towers
+  I want the league to judge my captain
+  So that I know if it is better than the champion
+
+  A captain is a computer commander of Towers. You play one game between two default
+  captains. Next, you let the default captain play itself, to see that the two sides are fair.
+  Last, you judge the default captain against a timid champion.
+
+  Scenario: One game, a fair test, a judgement
+    Given the champion captain is the timid captain
+    And the challenger captain is the default captain
+    When the arena plays a game of Towers between two default captains
+    Then the drones that flew in the captain game are 6
+    When the default captain plays itself from both sides
+    Then the score of the captain against itself is 0
+    When the league judges the captain challenger
+    Then the verdict is promoted

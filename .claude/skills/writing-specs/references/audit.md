@@ -52,6 +52,12 @@ Work through every page against each of these.
 11. **Accuracy and consistency.** Nothing contradicts another page. Commands, keys and
     numbers agree everywhere. Flag anything you checked against the code and found wrong.
 
+12. **Size and place.** Each section has a few topics and a few tutorials, not one long list.
+    A tutorial has three to eight steps, and it is a walk a reader would take, not one rule
+    restated as a page. A topic page has a handful of behaviours, not one and not a dozen.
+    Flag lists of near-identical tutorial titles in one section, one-step tutorials, and
+    sections or parts a reader would not think to look in. Say where each would fit better.
+
 ## Severity
 
 - **blocker**: a reader following the page would fail or be misled: a wrong key or command,

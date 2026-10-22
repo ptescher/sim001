@@ -64,11 +64,17 @@ In the section's `section.expect`:
 Define any term a new reader might not know with `Term:` in `expectations/glossary.expect`,
 and link to it with `[[the term]]`.
 
-Then a feature file (`NN-<name>.expect`) per topic: a `Feature:` with a description that
+Then a feature file (`NN-<name>.expect`) per topic, with 2 to 8 expectations each: a `Feature:` with a description that
 reads as the topic's opening paragraph, and one `Expectation:` per behaviour. Name each like
 a manual heading (the rule in plain words: "Reset picks the plane back up"), give it a
 description when the why isn't obvious, and keep its Given to what matters. Mark exceptions
 with `Overrides:`.
+
+Place a new section in `expectations/outline.txt`: the parts of the manual, in reading order.
+Put a section in the part where a reader would look for it, by what they want to do, not by
+where the code lives. A large new feature (a game with its own app and server, say) gets a
+part of its own. A part that collects unrelated sections ("Beyond the cockpit") is a sign to
+split it.
 
 ### 3. Check the graph
 
@@ -78,16 +84,23 @@ cargo run -p expectation -- graph expectations      # the flow DAG as Mermaid
 ```
 
 Fix every error. Conflicts mean two expectations promise different things in the same
-situation: decide which is the exception and add `Overrides:`, or narrow a Given. Read the
-warnings too: `no-way-in` means the docs can't say how to reach a section, and `untested`
-lists expectations no story shows (each comes with a route a story could take). The
-diagnostic codes are explained in style.md.
+situation: decide which is the exception and add `Overrides:`, or narrow a Given. Fix the size
+warnings too (`many-scenarios`, `short-story`, `long-story`, `big-feature`, `small-feature`,
+`crowded-section`, `no-tutorial`): each is a page that is too big or too small for a reader.
+See style.md's "Sizes". Read the other warnings too: `no-way-in` means the docs can't say how
+to reach a section, and `untested` lists expectations no story shows (each comes with a route
+a story could take). The diagnostic codes are explained in style.md.
 
 ### 4. Write the stories as tutorials
 
 In the section's `stories.expect`. Each story is one tutorial page:
 
 - Name it for the reader's goal ("Planning a hand-launched circuit"), not the mechanics.
+- One story is one tutorial page, so give it one scenario. Never write a scenario for each rule
+  of a topic: that is the topic page again, as many one-step pages. Walk through the feature
+  instead, and let each step start where the last one stopped. style.md's "Sizes" says how
+  big a section, a topic and a tutorial should be, and how to write expectations that a
+  tutorial can chain.
 - The narrative lines (As a / I want / So that) are for the test report. The paragraph after
   them is the tutorial's introduction: say what the reader will do and why it matters.
 - Each `When` is a numbered step. Use phrases and intent-named events, never raw keys. One

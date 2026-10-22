@@ -1,8 +1,13 @@
-Feature: Controllers
+Feature: Controllers and the manual
   The CONTROLLERS screen lists the USB joysticks and gamepads that are plugged in, and what
   `controls.cfg` maps. SET UP CONTROLLER starts the sim on the plain T1-S, with the radio
   wizard. The wizard opens when the sim sees a controller. It saves `controls.cfg`. When the
   sim closes, the launcher reads `controls.cfg` again. RESCAN looks for the controllers again.
+
+  The DOCS screen opens this manual. From source, RENDER DOCS writes the manual again from the
+  specs in `expectations/` and the last saved test results. RE-RUN TESTS + RENDER also runs
+  the tests first. In the app bundle, the manual was written when the app was built, so these
+  two buttons are not there.
 
   Expectation: SET UP CONTROLLER starts the radio wizard on the T1-S Ranger
     When the pilot sets up the controller
@@ -14,3 +19,7 @@ Feature: Controllers
     And the program in the log is the radio wizard
     When the radio wizard saves controls.cfg and closes
     Then the controls file is mapped
+
+  Expectation: RENDER DOCS writes the manual
+    When the pilot renders the docs
+    Then the program in the log is the manual build

@@ -1,0 +1,55 @@
+Feature: Other aircraft and bad data
+  The [[safety envelope]] keeps the plane clear of other aircraft by the [[separation]] limit,
+  `AGENT_SEP`. Its separation rule comes first, so the fence, the ceiling, the floor and the
+  stall margin all win over it. If the data of the plane is bad, the envelope does not guess:
+  it gives wings level and the throttle to the pilot.
+
+  Expectation: The plane keeps clear of an aircraft that crosses its path
+    The envelope looks 5 s ahead along the paths of the plane and of each track. If the plane
+    will come inside the separation zone, the envelope flies an escape: a hard turn, a climb,
+    a dive, or two of them. Of two planes in conflict, the upper one climbs and the lower one
+    dives.
+
+    Given the other aircraft is across your path
+    When the plane flies on for 30 seconds
+    Then the closest distance to the other aircraft is above 4 m
+
+  Expectation: Bad input gives wings level and the throttle to the pilot
+    The envelope refuses a state that is not a number, or that cannot be true. The plane then
+    flies wings level with the nose level, and the throttle stick sets the throttle. This
+    happens if the EKF of ArduPilot loses the position of the plane. The plane ignores a bad track, and it
+    refuses a bad plan.
+
+    When the plane loses its position estimate
+    Then the reported fallback is bad input
+    And the throttle of the plane is the pilot's
+
+  Expectation: The plane flies again when the position estimate comes back
+    Given the reported fallback is bad input
+    When the plane gets its position estimate back
+    Then the reported fallback is none
+    And the throttle of the plane is the executor's
+
+  Expectation: With space to turn, planes on plans keep their separation
+    In a large fence, each plane has space for its escapes. Three planes on random plans keep
+    the separation for 20 minutes. Their plans also tell them to chase each other, and to break
+    away from each other.
+
+    Given the fence radius is 300 m
+    And the separation limit is 8 m
+    When three planes fly random plans for 20 minutes
+    Then the closest distance between two planes is above 8 m
+
+  Expectation: In a small fence, the fence wins over the separation
+    The 85 m fence of a game of tag is small for three planes. Sometimes an escape from
+    another plane would take the plane out of the fence. Then the envelope keeps the plane
+    inside the fence, and the separation can be less than the limit for a moment. We flew three
+    planes for 20 minutes with a separation of 8 m, eight times. In three of the eight flights,
+    two planes came closer than 8 m for a moment: to 2.7 m, 3.6 m and 5.7 m. Use height bands,
+    as in [[Tag by plan]], to keep planes apart in a small fence.
+
+    Given the fence radius is 85 m
+    And the separation limit is 8 m
+    When three planes fly random plans for 20 minutes
+    Then the farthest distance from the arena centre is at most 85 m
+    And the lowest height of the flight is above 12 m

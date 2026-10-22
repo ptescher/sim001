@@ -155,16 +155,17 @@ three sentences. Link to it from any text with `[[the term]]` the first time a p
   "Fixing a misplaced waypoint". Avoid names that describe the test ("Press PLAN twice").
 - **Write the introduction.** One short paragraph after the narrative: what the reader will
   do, and why. It's the first thing on the tutorial page and on its card.
-- **Three to eight steps.** Fewer is a topic, not a tutorial; more should be split, or folded
-  into phrases.
+- **Three to eight steps, in one scenario.** Fewer is a topic, not a tutorial; more should be
+  split, or folded into phrases. See [Sizes](#sizes).
 - **Steps are intents.** Use the declarative events and phrases. Never put a key or button
   name in a story step.
 - **Thens say what the reader sees.** Add one to every step whose result isn't obvious, and
   word it as the screen shows it.
 - **Given only what's special about this tutorial.** The section's setup is already in
   Before you begin. A `Given` in a scenario is listed there too, so keep it to one or two.
-- **Scenario names** only show when a story has several. A single-scenario story can name its
-  scenario after the story.
+- **One scenario.** Each scenario is a page of its own, titled with the scenario's name, so a
+  story with several scenarios scatters one goal over several pages. Write a second story
+  for a second goal.
 
 ## Diagnostics
 
@@ -181,7 +182,46 @@ three sentences. Link to it from any text with `[[the term]]` the first time a p
 | `unpromised` (warning) | A story checks something no expectation promises | Write the expectation, so it's specified, not just tested |
 | `untested` (warning) | No story shows an expectation | A story, if a reader would want a tutorial; otherwise a generated test covers it |
 | `shows-what` (warning) | A `Shows:` line doesn't say which value it's for | Start it with the value and a colon, or use `{value}` |
+| `many-scenarios` (warning) | A story has more than one scenario | One story per goal; leave variants to the expectations |
+| `short-story` / `long-story` (warning) | A tutorial has fewer than 3 or more than 8 steps | Add the steps around it, or let the topic page say it; split, or use a phrase |
+| `big-feature` / `small-feature` (warning) | A topic has more than 8 expectations, or only 1 | Split it into topics a reader would scan for; fold it into the closest topic |
+| `crowded-section` (warning) | A section has more than 8 topics or 8 tutorials | Make subsections |
+| `no-tutorial` (warning) | A section with topics has no story | A story for the reader's main goal there |
 | `no-way-in` (warning) | Nothing says how to get into a section | An expectation that leads there from the parent section's setup |
+
+## Sizes
+
+Each generated page has a size that reads well. Too many pages in one place, or pages with one
+line on them, make the manual hard to find your way in. `check` warns about these sizes.
+
+| What | Reads well | Too small | Too big |
+| --- | --- | --- | --- |
+| A section | 2 to 6 topics, 1 to 6 tutorials | No tutorial (`no-tutorial`) | More than 8 topics or 8 tutorials: make subsections (`crowded-section`) |
+| A topic (`Feature:`) | 2 to 8 expectations that show | 1: fold it into the closest topic (`small-feature`) | More than 8: split it into topics a reader would scan for (`big-feature`) |
+| A tutorial (a scenario) | 3 to 8 steps | Fewer than 3: it is a topic, not a tutorial (`short-story`) | More than 8: split it, or use a phrase (`long-story`) |
+| A story | 1 scenario | | More than 1: each scenario is a page of its own (`many-scenarios`) |
+
+**Do not restate the rules as stories.** A story with one scenario for each rule ("One drone
+gets half way in 10 seconds", "Two drones take the tower in 10 seconds", …) gives one page for
+each rule, each with one step, in the reader's navigation. It says nothing that the topic page
+does not say. Write a tutorial as one walk through the feature: each step starts where the last
+one stopped, and the steps show several rules on the way. Leave the rules that no tutorial shows
+to the topic page. The suite tests each of them on its own.
+
+**Write expectations that a tutorial can chain.** A tutorial step only fires an expectation if
+the planner knows that its Given holds.
+
+- Pin only what matters in a Given. "The same number of drones stops the control" needs no
+  control value: say `Then the control … stays the same`.
+- Prefer exact Thens to ranges. After `Then the airspeed is at least 17.5 m/s`, the planner does
+  not know the airspeed, and the next step that needs `the airspeed is 18 m/s` is
+  `unclear-step`. Let the driver read the value as the screen shows it (rounded to a tenth),
+  and write `Then the airspeed is 18 m/s`.
+- A relative Then (`stays the same`, `goes up by 1`) is checked against what the planner knows,
+  not what the system had. Do not use one for a state that the spec does not model (Red's score
+  when no expectation says Red earns points).
+- A state that a tutorial changes in a `When` needs a `set` binding in the driver. An
+  `arrange` binding is only for the start of a test.
 
 ## Line starts
 

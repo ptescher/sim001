@@ -18,8 +18,12 @@ Section: Towers
   it holds. The rest of the field is in [[fog]]. An enemy drone in the fog is not on your map,
   or it is where you last saw it.
 
-  [[Taking a tower]] tells you how a tower changes sides. [[Points and the end of the game]]
-  tells you how to win. [[What a team sees]] tells you what the fog hides.
+  [[Taking a tower]] and [[Fighting for a tower]] tell you how a tower changes sides.
+  [[Points and the end of the game]] tells you how to win. [[What a team sees]] tells you what
+  the fog hides. [[The computer commander]] tells you how the computer plays a team.
+
+  To play a game yourself, see [[The commander app]]. To watch the game with real ArduPilot
+  drones, see [[The game with ArduPlane drones]].
 
 Vocabulary:
   State: the game of Towers is in play | won by Blue | won by Red | a draw

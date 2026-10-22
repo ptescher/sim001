@@ -1,8 +1,11 @@
-Feature: Survey grids
+Feature: Survey grids and distances
   To make a map of an area, draw a polygon around it. The planner fills the polygon with
   parallel lines of waypoints at the plan altitude. The distance between the lines suits the
   camera. In Mission Planner, this is Auto WP, Grid. As in Mission Planner, the grid cannot
   have holes. If the polygon has the shape of a U, the plane also flies over the open middle.
+
+  The cursor readout always shows the range and bearing from home. To find the distance
+  between two points, measure from one point to the other. The map shows the distance.
 
   Expectation: A survey grid fills the area with waypoints
     Given the map tool is PLAN
@@ -10,3 +13,7 @@ Feature: Survey grids
     When the operator draws a survey grid
     Then the plan has at least 4 items
     And the last plan item is WAYPOINT
+
+  Expectation: Measuring between two points shows the distance
+    When the operator measures between two points
+    Then the measured distance is shown

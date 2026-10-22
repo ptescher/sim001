@@ -54,7 +54,8 @@ Story: Losing the radio link
   So that I do not trust old positions
 
   A friend flies near you, and the station tracks the plane. Then the radio link is lost. The
-  station keeps the last position of the plane, and it dims the marker.
+  station keeps the last position of the plane, and it dims the marker. After a minute with no
+  news, the marker goes away.
 
   Scenario: The link drops
     When the other plane is sending MAVLink
@@ -63,3 +64,5 @@ Story: Losing the radio link
     When the TX15 link is lost
     And 10 seconds pass
     Then the marker of the other plane is stale
+    When 70 seconds pass
+    Then the map has 0 other planes
