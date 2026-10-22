@@ -8,6 +8,8 @@
 //! code can play each other.
 
 use glam::Vec2;
+// Where a drone circles and how high: the game's own numbers, as the server flies them.
+use recreation_towers::flight::{ORBIT_RADIUS, orbit_height};
 use recreation_towers::{Commander, CommanderTuning, Game, Order, Outcome, Phase, Rules, Team, TeamView};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -16,12 +18,6 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 /// The arena's step (s), and how often each captain decides (s).
 const DT: f32 = 0.1;
 const DECIDE_EVERY: f32 = 1.0;
-/// The orbit round a tower or a point (m), and the heights the drones fly at (m): as the server
-/// flies them (towers_server's world.rs): 40 + 8k, and 4 m more for Red, so that no two meet.
-const ORBIT_RADIUS: f32 = 40.0;
-fn orbit_height(team: Team, k: usize) -> f32 {
-    40.0 + 8.0 * k as f32 + if team == Team::Red { 4.0 } else { 0.0 }
-}
 /// The take-off: each drone climbs at this rate (m/s) to this height (m), then flies; the drones of
 /// a team leave this many seconds apart.
 const CLIMB_RATE: f32 = 3.0;
@@ -78,7 +74,9 @@ impl Flyer {
             Some(Order::Take(t)) => (game.towers[t].at, ORBIT_RADIUS),
             Some(Order::Goto(p)) => (p, ORBIT_RADIUS),
             Some(Order::Home) => (game.rules.base(self.team), ORBIT_RADIUS),
-            Some(Order::Hold) | None => (self.hold, ORBIT_RADIUS),
+            Some(Order::Hold) => (self.hold, ORBIT_RADIUS),
+            // As the server: a drone its seat has not ordered yet circles over its base.
+            None => (game.rules.base(self.team), ORBIT_RADIUS),
         }
     }
 
@@ -375,6 +373,20 @@ mod tests {
         let here = play(&mut default(), &mut default(), 3).unwrap();
         let there = play(&mut default(), &mut piped, 3).unwrap();
         assert_eq!(here, there);
+    }
+
+    #[test]
+    fn a_drone_with_no_order_circles_over_its_base_as_the_server_flies_it() {
+        struct Silent;
+        impl Captain for Silent {
+            fn decide(&mut self, _: &TeamView) -> Result<Vec<(usize, Order)>, String> {
+                Ok(vec![])
+            }
+        }
+        let r = play(&mut Silent, &mut Silent, 5).unwrap();
+        // Neither team leaves its base: nothing is taken, and each scores from its home tower.
+        assert_eq!(r.held, [1, 1], "{r:?}");
+        assert_eq!(r.outcome, Outcome::Draw);
     }
 
     #[test]
