@@ -410,3 +410,17 @@ Term: Seed
 Term: Home tower
   In [[Towers]], the [[tower]] next to the [[base]] of a team. Each team holds its home tower
   at the start. The centre tower and the two flank towers, west and east, start neutral.
+
+Term: Lane
+  In [[Towers]], a path 60 m wide that is cut through the forest. Three lanes, west, mid and
+  east, go from the [[home tower]] of each team to the home tower of the other team, through a
+  tower on the way. A drone can fly [[low]] along a lane, below the treetops.
+
+Term: Low
+  In [[Towers]], a drone that flies below the treetops, at 16 m to 20 m. A drone that flies low
+  goes along the [[lane]]s, and the trees hide it. A drone that flies high goes straight over
+  the forest, at 55 m to 75 m, and it is easy to see.
+
+Term: Clearing
+  In [[Towers]], an open area in the forest where a drone can circle [[low]]: round each
+  [[tower]], round each [[base]], and over the lake.

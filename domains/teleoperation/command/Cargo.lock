@@ -5392,7 +5392,12 @@ dependencies = [
  "illustration_theme",
  "image",
  "recreation_towers",
+ "teleoperation_shared",
 ]
+
+[[package]]
+name = "teleoperation_shared"
+version = "0.1.0"
 
 [[package]]
 name = "tempfile"

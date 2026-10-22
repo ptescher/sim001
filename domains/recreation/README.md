@@ -15,8 +15,9 @@ In the sim, **G** starts a pylon race and **T** a game of tag. The same key agai
 | `recreation_racing` | [racing/](racing) | The pylon race: the leagues' course and its referee (laps, cuts, places, times). Depends only on `glam` |
 | `recreation_tag` | [tag/](tag) | Tag: the arena and its referee (who is it, touches, no tag-backs, leaving the arena, the clock). Depends only on `glam` |
 | `recreation_pilot` | [pilot/](pilot) | The computer pilot: hands that hold a bank and a climb rate, and steering to a point, along a line or onto another plane. Its [`Skill`](pilot/src/lib.rs) sets how hard it turns and how fast it flies |
-| `recreation_towers` | [towers/](towers) | Towers, a team game for drones flown by plan: the towers and their circles, capture, points, the end of the game, and what each team sees through the fog. Depends only on `glam`. See [plans/towers.md](../../plans/towers.md) |
-| `recreation_towers_server` | [towers_server/](towers_server) | The game server of Towers (binary `towers_server`): an ArduPlane SITL in AGENT mode for each drone, the flight model, the referee, and a seat for each team over TCP |
+| `recreation_towers` | [towers/](towers) | Towers, a team game for drones flown by plan: the towers and their circles, capture, points, the end of the game, the valley (forest, lanes, lake) and what each team sees through the fog and the trees. Depends only on `glam`. See [plans/towers.md](../../plans/towers.md) |
+| `recreation_towers_server` | [towers_server/](towers_server) | The game server of Towers (binary `towers_server`): an ArduPlane SITL in AGENT mode for each drone, the flight model (with the trees), the referee, and a seat for each team over TCP |
+| `recreation_towers_view` | [towers_view/](towers_view) | The 3D view of a game of Towers (binary `towers_view`): the valley, the six drones, and the camera of each drone on the sensor feed of the sim (TCP 5601 to 5606) |
 | `recreation_games` | [games/](games) | A game in play: the countdown, the computer pilots (Kestrel the ace, Merlin the club pilot, Swift the rookie) and what they decide to do, their planes on the flight model, and the referee. Also a stand-in that flies your plane, which the acceptance tests use |
 
 `recreation_games` depends on racing, tag and pilot, and on the simulation domain; the others don't

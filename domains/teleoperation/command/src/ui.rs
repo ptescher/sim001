@@ -3,16 +3,19 @@
 //!
 //! To give an order: select a drone (click it in the list or on the map, or press 1, 2 or 3),
 //! then click a tower (take it) or anywhere else on the field (go there and circle). HOLD and
-//! HOME (or H and B) act on the selected drone; Esc lets it go.
+//! HOME (or H and B) act on the selected drone; Esc lets it go. LOW (L) makes the selected drone
+//! fly along the lanes, below the treetops; CAMERAS shows the camera of each drone.
 
+use crate::cameras::Cameras;
 use crate::draw::*;
 use crate::seat::{Seat, Status};
 use crate::theme::*;
 use glam::Vec2;
 use gpui::{
-    App, Bounds, Context, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, Pixels, Render,
-    SharedString, Stateful, Window, canvas, div, prelude::*, px,
+    App, Bounds, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, Pixels,
+    Render, RenderImage, SharedString, Stateful, Window, canvas, div, prelude::*, px,
 };
+use recreation_towers::map::{LANE_HALF_WIDTH, Map};
 use recreation_towers::seat::Join;
 use recreation_towers::{Order, Outcome, Phase, Rules, Team, TeamView};
 use std::cell::{Cell, RefCell};
@@ -64,11 +67,16 @@ pub struct CommanderView {
     /// The selected drone (its number in the team).
     pub selected: Option<usize>,
     pub map_bounds: Rc<Cell<Bounds<Pixels>>>,
+    /// The valley (lanes, lake, clearings), worked out from the game's rules once they arrive.
+    valley: Option<Map>,
+    /// The pictures from the team's drones, and the one of each that the window has on its atlas.
+    pub cameras: Arc<Cameras>,
+    shown: Vec<Option<Arc<RenderImage>>>,
     focus: FocusHandle,
 }
 
 impl CommanderView {
-    pub fn new(seat: Arc<Seat>, window: &mut Window, cx: &mut Context<Self>) -> CommanderView {
+    pub fn new(seat: Arc<Seat>, cameras: Arc<Cameras>, window: &mut Window, cx: &mut Context<Self>) -> CommanderView {
         // The game arrives on another thread; repaint at about 30 Hz.
         cx.spawn(async move |this, cx| {
             loop {
@@ -81,7 +89,15 @@ impl CommanderView {
         .detach();
         let focus = cx.focus_handle();
         window.focus(&focus);
-        CommanderView { seat, selected: None, map_bounds: Rc::new(Cell::new(Bounds::default())), focus }
+        CommanderView {
+            seat,
+            selected: None,
+            map_bounds: Rc::new(Cell::new(Bounds::default())),
+            valley: None,
+            cameras,
+            shown: vec![None; 3],
+            focus,
+        }
     }
 
     /// The seat commands its team (it does not only watch).
@@ -93,13 +109,33 @@ impl CommanderView {
         self.selected = k;
     }
 
-    /// Gives the selected drone `order`.
+    /// Whether drone `k`'s order is flown low now, as the server has it.
+    fn low_of(&self, k: usize) -> bool {
+        self.seat.state().view.as_ref().and_then(|v| v.drones.get(k)).is_some_and(|d| d.low)
+    }
+
+    /// Gives the selected drone `order`, flown as the drone flies now (low or high).
     pub fn give(&mut self, order: Order) {
         if let Some(k) = self.selected
             && self.commands()
         {
-            self.seat.order(k, order);
+            let low = self.low_of(k);
+            self.seat.order(k, order, low);
         }
+    }
+
+    /// LOW: the selected drone flies its order low, along the lanes, or (again) high.
+    pub fn toggle_low(&mut self) {
+        let Some(k) = self.selected else { return };
+        if !self.commands() {
+            return;
+        }
+        let (order, low) = {
+            let s = self.seat.state();
+            let d = s.view.as_ref().and_then(|v| v.drones.get(k));
+            (d.and_then(|d| d.order).unwrap_or(Order::Home), d.is_some_and(|d| d.low))
+        };
+        self.seat.order(k, order, !low);
     }
 
     /// A click on the field at `at`: with a drone selected, take the tower there or go there;
@@ -134,6 +170,7 @@ impl CommanderView {
             k @ ("1" | "2" | "3") => self.select(k.parse::<usize>().ok().map(|n| n - 1)),
             "h" => self.give(Order::Hold),
             "b" => self.give(Order::Home),
+            "l" => self.toggle_low(),
             "escape" => self.select(None),
             _ => return,
         }
@@ -151,6 +188,10 @@ impl CommanderView {
 
 /// What an order is, in the list of drones.
 pub fn order_text(order: Option<Order>, view: &TeamView) -> String {
+    order_name(order, view)
+}
+
+fn order_name(order: Option<Order>, view: &TeamView) -> String {
     match order {
         None => "NO ORDER".into(),
         Some(Order::Take(t)) => format!("TAKE {}", view.towers.get(t).map_or("?".into(), |t| t.name.to_uppercase())),
@@ -212,8 +253,88 @@ fn screen(title: &'static str, body: impl IntoElement) -> Div {
         .child(div().flex_1().bg(c(SCREEN)).rounded(px(SCREEN_RADIUS)).overflow_hidden().child(body))
 }
 
+impl CommanderView {
+    /// The camera of each drone beside its name, and the selected drone's (else the first's) larger.
+    fn cameras_panel(&mut self, window: &mut Window, view: &Option<TeamView>, cx: &mut Context<Self>) -> Div {
+        // The newest pictures; the ones the window had are freed from its atlas.
+        let images: Vec<Option<Arc<RenderImage>>> = (0..3).map(|k| self.cameras.image(k)).collect();
+        for (k, img) in images.iter().enumerate() {
+            let same = match (&self.shown[k], img) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            };
+            if !same && let Some(old) = std::mem::replace(&mut self.shown[k], img.clone()) {
+                let _ = window.drop_image(old);
+            }
+        }
+        let team = view.as_ref().map(|v| v.team);
+        let mut row = div().flex().gap(px(4.0)).p_2();
+        for (k, img) in images.iter().enumerate() {
+            let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
+            row = row.child(
+                camera_tile(format!("camera-{k}"), &label, img.clone(), 100.0, 75.0, self.selected == Some(k))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.select(Some(k));
+                        cx.notify();
+                    })),
+            );
+        }
+        let k = self.selected.unwrap_or(0);
+        let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
+        div().flex().flex_col().child(row).child(div().px_2().pb_2().child(camera_tile(
+            "camera-selected".to_string(),
+            &label,
+            images[k].clone(),
+            252.0,
+            189.0,
+            false,
+        )))
+    }
+}
+
+/// One drone's picture (or NO SIGNAL), `w` by `h` pixels, with its name over it.
+fn camera_tile(
+    id: String,
+    label: &str,
+    image: Option<Arc<RenderImage>>,
+    w: f32,
+    h: f32,
+    selected: bool,
+) -> Stateful<Div> {
+    let recorded: SharedString = id.clone().into();
+    let label = label.to_string();
+    div()
+        .id(SharedString::from(id))
+        .relative()
+        .w(px(w))
+        .h(px(h))
+        .flex_none()
+        .border_1()
+        .border_color(c(if selected { WHITE } else { BEZEL_EDGE }))
+        .cursor_pointer()
+        .child(
+            canvas(
+                move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(recorded, b)),
+                move |b, _, window, cx| {
+                    let (x, y, w, h) = rect(b);
+                    fill_rect(window, x, y, w, h, c(0x000000));
+                    match &image {
+                        Some(img) => {
+                            let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
+                        }
+                        None => text(window, cx, "NO SIGNAL", x + w * 0.5, y + h * 0.5, 10.0, c(GREY), Align::Center),
+                    }
+                    text(window, cx, &label, x + 6.0, y + 9.0, 10.0, c(WHITE), Align::Left);
+                },
+            )
+            .absolute()
+            .inset_0(),
+        )
+}
+
 impl Render for CommanderView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (status, rules, view) = {
             let s = self.seat.state();
             (s.status.clone(), s.rules, s.view.clone())
@@ -258,6 +379,12 @@ impl Render for CommanderView {
             .child(div().text_color(c(RED)).child(format!("RED {:.0}", score[1])))
             .child(div().text_color(c(AMBER)).child(game_text));
 
+        if self.valley.is_none()
+            && let Some(r) = &rules
+        {
+            self.valley = Some(Map::new(r));
+        }
+        let valley = self.valley.clone();
         let bounds = self.map_bounds.clone();
         let selected = self.selected;
         let (v2, r2) = (view.clone(), rules);
@@ -265,8 +392,8 @@ impl Render for CommanderView {
             |_, _, _| {},
             move |b, _, window, cx| {
                 bounds.set(b);
-                if let (Some(v), Some(r)) = (&v2, &r2) {
-                    paint_map(b, v, r, selected, window, cx);
+                if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
+                    paint_map(b, v, r, m, selected, window, cx);
                 }
                 round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
             },
@@ -288,7 +415,9 @@ impl Render for CommanderView {
                     Phase::Ground => "GROUND".into(),
                     Phase::Down => "DOWN".into(),
                 };
-                let label = format!("{}{}  {:<7} {}", &team_name(v.team)[..1], k + 1, phase, order_text(d.order, v));
+                let low = if d.low { " LOW" } else { "" };
+                let label =
+                    format!("{}{}  {:<7} {}{low}", &team_name(v.team)[..1], k + 1, phase, order_text(d.order, v));
                 drones = drones.child(
                     button(format!("drone-{k}"), label, selected == Some(k))
                         .border_color(c(if selected == Some(k) { tint } else { BEZEL_EDGE }))
@@ -310,9 +439,18 @@ impl Render for CommanderView {
             .child(button("home", "HOME", false).on_click(cx.listener(|this, _, _, cx| {
                 this.give(Order::Home);
                 cx.notify();
-            })));
+            })))
+            .child(button("low", "LOW", selected.is_some_and(|k| self.low_of(k))).on_click(cx.listener(
+                |this, _, _, cx| {
+                    this.toggle_low();
+                    cx.notify();
+                },
+            )));
         let help = div().p_2().text_xs().text_color(c(GREY)).child(match selected {
-            Some(k) => format!("Click a tower to take it, or a point to fly there with drone {}. Esc: none.", k + 1),
+            Some(k) => format!(
+                "Click a tower to take it, or a point to fly there with drone {}. LOW: along the lanes. Esc: none.",
+                k + 1
+            ),
             None => "Select a drone: click it, or press 1, 2 or 3.".to_string(),
         });
         let mut towers = div().flex().flex_col().gap(px(2.0)).p_2().text_sm();
@@ -332,6 +470,7 @@ impl Render for CommanderView {
                 )));
             }
         }
+        let cameras = self.cameras_panel(window, &view, cx);
         let right = div()
             .flex()
             .flex_col()
@@ -339,7 +478,8 @@ impl Render for CommanderView {
             .w(px(340.0))
             .flex_none()
             .child(screen("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)))
-            .child(screen("TOWERS", towers));
+            .child(screen("TOWERS", towers))
+            .child(screen("CAMERAS", cameras));
 
         div()
             .track_focus(&self.focus)
@@ -366,6 +506,7 @@ fn paint_map(
     b: Bounds<Pixels>,
     v: &TeamView,
     rules: &Rules,
+    valley: &Map,
     selected: Option<usize>,
     window: &mut Window,
     cx: &mut App,
@@ -382,6 +523,7 @@ fn paint_map(
         let (sx, sy) = map.to_screen(*at);
         fill_circle(window, sx, sy, range * s, c(FIELD));
     }
+    paint_valley(window, map, valley);
     let (cx0, cy0) = map.to_screen(Vec2::ZERO);
     dashed_circle(window, cx0, cy0, rules.field_radius * s, 1.0, 6.0, ca(GREY, 0.6));
     for team in Team::BOTH {
@@ -482,6 +624,22 @@ fn paint_map(
         };
         fill_rect(window, x + w * 0.5 - 140.0, y + h * 0.5 - 30.0, 280.0, 60.0, ca(0x000000, 0.8));
         text(window, cx, &banner, x + w * 0.5, y + h * 0.5, 28.0, c(AMBER), Align::Center);
+    }
+}
+
+/// The ground a team knows: the lake, the lanes cut through the forest and the clearings. It is
+/// drawn over the fog and the team's sight both, dim.
+fn paint_valley(window: &mut Window, map: MapView, valley: &Map) {
+    let s = map.scale;
+    let (lx, ly) = map.to_screen(valley.lake.at);
+    fill_circle(window, lx, ly, valley.lake.radius * s, ca(LAKE, 0.8));
+    for lane in &valley.lanes {
+        let pts: Vec<(f32, f32)> = lane.points.iter().map(|&p| map.to_screen(p)).collect();
+        polyline(window, &pts, 2.0 * LANE_HALF_WIDTH * s, ca(LANE, 0.75));
+    }
+    for cl in &valley.clearings {
+        let (x, y) = map.to_screen(cl.at);
+        fill_circle(window, x, y, cl.radius * s, ca(LANE, 0.75));
     }
 }
 

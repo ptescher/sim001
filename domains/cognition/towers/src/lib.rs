@@ -330,7 +330,7 @@ mod tests {
             }
         }
         assert!(inside > 550, "in the west tower's circle for {inside} of the last 600 steps");
-        assert!((f.alt - 40.0).abs() < 1.0, "{}", f.alt);
+        assert!((f.alt - orbit_height(Team::Blue, 0)).abs() < 1.0, "{}", f.alt);
     }
 
     #[test]

@@ -9,6 +9,8 @@ gpui = "0.2.2"
 # The game: the seat protocol, the team's map, the rules.
 recreation_towers = { path = "../../recreation/towers" }
 glam = "0.33"
+# The sensor feed protocol: the cameras of the drones come the way the sim's sensor camera does.
+teleoperation_shared = { path = "../shared" }
 # The shared look (the console, the sim's HUD and the docs use it too).
 illustration_theme = { path = "../../illustration/theme" }
 # Acceptance tests (`--expect`): see github.com/ptescher/expectation and expectations/.

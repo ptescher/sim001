@@ -330,6 +330,23 @@ impl Link {
         self.send(&command_int(&game.to_command(), self.target()).expect("a game"))
     }
 
+    /// Sets an ArduPilot parameter (`PARAM_SET`, as a float): the AGENT envelope's numbers, such as
+    /// `AGENT_FLOOR`, can change in flight.
+    pub fn set_param(&self, name: &str, value: f32) -> io::Result<()> {
+        let (system, component) = self.target();
+        let mut param_id = [0u8; 16];
+        for (slot, b) in param_id.iter_mut().zip(name.bytes()) {
+            *slot = b;
+        }
+        self.send(&MavMessage::PARAM_SET(PARAM_SET_DATA {
+            param_value: value,
+            target_system: system,
+            target_component: component,
+            param_id: param_id.into(),
+            param_type: MavParamType::MAV_PARAM_TYPE_REAL32,
+        }))
+    }
+
     /// Asks for an ArduPlane flight mode (custom mode number).
     pub fn set_mode(&self, custom_mode: u32) -> io::Result<()> {
         self.send(&set_mode_message(custom_mode, self.target()))

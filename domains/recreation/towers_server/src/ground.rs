@@ -20,9 +20,19 @@ const ASK_AGAIN: f64 = 1.0;
 /// `MAV_CMD_DO_SET_MODE`.
 const MAV_CMD_DO_SET_MODE: u16 = 176;
 
+/// The lowest a drone may fly (`AGENT_FLOOR`, m): under the tops of the trees for a drone that
+/// flies low, over them (with room to spare, since the envelope dives a drone to keep clear of
+/// others) for one that flies high.
+const LOW_FLOOR: f32 = 8.0;
+const HIGH_FLOOR: f32 = 35.0;
+/// A drone this high (m) that flies high is up over the trees.
+const UP_THERE: f32 = 42.0;
+
 struct Drone {
     name: String,
     link: Option<Link>,
+    /// The floor the drone's envelope has been told.
+    floor: Option<f32>,
     asked: Option<f64>,
     /// It was seen in AGENT.
     in_agent: bool,
@@ -44,6 +54,7 @@ pub struct Ground {
 struct Sends {
     modes: Vec<usize>,
     plans: Vec<(usize, WirePlan)>,
+    floors: Vec<(usize, f32)>,
     traffic: Vec<(usize, Traffic)>,
 }
 
@@ -61,7 +72,16 @@ impl Ground {
                         None
                     }
                 };
-                Drone { name: name.clone(), link, asked: None, in_agent: false, plan_id: 0, plan: None, send_errors: 0 }
+                Drone {
+                    name: name.clone(),
+                    link,
+                    floor: None,
+                    asked: None,
+                    in_agent: false,
+                    plan_id: 0,
+                    plan: None,
+                    send_errors: 0,
+                }
             })
             .collect();
         Ground { drones, home, next_plans: 0.0, next_traffic: 0.0 }
@@ -78,6 +98,15 @@ impl Ground {
                 && link.set_mode(AGENT_MODE).is_err()
             {
                 self.drones[i].send_errors += 1;
+            }
+        }
+        for (i, floor) in sends.floors {
+            let d = &mut self.drones[i];
+            if let Some(link) = &d.link {
+                if link.set_param("AGENT_FLOOR", floor).is_err() {
+                    d.send_errors += 1;
+                }
+                d.floor = Some(floor);
             }
         }
         for (i, plan) in sends.plans {
@@ -118,7 +147,20 @@ impl Ground {
             for (i, d) in self.drones.iter_mut().enumerate().filter(|(i, _)| wing[*i] && agent[*i]) {
                 let order = w.orders[i].unwrap_or(Order::Home);
                 d.plan_id = d.plan_id.wrapping_add(1).max(1);
-                let plan = plan_for(&w.game, i, order, (self.home.0, self.home.1), d.plan_id);
+                let plan = plan_for(&w.game, i, order, w.lows[i], (self.home.0, self.home.1), d.plan_id);
+                // A plan under the treetops needs the low floor. One over them the high floor, once the
+                // drone is up there: a drone that is still climbing out has the low one, or its
+                // envelope would fly it straight ahead and up, wherever it points.
+                let floor = if plan.alt < w.game.rules.treetop {
+                    LOW_FLOOR
+                } else if w.game.drones[i].alt >= UP_THERE {
+                    HIGH_FLOOR
+                } else {
+                    d.floor.unwrap_or(LOW_FLOOR)
+                };
+                if d.floor != Some(floor) {
+                    sends.floors.push((i, floor));
+                }
                 sends.plans.push((i, plan));
             }
         }
@@ -152,7 +194,10 @@ impl Ground {
         let Some(link) = &d.link else { return format!("{} no link", d.name) };
         let s = link.state();
         let mode = s.mode.map_or("?".into(), simulation_sitl::launch::plane_mode_name);
-        let plan = d.plan.map_or("-".into(), |p| format!("{:?} #{} {:.0}m", p.primitive, p.id, p.alt));
+        let plan = d.plan.map_or("-".into(), |p| {
+            let (n, e) = cognition_plan::to_local(self.home.0, self.home.1, p.lat, p.lon);
+            format!("{:?} #{} {:.0}m at {n:.0}, {e:.0}", p.primitive, p.id, p.alt)
+        });
         let v = |x: Option<i32>| x.map_or("-".into(), |x| x.to_string());
         format!(
             "{} {mode} plan {plan} | AG_PLAN {} ENV {} FALL {}{}",

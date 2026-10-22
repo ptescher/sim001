@@ -43,8 +43,9 @@ pub struct PropVis(pub usize, pub usize);
 #[derive(Component)]
 pub struct PropDisc(pub usize, pub usize, pub Handle<StandardMaterial>);
 
-/// How many planes the view can show: yours and three computer pilots'.
-pub const PLANES: usize = 4;
+/// How many planes the view can show: yours and three computer pilots', or the six drones of a game
+/// of Towers.
+pub const PLANES: usize = 6;
 
 /// The prop drawn on every motor (the Ranger's is 3.8 inch, the VTOL's 5).
 const ROTOR_RADIUS: f32 = 0.056;

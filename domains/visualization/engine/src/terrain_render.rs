@@ -81,13 +81,23 @@ fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
     f[F_N1] = fbm(x / 70.0 + 7.0, z / 70.0 - 3.0, 4);
     f[F_N2] = fbm(x / 11.0, z / 11.0, 3);
     let field_edge = 205.0 + 15.0 * gradient_noise(x / 40.0, z / 40.0);
-    f[F_FIELD] = 1.0 - smoothstep(field_edge - 6.0, field_edge, r);
-    f[F_FOREST] =
-        if r > 140.0 { smoothstep(0.1, 0.6, terrain::forest_density(x, z)) * smoothstep(140.0, 180.0, r) } else { 0.0 };
+    if let Some(a) = terrain::arena() {
+        // The lanes and clearings are the mown ground; the rest of the field is under the woods.
+        let open = (a.open_distance)(x, z);
+        f[F_FIELD] = 1.0 - smoothstep(-3.0, 3.0, open);
+        f[F_FOREST] = smoothstep(0.0, 8.0, open) * (1.0 - smoothstep(a.radius + 400.0, a.radius + 700.0, r));
+    } else {
+        f[F_FIELD] = 1.0 - smoothstep(field_edge - 6.0, field_edge, r);
+        f[F_FOREST] = if r > 140.0 {
+            smoothstep(0.1, 0.6, terrain::forest_density(x, z)) * smoothstep(140.0, 180.0, r)
+        } else {
+            0.0
+        };
+    }
     f[F_MOSS] = if f[F_FOREST] > 0.0 { smoothstep(0.55, 0.75, fbm(x / 6.0 + 9.0, z / 6.0, 3)) } else { 0.0 };
     f[F_DRIFT] = smoothstep(0.50, 0.75, fbm(x / 18.0 + 3.0, z / 18.0 - 8.0, 3));
     f[F_KIND] = fbm(x / 40.0 - 2.0, z / 40.0 + 5.0, 2);
-    f[F_LAKE] = if Vec2::new(x, z).distance(terrain::LAKE_CENTER) < terrain::LAKE_RADIUS * 2.0 {
+    f[F_LAKE] = if Vec2::new(x, z).distance(terrain::lake_center()) < terrain::lake_radius() * 2.0 {
         terrain::lake_factor(x, z)
     } else {
         9.0
@@ -163,9 +173,10 @@ fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
     // Worn dirt (pilot box, path to the hangar, runway shoulders) and the lake shore:
     // only evaluated where they can appear.
     let p = Vec2::new(x, z);
-    let near_field = p.distance(Vec2::new(terrain::pilot_pos().x, terrain::pilot_pos().z)) < 60.0
-        || ((x - terrain::RUNWAY_CENTER.x).abs() < terrain::RUNWAY_HALF_WIDTH + 3.0
-            && (z - terrain::RUNWAY_CENTER.y).abs() < terrain::RUNWAY_HALF_LENGTH + 3.0);
+    let near_field = terrain::alpine()
+        && (p.distance(Vec2::new(terrain::pilot_pos().x, terrain::pilot_pos().z)) < 60.0
+            || ((x - terrain::RUNWAY_CENTER.x).abs() < terrain::RUNWAY_HALF_WIDTH + 3.0
+                && (z - terrain::RUNWAY_CENTER.y).abs() < terrain::RUNWAY_HALF_LENGTH + 3.0));
     if near_field || f[F_LAKE] < 1.4 {
         let wobble = gradient_noise(x * 0.9, z * 0.9) * 0.4;
         if near_field {

@@ -1,7 +1,14 @@
 # Towers (domains/recreation/towers_server): the AGENT mode's envelope for the Towers field, on
-# top of t1s.parm. The field is a circle 420 m round SITL's home; the fence is a little wider. The
-# drones circle the towers between 40 m and 60 m, under the tower circles' 120 m.
+# top of t1s.parm. The field is a circle 600 m round SITL's home; the fence is a little wider. The
+# drones circle the towers between 40 m and 60 m, under the tower circles' 120 m, or fly low (16 m
+# to 20 m) along the lanes, under the trees' 20 m. The floor starts at 8 m. Once a drone flies
+# high and is up over the trees, the server raises it to 35 m, so that its envelope cannot dive the
+# drone into them while it keeps clear of other drones; for a drone that flies low it is 8 m again
+# (AGENT_FLOOR, by PARAM_SET).
+# ArduPilot's home is where the drone starts (its base), and the fence is round its home: the
+# server's parameter file for each drone moves the centre to the middle of the field.
 AGENT_FENCE_N 0
 AGENT_FENCE_E 0
-AGENT_FENCE_R 440
+AGENT_FENCE_R 620
 AGENT_CEIL 100
+AGENT_FLOOR 8

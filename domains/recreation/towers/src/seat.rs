@@ -26,10 +26,13 @@ pub enum Join {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ToServer {
     Join(Join),
-    /// An order for the seat's team's drone `drone` (its number in the team).
+    /// An order for the seat's team's drone `drone` (its number in the team), flown `low` (along
+    /// the lanes, below the treetops) or high (straight over the forest).
     Order {
         drone: usize,
         order: Order,
+        #[serde(default)]
+        low: bool,
     },
 }
 
@@ -43,6 +46,10 @@ pub struct Truth {
     pub towers: Vec<Tower>,
     /// Blue's drones, then Red's.
     pub drones: Vec<Drone>,
+    /// How each drone sits (its body to the world, a quaternion x, y, z, w, in the 3D view's frame:
+    /// x east, y up, z south), when the host knows. For a view of the game.
+    #[serde(default)]
+    pub attitudes: Vec<[f32; 4]>,
 }
 
 impl Truth {
@@ -54,6 +61,7 @@ impl Truth {
             outcome: game.outcome,
             towers: game.towers.clone(),
             drones: game.drones.clone(),
+            attitudes: vec![],
         }
     }
 }

@@ -16,20 +16,47 @@ Numbers to tune, not measurements; they live in `recreation_towers::Rules`.
 
 | Rule | Value |
 | --- | --- |
-| Field | Flat, a circle 420 m round the centre (the AGENT fence). North is up |
-| Teams | Blue (south base, 300 m south of the centre) and Red (north base, 300 m north) |
+| Field | A valley with a forest, flat ground in a circle 600 m round the centre (the AGENT fence is 620 m). North is up |
+| Teams | Blue (south base, 520 m south of the centre) and Red (north base, 520 m north) |
 | Drones | 3 a team, taking off from their base |
-| Towers | Five: each team's home tower (220 m from the centre, towards its base, held by that team at the start), the centre, and the east and west flanks (220 m out), neutral at the start |
+| Towers | Five: each team's home tower (430 m from the centre, towards its base, held by that team at the start), the centre, and the west and east flanks (about 360 m out, not mirror images: the lake and the lanes are not), neutral at the start |
 | In a tower's circle | Flying, within 60 m of the tower across, and at most 120 m up |
 | Capture | A tower's control goes from −1 (Red) to +1 (Blue). Each second it moves towards the team with more drones in the circle, by 1/20 for one drone more and 1/20 more for each drone after that. With the same number of each team's drones in the circle (and at least one), it is contested and does not move. With none, it stays |
 | Holding | A team holds a tower when its control reaches its end (±1). It loses it when the control crosses 0. A tower between is neutral |
 | Score | One point a second for each tower a team holds |
 | End | 500 points, or the clock (8 min): the most points wins; equal points is a draw |
-| Vision | A held tower sees 200 m round it (the centre tower, 220 m out, stays in fog from both home towers), a drone 150 m (on the ground too), a base 150 m |
+| Vision | A held tower sees 200 m round it, a drone 150 m (on the ground too), a base 150 m. The trees hide a drone below the treetops (20 m): it is seen only along open ground (a lane, a clearing, the lake), or from above within 75 m |
 | Fog | A team sees an enemy drone only while something of its own sees it. Out of sight, the drone stays on its map where it was last seen, with its age. A tower's holder and control are known only while the team sees the tower; otherwise the team has what it last saw |
 | Crash | The drone is out, and it is back at its base after 15 s (phase 2) |
 
 There is no fighting in version 1: a team keeps the other out of a tower by being there too.
+
+## The valley (map)
+
+`recreation_towers::map` is the one map that the referee, the server, the 3D view and the app share:
+
+- A forest covers the field (trees 20 to 30 m tall, one each 10 m or so), cut open by three **lanes**
+  60 m wide from home tower to home tower (west through the west tower and along the shore of the
+  lake, mid through the centre, east through the east tower), a road from each base to its home
+  tower, **clearings** round the towers (80 m) and bases (150 m: a drone leaves the ground, turns
+  on the wing and climbs there) and the **lake**, between the Blue home tower and the west tower.
+- A drone flies **high** (straight over the forest, 55 to 75 m) or **low** (16 to
+  20 m, below the treetops). A low order goes along the lanes (`flight::plan` and `flight::leg`
+  turn it into the plans that the server sends) and circles low in a clearing; to a point in the
+  forest it goes to the nearest clearing, climbs there and circles high. A drone below the
+  treetops that is sent high climbs in its clearing first.
+- The flight model meets every tree as an obstacle (a plane against the trees round it, in a
+  grid): a low drone that leaves its lane crashes. The 3D view draws the same trees.
+- The seat protocol carries `low` with an order, and the drone's `low` in the map. LOW (or `L`) in
+  the app toggles it for the selected drone.
+
+## The drones' cameras
+
+`towers_view` (`domains/recreation/towers_view`) is the 3D view of a game: a spectator seat on the
+server, the engine's world with the valley, the six drones, and a camera under each drone's nose.
+Each camera is served on the sensor feed of the sim (`teleoperation_shared::feed`), drone `i` (Blue's
+three, then Red's) on TCP port 5601 + `i`, while someone watches it. The commander app shows its
+team's three in CAMERAS. The app starts the view with `--serve`, and it stops with the app.
 
 ## Architecture
 

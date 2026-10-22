@@ -45,6 +45,9 @@ pub struct OwnDrone {
     /// The order the server has for it (the referee knows none: the server fills it in).
     #[serde(default)]
     pub order: Option<Order>,
+    /// The order is flown low (along the lanes, below the treetops).
+    #[serde(default)]
+    pub low: bool,
 }
 
 /// An enemy drone the team sees, or has seen.
@@ -100,7 +103,7 @@ impl Game {
         let drones = (0..n)
             .map(|j| {
                 let d = &self.drones[self.drone(team, j)];
-                OwnDrone { k: j, at: d.at, alt: d.alt, vel: d.vel, phase: d.phase, order: None }
+                OwnDrone { k: j, at: d.at, alt: d.alt, vel: d.vel, phase: d.phase, order: None, low: false }
             })
             .collect();
         let enemies = self

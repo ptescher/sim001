@@ -5,18 +5,21 @@
 //! from −1 (Red) to +1 (Blue), that moves towards the team with more drones in the circle; a team
 //! holds the tower when the control gets to its end, and loses it when the control gets back to 0.
 //! A held tower scores a point a second. Each team sees round its drones, its base and its towers,
-//! and keeps a map of what it last saw: the rest of the field is in fog.
+//! and keeps a map of what it last saw: the rest of the field is in fog. The field is a forest with
+//! lanes ([`map`]): the trees hide a drone that flies below them.
 //!
 //! The referee only needs where each drone is and whether it flies; the host moves the drones.
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
 
 mod commander;
 pub mod flight;
+pub mod map;
 pub mod seat;
 pub mod svg;
 mod view;
 
 pub use commander::{Commander, CommanderTuning};
+pub use map::Map;
 pub use view::{EnemyDrone, Order, OwnDrone, TeamView, TowerView};
 
 use glam::Vec2;
@@ -59,8 +62,15 @@ pub struct Rules {
     pub field_radius: f32,
     /// From the centre to each base (m): Blue's to the south, Red's to the north.
     pub base_distance: f32,
-    /// From the centre to each home tower and each flank tower (m).
+    /// From the centre to each home tower (m), towards its base.
+    pub home_distance: f32,
+    /// From the centre to the flank towers, about (m): the map puts each a little off.
     pub tower_distance: f32,
+    /// The height of the trees' crowns, about (m): a drone lower than this is hidden by them.
+    pub treetop: f32,
+    /// How far an eye above the treetops sees a drone below them, looking down through a lane or
+    /// a clearing (m, across).
+    pub look_down: f32,
     /// Drones in each team.
     pub drones: usize,
     /// A tower's circle: a drone counts within this distance across (m)...
@@ -82,9 +92,12 @@ pub struct Rules {
 impl Default for Rules {
     fn default() -> Rules {
         Rules {
-            field_radius: 420.0,
-            base_distance: 300.0,
-            tower_distance: 220.0,
+            field_radius: 600.0,
+            base_distance: 520.0,
+            home_distance: 430.0,
+            tower_distance: 360.0,
+            treetop: map::TREE_MIN,
+            look_down: 75.0,
             drones: 3,
             circle_radius: 60.0,
             circle_ceiling: 120.0,
@@ -182,6 +195,8 @@ pub struct TeamMap {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Game {
     pub rules: Rules,
+    /// The valley: its lanes, its lake, its clearings and its trees.
+    pub map: Map,
     pub towers: Vec<Tower>,
     /// Blue's drones, then Red's.
     pub drones: Vec<Drone>,
@@ -198,7 +213,7 @@ impl Game {
     /// The start: the five towers, each team holding its home tower, and every drone on the
     /// ground at its base.
     pub fn new(rules: Rules) -> Game {
-        let d = rules.tower_distance;
+        let map = Map::new(&rules);
         let tower = |name: &str, at: Vec2, holder: Option<Team>| Tower {
             name: name.to_string(),
             at,
@@ -207,11 +222,11 @@ impl Game {
             contested: false,
         };
         let towers = vec![
-            tower("Blue home", Vec2::new(-d, 0.0), Some(Team::Blue)),
-            tower("west", Vec2::new(0.0, -d), None),
-            tower("centre", Vec2::ZERO, None),
-            tower("east", Vec2::new(0.0, d), None),
-            tower("Red home", Vec2::new(d, 0.0), Some(Team::Red)),
+            tower("Blue home", map.towers[0], Some(Team::Blue)),
+            tower("west", map.towers[1], None),
+            tower("centre", map.towers[2], None),
+            tower("east", map.towers[3], None),
+            tower("Red home", map.towers[4], Some(Team::Red)),
         ];
         let drones: Vec<Drone> = Team::BOTH
             .into_iter()
@@ -225,14 +240,23 @@ impl Game {
                 })
             })
             .collect();
-        let map = TeamMap {
+        let team_map = TeamMap {
             towers: towers
                 .iter()
                 .map(|t| TowerSighting { control: t.control, holder: t.holder, time: 0.0, seen: false })
                 .collect(),
             drones: vec![None; drones.len()],
         };
-        Game { rules, towers, drones, score: [0.0; 2], time: 0.0, outcome: None, maps: [map.clone(), map] }
+        Game {
+            rules,
+            map,
+            towers,
+            drones,
+            score: [0.0; 2],
+            time: 0.0,
+            outcome: None,
+            maps: [team_map.clone(), team_map],
+        }
     }
 
     pub fn tower(&self, name: &str) -> usize {
@@ -315,31 +339,57 @@ impl Game {
     }
 
     /// What `team` can see from: each of its drones that is not down, its base and each tower it
-    /// holds, with how far each sees (m, across).
-    fn eyes(&self, team: Team) -> Vec<(Vec2, f32)> {
+    /// holds, with how far each sees (m, across) and whether it looks from above the trees.
+    fn eyes(&self, team: Team) -> Vec<Eye> {
         let r = &self.rules;
-        let drones =
-            self.drones.iter().filter(|d| d.team == team && d.phase != Phase::Down).map(|d| (d.at, r.drone_vision));
-        let towers = self.towers.iter().filter(|t| t.holder == Some(team)).map(|t| (t.at, r.tower_vision));
-        drones.chain(towers).chain([(r.base(team), r.base_vision)]).collect()
+        let drones = self.drones.iter().filter(|d| d.team == team && d.phase != Phase::Down).map(|d| Eye {
+            at: d.at,
+            range: r.drone_vision,
+            high: d.phase == Phase::Flying && d.alt >= r.treetop,
+        });
+        let towers = self.towers.iter().filter(|t| t.holder == Some(team)).map(|t| Eye {
+            at: t.at,
+            range: r.tower_vision,
+            high: true,
+        });
+        let base = Eye { at: r.base(team), range: r.base_vision, high: false };
+        drones.chain(towers).chain([base]).collect()
+    }
+
+    /// Does an eye see a drone at `at`, at `alt`? A drone below the treetops is hidden by the
+    /// trees from an eye that does not look from above: it is seen only along open ground.
+    fn sees_drone(&self, eyes: &[Eye], at: Vec2, alt: f32, flying: bool) -> bool {
+        let above = flying && alt >= self.rules.treetop;
+        eyes.iter().any(|e| {
+            let d = e.at.distance(at);
+            d <= e.range && (above || (e.high && d <= self.rules.look_down) || self.map.line_open(e.at, at))
+        })
     }
 
     /// Each team looks round and updates its map.
     pub fn look(&mut self) {
         for team in Team::BOTH {
             let eyes = self.eyes(team);
-            let sees = |at: Vec2| eyes.iter().any(|&(from, range)| from.distance(at) <= range);
+            let sees_tower = |at: Vec2| eyes.iter().any(|e| e.at.distance(at) <= e.range);
             let time = self.time;
+            let seen: Vec<bool> = self
+                .drones
+                .iter()
+                .map(|d| {
+                    d.team == team
+                        || (d.phase != Phase::Down && self.sees_drone(&eyes, d.at, d.alt, d.phase == Phase::Flying))
+                })
+                .collect();
             let map = &mut self.maps[team.index()];
-            for (d, s) in self.drones.iter().zip(map.drones.iter_mut()) {
-                if d.team == team || (d.phase != Phase::Down && sees(d.at)) {
+            for ((d, s), seen) in self.drones.iter().zip(map.drones.iter_mut()).zip(seen) {
+                if seen {
                     *s = Some(DroneSighting { at: d.at, alt: d.alt, vel: d.vel, time, seen: true });
                 } else if let Some(s) = s {
                     s.seen = false;
                 }
             }
             for (t, s) in self.towers.iter().zip(map.towers.iter_mut()) {
-                if sees(t.at) {
+                if sees_tower(t.at) {
                     *s = TowerSighting { control: t.control, holder: t.holder, time, seen: true };
                 } else {
                     s.seen = false;
@@ -347,6 +397,14 @@ impl Game {
             }
         }
     }
+}
+
+/// Something a team sees from.
+struct Eye {
+    at: Vec2,
+    range: f32,
+    /// It looks from above the trees (a tower, a drone above the treetops).
+    high: bool,
 }
 
 /// How near (in control, or in seconds of the clock) counts as there: the referee sums in floats.
@@ -367,6 +425,11 @@ mod tests {
     fn fly(g: &mut Game, team: Team, k: usize, at: Vec2) {
         let i = g.drone(team, k);
         g.drones[i] = Drone { at, alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+    }
+
+    fn fly_low(g: &mut Game, team: Team, k: usize, at: Vec2) {
+        let i = g.drone(team, k);
+        g.drones[i] = Drone { at, alt: 12.0, phase: Phase::Flying, ..g.drones[i] };
     }
 
     #[test]
@@ -470,25 +533,75 @@ mod tests {
         fly(&mut g, Team::Red, 0, Vec2::new(149.0, 0.0));
         g.look();
         assert!(sees(&g));
-        // Out of the drone's sight, and out of the home tower's (200 m round (-220, 0)).
+        // Out of the drone's sight, and out of the home tower's (200 m round (-430, 0)).
         g.drones[scout].at = Vec2::new(151.0, 0.0);
         g.look();
         assert!(!sees(&g));
         // Near the Blue home tower, with the Blue drone back at the base.
         g.drones[blue] = Game::new(rules).drones[blue];
-        g.drones[scout].at = Vec2::new(-221.0 + 199.0, 0.0);
+        g.drones[scout].at = Vec2::new(-430.0 + 199.0, 0.0);
         g.look();
         assert!(sees(&g));
         // A neutral tower gives no sight.
         g.drones[scout].at = g.towers[g.tower("west")].at + Vec2::new(10.0, 0.0);
         g.look();
         assert!(!sees(&g));
-        // Near the Blue base, on the ground.
-        g.drones[scout].at = rules.base(Team::Blue) + Vec2::new(0.0, 149.0 + 10.0);
+        // Near the Blue base, on the ground, in its clearing.
+        g.drones[scout].at = rules.base(Team::Blue) + Vec2::new(0.0, 60.0);
         g.drones[scout].phase = Phase::Ground;
         g.look();
         assert!(sees(&g));
         // A crashed drone is not seen.
+        g.drones[scout].phase = Phase::Down;
+        g.look();
+        assert!(!sees(&g));
+    }
+
+    #[test]
+    fn the_trees_hide_a_drone_below_them_from_an_eye_that_looks_along_the_ground() {
+        let mut g = Game::new(Rules::default());
+        let scout = g.drone(Team::Red, 0);
+        let sees = |g: &Game| g.maps[Team::Blue.index()].drones[scout].is_some_and(|s| s.seen);
+        // Blue's home tower sees down its lanes: leave it out of this.
+        g.towers[0].holder = None;
+        // Blue's drone is low in the mid lane; Red's is low in the east lane, 130 m off.
+        fly_low(&mut g, Team::Blue, 0, Vec2::new(-200.0, 0.0));
+        let east = &g.map.lanes.iter().find(|l| l.name == map::LaneName::East).unwrap().points;
+        let p = east[0].lerp(east[1], 0.35);
+        fly_low(&mut g, Team::Red, 0, p);
+        assert!(p.distance(Vec2::new(-200.0, 0.0)) < 150.0 && !g.map.line_open(p, Vec2::new(-200.0, 0.0)));
+        g.look();
+        assert!(!sees(&g), "the trees are between them");
+        // The same drone above the trees is seen.
+        g.drones[scout].alt = 50.0;
+        g.look();
+        assert!(sees(&g));
+        // Low in the same lane, it is seen along the lane.
+        fly_low(&mut g, Team::Red, 0, Vec2::new(-100.0, 0.0));
+        g.look();
+        assert!(sees(&g));
+        // A drone above the trees looks down on a low drone near it, but only near.
+        fly(&mut g, Team::Blue, 0, Vec2::new(-200.0, 40.0));
+        fly_low(&mut g, Team::Red, 0, p);
+        g.look();
+        assert!(!sees(&g), "{} m is past looking down", Vec2::new(-200.0, 40.0).distance(p));
+        fly_low(&mut g, Team::Red, 0, Vec2::new(-250.0, 0.0));
+        g.look();
+        assert!(sees(&g), "about 64 m below");
+    }
+
+    #[test]
+    fn a_tower_sees_a_low_drone_down_its_lanes_and_in_its_clearing_but_not_in_the_forest() {
+        let mut g = Game::new(Rules::default());
+        let scout = g.drone(Team::Red, 0);
+        let sees = |g: &Game| g.maps[Team::Blue.index()].drones[scout].is_some_and(|s| s.seen);
+        // Blue's home tower is held: it sees from above the trees, 200 m round.
+        fly_low(&mut g, Team::Red, 0, Vec2::new(-430.0 + 150.0, 0.0));
+        g.look();
+        assert!(sees(&g), "down the mid lane");
+        fly_low(&mut g, Team::Red, 0, Vec2::new(-430.0 + 40.0, 0.0));
+        g.look();
+        assert!(sees(&g), "in the clearing");
         g.drones[scout].phase = Phase::Down;
         g.look();
         assert!(!sees(&g));

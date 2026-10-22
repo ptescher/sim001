@@ -1,0 +1,18 @@
+[package]
+name = "recreation_towers_view"
+version = "0.1.0"
+edition = "2024"
+description = "Recreation domain: towers_view, the 3D view of a game of Towers: the valley with its forest, lanes and lake, the six drones, and each drone's camera on the sensor feed of the sim"
+
+[[bin]]
+name = "towers_view"
+path = "src/main.rs"
+
+[dependencies]
+recreation_towers = { path = "../towers" }
+visualization_engine = { path = "../../visualization/engine" }
+visualization_world = { path = "../../visualization/world" }
+# The sensor feed protocol: the camera of each drone is sent the way the sim's sensor camera is.
+teleoperation_shared = { path = "../../teleoperation/shared" }
+bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+glam = "0.33"

@@ -11,6 +11,10 @@ Section: Towers
   the start, each team holds its home tower. The centre tower and the two flank towers are
   neutral.
 
+  The field is in a valley with a forest and a lake. Three [[lane]]s cut through the forest
+  from one home tower to the other. A drone can fly high over the forest, or [[low]] along the
+  lanes, where the trees hide it.
+
   You do not fly the drones with sticks. You command your team from the commander app: you
   give each drone an order, and the drone flies it by plan in [[AGENT mode]]. To take a tower,
   send drones to circle it. Each tower that your team holds gives you one point each second.
@@ -70,11 +74,27 @@ Vocabulary:
     Set: wait until {value} Red drones circle the east tower
 
   # What Blue knows: the map of the Blue team.
-  State: the Red scout is at its base | near a Blue drone | far from anything Blue | near the Blue home tower
+  State: the Red scout is at its base | near a Blue drone | far from anything Blue | near the Blue home tower | low in the east lane, near the first Blue drone | high over the east lane, near the first Blue drone | low in the mid lane, ahead of the first Blue drone | low over the lake
     Shows: at its base: the Red scout is on the ground at the Red base
     Shows: near a Blue drone: the Red scout flies 100 m from a Blue drone, over the middle of the field
     Shows: far from anything Blue: the Red scout flies 100 m north of the east tower, and no Blue drone is near
     Shows: near the Blue home tower: the Red scout flies 100 m north of the Blue home tower
+    Shows: low in the east lane, near the first Blue drone: the Red scout flies 17 m high in the east lane, 210 m from the Blue home tower and about 140 m from the first Blue drone, with the forest between them
+    Shows: high over the east lane, near the first Blue drone: the Red scout flies 50 m high over the same place in the east lane
+    Shows: low in the mid lane, ahead of the first Blue drone: the Red scout flies 17 m high in the mid lane, 120 m ahead of the first Blue drone
+    Shows: low over the lake: the Red scout flies 17 m high over the middle of the lake
+  # Where the first Blue drone is, and how it flies (the lanes, the forest and the lake).
+  State: the first Blue drone is at its base | at the Blue home tower | low in the mid lane | low in the west lane, on the shore of the lake
+    Shows: at the Blue home tower: the first Blue drone circles the Blue home tower
+    Shows: low in the mid lane: the first Blue drone flies 17 m high in the mid lane, 210 m from the Blue home tower
+    Shows: low in the west lane, on the shore of the lake: the first Blue drone flies 17 m high in the west lane, where the lane goes along the lake
+  State: the way of the first Blue drone is straight over the forest | along the west lane | along the mid lane | along the east lane
+    Shows: straight over the forest: the map shows a straight line from the first Blue drone to where it goes
+    Shows: along the west lane: the map shows the way of the first Blue drone along the west lane
+    Shows: along the mid lane: the map shows the way of the first Blue drone along the mid lane
+  State: the orbit of the first Blue drone is high | low
+    Shows: high: at the end of its way, the first Blue drone circles 55 m to 75 m high, above the trees
+    Shows: low: at the end of its way, the first Blue drone circles below the treetops
   State: the Red scout on the Blue map is seen | last seen | unknown
     Shows: seen: the Blue map shows the Red scout where it is now
     Shows: last seen: the Blue map shows the Red scout dim, where Blue last saw it, with the time since then
@@ -95,6 +115,12 @@ Vocabulary:
     Say: watch the Red scout fly away to the north-east, far from the Blue drones, and wait 10 seconds
   Event: a Blue drone flies near the east tower
     Say: order a Blue drone to fly to a point 70 m south-west of the east tower, outside its circle
+  Event: the first Blue drone is sent high to the west tower
+    Say: order the first Blue drone to take the west tower, high
+  Event: the first Blue drone is sent low to the west tower
+    Say: order the first Blue drone to take the west tower, low
+  Event: the first Blue drone is sent low to a point in the forest
+    Say: order the first Blue drone to fly low to a point in the forest, 100 m east of the mid lane
 
   # The computer commander of a team (recreation_towers::Commander): its orders to the Blue
   # drones. The first Blue drone stands at the west end of the Blue base, the third at the east end.
@@ -126,8 +152,20 @@ Vocabulary:
     Say: click HOLD
   Event: the commander sends the selected drone home
     Say: click HOME
+  Event: the commander flies the selected drone low
+    Say: click LOW, or press L
+  Event: the commander clicks the camera of the second Blue drone
+    Say: click the picture of B2 in CAMERAS
+  State: the flight of the first Blue drone is high | low
+    Set: select B1, and click LOW until it is {value}
+    Shows: low: the list of drones shows LOW beside the order of B1
+    Shows: high: the list of drones shows the order of B1 with no LOW
+  State: the camera feeds in the app are 0..3
+    Shows: 3: CAMERAS shows the picture from the camera of each Blue drone, beside its name
   Event: the game runs for 2 minutes
     Say: wait until the clock has run for 2 minutes
+  Event: the game runs for 3 minutes
+    Say: wait until the clock has run for 3 minutes
 
   Event: the computer commander of Blue decides
     Say: wait for the next decision of the computer commander. It decides once each second
