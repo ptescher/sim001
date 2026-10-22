@@ -18,3 +18,132 @@ step	2	passed	1	screenshots/towers--changing-your-mind--hold-then-home/02.jpg	-
 check	1	e:hold	-
 step	3	passed	1	screenshots/towers--changing-your-mind--hold-then-home/03.jpg	-
 check	1	e:go home	-
+plan	towers--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it	passed	a2cb44779a2b796d
+step	0	passed	1	screenshots/towers--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it/00.jpg	-
+check	1	e:the first Blue drone	-
+step	1	passed	1	screenshots/towers--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it/01.jpg	-
+check	1	e:take the west tower	-
+plan	towers--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it	passed	18429975ec14e044
+step	0	passed	1	screenshots/towers--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it/00.jpg	-
+check	1	e:take the west tower	-
+step	1	passed	1	screenshots/towers--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it/01.jpg	-
+check	1	e:held by Blue	-
+plan	towers--rules--state--the-app-takes-the-blue-seat	passed	2ee5c5e0f6c0517d
+step	0	passed	1	screenshots/towers--rules--state--the-app-takes-the-blue-seat/00.jpg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--state--the-app-takes-the-blue-seat/01.jpg	-
+check	1	e:Blue	-
+check	1	n:5	-
+plan	towers--rules--state--a-click-on-a-drone-selects-it	passed	0957af600e74ef56
+step	0	passed	1	screenshots/towers--rules--state--a-click-on-a-drone-selects-it/00.jpg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+step	1	passed	1	screenshots/towers--rules--state--a-click-on-a-drone-selects-it/01.jpg	-
+check	1	e:the first Blue drone	-
+plan	towers--rules--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it	passed	9cc85b3afdbde19a
+step	0	passed	1	screenshots/towers--rules--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it/00.jpg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+check	1	e:the first Blue drone	-
+step	1	passed	1	screenshots/towers--rules--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it/01.jpg	-
+check	1	e:take the west tower	-
+plan	towers--rules--state--hold-makes-the-selected-drone-circle-where-it-is	passed	a90f121acd6491d3
+step	0	passed	1	screenshots/towers--rules--state--hold-makes-the-selected-drone-circle-where-it-is/00.jpg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+check	1	e:the first Blue drone	-
+step	1	passed	1	screenshots/towers--rules--state--hold-makes-the-selected-drone-circle-where-it-is/01.jpg	-
+check	1	e:hold	-
+plan	towers--rules--state--home-sends-the-selected-drone-back-over-its-base	passed	7fc133e89cc083f2
+step	0	passed	1	screenshots/towers--rules--state--home-sends-the-selected-drone-back-over-its-base/00.jpg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+check	1	e:the first Blue drone	-
+step	1	passed	1	screenshots/towers--rules--state--home-sends-the-selected-drone-back-over-its-base/01.jpg	-
+check	1	e:go home	-
+plan	towers--rules--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it	passed	372bdcba44cda525
+step	0	passed	1	screenshots/towers--rules--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it/00.jpg	-
+check	1	e:in play	-
+check	1	n:480	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:1	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:neutral	-
+check	1	n:0	-
+check	1	n:0	-
+check	1	e:at its base	-
+check	1	e:neutral	-
+check	1	e:take the west tower	-
+step	1	passed	1	screenshots/towers--rules--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it/01.jpg	-
+check	1	e:held by Blue	-

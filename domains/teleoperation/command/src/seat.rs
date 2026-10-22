@@ -61,6 +61,12 @@ impl Seat {
         let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low });
     }
 
+    /// Stops connecting: the connection that is open ends with its server, and is not made
+    /// again. (Before the server stops, so that it does not take the seat of the next game first.)
+    pub fn hang_up(&self) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
+    }
+
     /// Forgets the game and connects again (to a new game on the same server address).
     pub fn reconnect(&self) {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
@@ -115,6 +121,10 @@ fn run(addr: &str, join: Join, state: &Mutex<State>, orders: Receiver<ToServer>,
             }
         }
         *out.lock().unwrap() = None;
+        // Hung up, or a newer connection: the state is the newer one's.
+        if current.load(Ordering::SeqCst) != generation {
+            return;
+        }
         // The seat is refused for good if the computer commands the team. If a commander holds it,
         // that is this app's own connection from before a new game: it lets go in a moment.
         let refused = match &state.lock().unwrap().status {

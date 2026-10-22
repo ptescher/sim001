@@ -805,6 +805,9 @@ struct ConsoleDriver {
     line: Option<aviation_line::Hosted>,
     /// The test uses the radio (the keeper leaves the sticks to it).
     in_use: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// AUTO, asked for before the vehicle has a mission: set once the mission is arranged (an
+    /// empty mission ends as AUTO starts, and ArduPlane flies home in RTL).
+    pending_auto: bool,
 }
 
 impl ConsoleDriver {
@@ -829,6 +832,7 @@ impl ConsoleDriver {
             deadline: None,
             line: None,
             in_use: Default::default(),
+            pending_auto: false,
         }
     }
 
@@ -1045,6 +1049,91 @@ impl ConsoleDriver {
         }
     }
 
+    /// The vehicle's mission: `empty`, `up to date` (the plan uploaded) or `out of date`.
+    fn arrange_mission(&mut self, want: &str) -> Result<(), String> {
+        let key = "vehicle mission";
+        let want = want.to_string();
+        let state = self.read(key)?;
+        if state.as_str() == Some(want.as_str()) {
+            return Ok(());
+        }
+        match want.as_str() {
+            "empty" => {
+                // Just after the line comes up a first clear can be lost, so ask again
+                // a few times before giving up.
+                let mut cleared = Err(String::new());
+                for _ in 0..3 {
+                    self.send(Cmd::ClearMission)?;
+                    std::thread::sleep(Duration::from_millis(500));
+                    // Read it back, rather than trusting what the console remembers.
+                    self.send(Cmd::Download)?;
+                    cleared = self.wait_for(8, "the vehicle's mission being cleared", |g| {
+                        let v = g.vehicle.lock().unwrap();
+                        v.mission.len() <= 1 && v.mission_status == "no mission on vehicle"
+                    });
+                    if cleared.is_ok() {
+                        break;
+                    }
+                }
+                cleared
+            }
+            "up to date" => {
+                let plan = self.call(|g, _, _| g.map.plan.clone())?;
+                if plan.is_empty() {
+                    return Err("there is no plan to upload".into());
+                }
+                self.send(Cmd::Upload(plan))?;
+                self.wait_for(30, "the upload", |g| {
+                    same(&g.map.plan, &g.vehicle.lock().unwrap().mission)
+                })
+            }
+            _ => {
+                // Out of date: something on the vehicle, and a plan that differs from it.
+                if state.as_str() == Some("empty") {
+                    let one = self.call(|g, _, _| vec![waypoint(g, 0)])?;
+                    self.send(Cmd::Upload(one))?;
+                    self.wait_for(30, "the upload", |g| {
+                        g.vehicle.lock().unwrap().mission.len() > 1
+                    })?;
+                }
+                self.call(|g, _, _| {
+                    let w = waypoint(g, g.map.plan.len() + 1);
+                    g.map.plan.push(w);
+                })
+            }
+        }
+    }
+
+    /// Puts the vehicle in `mode`, and sees that it stays there.
+    fn arrange_mode(&mut self, mode: &str) -> Result<(), String> {
+        let key = "autopilot mode";
+        let mode = mode.to_string();
+        let n = mode_number(&mode).ok_or_else(|| format!("no mode called {mode}"))?;
+        // A vehicle that has only just come up can change mode by itself (ArduPlane
+        // does when the EKF settles), so the mode has to hold for a moment.
+        for _ in 0..4 {
+            if self.read(key)?.as_str() != Some(mode.as_str()) {
+                self.send(Cmd::SetMode(n))?;
+                let m = mode.clone();
+                if let Err(e) = self.wait_for(30, &format!("the {mode} mode"), move |g| {
+                    g.vehicle.lock().unwrap().mode() == m
+                }) {
+                    // Why the autopilot said no, when it said why.
+                    let recent = self.call(|g, _, _| {
+                        let v = g.vehicle.lock().unwrap();
+                        v.log.iter().rev().take(8).map(|l| l.text.clone()).collect::<Vec<_>>()
+                    })?;
+                    return Err(format!("{e} (its latest messages, newest first: {})", recent.join(" | ")));
+                }
+            }
+            std::thread::sleep(HOLD);
+            if self.read(key)?.as_str() == Some(mode.as_str()) {
+                return Ok(());
+            }
+        }
+        Err(format!("the vehicle wouldn't stay in {mode}"))
+    }
+
     /// Fly the VTOL to `want`: armed and taking off straight up, then (for forward flight)
     /// switched across.
     fn flight_now(&self) -> Result<String, String> {
@@ -1187,6 +1276,7 @@ impl Driver for ConsoleDriver {
     /// Back to the Background's UI state: panning, no plan, 40 m. The vehicle is arranged per
     /// test (disarmed, MANUAL, ...), since it can't be reset by the console.
     fn reset(&mut self) -> Result<(), String> {
+        self.pending_auto = false;
         // Getting a fresh plane (the autopilot restarts) is not the test's time: the clock starts
         // when the plane is ready.
         self.deadline = None;
@@ -1263,23 +1353,12 @@ impl Driver for ConsoleDriver {
             },
             "autopilot mode" => {
                 let mode = name()?;
-                let n = mode_number(&mode).ok_or_else(|| format!("no mode called {mode}"))?;
-                // A vehicle that has only just come up can change mode by itself (ArduPlane
-                // does when the EKF settles), so the mode has to hold for a moment.
-                for _ in 0..4 {
-                    if self.read(key)?.as_str() != Some(mode.as_str()) {
-                        self.send(Cmd::SetMode(n))?;
-                        let m = mode.clone();
-                        self.wait_for(30, &format!("the {mode} mode"), move |g| {
-                            g.vehicle.lock().unwrap().mode() == m
-                        })?;
-                    }
-                    std::thread::sleep(HOLD);
-                    if self.read(key)?.as_str() == Some(mode.as_str()) {
-                        return Ok(());
-                    }
+                // The plan's start arranges the mode before the mission: AUTO waits for it.
+                if mode == "AUTO" && self.read("vehicle mission")?.as_str() == Some("empty") {
+                    self.pending_auto = true;
+                    return Ok(());
                 }
-                Err(format!("the vehicle wouldn't stay in {mode}"))
+                self.arrange_mode(&mode)
             }
             "radio line" => {
                 let want = name()?;
@@ -1396,64 +1475,39 @@ impl Driver for ConsoleDriver {
                 })
             }
             "plane" if name()? == "on the ground" => self.check(key, "on the ground", ""),
-            "vehicle's current item" if value.as_f64() == Some(0.0) => {
-                if self.read(key)?.as_f64() == Some(0.0) {
-                    Ok(())
-                } else {
-                    Err("the vehicle is part-way through a mission".into())
+            // A mission flown from the hand: armed in AUTO, the pilot throws the plane (Space in
+            // the sim's window), and ArduPlane takes it from there.
+            "plane" if name()? == "flying the mission" => {
+                if self.read(key)?.as_str() != Some("flying the mission") {
+                    if self.read("autopilot mode")?.as_str() != Some("AUTO") || self.read("vehicle")?.as_str() != Some("armed") {
+                        return Err("only a plane armed in AUTO flies the mission".into());
+                    }
+                    self.perform_key(Key::Throw)?;
+                    self.wait_for(15, "the thrown plane flying the mission", |g| {
+                        let v = g.vehicle.lock().unwrap();
+                        v.mode() == "AUTO" && v.have_position && (v.alt_rel >= 2.0 || v.groundspeed >= 2.0)
+                    })?;
                 }
+                self.check(key, "flying the mission", "")
+            }
+            // Where the vehicle is in its mission: as it is (AUTO starts at the first item).
+            "vehicle's current item" => {
+                let want = value.as_f64().ok_or("expected a number")?;
+                let w = want as u16;
+                self.wait_for(5, &format!("the vehicle's current item being {want}"), move |g| {
+                    g.vehicle.lock().unwrap().mission_seq == w
+                })
+                .map_err(|_| match want {
+                    0.0 => "the vehicle is part-way through a mission".to_string(),
+                    _ => format!("the vehicle's current item isn't {want}, and can't be put there"),
+                })
             }
             "vehicle mission" => {
-                let want = name()?;
-                let state = self.read(key)?;
-                if state.as_str() == Some(want.as_str()) {
-                    return Ok(());
+                self.arrange_mission(&name()?)?;
+                if std::mem::take(&mut self.pending_auto) {
+                    self.arrange_mode("AUTO")?;
                 }
-                match want.as_str() {
-                    "empty" => {
-                        // Just after the line comes up a first clear can be lost, so ask again
-                        // a few times before giving up.
-                        let mut cleared = Err(String::new());
-                        for _ in 0..3 {
-                            self.send(Cmd::ClearMission)?;
-                            std::thread::sleep(Duration::from_millis(500));
-                            // Read it back, rather than trusting what the console remembers.
-                            self.send(Cmd::Download)?;
-                            cleared = self.wait_for(8, "the vehicle's mission being cleared", |g| {
-                                let v = g.vehicle.lock().unwrap();
-                                v.mission.len() <= 1 && v.mission_status == "no mission on vehicle"
-                            });
-                            if cleared.is_ok() {
-                                break;
-                            }
-                        }
-                        cleared
-                    }
-                    "up to date" => {
-                        let plan = self.call(|g, _, _| g.map.plan.clone())?;
-                        if plan.is_empty() {
-                            return Err("there is no plan to upload".into());
-                        }
-                        self.send(Cmd::Upload(plan))?;
-                        self.wait_for(30, "the upload", |g| {
-                            same(&g.map.plan, &g.vehicle.lock().unwrap().mission)
-                        })
-                    }
-                    _ => {
-                        // Out of date: something on the vehicle, and a plan that differs from it.
-                        if state.as_str() == Some("empty") {
-                            let one = self.call(|g, _, _| vec![waypoint(g, 0)])?;
-                            self.send(Cmd::Upload(one))?;
-                            self.wait_for(30, "the upload", |g| {
-                                g.vehicle.lock().unwrap().mission.len() > 1
-                            })?;
-                        }
-                        self.call(|g, _, _| {
-                            let w = waypoint(g, g.map.plan.len() + 1);
-                            g.map.plan.push(w);
-                        })
-                    }
-                }
+                Ok(())
             }
             "waypoints" | "mission file" | "measured distance" => {
                 let want = name()?;
@@ -1572,6 +1626,10 @@ impl Driver for ConsoleDriver {
     }
 
     fn settle(&mut self) {
+        // AUTO with no mission arranged after it: as it is (the start's check says what it got).
+        if std::mem::take(&mut self.pending_auto) {
+            let _ = self.arrange_mode("AUTO");
+        }
         std::thread::sleep(SETTLE);
     }
 

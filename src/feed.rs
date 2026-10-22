@@ -281,10 +281,13 @@ fn viewer(shared: &Arc<Shared>, core: Arc<Mutex<SimCore>>, mut stream: TcpStream
                     }
                     Ok(ClientMsg::Radio(r)) => core.lock().unwrap().test_radio = Some(r),
                     Ok(ClientMsg::Key(teleoperation_shared::feed::Key::Reset)) => core.lock().unwrap().reset(),
+                    Ok(ClientMsg::Key(teleoperation_shared::feed::Key::Throw)) => core.lock().unwrap().launch(),
                     Ok(ClientMsg::Key(k)) => core.lock().unwrap().toggle_game(match k {
                         teleoperation_shared::feed::Key::Race => Kind::Race,
                         teleoperation_shared::feed::Key::Tag => Kind::Tag,
-                        teleoperation_shared::feed::Key::Reset => unreachable!("handled above"),
+                        teleoperation_shared::feed::Key::Reset | teleoperation_shared::feed::Key::Throw => {
+                            unreachable!("handled above")
+                        }
                     }),
                     Err(_) => {}
                 }

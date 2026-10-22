@@ -256,7 +256,9 @@ impl AppDriver {
 impl Driver for AppDriver {
     fn reset(&mut self) -> Result<(), String> {
         if self.used {
-            // A fresh game: a new server, and the seat taken again.
+            // A fresh game: a new server, and the seat taken again. The seat hangs up first, or
+            // it would come back to the new server as it starts, and take the seat itself.
+            self.call(|v, _, _| v.seat.hang_up())?;
             let mut s = self.server.lock().unwrap();
             s.take();
             *s = Some(Server::start(&self.server_args, self.cameras)?);
