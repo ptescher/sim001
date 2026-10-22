@@ -79,7 +79,14 @@ mod tests {
     use communication_traffic::{Position, Source};
 
     fn beacon(sysid: u8) -> Beacon {
-        Beacon { sysid, position: Position::new(37.87, -122.27, 60.0), velocity: [0.0; 3], heading: 0.0, uas_id: "T1S".into(), mac: [0x60, 0, 0, 0, 0, sysid] }
+        Beacon {
+            sysid,
+            position: Position::new(37.87, -122.27, 60.0),
+            velocity: [0.0; 3],
+            heading: 0.0,
+            uas_id: "T1S".into(),
+            mac: [0x60, 0, 0, 0, 0, sysid],
+        }
     }
 
     #[test]
@@ -103,7 +110,10 @@ mod tests {
             emitter: 0,
             technology: Technology::Bluetooth5,
             time: 1.0,
-            payload: Payload::RemoteId { mac: other.mac, bytes: communication_remoteid::encode_pack(&[remote_id_location(&other, 1.0)]) },
+            payload: Payload::RemoteId {
+                mac: other.mac,
+                bytes: communication_remoteid::encode_pack(&[remote_id_location(&other, 1.0)]),
+            },
         }];
         relay.pass_on(heard, 1.0);
         let bytes = relay.step(0.05, 1.05);
@@ -118,7 +128,13 @@ mod tests {
         let mut relay = Relay::new(1, 100_000.0);
         let other = beacon(2);
         let f = frame(2, 1, 0, &global_position(&other, 1));
-        let heard = vec![Reception { listener: 0, emitter: 0, technology: Technology::MavlinkNetwork, time: 1.0, payload: Payload::Mavlink(f.clone()) }];
+        let heard = vec![Reception {
+            listener: 0,
+            emitter: 0,
+            technology: Technology::MavlinkNetwork,
+            time: 1.0,
+            payload: Payload::Mavlink(f.clone()),
+        }];
         relay.pass_on(heard, 1.0);
         assert_eq!(relay.step(0.05, 1.05), f);
         let _ = heartbeat(&other);

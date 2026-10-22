@@ -93,11 +93,17 @@ pub enum Kind {
 pub enum Clock {
     /// Until you take off (see `Session::after_takeoff`).
     Waiting,
-    CountingDown { left: f32 },
+    CountingDown {
+        left: f32,
+    },
     /// Seconds since GO.
-    Running { time: f32 },
+    Running {
+        time: f32,
+    },
     /// Your game is over (you finished, or are out, or the clock ran out): its time then.
-    Stopped { time: f32 },
+    Stopped {
+        time: f32,
+    },
 }
 
 /// The referee of the game.
@@ -210,9 +216,11 @@ impl Preflight {
             // Above the middle of the stick, QHOVER climbs.
             Stage::Climbing => Some(on(0.9, qhover)),
             // Wings level and a little nose up while the wing takes over.
-            Stage::Transition(_) => {
-                Some(Radio { sticks: Controls { elevator: 0.2, throttle: 1.0, ..Default::default() }, arm: true, mode: fbwa })
-            }
+            Stage::Transition(_) => Some(Radio {
+                sticks: Controls { elevator: 0.2, throttle: 1.0, ..Default::default() },
+                arm: true,
+                mode: fbwa,
+            }),
             Stage::Flying => None,
         }
     }
@@ -324,7 +332,8 @@ impl Session {
             o.line = Path::closed(self.course.outside_line(o.skill.turn_radius * RADIO_TURN, 1.0));
             o.preflight.reset();
         }
-        self.autopilots = Some(Autopilots { qhover: mode_slot(&params, "QHOVER"), fbwa: mode_slot(&params, "FBWA"), params });
+        self.autopilots =
+            Some(Autopilots { qhover: mode_slot(&params, "QHOVER"), fbwa: mode_slot(&params, "FBWA"), params });
         self.clock = Clock::CountingDown { left: COUNTDOWN };
         self
     }
@@ -375,8 +384,11 @@ impl Session {
     /// Every player's position, velocity and whether it is in the air (0 is you, as of the last
     /// step).
     fn planes(&self) -> Vec<(Vec3, Vec3, bool)> {
-        let airborne = |s: &FlightState| matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none() && !s.on_ground;
-        std::iter::once(self.you_now).chain(self.opponents.iter().map(|o| (o.state.pos, o.state.vel, airborne(&o.state)))).collect()
+        let airborne =
+            |s: &FlightState| matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none() && !s.on_ground;
+        std::iter::once(self.you_now)
+            .chain(self.opponents.iter().map(|o| (o.state.pos, o.state.vel, airborne(&o.state))))
+            .collect()
     }
 
     /// A game that waits for you to take off: the countdown starts when your plane is in the air.
@@ -420,15 +432,25 @@ impl Session {
         }
 
         // The computer pilots fly.
-        let planes: Vec<(Vec3, Vec3, bool)> =
-            std::iter::once(you).chain(self.opponents.iter().map(|o| &o.state)).map(|s| (s.pos, s.vel, airborne(s) && !s.on_ground)).collect();
+        let planes: Vec<(Vec3, Vec3, bool)> = std::iter::once(you)
+            .chain(self.opponents.iter().map(|o| &o.state))
+            .map(|s| (s.pos, s.vel, airborne(s) && !s.on_ground))
+            .collect();
         // With autopilots, their planes are the host's to step (see `radio`).
         let hands = if self.autopilots.is_none() { self.opponents.len() } else { 0 };
         for i in 0..hands {
             let controls = self.brain(i, &planes, world.ground, dt);
             let o = &mut self.opponents[i];
             let wind = (world.wind)(o.state.pos, o.state.time);
-            physics::step(&self.params, &mut o.state, &controls.mix(), &Environment { wind }, world.ground, world.obstacles, dt);
+            physics::step(
+                &self.params,
+                &mut o.state,
+                &controls.mix(),
+                &Environment { wind },
+                world.ground,
+                world.obstacles,
+                dt,
+            );
         }
 
         if go < 0.0 {
@@ -467,7 +489,8 @@ impl Session {
                     .map(|s| Plane { pos: s.pos, flying: airborne(s) && !s.on_ground })
                     .collect();
                 tag.step(&planes, dt);
-                self.clock = if tag.over() { Clock::Stopped { time: tag.time } } else { Clock::Running { time: tag.time } };
+                self.clock =
+                    if tag.over() { Clock::Stopped { time: tag.time } } else { Clock::Running { time: tag.time } };
             }
         }
     }
@@ -476,7 +499,7 @@ impl Session {
     /// velocity and whether it is in the air.
     fn brain(&mut self, i: usize, planes: &[(Vec3, Vec3, bool)], ground: &dyn Terrain, dt: f32) -> Controls {
         let go = self.since_go();
-                let o = &mut self.opponents[i];
+        let o = &mut self.opponents[i];
         match o.state.phase {
             Phase::Held => {
                 if o.state.carry.is_some() || go < o.throw_at {
@@ -606,7 +629,9 @@ impl Session {
 fn players(game: &Session, you: &FlightState) -> Vec<(Vec3, Vec3, bool)> {
     std::iter::once(you)
         .chain(game.opponents.iter().map(|o| &o.state))
-        .map(|s| (s.pos, s.vel, matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none() && !s.on_ground))
+        .map(|s| {
+            (s.pos, s.vel, matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none() && !s.on_ground)
+        })
         .collect()
 }
 
@@ -631,7 +656,13 @@ fn choose_target(tag: &Tag, me: usize, planes: &[(Vec3, Vec3, bool)], now: Optio
 }
 
 /// Fly at a plane to touch it: aim where it will be, and match its height.
-fn chase(pilot: &mut Pilot, s: &FlightState, (pos, vel, _): (Vec3, Vec3, bool), ground: &dyn Terrain, dt: f32) -> Controls {
+fn chase(
+    pilot: &mut Pilot,
+    s: &FlightState,
+    (pos, vel, _): (Vec3, Vec3, bool),
+    ground: &dyn Terrain,
+    dt: f32,
+) -> Controls {
     pilot.intercept(s, pos, vel, ground, dt)
 }
 
@@ -663,7 +694,15 @@ fn evade(pilot: &mut Pilot, s: &FlightState, threat: Vec3, arena: &Arena, ground
 }
 
 /// Fly round the arena at an easy pace, each pilot on its own circle.
-fn wander(pilot: &mut Pilot, s: &FlightState, arena: &Arena, t: f32, i: usize, ground: &dyn Terrain, dt: f32) -> Controls {
+fn wander(
+    pilot: &mut Pilot,
+    s: &FlightState,
+    arena: &Arena,
+    t: f32,
+    i: usize,
+    ground: &dyn Terrain,
+    dt: f32,
+) -> Controls {
     let a = i as f32 * 2.1 + t * 0.12;
     let spot = arena.centre + Vec3::new(a.cos(), 0.0, a.sin()) * arena.radius * 0.45;
     let height = 18.0 + 6.0 * (t * 0.2 + i as f32).sin();
@@ -703,7 +742,14 @@ impl Default for StandIn {
 
 impl StandIn {
     /// The controls for your plane, to do `errand` in `game`.
-    pub fn fly(&mut self, game: &Session, you: &FlightState, errand: Errand, ground: &dyn Terrain, dt: f32) -> Controls {
+    pub fn fly(
+        &mut self,
+        game: &Session,
+        you: &FlightState,
+        errand: Errand,
+        ground: &dyn Terrain,
+        dt: f32,
+    ) -> Controls {
         if you.phase == Phase::Held {
             return Controls { throttle: 1.0, ..Default::default() };
         }
@@ -729,7 +775,9 @@ impl StandIn {
                 self.pilot.follow(you, line, RACE_HEIGHT, 1.0, ground, dt)
             }
             Errand::Tag => {
-                let Some(tag) = game.tag_ref() else { return self.pilot.toward(you, you.pos + you.vel, 0.7, ground, dt) };
+                let Some(tag) = game.tag_ref() else {
+                    return self.pilot.toward(you, you.pos + you.vel, 0.7, ground, dt);
+                };
                 let planes = players(game, you);
                 match choose_target(tag, 0, &planes, None) {
                     Some(t) => chase(&mut self.pilot, you, planes[t], ground, dt),
@@ -737,7 +785,9 @@ impl StandIn {
                 }
             }
             Errand::Meet => {
-                let Some(tag) = game.tag_ref() else { return self.pilot.toward(you, you.pos + you.vel, 0.7, ground, dt) };
+                let Some(tag) = game.tag_ref() else {
+                    return self.pilot.toward(you, you.pos + you.vel, 0.7, ground, dt);
+                };
                 let planes = players(game, you);
                 if tag.it == 0 {
                     return wander(&mut self.pilot, you, &game.arena, game.since_go(), 3, ground, dt);
@@ -786,7 +836,13 @@ mod tests {
 
     /// Runs the game for `seconds`, your plane flown by `fly` (or left in your hand), looking
     /// at every step. Stops early when `done` says so; returns the time it took.
-    fn play(game: &mut Session, you: &mut FlightState, seconds: f32, mut fly: impl FnMut(&Session, &FlightState) -> Option<Controls>, mut done: impl FnMut(&Session, &FlightState) -> bool) -> f32 {
+    fn play(
+        game: &mut Session,
+        you: &mut FlightState,
+        seconds: f32,
+        mut fly: impl FnMut(&Session, &FlightState) -> Option<Controls>,
+        mut done: impl FnMut(&Session, &FlightState) -> bool,
+    ) -> f32 {
         let p = t1s_ranger::params();
         let world = Surroundings { ground: &Flat, obstacles: &[], wind: &calm };
         let mut t = 0.0;
@@ -853,7 +909,9 @@ mod tests {
         for i in 1..4 {
             let r = &race.racers[i];
             assert_eq!(r.cuts, 0, "{} cut a pylon", game.name(i));
-            let Status::Finished { time, .. } = r.status else { panic!("{} didn't finish: {:?}, {}", game.name(i), r, game.opponents[i - 1].state.crash_reason) };
+            let Status::Finished { time, .. } = r.status else {
+                panic!("{} didn't finish: {:?}, {}", game.name(i), r, game.opponents[i - 1].state.crash_reason)
+            };
             // Five laps of about 600 m at 20 to 25 m/s.
             assert!((100.0..180.0).contains(&time), "{} took {time:.0} s", game.name(i));
         }
@@ -867,7 +925,8 @@ mod tests {
         // 5 m/s from the north-east, with gusts, as the sim's wind can be.
         let breeze = |p: Vec3, t: f64| {
             let t = t as f32;
-            Vec3::new(-3.5, 0.0, 3.5) * (1.0 + 0.3 * (t * 0.7 + p.x * 0.03).sin()) + Vec3::new((t * 1.9).sin(), 0.3 * (t * 1.3).sin(), (t * 1.1 + p.z * 0.02).cos())
+            Vec3::new(-3.5, 0.0, 3.5) * (1.0 + 0.3 * (t * 0.7 + p.x * 0.03).sin())
+                + Vec3::new((t * 1.9).sin(), 0.3 * (t * 1.3).sin(), (t * 1.1 + p.z * 0.02).cos())
         };
         let p = t1s_ranger::params();
         let mut game = Session::race(field());
@@ -881,7 +940,13 @@ mod tests {
         }
         for i in 1..4 {
             let r = &game.race_ref().unwrap().racers[i];
-            assert!(matches!(r.status, Status::Finished { .. }), "{}: {:?} {}", game.name(i), r.status, game.opponents[i - 1].state.crash_reason);
+            assert!(
+                matches!(r.status, Status::Finished { .. }),
+                "{}: {:?} {}",
+                game.name(i),
+                r.status,
+                game.opponents[i - 1].state.crash_reason
+            );
             assert_eq!(r.cuts, 0, "{} cut a pylon", game.name(i));
         }
     }
@@ -925,7 +990,13 @@ mod tests {
         let mut game = Session::race(field());
         let (_, mut you) = your_plane();
         let mut stand_in = StandIn::default();
-        let t = play(&mut game, &mut you, COUNTDOWN + 60.0, |g, y| Some(stand_in.fly(g, y, Errand::Race, &Flat, DT)), |g, _| g.your_laps() == 1);
+        let t = play(
+            &mut game,
+            &mut you,
+            COUNTDOWN + 60.0,
+            |g, y| Some(stand_in.fly(g, y, Errand::Race, &Flat, DT)),
+            |g, _| g.your_laps() == 1,
+        );
         assert_eq!(game.your_laps(), 1, "{:?}", game.race_ref().unwrap().racers[0]);
         assert_eq!(game.your_cuts(), 0);
         assert!(t < COUNTDOWN + 45.0, "the lap took {:.0} s", t - COUNTDOWN);
@@ -936,10 +1007,22 @@ mod tests {
         let mut game = Session::race(field());
         let (_, mut you) = your_plane();
         let mut stand_in = StandIn::default();
-        play(&mut game, &mut you, COUNTDOWN + 60.0, |g, y| Some(stand_in.fly(g, y, Errand::Cut, &Flat, DT)), |g, _| g.your_cuts() == 1);
+        play(
+            &mut game,
+            &mut you,
+            COUNTDOWN + 60.0,
+            |g, y| Some(stand_in.fly(g, y, Errand::Cut, &Flat, DT)),
+            |g, _| g.your_cuts() == 1,
+        );
         assert_eq!(game.your_cuts(), 1);
         // And again, at the next pylon: disqualified.
-        play(&mut game, &mut you, 60.0, |g, y| Some(stand_in.fly(g, y, Errand::Cut, &Flat, DT)), |g, _| g.your_cuts() == 2);
+        play(
+            &mut game,
+            &mut you,
+            60.0,
+            |g, y| Some(stand_in.fly(g, y, Errand::Cut, &Flat, DT)),
+            |g, _| g.your_cuts() == 2,
+        );
         assert_eq!(game.race_ref().unwrap().racers[0].status, Status::Disqualified);
         assert!(matches!(game.clock, Clock::Stopped { .. }));
     }
@@ -949,7 +1032,13 @@ mod tests {
         let mut game = Session::tag(field());
         let (_, mut you) = your_plane();
         let mut stand_in = StandIn::default();
-        let t = play(&mut game, &mut you, COUNTDOWN + 90.0, |g, y| Some(stand_in.fly(g, y, Errand::Tag, &Flat, DT)), |g, _| g.chaser() != Some(0));
+        let t = play(
+            &mut game,
+            &mut you,
+            COUNTDOWN + 90.0,
+            |g, y| Some(stand_in.fly(g, y, Errand::Tag, &Flat, DT)),
+            |g, _| g.chaser() != Some(0),
+        );
         assert_ne!(game.chaser(), Some(0), "no tag in {t:.0} s");
         assert_eq!(game.tag_ref().unwrap().players[0].tags, 1);
     }
@@ -967,7 +1056,13 @@ mod tests {
             let (_, mut you) = your_plane();
             let mut stand_in = StandIn::default();
             game.tag_ref_mut().unwrap().it = chaser;
-            let t = play(&mut game, &mut you, COUNTDOWN + 60.0, |g, y| Some(stand_in.fly(g, y, Errand::Loiter, &Flat, DT)), |g, _| g.chaser() == Some(0));
+            let t = play(
+                &mut game,
+                &mut you,
+                COUNTDOWN + 60.0,
+                |g, y| Some(stand_in.fly(g, y, Errand::Loiter, &Flat, DT)),
+                |g, _| g.chaser() == Some(0),
+            );
             assert_eq!(game.chaser(), Some(0), "opponent {chaser} did not tag you in {t:.0} s");
         }
     }
@@ -979,7 +1074,13 @@ mod tests {
             let (_, mut you) = your_plane();
             let mut stand_in = StandIn::default();
             game.tag_ref_mut().unwrap().it = chaser;
-            let t = play(&mut game, &mut you, COUNTDOWN + 60.0, |g, y| Some(stand_in.fly(g, y, Errand::Meet, &Flat, DT)), |g, _| g.chaser() == Some(0));
+            let t = play(
+                &mut game,
+                &mut you,
+                COUNTDOWN + 60.0,
+                |g, y| Some(stand_in.fly(g, y, Errand::Meet, &Flat, DT)),
+                |g, _| g.chaser() == Some(0),
+            );
             assert_eq!(game.chaser(), Some(0), "opponent {chaser} did not tag the stand-in in {t:.0} s");
         }
     }
@@ -991,7 +1092,13 @@ mod tests {
         let mut stand_in = StandIn::default();
         // Kestrel is it, and you fly slow circles.
         game.tag_ref_mut().unwrap().it = 1;
-        let t = play(&mut game, &mut you, COUNTDOWN + 90.0, |g, y| Some(stand_in.fly(g, y, Errand::Loiter, &Flat, DT)), |g, _| g.chaser() == Some(0));
+        let t = play(
+            &mut game,
+            &mut you,
+            COUNTDOWN + 90.0,
+            |g, y| Some(stand_in.fly(g, y, Errand::Loiter, &Flat, DT)),
+            |g, _| g.chaser() == Some(0),
+        );
         assert_eq!(game.chaser(), Some(0), "not caught in {t:.0} s; it is {:?}", game.chaser());
         assert_eq!(you.phase, Phase::Flying);
     }
@@ -1030,7 +1137,13 @@ mod tests {
                 game.step(&you, &world, DT);
                 t += DT;
             }
-            assert_eq!(game.chaser(), Some(0), "{} didn't catch you in 2 minutes; it is {:?}", game.name(chaser), game.chaser().map(|i| game.name(i)));
+            assert_eq!(
+                game.chaser(),
+                Some(0),
+                "{} didn't catch you in 2 minutes; it is {:?}",
+                game.name(chaser),
+                game.chaser().map(|i| game.name(i))
+            );
         }
     }
 
@@ -1040,7 +1153,13 @@ mod tests {
         let (_, mut you) = your_plane();
         let mut stand_in = StandIn::default();
         game.tag_ref_mut().unwrap().it = 2;
-        play(&mut game, &mut you, COUNTDOWN + 60.0, |g, y| Some(stand_in.fly(g, y, Errand::LeaveArena, &Flat, DT)), |g, _| g.chaser() == Some(0));
+        play(
+            &mut game,
+            &mut you,
+            COUNTDOWN + 60.0,
+            |g, y| Some(stand_in.fly(g, y, Errand::LeaveArena, &Flat, DT)),
+            |g, _| g.chaser() == Some(0),
+        );
         assert_eq!(game.chaser(), Some(0));
         assert!(!game.arena.contains(you.pos));
     }
@@ -1052,7 +1171,7 @@ mod tests {
         // You stay in your hand, so you can't be tagged; Merlin starts as it.
         game.tag_ref_mut().unwrap().it = 2;
         let mut crashes = 0;
-        let mut was = vec![false; 3];
+        let mut was = [false; 3];
         play(&mut game, &mut you, COUNTDOWN + 125.0, held, |g, _| {
             for (i, o) in g.opponents.iter().enumerate() {
                 let down = o.state.phase == Phase::Crashed;
@@ -1104,7 +1223,15 @@ mod tests {
         while t < seconds {
             radios.clear();
             for i in 0..game.opponents.len() {
-                physics::step(&p, &mut game.opponents[i].state, &Default::default(), &Environment::default(), &Flat, &[], DT);
+                physics::step(
+                    &p,
+                    &mut game.opponents[i].state,
+                    &Default::default(),
+                    &Environment::default(),
+                    &Flat,
+                    &[],
+                    DT,
+                );
                 radios.push(game.radio(i, &Flat, DT));
             }
             physics::step(&p, you, &Default::default(), &Environment::default(), &Flat, &[], DT);
@@ -1222,21 +1349,40 @@ mod probe {
             let it = game.tag_ref().unwrap().it;
             if it != 0 {
                 let o = &game.opponents[it - 1];
-                if let Some((t, _)) = o.target {
-                    if t > 0 {
-                        let q = &game.opponents[t - 1].state;
-                        let d = o.state.pos.distance(q.pos);
-                        closest = closest.min(d);
-                        if d < 10.0 && k % 30 == 0 {
-                            let rel = q.pos - o.state.pos;
-                            println!("  t {:.1} {}->{} d {d:.1} horiz {:.1} dy {:+.1} v {:.1}/{:.1} closing {:+.1} bank {:.0}/{:.0}", game.time - COUNTDOWN, o.name, game.name(t), rel.with_y(0.0).length(), rel.y, o.state.vel.length(), q.vel.length(), (o.state.vel - q.vel).dot(rel.normalize()), physics::euler(o.state.rot).0.to_degrees(), physics::euler(q.rot).0.to_degrees());
-                        }
+                if let Some((t, _)) = o.target
+                    && t > 0
+                {
+                    let q = &game.opponents[t - 1].state;
+                    let d = o.state.pos.distance(q.pos);
+                    closest = closest.min(d);
+                    if d < 10.0 && k % 30 == 0 {
+                        let rel = q.pos - o.state.pos;
+                        println!(
+                            "  t {:.1} {}->{} d {d:.1} horiz {:.1} dy {:+.1} v {:.1}/{:.1} closing {:+.1} bank {:.0}/{:.0}",
+                            game.time - COUNTDOWN,
+                            o.name,
+                            game.name(t),
+                            rel.with_y(0.0).length(),
+                            rel.y,
+                            o.state.vel.length(),
+                            q.vel.length(),
+                            (o.state.vel - q.vel).dot(rel.normalize()),
+                            physics::euler(o.state.rot).0.to_degrees(),
+                            physics::euler(q.rot).0.to_degrees()
+                        );
                     }
                 }
             }
             if it != it_was {
                 let q = &game.opponents[it - 1].state;
-                println!("t {:.1}: {} is it (was {}), at r {:.0} y {:.0}; chaser got to {closest:.1} m", game.time - COUNTDOWN, game.name(it), game.name(it_was), (q.pos - game.arena.centre).with_y(0.0).length(), q.pos.y);
+                println!(
+                    "t {:.1}: {} is it (was {}), at r {:.0} y {:.0}; chaser got to {closest:.1} m",
+                    game.time - COUNTDOWN,
+                    game.name(it),
+                    game.name(it_was),
+                    (q.pos - game.arena.centre).with_y(0.0).length(),
+                    q.pos.y
+                );
                 it_was = it;
                 closest = f32::MAX;
             }
@@ -1248,5 +1394,4 @@ mod probe {
     fn t1s_aircraft() -> AircraftParams {
         t1s_ranger::params()
     }
-
 }

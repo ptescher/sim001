@@ -77,7 +77,10 @@ pub enum SurfaceControl {
     None,
     /// Output `channel` (-1..1) times `gain` is the deflection in radians, trailing edge down
     /// positive. A surface's side and the plane's mixing are in the gain and the output.
-    Output { channel: usize, gain: f32 },
+    Output {
+        channel: usize,
+        gain: f32,
+    },
 }
 
 /// How a servo output's value (0..1 for a motor, -1..1 for a servo) is read from a PWM.
@@ -130,7 +133,8 @@ impl ActuatorCommands {
     /// The average throttle of the motors that fly the plane forward (the HUD's throttle and
     /// the hand-launch trigger).
     pub fn forward_throttle(&self, p: &AircraftParams) -> f32 {
-        let (sum, n) = p.motors.iter().filter(|m| m.forward).fold((0.0, 0), |(s, n), m| (s + self.out[m.channel], n + 1));
+        let (sum, n) =
+            p.motors.iter().filter(|m| m.forward).fold((0.0, 0), |(s, n), m| (s + self.out[m.channel], n + 1));
         if n == 0 { 0.0 } else { sum / n as f32 }
     }
 }
@@ -249,14 +253,30 @@ mod tests {
         let vtol = t1s_vtol::params();
         assert_eq!(vtol.rc_modes, ["QHOVER", "QLOITER", "FBWA", "CRUISE", "AUTO", "QRTL"]);
         let at = |pwm| vtol.rc_modes[rc_mode_slot(pwm)];
-        assert_eq!((at(1165), at(1295), at(1425), at(1555), at(1685), at(1815)), ("QHOVER", "QLOITER", "FBWA", "CRUISE", "AUTO", "QRTL"));
+        assert_eq!(
+            (at(1165), at(1295), at(1425), at(1555), at(1685), at(1815)),
+            ("QHOVER", "QLOITER", "FBWA", "CRUISE", "AUTO", "QRTL")
+        );
         assert!(t1s_ranger::params().rc_modes.is_empty(), "no flight controller, no modes");
     }
 
     /// ArduPilot's FLTMODE_CH bands, and the PWM in the middle of each.
     #[test]
     fn the_six_slots_are_ardupilots_bands() {
-        for (pwm, slot) in [(900, 0), (1230, 0), (1231, 1), (1360, 1), (1361, 2), (1490, 2), (1491, 3), (1620, 3), (1621, 4), (1749, 4), (1750, 5), (2100, 5)] {
+        for (pwm, slot) in [
+            (900, 0),
+            (1230, 0),
+            (1231, 1),
+            (1360, 1),
+            (1361, 2),
+            (1490, 2),
+            (1491, 3),
+            (1620, 3),
+            (1621, 4),
+            (1749, 4),
+            (1750, 5),
+            (2100, 5),
+        ] {
             assert_eq!(rc_mode_slot(pwm), slot, "{pwm} µs");
         }
         for slot in 0..6 {

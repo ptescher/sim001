@@ -19,7 +19,8 @@ const CELLS: i32 = 72;
 pub const GRAIN_MEAN: f32 = 0.45;
 
 fn hash(x: i32, y: i32, seed: u32) -> f32 {
-    let mut h = (x as u32).wrapping_mul(0x8da6_b343) ^ (y as u32).wrapping_mul(0xd816_3841) ^ seed.wrapping_mul(0xcb1a_b31f);
+    let mut h =
+        (x as u32).wrapping_mul(0x8da6_b343) ^ (y as u32).wrapping_mul(0xd816_3841) ^ seed.wrapping_mul(0xcb1a_b31f);
     h = (h ^ (h >> 13)).wrapping_mul(0x5bd1_e995);
     h ^= h >> 15;
     (h & 0x00ff_ffff) as f32 / 0x00ff_ffff as f32
@@ -84,8 +85,17 @@ pub fn foam_normal() -> Image {
 /// `TILE` metres to the texture. Faces are separated so that the projection can change from one
 /// to the next; normals are kept as they were, tangents made again.
 pub fn world_uv(mesh: Mesh) -> Mesh {
-    let pos: Vec<Vec3> = mesh.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| a.as_float3()).expect("positions").iter().map(|p| Vec3::from(*p)).collect();
-    let nrm: Option<Vec<Vec3>> = mesh.attribute(Mesh::ATTRIBUTE_NORMAL).and_then(|a| a.as_float3()).map(|n| n.iter().map(|p| Vec3::from(*p)).collect());
+    let pos: Vec<Vec3> = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .and_then(|a| a.as_float3())
+        .expect("positions")
+        .iter()
+        .map(|p| Vec3::from(*p))
+        .collect();
+    let nrm: Option<Vec<Vec3>> = mesh
+        .attribute(Mesh::ATTRIBUTE_NORMAL)
+        .and_then(|a| a.as_float3())
+        .map(|n| n.iter().map(|p| Vec3::from(*p)).collect());
     let idx: Vec<u32> = match mesh.indices() {
         Some(i) => i.iter().map(|i| i as u32).collect(),
         None => (0..pos.len() as u32).collect(),
@@ -122,7 +132,6 @@ pub fn world_uv(mesh: Mesh) -> Mesh {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::prelude::*;
 
     fn grey(t: &Image) -> Vec<f32> {
         // Mip 0, sRGB bytes to linear luminance.
@@ -225,8 +234,10 @@ mod tests {
         let idx: Vec<u32> = m.indices().unwrap().iter().map(|i| i as u32).collect();
         for t in idx.chunks(3) {
             let (a, b, c) = (t[0] as usize, t[1] as usize, t[2] as usize);
-            let world = (Vec3::from(pos[b]) - Vec3::from(pos[a])).cross(Vec3::from(pos[c]) - Vec3::from(pos[a])).length() * 0.5;
-            let tex = (Vec2::from(uv[b]) - Vec2::from(uv[a])).perp_dot(Vec2::from(uv[c]) - Vec2::from(uv[a])).abs() * 0.5;
+            let world =
+                (Vec3::from(pos[b]) - Vec3::from(pos[a])).cross(Vec3::from(pos[c]) - Vec3::from(pos[a])).length() * 0.5;
+            let tex =
+                (Vec2::from(uv[b]) - Vec2::from(uv[a])).perp_dot(Vec2::from(uv[c]) - Vec2::from(uv[a])).abs() * 0.5;
             let ratio = tex * TILE * TILE / world;
             assert!((ratio - 1.0).abs() < 0.05, "a face is {ratio} times its true size in the texture");
         }
@@ -240,7 +251,7 @@ mod tests {
     /// projection.
     #[test]
     fn the_plane_meshes_have_sound_tangents() {
-        use crate::mesh_util::{airfoil_panel, loft, PanelSpec};
+        use crate::mesh_util::{PanelSpec, airfoil_panel, loft};
         use simulation_aircraft::t1s_ranger::geom::*;
         let (wing_top, wing_bottom) = airfoil_panel(&PanelSpec {
             root_le: Vec3::new(0.0, WING_Y, WING_LE_Z),
@@ -271,7 +282,10 @@ mod tests {
                 assert!(t.iter().all(|v| v.is_finite()), "{name}: vertex {i} has tangent {t:?}");
                 let tl = Vec3::new(t[0], t[1], t[2]).length();
                 assert!((tl - 1.0).abs() < 0.05, "{name}: vertex {i} has a tangent of length {tl}");
-                assert!(n.iter().all(|v| v.is_finite()) && (Vec3::from(*n).length() - 1.0).abs() < 0.05, "{name}: vertex {i} has normal {n:?}");
+                assert!(
+                    n.iter().all(|v| v.is_finite()) && (Vec3::from(*n).length() - 1.0).abs() < 0.05,
+                    "{name}: vertex {i} has normal {n:?}"
+                );
             }
         }
     }
@@ -290,8 +304,10 @@ mod tests {
         let mut worst = 0.0f32;
         for t in idx.chunks(3) {
             let (a, b, c) = (t[0] as usize, t[1] as usize, t[2] as usize);
-            let world = (Vec3::from(pos[b]) - Vec3::from(pos[a])).cross(Vec3::from(pos[c]) - Vec3::from(pos[a])).length() * 0.5;
-            let tex = (Vec2::from(uv[b]) - Vec2::from(uv[a])).perp_dot(Vec2::from(uv[c]) - Vec2::from(uv[a])).abs() * 0.5;
+            let world =
+                (Vec3::from(pos[b]) - Vec3::from(pos[a])).cross(Vec3::from(pos[c]) - Vec3::from(pos[a])).length() * 0.5;
+            let tex =
+                (Vec2::from(uv[b]) - Vec2::from(uv[a])).perp_dot(Vec2::from(uv[c]) - Vec2::from(uv[a])).abs() * 0.5;
             worst = worst.max((world / (tex * TILE * TILE)).max(tex * TILE * TILE / world));
         }
         assert!(worst < 1.8, "a face is stretched {worst} times");

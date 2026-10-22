@@ -108,7 +108,13 @@ fn update(time: Res<Time>, sim: Res<SharedSim>, mut radio: ResMut<Radio>) {
     }
     let listener = Listener {
         position: geo(&radio.home, own),
-        hears: vec![Technology::MavlinkNetwork, Technology::Bluetooth4, Technology::Bluetooth5, Technology::WifiNan, Technology::Adsb],
+        hears: vec![
+            Technology::MavlinkNetwork,
+            Technology::Bluetooth4,
+            Technology::Bluetooth5,
+            Technology::WifiNan,
+            Technology::Adsb,
+        ],
     };
     let heard = radio.air.step(dt, &mut radio.emitters, &[listener]);
     if !heard.is_empty() {

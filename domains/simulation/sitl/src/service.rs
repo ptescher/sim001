@@ -3,7 +3,7 @@
 //! flight controller declare it; the harness starts it once for the run and stops it after, and
 //! when neither a build nor Docker is there those tests are "not supported yet", with how to get one.
 
-use crate::launch::{native_args, native_binary, DOCKER_IMAGE, DOCKER_NAME, MAVLINK_PORT};
+use crate::launch::{DOCKER_IMAGE, DOCKER_NAME, MAVLINK_PORT, native_args, native_binary};
 use expectation_service::{Command, Docker, Fallback, Ready};
 use std::path::Path;
 use std::time::Duration;
@@ -80,7 +80,10 @@ mod tests {
         let nowhere = Path::new("/definitely/not/a/checkout");
         let f = Fallback::new(
             NAME,
-            vec![Box::new(native(nowhere, "t1s-vtol", Path::new("/tmp/x"))), Box::new(docker(nowhere, "t1s-vtol").docker_program("definitely-not-docker-sim001"))],
+            vec![
+                Box::new(native(nowhere, "t1s-vtol", Path::new("/tmp/x"))),
+                Box::new(docker(nowhere, "t1s-vtol").docker_program("definitely-not-docker-sim001")),
+            ],
         );
         let why = f.unavailable().expect("neither is there");
         assert!(why.contains("build_native.sh") && why.contains("Docker"), "{why}");

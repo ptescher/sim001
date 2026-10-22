@@ -482,7 +482,8 @@ fn the_section_runs_in_sitl() {
         println!("not supported yet: {why}");
     }
     let published = std::env::var("SIM001_DOCS").ok().map(PathBuf::from);
-    let report = a.run_with(&mut driver, &RunOptions { docs_dir: published.clone(), ..Default::default() }, &mut services);
+    let report =
+        a.run_with(&mut driver, &RunOptions { docs_dir: published.clone(), ..Default::default() }, &mut services);
     drop(driver);
     if let Some(out) = &published {
         a.publish(out, "cognition-sitl", &report).unwrap();

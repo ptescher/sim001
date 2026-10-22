@@ -2,6 +2,9 @@
 //! (480 x 272): lamps along the top, bezelled monitors for the air data, the horizon and the nav
 //! data, and ArduPilot's messages below, in the console's palettes. The same layout, in Lua, is in `domains/teleoperation/edgetx/WIDGETS/SIM001FC/main.lua`; change them together.
 
+// The SVG is written in lines, newlines inside the markup included.
+#![allow(clippy::write_with_newline)]
+
 use crate::handset::Screen;
 use illustration_theme::{NIGHT, Palette, Rgb};
 use std::fmt::Write;
@@ -58,8 +61,13 @@ impl Screen {
             );
         };
         let label = |s: &mut String, x: f32, y: f32, text: &str, fill: &str, anchor: &str| {
-            let _ = write!(s, r##"<text x="{x}" y="{}" text-anchor="{anchor}" fill="{fill}">{}</text>
-"##, y + 11.0, escape(text));
+            let _ = write!(
+                s,
+                r##"<text x="{x}" y="{}" text-anchor="{anchor}" fill="{fill}">{}</text>
+"##,
+                y + 11.0,
+                escape(text)
+            );
         };
         // A bezelled monitor with a title strip. Returns where its screen is.
         let monitor = |s: &mut String, x: f32, y: f32, w: f32, h: f32, title: &str| {
@@ -106,13 +114,53 @@ impl Screen {
         let mode_w = w0 * 0.34;
         let small = (w0 - mode_w - 4.0 * gap) / 4.0;
         let low = self.percent < 20;
-        let lamp_state = |good: bool, bad: &'static str| if !live { "off" } else if good { "ok" } else { bad };
-        lamp(&mut s, x0, ly, mode_w, lh, &if live { self.mode.clone() } else { "NO LINK".into() }, if live { "active" } else { "warn" });
+        let lamp_state = |good: bool, bad: &'static str| {
+            if !live {
+                "off"
+            } else if good {
+                "ok"
+            } else {
+                bad
+            }
+        };
+        lamp(
+            &mut s,
+            x0,
+            ly,
+            mode_w,
+            lh,
+            &if live { self.mode.clone() } else { "NO LINK".into() },
+            if live { "active" } else { "warn" },
+        );
         let armed_label = if live && !self.armed { "DISARMED" } else { "ARMED" };
         lamp(&mut s, x0 + mode_w + gap, ly, small, lh, armed_label, if live && self.armed { "caution" } else { "off" });
-        lamp(&mut s, x0 + mode_w + gap * 2.0 + small, ly, small, lh, &format!("GPS {}", self.sats), lamp_state(self.sats >= 6, "caution"));
-        lamp(&mut s, x0 + mode_w + gap * 3.0 + small * 2.0, ly, small, lh, &format!("LINK {}%", self.quality), lamp_state(self.quality >= 50, "caution"));
-        lamp(&mut s, x0 + mode_w + gap * 4.0 + small * 3.0, ly, small, lh, &format!("{:.1}V", self.volts), lamp_state(!low, "warn"));
+        lamp(
+            &mut s,
+            x0 + mode_w + gap * 2.0 + small,
+            ly,
+            small,
+            lh,
+            &format!("GPS {}", self.sats),
+            lamp_state(self.sats >= 6, "caution"),
+        );
+        lamp(
+            &mut s,
+            x0 + mode_w + gap * 3.0 + small * 2.0,
+            ly,
+            small,
+            lh,
+            &format!("LINK {}%", self.quality),
+            lamp_state(self.quality >= 50, "caution"),
+        );
+        lamp(
+            &mut s,
+            x0 + mode_w + gap * 4.0 + small * 3.0,
+            ly,
+            small,
+            lh,
+            &format!("{:.1}V", self.volts),
+            lamp_state(!low, "warn"),
+        );
 
         // The middle: air data on the left, the horizon, the nav data on the right.
         let mh = 52.0;
@@ -121,33 +169,57 @@ impl Screen {
         let mid_w = w0 - 2.0 * side_w - 2.0 * gap;
         let (sx, sy, sw, sh) = monitor(&mut s, x0, py, side_w, ph, "AIR DATA");
         let climb_color = if self.climb < -3.0 { p.caution } else { p.ok };
-        systems(&mut s, sx, sy, sw, sh, &[
-            ("IAS", format!("{:.0} m/s", self.airspeed), None),
-            ("GS", format!("{:.0} m/s", self.ground_speed), None),
-            ("HDG", format!("{:03}", self.heading.floor() as i32), None),
-            ("VS", format!("{:+.1} m/s", self.climb), Some(climb_color)),
-        ]);
+        systems(
+            &mut s,
+            sx,
+            sy,
+            sw,
+            sh,
+            &[
+                ("IAS", format!("{:.0} m/s", self.airspeed), None),
+                ("GS", format!("{:.0} m/s", self.ground_speed), None),
+                ("HDG", format!("{:03}", self.heading.floor() as i32), None),
+                ("VS", format!("{:+.1} m/s", self.climb), Some(climb_color)),
+            ],
+        );
         let (hx, hy, hw, hh) = monitor(&mut s, x0 + side_w + gap, py, mid_w, ph, "ATTITUDE");
         self.horizon(&mut s, p, hx, hy, hw, hh);
         let (dist, _) = self.home_distance();
         let (rx, ry, rw, rh) = monitor(&mut s, x0 + side_w + mid_w + 2.0 * gap, py, side_w, ph, "NAV");
-        systems(&mut s, rx, ry, rw, rh, &[
-            ("ALT", format!("{:.0} m", self.height()), None),
-            ("HOME", format!("{dist:.0} m"), None),
-            ("BATT", format!("{}%", self.percent), Some(if low { p.warning } else { p.ok })),
-            ("CURR", format!("{:.1} A", self.amps), None),
-        ]);
+        systems(
+            &mut s,
+            rx,
+            ry,
+            rw,
+            rh,
+            &[
+                ("ALT", format!("{:.0} m", self.height()), None),
+                ("HOME", format!("{dist:.0} m"), None),
+                ("BATT", format!("{}%", self.percent), Some(if low { p.warning } else { p.ok })),
+                ("CURR", format!("{:.1} A", self.amps), None),
+            ],
+        );
 
         // ArduPilot's messages along the bottom, in a monitor of their own.
         let (mx, my, mw, mhh) = monitor(&mut s, x0, py + ph + gap, w0, mh, "MESSAGES");
         boxed(&mut s, mx, my, mw, mhh, screen_r, Rgb(0), p.screen);
         if self.messages.is_empty() && live {
-            let hint = if self.armed { "Armed. ArduPilot's messages show here." } else { "Disarmed: waiting for ArduPilot's pre-arm checks." };
+            let hint = if self.armed {
+                "Armed. ArduPilot's messages show here."
+            } else {
+                "Disarmed: waiting for ArduPilot's pre-arm checks."
+            };
             label(&mut s, mx + 8.0, my + 3.0, hint, &c(p.muted), "start");
         }
         let first = self.messages.len().saturating_sub(2);
         for (i, m) in self.messages[first..].iter().enumerate() {
-            let fill = if m.severity <= 3 { c(p.warning) } else if m.severity == 4 { c(p.caution) } else { c(p.text) };
+            let fill = if m.severity <= 3 {
+                c(p.warning)
+            } else if m.severity == 4 {
+                c(p.caution)
+            } else {
+                c(p.text)
+            };
             let shown: String = m.text.chars().take(60).collect();
             label(&mut s, mx + 8.0, my + 3.0 + i as f32 * 13.0, &shown, &fill, "start");
         }
@@ -273,7 +345,12 @@ mod tests {
     #[test]
     fn height_and_home_are_measured_from_where_it_stood_disarmed() {
         let g = |lat, alt| aviation_crsf::Gps { lat, lon: 149.0, speed: 0.0, heading: 0.0, alt, sats: 10 };
-        let s = Screen { home: Some((-35.0, 149.0, 584.0)), gps: Some(g(-35.0 + 100.0 / 111_320.0, 624.0)), alt: 624.0, ..Default::default() };
+        let s = Screen {
+            home: Some((-35.0, 149.0, 584.0)),
+            gps: Some(g(-35.0 + 100.0 / 111_320.0, 624.0)),
+            alt: 624.0,
+            ..Default::default()
+        };
         assert_eq!(s.height().round(), 40.0);
         let (d, bearing) = s.home_distance();
         assert!((d - 100.0).abs() < 1.0 && (bearing - 0.0).abs() < 1.0, "{d} {bearing}");

@@ -16,7 +16,11 @@ use teleoperation_shared::layout::Rect;
 #[derive(Resource)]
 pub struct WindowRect(pub Rect, pub f32);
 
-pub fn place_window(rect: Res<WindowRect>, mut windows: Query<&mut Window, With<PrimaryWindow>>, mut frame: Local<u32>) {
+pub fn place_window(
+    rect: Res<WindowRect>,
+    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+    mut frame: Local<u32>,
+) {
     *frame += 1;
     // Frames 2, 12, 22, 32: early, then again after any display/scale change settles.
     if *frame > 32 || *frame % 10 != 2 {

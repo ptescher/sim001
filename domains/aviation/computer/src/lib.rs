@@ -101,10 +101,30 @@ pub struct FlightComputer {
 
 /// ArduPlane's custom modes, by number.
 const PLANE_MODES: &[(u32, &str)] = &[
-    (0, "MANUAL"), (1, "CIRCLE"), (2, "STABILIZE"), (3, "TRAINING"), (4, "ACRO"), (5, "FBWA"), (6, "FBWB"),
-    (7, "CRUISE"), (8, "AUTOTUNE"), (10, "AUTO"), (11, "RTL"), (12, "LOITER"), (13, "TAKEOFF"),
-    (14, "AVOID_ADSB"), (15, "GUIDED"), (17, "QSTABILIZE"), (18, "QHOVER"), (19, "QLOITER"), (20, "QLAND"),
-    (21, "QRTL"), (22, "QAUTOTUNE"), (23, "QACRO"), (24, "THERMAL"), (25, "LOITER2QLAND"),
+    (0, "MANUAL"),
+    (1, "CIRCLE"),
+    (2, "STABILIZE"),
+    (3, "TRAINING"),
+    (4, "ACRO"),
+    (5, "FBWA"),
+    (6, "FBWB"),
+    (7, "CRUISE"),
+    (8, "AUTOTUNE"),
+    (10, "AUTO"),
+    (11, "RTL"),
+    (12, "LOITER"),
+    (13, "TAKEOFF"),
+    (14, "AVOID_ADSB"),
+    (15, "GUIDED"),
+    (17, "QSTABILIZE"),
+    (18, "QHOVER"),
+    (19, "QLOITER"),
+    (20, "QLAND"),
+    (21, "QRTL"),
+    (22, "QAUTOTUNE"),
+    (23, "QACRO"),
+    (24, "THERMAL"),
+    (25, "LOITER2QLAND"),
 ];
 
 impl FlightComputer {
@@ -304,11 +324,21 @@ impl FlightComputer {
             out.extend(crsf::flight_mode_frame(&format!("{}{}", v.mode, if v.armed { "" } else { "*" })));
         }
         if due(&mut self.timers.link, 0.5) {
-            out.extend(crsf::link_stats_frame(&crsf::LinkStats { rssi: 60, quality: self.quality, snr: 10, rf_mode: 6, tx_power_mw_index: 2 }));
+            out.extend(crsf::link_stats_frame(&crsf::LinkStats {
+                rssi: 60,
+                quality: self.quality,
+                snr: 10,
+                rf_mode: 6,
+                tx_power_mw_index: 2,
+            }));
         }
         // The ground station's commands first (they are few), then ArduPilot's MAVLink, in the
         // room that is left.
-        for (queue, addr) in [(&mut self.from_gs, crsf::ADDR_RADIO), (&mut self.heartbeats, crsf::ADDR_TX), (&mut self.waiting, crsf::ADDR_TX)] {
+        for (queue, addr) in [
+            (&mut self.from_gs, crsf::ADDR_RADIO),
+            (&mut self.heartbeats, crsf::ADDR_TX),
+            (&mut self.waiting, crsf::ADDR_TX),
+        ] {
             while !queue.is_empty() {
                 let n = queue.len().min(crsf::MAX_ENVELOPE_DATA);
                 if self.budget < (n + 5) as f32 {

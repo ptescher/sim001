@@ -90,7 +90,15 @@ pub struct Tag {
 
 impl Tag {
     pub fn new(arena: Arena, rules: Rules, players: usize, first_it: usize) -> Tag {
-        Tag { arena, rules, players: (0..players).map(|_| Player { it_time: 0.0, tags: 0 }).collect(), it: first_it, tagged_by: None, time: 0.0, inside: vec![true; players] }
+        Tag {
+            arena,
+            rules,
+            players: (0..players).map(|_| Player { it_time: 0.0, tags: 0 }).collect(),
+            it: first_it,
+            tagged_by: None,
+            time: 0.0,
+            inside: vec![true; players],
+        }
     }
 
     /// Runs the game on by `dt` seconds, with every plane where it is now.

@@ -45,15 +45,36 @@ pub struct NoseCamera {
 pub fn nose_camera() -> NoseCamera {
     let bulkhead_z = NOSE_Z + 0.032;
     let (_, rx, ry, cy) = pod::stations_at(bulkhead_z);
-    let bulkhead = finish(loft_n(&[(bulkhead_z, rx * 0.97, ry * 0.97, cy), (bulkhead_z + 0.002, rx * 0.97, ry * 0.97, cy)], 0.0, 40, true, pod::EXPONENT));
+    let bulkhead = finish(loft_n(
+        &[(bulkhead_z, rx * 0.97, ry * 0.97, cy), (bulkhead_z + 0.002, rx * 0.97, ry * 0.97, cy)],
+        0.0,
+        40,
+        true,
+        pod::EXPONENT,
+    ));
     let along_z = Quat::from_rotation_x(FRAC_PI_2);
     let y = cy - 0.004;
     let body_z = bulkhead_z - 0.011;
     let barrel_z = bulkhead_z - 0.022 - 0.004;
     let parts = vec![
-        Part { kind: Kind::Black, mesh: finish(Cuboid::new(0.030, 0.024, 0.022).mesh().build()), at: Transform::from_xyz(0.0, y, body_z), half: Vec3::new(0.015, 0.012, 0.011) },
-        Part { kind: Kind::Metal, mesh: finish(Cylinder::new(0.0085, 0.008).mesh().resolution(24).build()), at: Transform::from_xyz(0.0, y, barrel_z).with_rotation(along_z), half: Vec3::new(0.0085, 0.0085, 0.004) },
-        Part { kind: Kind::Glass, mesh: finish(Cylinder::new(0.0065, 0.0016).mesh().resolution(24).build()), at: Transform::from_xyz(0.0, y, barrel_z - 0.0044).with_rotation(along_z), half: Vec3::new(0.0065, 0.0065, 0.0008) },
+        Part {
+            kind: Kind::Black,
+            mesh: finish(Cuboid::new(0.030, 0.024, 0.022).mesh().build()),
+            at: Transform::from_xyz(0.0, y, body_z),
+            half: Vec3::new(0.015, 0.012, 0.011),
+        },
+        Part {
+            kind: Kind::Metal,
+            mesh: finish(Cylinder::new(0.0085, 0.008).mesh().resolution(24).build()),
+            at: Transform::from_xyz(0.0, y, barrel_z).with_rotation(along_z),
+            half: Vec3::new(0.0085, 0.0085, 0.004),
+        },
+        Part {
+            kind: Kind::Glass,
+            mesh: finish(Cylinder::new(0.0065, 0.0016).mesh().resolution(24).build()),
+            at: Transform::from_xyz(0.0, y, barrel_z - 0.0044).with_rotation(along_z),
+            half: Vec3::new(0.0065, 0.0065, 0.0008),
+        },
     ];
     NoseCamera { bulkhead_z, bulkhead, parts }
 }
@@ -66,17 +87,43 @@ pub fn gimbal() -> Vec<Part> {
     let r = GIMBAL_RADIUS;
     let ring_y = -0.004;
     vec![
-        Part { kind: Kind::White, mesh: finish(Sphere::new(r).mesh().uv(28, 16)), at: Transform::from_translation(GIMBAL_CENTRE), half: Vec3::splat(r) },
+        Part {
+            kind: Kind::White,
+            mesh: finish(Sphere::new(r).mesh().uv(28, 16)),
+            at: Transform::from_translation(GIMBAL_CENTRE),
+            half: Vec3::splat(r),
+        },
         Part {
             kind: Kind::Black,
-            mesh: finish(Torus::new(0.0010, (r * r - ring_y * ring_y).sqrt() + 0.0003).mesh().major_resolution(36).minor_resolution(6).build()),
+            mesh: finish(
+                Torus::new(0.0010, (r * r - ring_y * ring_y).sqrt() + 0.0003)
+                    .mesh()
+                    .major_resolution(36)
+                    .minor_resolution(6)
+                    .build(),
+            ),
             at: Transform::from_translation(GIMBAL_CENTRE + Vec3::Y * ring_y),
             half: Vec3::new(r, 0.001, r),
         },
-        Part { kind: Kind::Black, mesh: finish(Cylinder::new(0.0105, 0.0012).mesh().resolution(28).build()), at: Transform::from_translation(GIMBAL_CENTRE + look * (r - 0.0002)).with_rotation(facing), half: Vec3::splat(0.0105) },
-        Part { kind: Kind::Glass, mesh: finish(Cylinder::new(0.0085, 0.0012).mesh().resolution(28).build()), at: Transform::from_translation(GIMBAL_CENTRE + look * (r + 0.0003)).with_rotation(facing), half: Vec3::splat(0.0085) },
+        Part {
+            kind: Kind::Black,
+            mesh: finish(Cylinder::new(0.0105, 0.0012).mesh().resolution(28).build()),
+            at: Transform::from_translation(GIMBAL_CENTRE + look * (r - 0.0002)).with_rotation(facing),
+            half: Vec3::splat(0.0105),
+        },
+        Part {
+            kind: Kind::Glass,
+            mesh: finish(Cylinder::new(0.0085, 0.0012).mesh().resolution(28).build()),
+            at: Transform::from_translation(GIMBAL_CENTRE + look * (r + 0.0003)).with_rotation(facing),
+            half: Vec3::splat(0.0085),
+        },
         // The plate on the belly the ball hangs from.
-        Part { kind: Kind::Black, mesh: finish(Cuboid::new(0.036, 0.002, 0.042).mesh().build()), at: Transform::from_xyz(0.0, pod::surface_y(GIMBAL_CENTRE.z, false) - 0.0004, GIMBAL_CENTRE.z), half: Vec3::new(0.018, 0.001, 0.021) },
+        Part {
+            kind: Kind::Black,
+            mesh: finish(Cuboid::new(0.036, 0.002, 0.042).mesh().build()),
+            at: Transform::from_xyz(0.0, pod::surface_y(GIMBAL_CENTRE.z, false) - 0.0004, GIMBAL_CENTRE.z),
+            half: Vec3::new(0.018, 0.001, 0.021),
+        },
     ]
 }
 
@@ -84,7 +131,6 @@ pub fn gimbal() -> Vec<Part> {
 mod tests {
     use super::*;
     use crate::pod;
-    use bevy::prelude::*;
 
     /// The gimbal hangs from the belly of the pod ahead of the wing, as in the manufacturer's
     /// renders: a ball standing out of the bottom of the pod by a couple of centimetres.
@@ -114,11 +160,20 @@ mod tests {
     #[test]
     fn the_nose_camera_sits_in_the_recess() {
         let n = nose_camera();
-        assert!(n.bulkhead_z > simulation_aircraft::t1s_ranger::geom::NOSE_Z + 0.02 && n.bulkhead_z < simulation_aircraft::t1s_ranger::geom::NOSE_Z + 0.045, "bulkhead at {}", n.bulkhead_z);
+        assert!(
+            n.bulkhead_z > simulation_aircraft::t1s_ranger::geom::NOSE_Z + 0.02
+                && n.bulkhead_z < simulation_aircraft::t1s_ranger::geom::NOSE_Z + 0.045,
+            "bulkhead at {}",
+            n.bulkhead_z
+        );
         for p in &n.parts {
             let (_, rx, ry, cy) = pod::stations_at(p.at.translation.z);
             assert!(p.at.translation.x.abs() + p.half.x <= rx * 0.9, "{:?} sticks out of the side", p.kind);
-            assert!(p.at.translation.y + p.half.y <= cy + ry && p.at.translation.y - p.half.y >= cy - ry, "{:?} sticks out of the pod", p.kind);
+            assert!(
+                p.at.translation.y + p.half.y <= cy + ry && p.at.translation.y - p.half.y >= cy - ry,
+                "{:?} sticks out of the pod",
+                p.kind
+            );
             assert!(p.at.translation.z - p.half.z >= n.bulkhead_z - 0.04, "{:?} is outside the pod's nose", p.kind);
         }
         assert!(n.parts.iter().any(|p| p.kind == Kind::Glass), "no lens");
@@ -139,6 +194,9 @@ mod tests {
         let window = g.iter().find(|p| p.kind == Kind::Glass).unwrap();
         let facing = window.at.rotation * Vec3::Y;
         let look = (SENSOR_MOUNT - GIMBAL_CENTRE).normalize();
-        assert!(facing.dot(look) > 0.95 || (-facing).dot(look) > 0.95, "the window does not face the lens: {facing:?} against {look:?}");
+        assert!(
+            facing.dot(look) > 0.95 || (-facing).dot(look) > 0.95,
+            "the window does not face the lens: {facing:?} against {look:?}"
+        );
     }
 }

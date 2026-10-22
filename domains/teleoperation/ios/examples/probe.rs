@@ -8,6 +8,13 @@ fn main() {
     for _ in 0..30 {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let v = s.vehicle.lock().unwrap();
-        println!("{} | alive {} mode {} armed {} home {}", v.link.status, v.link.alive(), v.mode(), v.armed, v.home.is_some());
+        println!(
+            "{} | alive {} mode {} armed {} home {}",
+            v.link.status,
+            v.link.alive(),
+            v.mode(),
+            v.armed,
+            v.home.is_some()
+        );
     }
 }

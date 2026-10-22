@@ -39,7 +39,13 @@ pub fn rock(seed: u32, size: Size) -> Mesh {
         Size::Cobble => 2,
     };
     let ico = Sphere::new(1.0).mesh().ico(subdivisions).unwrap();
-    let mut pos: Vec<Vec3> = ico.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| a.as_float3()).unwrap().iter().map(|p| Vec3::from_array(*p)).collect();
+    let mut pos: Vec<Vec3> = ico
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .and_then(|a| a.as_float3())
+        .unwrap()
+        .iter()
+        .map(|p| Vec3::from_array(*p))
+        .collect();
     let tris: Vec<u32> = ico.indices().unwrap().iter().map(|i| i as u32).collect();
 
     // Planes that cut the sphere into faces: a few leaning up (the top), the rest all round, none
@@ -105,7 +111,9 @@ pub fn rock(seed: u32, size: Size) -> Mesh {
             let p = pos[i as usize];
             let n = (smooth[i as usize].normalize_or(face) * 0.3 + face * 0.7).normalize_or(face);
             let cover = smoothstep(0.55, 0.85, n.y) * smoothstep(0.35, 0.65, noise3(p * 2.5 + off)) * moss;
-            let lichen = smoothstep(0.62, 0.78, noise3(p * 6.0 + off * 1.7)) * (1.0 - smoothstep(0.3, 0.8, n.y)) * smoothstep(-0.2, 0.2, p.y);
+            let lichen = smoothstep(0.62, 0.78, noise3(p * 6.0 + off * 1.7))
+                * (1.0 - smoothstep(0.3, 0.8, n.y))
+                * smoothstep(-0.2, 0.2, p.y);
             let dirt = smoothstep(-BOTTOM + 0.2, -BOTTOM, p.y);
             let mut col = Vec3::ONE;
             col = col.lerp(Vec3::new(0.50, 0.66, 0.28), cover.min(1.0) * 0.9);
@@ -171,7 +179,14 @@ mod tests {
     }
 
     fn soup(m: &Mesh) -> Soup {
-        let f3 = |a| m.attribute(a).and_then(|v| v.as_float3()).expect("attribute").iter().map(|p| Vec3::from_array(*p)).collect::<Vec<_>>();
+        let f3 = |a| {
+            m.attribute(a)
+                .and_then(|v| v.as_float3())
+                .expect("attribute")
+                .iter()
+                .map(|p| Vec3::from_array(*p))
+                .collect::<Vec<_>>()
+        };
         let uv = match m.attribute(Mesh::ATTRIBUTE_UV_0) {
             Some(bevy::mesh::VertexAttributeValues::Float32x2(v)) => v.iter().map(|p| Vec2::from_array(*p)).collect(),
             _ => panic!("uvs"),
@@ -247,7 +262,8 @@ mod tests {
                 (hi.y - lo.y) / (hi.x - lo.x).max(hi.z - lo.z)
             })
             .collect();
-        let spread = aspects.iter().cloned().fold(f32::MIN, f32::max) - aspects.iter().cloned().fold(f32::MAX, f32::min);
+        let spread =
+            aspects.iter().cloned().fold(f32::MIN, f32::max) - aspects.iter().cloned().fold(f32::MAX, f32::min);
         assert!(spread > 0.15, "all about as tall as wide: {aspects:?}");
         assert!(aspects.iter().all(|&a| a > 0.2 && a < 1.3), "{aspects:?}");
     }
@@ -257,7 +273,7 @@ mod tests {
         for seed in 1..5 {
             let (big, small) = (tris(&rock(seed, Size::Boulder)), tris(&rock(seed, Size::Cobble)));
             assert!(big <= 1500, "a boulder has {big} triangles");
-            assert!(small <= 300 && small >= 60, "a cobble has {small} triangles");
+            assert!((60..=300).contains(&small), "a cobble has {small} triangles");
         }
     }
 

@@ -36,6 +36,11 @@ fn main() {
         std::hint::black_box(&s);
         println!("  end: phase {:?}, pos {:?}, airspeed {:.1}", s.phase, s.pos, s.airspeed);
         let sim = steps as f64 * dt as f64;
-        println!("{id}: {steps} steps at {:.0} Hz in {wall:.2} s: {:.0} steps/s, {:.0}x real time on one core", 1.0 / dt as f64, steps as f64 / wall, sim / wall);
+        println!(
+            "{id}: {steps} steps at {:.0} Hz in {wall:.2} s: {:.0} steps/s, {:.0}x real time on one core",
+            1.0 / dt as f64,
+            steps as f64 / wall,
+            sim / wall
+        );
     }
 }

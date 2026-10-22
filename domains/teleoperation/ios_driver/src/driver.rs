@@ -29,7 +29,8 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator lands vertically", Act::Button("mode-QLAND")),
 ];
 
-const MODES: &[&str] = &["MANUAL", "FBWA", "CRUISE", "AUTO", "RTL", "LOITER", "QSTABILIZE", "QHOVER", "QLOITER", "QLAND", "QRTL"];
+const MODES: &[&str] =
+    &["MANUAL", "FBWA", "CRUISE", "AUTO", "RTL", "LOITER", "QSTABILIZE", "QHOVER", "QLOITER", "QLAND", "QRTL"];
 
 const LOOK: Duration = Duration::from_millis(100);
 const SETTLE: Duration = Duration::from_millis(600);
@@ -233,9 +234,19 @@ mod tests {
         let v = &a.suite.vocabulary;
         let ok = |p: &expectation_story::Plan| {
             p.start.iter().all(|(x, _)| STATES.contains(&v.var(x).key.as_str()))
-                && p.steps.iter().flat_map(|s| &s.checks).chain(&p.start_checks).all(|c| STATES.contains(&v.var(c.var).key.as_str()))
-                && p.steps.iter().filter_map(|s| s.action.event).all(|e| EVENTS.iter().any(|(k, _)| *k == v.event(e).key))
-                && p.steps.iter().flat_map(|s| s.action.changes.vars()).all(|x| SETTABLE.contains(&v.var(x).key.as_str()))
+                && p.steps
+                    .iter()
+                    .flat_map(|s| &s.checks)
+                    .chain(&p.start_checks)
+                    .all(|c| STATES.contains(&v.var(c.var).key.as_str()))
+                && p.steps
+                    .iter()
+                    .filter_map(|s| s.action.event)
+                    .all(|e| EVENTS.iter().any(|(k, _)| *k == v.event(e).key))
+                && p.steps
+                    .iter()
+                    .flat_map(|s| s.action.changes.vars())
+                    .all(|x| SETTABLE.contains(&v.var(x).key.as_str()))
         };
         let runnable: Vec<&str> = a.plans.iter().filter(|p| ok(p)).map(|p| p.title.as_str()).collect();
         for want in ["Arming sets home", "DISARM disarms"] {

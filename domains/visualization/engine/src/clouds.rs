@@ -12,25 +12,27 @@
 use crate::Wind;
 use bevy::anti_alias::taa::temporal_anti_alias;
 use bevy::asset::{RenderAssetUsages, embedded_asset, load_embedded_asset};
+use bevy::camera::MainPassResolutionOverride;
 use bevy::core_pipeline::{
     FullscreenShader,
     schedule::{Core3d, Core3dSystems},
 };
-use bevy::camera::MainPassResolutionOverride;
 use bevy::diagnostic::FrameCount;
 use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
 use bevy::render::{
     Render, RenderApp, RenderStartup, RenderSystems,
-    extract_component::{ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin},
+    extract_component::{
+        ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
+    },
     extract_resource::{ExtractResource, ExtractResourcePlugin},
     render_asset::RenderAssets,
     render_resource::{
-        BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, CachedRenderPipelineId, ColorTargetState,
-        AddressMode, ColorWrites, Extent3d, FilterMode, FragmentState, LoadOp, Operations, PipelineCache, RenderPassColorAttachment,
-        RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages,
-        ShaderType, SpecializedRenderPipeline, SpecializedRenderPipelines, StoreOp, TextureDimension, TextureFormat,
-        TextureDescriptor, TextureSampleType, TextureUsages,
+        AddressMode, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, CachedRenderPipelineId,
+        ColorTargetState, ColorWrites, Extent3d, FilterMode, FragmentState, LoadOp, Operations, PipelineCache,
+        RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerBindingType,
+        SamplerDescriptor, ShaderStages, ShaderType, SpecializedRenderPipeline, SpecializedRenderPipelines, StoreOp,
+        TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
         binding_types::{sampler, texture_2d, texture_3d, uniform_buffer},
     },
     renderer::{RenderContext, RenderDevice, ViewQuery},
@@ -116,7 +118,10 @@ pub fn drift(wind: &Wind, t: f32) -> Vec2 {
 const NOISE_SIZE: u32 = 128;
 
 fn hash(c: IVec3, seed: u32) -> Vec3 {
-    let mut h = (c.x as u32).wrapping_mul(0x8da6_b343) ^ (c.y as u32).wrapping_mul(0xd816_3841) ^ (c.z as u32).wrapping_mul(0xcb1a_b31f) ^ seed.wrapping_mul(0x9E37_79B1);
+    let mut h = (c.x as u32).wrapping_mul(0x8da6_b343)
+        ^ (c.y as u32).wrapping_mul(0xd816_3841)
+        ^ (c.z as u32).wrapping_mul(0xcb1a_b31f)
+        ^ seed.wrapping_mul(0x9E37_79B1);
     let mut next = || {
         h = (h ^ (h >> 13)).wrapping_mul(0x5bd1_e995);
         h ^= h >> 15;
@@ -268,7 +273,10 @@ impl Plugin for CloudsPlugin {
                 ),
             )
             // Before the anti-aliasing, which averages the ray march's jitter away.
-            .add_systems(Core3d, clouds.in_set(CloudsSet).in_set(Core3dSystems::EarlyPostProcess).before(temporal_anti_alias));
+            .add_systems(
+                Core3d,
+                clouds.in_set(CloudsSet).in_set(Core3dSystems::EarlyPostProcess).before(temporal_anti_alias),
+            );
     }
 }
 
@@ -447,7 +455,10 @@ fn prepare_buffers(
                 },
             )
         };
-        let buffers = CloudBuffers { light: texture("clouds_light", LIGHT_FORMAT), distance: texture("clouds_distance", DISTANCE_FORMAT) };
+        let buffers = CloudBuffers {
+            light: texture("clouds_light", LIGHT_FORMAT),
+            distance: texture("clouds_distance", DISTANCE_FORMAT),
+        };
         commands.entity(entity).insert(buffers);
     }
 }
@@ -478,14 +489,22 @@ fn clouds(
     let (target, id, depth, index, buffers, resolution) = view.into_inner();
     let Some(noise) = noise.and_then(|n| images.get(&n.0)) else { return };
     let Some(depth_view) = depth.attachment.depth_stencil_views().depth_only_view() else { return };
-    let (Some(march), Some(composite)) = (cache.get_render_pipeline(pipeline.march), cache.get_render_pipeline(id.0)) else { return };
+    let (Some(march), Some(composite)) = (cache.get_render_pipeline(pipeline.march), cache.get_render_pipeline(id.0))
+    else {
+        return;
+    };
     let Some(settings) = uniforms.uniforms().binding() else { return };
 
     // March at half size.
     let bind_group = ctx.render_device().create_bind_group(
         Some("clouds_march_bind_group"),
         &cache.get_bind_group_layout(&pipeline.march_layout),
-        &BindGroupEntries::with_indices(((1, depth_view), (3, &noise.texture_view), (4, &noise.sampler), (5, settings.clone()))),
+        &BindGroupEntries::with_indices((
+            (1, depth_view),
+            (3, &noise.texture_view),
+            (4, &noise.sampler),
+            (5, settings.clone()),
+        )),
     );
     let attachment = |view| {
         Some(RenderPassColorAttachment {

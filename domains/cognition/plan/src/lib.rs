@@ -377,11 +377,23 @@ pub mod wire {
 
         #[test]
         fn a_plan_survives_the_wire() {
-            let p = WirePlan { id: 4321, primitive: Primitive::Orbit, target: 3, lat: -35.363261, lon: 149.16523, alt: 37.5, radius: 60.0, ttl: 2.5 };
+            let p = WirePlan {
+                id: 4321,
+                primitive: Primitive::Orbit,
+                target: 3,
+                lat: -35.363261,
+                lon: 149.16523,
+                alt: 37.5,
+                radius: 60.0,
+                ttl: 2.5,
+            };
             let c = p.to_command();
             assert_eq!(c.command, CMD_PLAN);
             let q = WirePlan::from_command(&c).unwrap();
-            assert_eq!((q.id, q.primitive, q.target, q.alt, q.radius, q.ttl), (4321, Primitive::Orbit, 3, 37.5, 60.0, 2.5));
+            assert_eq!(
+                (q.id, q.primitive, q.target, q.alt, q.radius, q.ttl),
+                (4321, Primitive::Orbit, 3, 37.5, 60.0, 2.5)
+            );
             assert!((q.lat - p.lat).abs() < 1e-7 && (q.lon - p.lon).abs() < 1e-7);
         }
 

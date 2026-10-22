@@ -37,7 +37,9 @@ impl Wire for TcpWire {
         match self.0.read(buf) {
             Ok(0) => None,
             Ok(n) => Some(n),
-            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted | ErrorKind::TimedOut) => Some(0),
+            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted | ErrorKind::TimedOut) => {
+                Some(0)
+            }
             Err(_) => None,
         }
     }

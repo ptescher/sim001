@@ -79,7 +79,11 @@ impl Watcher {
     pub fn message(&mut self, msg: &MavMessage) {
         match msg {
             MavMessage::HOME_POSITION(h) if self.fixed_home.is_none() => {
-                self.home = Some(Home { lat: h.latitude as f64 * 1e-7, lon: h.longitude as f64 * 1e-7, alt: h.altitude as f32 * 1e-3 });
+                self.home = Some(Home {
+                    lat: h.latitude as f64 * 1e-7,
+                    lon: h.longitude as f64 * 1e-7,
+                    alt: h.altitude as f32 * 1e-3,
+                });
             }
             MavMessage::GLOBAL_POSITION_INT(p) => {
                 let (lat, lon, alt) = (p.lat as f64 * 1e-7, p.lon as f64 * 1e-7, p.alt as f32 * 1e-3);
@@ -149,7 +153,10 @@ mod tests {
     fn a_home_on_the_command_line_wins() {
         let home = Home { lat: 1.0, lon: 2.0, alt: 3.0 };
         let mut w = Watcher::new(Some(home));
-        w.message(&MavMessage::HOME_POSITION(mavlink::dialects::common::HOME_POSITION_DATA { latitude: 10, ..Default::default() }));
+        w.message(&MavMessage::HOME_POSITION(mavlink::dialects::common::HOME_POSITION_DATA {
+            latitude: 10,
+            ..Default::default()
+        }));
         assert_eq!(w.home(), Some(home));
     }
 

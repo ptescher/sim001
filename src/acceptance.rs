@@ -11,7 +11,6 @@ use crate::camera::{CamMode, CamState};
 use crate::hud::HudState;
 use crate::input::PilotInput;
 use crate::loading::AppState;
-use simulation_physics::Phase;
 use crate::sim::{FlightMode, SimCore, Sticks};
 use crate::{SharedSim, SimSet};
 use bevy::app::AppExit;
@@ -21,9 +20,10 @@ use bevy::window::WindowOccluded;
 use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions};
 use expectation_model::{Event, Value, Variable};
 use recreation_games::{Clock, Errand, Kind, StandIn};
+use simulation_physics::Phase;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// What each event of the vocabulary presses.
@@ -47,7 +47,8 @@ const KEYS: &[(&str, KeyCode)] = &[
 ];
 
 /// Events and states that are ArduPilot's: they are for a run with ArduPilot flying the plane.
-const ARDUPILOT: &[&str] = &["pilot arms the plane", "pilot opens the throttle to climb", "pilot sends the plane home", "autopilot"];
+const ARDUPILOT: &[&str] =
+    &["pilot arms the plane", "pilot opens the throttle to climb", "pilot sends the plane home", "autopilot"];
 /// What the sim's own flight modes do: a run with ArduPilot flying the plane has none of it.
 const SIM_MODES: &[&str] = &["pilot changes flight mode", "pilot changes rates", "pilot toggles differential thrust"];
 
@@ -157,10 +158,19 @@ struct Standin {
 type Shared = Arc<Mutex<Standin>>;
 
 /// Load and check the suite before anything opens, then start the runner thread.
-pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_controller: bool, ardupilot_flying: bool, services: expectation_harness::service::Services) {
+pub fn plugin(
+    app: &mut App,
+    suite: PathBuf,
+    docs: Option<PathBuf>,
+    flight_controller: bool,
+    ardupilot_flying: bool,
+    services: expectation_harness::service::Services,
+) {
     // ArduPilot steps the physics in real time, so what the tests wait for can't run any faster.
     let speed: f32 = if ardupilot_flying { 1.0 } else { 8.0 };
-    let scale = TimeScale(std::env::var("SIM001_EXPECT_SPEED").ok().and_then(|v| v.parse().ok()).unwrap_or(speed).clamp(1.0, 20.0));
+    let scale = TimeScale(
+        std::env::var("SIM001_EXPECT_SPEED").ok().and_then(|v| v.parse().ok()).unwrap_or(speed).clamp(1.0, 20.0),
+    );
     let acceptance = match Acceptance::load(&suite) {
         Ok(a) => a.with_coverage(),
         Err(e) => {
@@ -187,20 +197,48 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
 
     std::thread::spawn(move || {
         let mut services = services;
-        let mut driver = SimDriver { tx, flight_controller, ardupilot_flying, standin, deadline: Mutex::new(None), needs: if services.is_empty() { vec![] } else { vec!["ardupilot".to_string()] } };
+        let mut driver = SimDriver {
+            tx,
+            flight_controller,
+            ardupilot_flying,
+            standin,
+            deadline: Mutex::new(None),
+            needs: if services.is_empty() { vec![] } else { vec!["ardupilot".to_string()] },
+        };
         let opts = RunOptions { docs_dir: docs.clone(), patience: 100 };
         let mut report = expectation_story::Report::default();
         let began = std::time::Instant::now();
         for plan in &acceptance.plans {
             let started = std::time::Instant::now();
-            let mut r = expectation_harness::run::run_with(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts, &mut services).results.into_iter().next().unwrap();
+            let mut r = expectation_harness::run::run_with(
+                &acceptance.suite,
+                std::slice::from_ref(plan),
+                &mut driver,
+                &opts,
+                &mut services,
+            )
+            .results
+            .into_iter()
+            .next()
+            .unwrap();
             // The games are played by computer pilots, and how a game goes is not the same twice:
             // a test that fails once gets one more go, and says so.
             let mut retried = false;
             say_what_ardupilot_did(&driver, &r);
-            if matches!(r.status, expectation_story::Status::Failed) && std::env::var("SIM001_EXPECT_NO_RETRY").is_err() {
+            if matches!(r.status, expectation_story::Status::Failed) && std::env::var("SIM001_EXPECT_NO_RETRY").is_err()
+            {
                 println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, started.elapsed().as_secs_f32());
-                r = expectation_harness::run::run_with(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts, &mut services).results.into_iter().next().unwrap();
+                r = expectation_harness::run::run_with(
+                    &acceptance.suite,
+                    std::slice::from_ref(plan),
+                    &mut driver,
+                    &opts,
+                    &mut services,
+                )
+                .results
+                .into_iter()
+                .next()
+                .unwrap();
                 retried = true;
                 say_what_ardupilot_did(&driver, &r);
             }
@@ -217,7 +255,17 @@ pub fn plugin(app: &mut App, suite: PathBuf, docs: Option<PathBuf>, flight_contr
         if let Some(dir) = &docs {
             // Saved as the sim's results, and merged with any other runner's (the ground
             // station's, one day) before the docs are written.
-            match acceptance.publish(dir, if ardupilot_flying { "sim-vtol" } else if flight_controller { "sim-flight-controller" } else { "sim" }, &report) {
+            match acceptance.publish(
+                dir,
+                if ardupilot_flying {
+                    "sim-vtol"
+                } else if flight_controller {
+                    "sim-flight-controller"
+                } else {
+                    "sim"
+                },
+                &report,
+            ) {
                 Ok(_) => println!("expect: wrote the docs to {}", dir.display()),
                 Err(e) => eprintln!("expect: couldn't write the docs to {}: {e}", dir.display()),
             }
@@ -429,7 +477,12 @@ impl SimDriver {
     }
 
     /// Wait up to `secs` of sim time for `done`, saying what it waited for if it never came.
-    fn until(&self, secs: f32, what: &str, done: impl Fn(&SimCore) -> bool + Send + Clone + 'static) -> Result<(), String> {
+    fn until(
+        &self,
+        secs: f32,
+        what: &str,
+        done: impl Fn(&SimCore) -> bool + Send + Clone + 'static,
+    ) -> Result<(), String> {
         let mut waited = 0.0;
         while waited < secs {
             let d = done.clone();
@@ -450,9 +503,9 @@ impl SimDriver {
     /// Give the stand-in pilot a job.
     fn errand(&self, errand: Errand) -> Result<(), String> {
         {
-        self.standin.lock().unwrap().errand = Some(errand);
-        Ok(())
-    }
+            self.standin.lock().unwrap().errand = Some(errand);
+            Ok(())
+        }
     }
 
     /// The events the stand-in pilot flies, or the test waits for: each returns when it has
@@ -470,7 +523,8 @@ impl SimDriver {
                 };
                 self.press(key)
             }
-            "countdown ends" => self.until(10.0, "GO", |c| c.game.as_ref().is_some_and(|g| !matches!(g.clock, Clock::CountingDown { .. }))),
+            "countdown ends" => self
+                .until(10.0, "GO", |c| c.game.as_ref().is_some_and(|g| !matches!(g.clock, Clock::CountingDown { .. }))),
             "pilot flies a lap" => {
                 let before = self.sim(move |c| laps(c))?;
                 self.errand(Errand::Race)?;
@@ -506,7 +560,9 @@ impl SimDriver {
                 self.errand(Errand::Loiter)?;
                 r
             }
-            "clock runs out" => self.until(150.0, "the end of the game", |c| c.game.as_ref().is_some_and(|g| matches!(g.clock, Clock::Stopped { .. }))),
+            "clock runs out" => self.until(150.0, "the end of the game", |c| {
+                c.game.as_ref().is_some_and(|g| matches!(g.clock, Clock::Stopped { .. }))
+            }),
             other => Err(format!("no way to do `{other}`")),
         }
     }
@@ -647,7 +703,9 @@ impl Driver for SimDriver {
                 // Arming takes the autopilot a while after it starts: it wants the position and
                 // the attitude to settle.
                 self.arm()?;
-                self.until(30.0, "ArduPilot to arm", move |c| c.ap.vehicle().is_some_and(|(a, _)| a == (want == "armed")))
+                self.until(30.0, "ArduPilot to arm", move |c| {
+                    c.ap.vehicle().is_some_and(|(a, _)| a == (want == "armed"))
+                })
             }
             "plane" if self.ardupilot_flying && name()? == "flying" => {
                 if !self.autopilot_armed()? {
@@ -656,7 +714,10 @@ impl Driver for SimDriver {
                 }
                 self.standin.lock().unwrap().held.throttle = 0.8;
                 self.press(KeyCode::Digit4)?;
-                self.until(60.0, "the plane to lift off", |c| !c.state.on_ground && c.state.pos.y - crate::terrain::ground_height(c.state.pos.x, c.state.pos.z) > 3.0)
+                self.until(60.0, "the plane to lift off", |c| {
+                    !c.state.on_ground
+                        && c.state.pos.y - crate::terrain::ground_height(c.state.pos.x, c.state.pos.z) > 3.0
+                })
             }
             "flight controller" => {
                 let want = name()?;
@@ -698,7 +759,11 @@ impl Driver for SimDriver {
             // These follow from the game; they can only be what they already are.
             "game clock" | "lap count" | "cut count" | "opponents" | "chaser" => {
                 let now = self.observe(var)?;
-                if now == *value { Ok(()) } else { Err(format!("{} is {now}, and only the game can make it {value}", var.subject)) }
+                if now == *value {
+                    Ok(())
+                } else {
+                    Err(format!("{} is {now}, and only the game can make it {value}", var.subject))
+                }
             }
             _ => Err(format!("can't put {} in place: {value}", var.subject)),
         }
@@ -709,9 +774,9 @@ impl Driver for SimDriver {
             "throttle" => {
                 let t = value.as_f64().ok_or("expected a number")? as f32 / 100.0;
                 {
-                self.standin.lock().unwrap().held.throttle = t;
-                Ok(())
-            }
+                    self.standin.lock().unwrap().held.throttle = t;
+                    Ok(())
+                }
             }
             "pitch stick" => {
                 // Stick forward is nose down.
@@ -721,9 +786,9 @@ impl Driver for SimDriver {
                     _ => 0.0,
                 };
                 {
-                self.standin.lock().unwrap().held.pitch = p;
-                Ok(())
-            }
+                    self.standin.lock().unwrap().held.pitch = p;
+                    Ok(())
+                }
             }
             "roll stick" => {
                 // Stick right is positive.
@@ -733,9 +798,9 @@ impl Driver for SimDriver {
                     _ => 0.0,
                 };
                 {
-                self.standin.lock().unwrap().held.roll = r;
-                Ok(())
-            }
+                    self.standin.lock().unwrap().held.roll = r;
+                    Ok(())
+                }
             }
             _ => Err(format!("{} isn't a stick", var.subject)),
         }
@@ -828,7 +893,8 @@ impl Driver for SimDriver {
                 }),
                 "opponents" => {
                     let Some(g) = &c.game else { return Err("there are no opponents without a game".into()) };
-                    let all = |f: &dyn Fn(&simulation_physics::FlightState) -> bool| g.opponents.iter().all(|o| f(&o.state));
+                    let all =
+                        |f: &dyn Fn(&simulation_physics::FlightState) -> bool| g.opponents.iter().all(|o| f(&o.state));
                     Value::from(if all(&|s| s.phase == Phase::Held) {
                         "in hand"
                     } else if g.opponents.iter().any(|o| o.state.phase == Phase::Crashed) {
@@ -886,7 +952,8 @@ impl Driver for SimDriver {
     /// The plane in the sim is the one it was started with: a test that starts with a flight
     /// controller can't be arranged on a plane without one.
     fn can_arrange(&self, var: &Variable, value: &Value) -> bool {
-        var.key != "flight controller" || value.as_str() == Some(if self.flight_controller { "fitted" } else { "missing" })
+        var.key != "flight controller"
+            || value.as_str() == Some(if self.flight_controller { "fitted" } else { "missing" })
     }
 
     fn supports(&self, need: Need<'_>) -> bool {
@@ -928,7 +995,14 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations");
         let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
         let (tx, _rx) = channel();
-        let driver = SimDriver { tx, flight_controller: false, ardupilot_flying: false, standin: Default::default(), deadline: Mutex::new(None), needs: vec![] };
+        let driver = SimDriver {
+            tx,
+            flight_controller: false,
+            ardupilot_flying: false,
+            standin: Default::default(),
+            deadline: Mutex::new(None),
+            needs: vec![],
+        };
         let v = &a.suite.vocabulary;
         let sim = a.suite.sections.iter().find(|s| s.slug == "sim").expect("a sim section").id;
         let ours = a.suite.subtree(sim);

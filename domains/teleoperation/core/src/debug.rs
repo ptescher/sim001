@@ -5,7 +5,7 @@
 //! The model is plain data and has no screen: the console draws it in a panel, the launcher reads
 //! the file the console writes it to, and a test that fails prints its tail.
 
-use crate::vehicle::{mode_name, Vehicle};
+use crate::vehicle::{Vehicle, mode_name};
 use std::collections::{HashMap, VecDeque};
 use std::io::Write;
 use std::path::Path;
@@ -82,7 +82,9 @@ impl Source {
     }
 
     fn from_tag(tag: &str) -> Option<Source> {
-        [Source::Gcs, Source::Link, Source::Cmd, Source::Ack, Source::Fc, Source::Ping, Source::State, Source::Process].into_iter().find(|s| s.tag() == tag)
+        [Source::Gcs, Source::Link, Source::Cmd, Source::Ack, Source::Fc, Source::Ping, Source::State, Source::Process]
+            .into_iter()
+            .find(|s| s.tag() == tag)
     }
 }
 
@@ -111,7 +113,12 @@ pub fn parse_line(line: &str) -> Option<DebugEvent> {
         rest = rest[end..].trim_start_matches(' ');
     }
     let t: f64 = words[0].parse().ok()?;
-    Some(DebugEvent { t, level: Level::from_tag(words[1])?, source: Source::from_tag(words[2])?, text: rest.to_string() })
+    Some(DebugEvent {
+        t,
+        level: Level::from_tag(words[1])?,
+        source: Source::from_tag(words[2])?,
+        text: rest.to_string(),
+    })
 }
 
 /// The log: the latest events, and a file that has them all.
@@ -212,7 +219,12 @@ impl PingStats {
 
     /// Gives up on the pings that have waited longer than `timeout`; returns how many.
     pub fn expire(&mut self, now: Instant, timeout: Duration) -> u32 {
-        let old: Vec<i64> = self.waiting.iter().filter(|(_, t)| now.saturating_duration_since(**t) > timeout).map(|(k, _)| *k).collect();
+        let old: Vec<i64> = self
+            .waiting
+            .iter()
+            .filter(|(_, t)| now.saturating_duration_since(**t) > timeout)
+            .map(|(k, _)| *k)
+            .collect();
         for k in &old {
             self.waiting.remove(k);
             self.given_up.push(*k);
@@ -339,7 +351,14 @@ pub fn state_report(v: &Vehicle) -> Vec<(String, String)> {
     add("armed", if v.armed { "YES".into() } else { "no".into() });
     add("status", format!("MAV_STATE {}", v.system_status));
     let unhealthy = unhealthy_sensors(v);
-    add("sensors", if unhealthy.is_empty() { "all present sensors healthy".into() } else { format!("unhealthy: {}", unhealthy.join(", ")) });
+    add(
+        "sensors",
+        if unhealthy.is_empty() {
+            "all present sensors healthy".into()
+        } else {
+            format!("unhealthy: {}", unhealthy.join(", "))
+        },
+    );
     add(
         "ready to arm",
         match v.sensor_ok(0x1000_0000) {
@@ -351,9 +370,18 @@ pub fn state_report(v: &Vehicle) -> Vec<(String, String)> {
     if let Some((t, text)) = &v.prearm {
         add("pre-arm", format!("{text} ({})", age(*t)));
     }
-    add("ekf", format!("flags 0x{:03x}, variances vel {:.2} pos {:.2} hgt {:.2} mag {:.2}", v.ekf_flags, v.ekf_vel_var, v.ekf_pos_var, v.ekf_hgt_var, v.ekf_mag_var));
+    add(
+        "ekf",
+        format!(
+            "flags 0x{:03x}, variances vel {:.2} pos {:.2} hgt {:.2} mag {:.2}",
+            v.ekf_flags, v.ekf_vel_var, v.ekf_pos_var, v.ekf_hgt_var, v.ekf_mag_var
+        ),
+    );
     add("gps", format!("{} fix, {} satellites, hdop {:.1}", fix_name(v.gps_fix), v.sats, v.hdop));
-    add("position", if v.have_position { format!("{:.6}, {:.6}, {:.1} m rel", v.lat, v.lon, v.alt_rel) } else { "none".into() });
+    add(
+        "position",
+        if v.have_position { format!("{:.6}, {:.6}, {:.1} m rel", v.lat, v.lon, v.alt_rel) } else { "none".into() },
+    );
     add("home", v.home.map_or("not set".into(), |h| format!("{:.6}, {:.6}, {:.0} m", h.0, h.1, h.2)));
     add("battery", format!("{:.2} V {:.1} A {} mAh", v.batt_v, v.batt_a, v.batt_mah));
     add("last ack", v.acks.back().map_or("none".into(), |a| format!("{}: {} ({})", a.command, a.result, age(a.at))));
@@ -397,8 +425,13 @@ pub fn list_logs(logs: &Path) -> Vec<LogFile> {
         if path.extension().is_none_or(|e| e != "log") {
             return;
         }
-        let name = match (path.file_stem().and_then(|s| s.to_str()), path.parent().and_then(|p| p.file_name()).and_then(|p| p.to_str())) {
-            (Some("arduplane"), Some(dir)) if dir.starts_with("opponent-") => format!("ArduPlane (computer pilot {})", dir.trim_start_matches("opponent-")),
+        let name = match (
+            path.file_stem().and_then(|s| s.to_str()),
+            path.parent().and_then(|p| p.file_name()).and_then(|p| p.to_str()),
+        ) {
+            (Some("arduplane"), Some(dir)) if dir.starts_with("opponent-") => {
+                format!("ArduPlane (computer pilot {})", dir.trim_start_matches("opponent-"))
+            }
             (Some("arduplane"), _) => "ArduPlane".to_string(),
             (Some(stem), _) => stem.to_string(),
             _ => return,
@@ -445,7 +478,14 @@ pub struct Digest {
 
 impl Digest {
     pub fn of(v: &Vehicle) -> Digest {
-        Digest { armed: v.armed, mode: mode_name(v.custom_mode), gps_fix: v.gps_fix, ekf_flags: v.ekf_flags, status: v.system_status, unhealthy: unhealthy_sensors(v) }
+        Digest {
+            armed: v.armed,
+            mode: mode_name(v.custom_mode),
+            gps_fix: v.gps_fix,
+            ekf_flags: v.ekf_flags,
+            status: v.system_status,
+            unhealthy: unhealthy_sensors(v),
+        }
     }
 }
 
@@ -534,7 +574,15 @@ mod tests {
         l.record(Level::Warn, Source::Fc, "PreArm: AHRS");
         l.record(Level::Debug, Source::Ack, "ARM_DISARM: ACCEPTED");
         let all: Vec<_> = l.tail(10).iter().map(|e| (e.source, e.text.as_str())).collect();
-        assert_eq!(all, vec![(Source::Link, "Link up"), (Source::Fc, "PreArm: AHRS"), (Source::Fc, "PreArm: AHRS"), (Source::Ack, "ARM_DISARM: ACCEPTED")]);
+        assert_eq!(
+            all,
+            vec![
+                (Source::Link, "Link up"),
+                (Source::Fc, "PreArm: AHRS"),
+                (Source::Fc, "PreArm: AHRS"),
+                (Source::Ack, "ARM_DISARM: ACCEPTED")
+            ]
+        );
         assert_eq!(l.tail(2).len(), 2);
         assert_eq!(l.tail(2)[1].text, "ARM_DISARM: ACCEPTED", "the tail is the latest, oldest first");
     }
@@ -555,7 +603,12 @@ mod tests {
     /// the console writes: it takes a line back apart.
     #[test]
     fn a_line_reads_back_as_the_event_it_was() {
-        let e = DebugEvent { t: 12.345, level: Level::Warn, source: Source::Ack, text: "ARM_DISARM: DENIED (it said: no)".into() };
+        let e = DebugEvent {
+            t: 12.345,
+            level: Level::Warn,
+            source: Source::Ack,
+            text: "ARM_DISARM: DENIED (it said: no)".into(),
+        };
         let line = format_line(&e);
         assert_eq!(line, "   12.345 WARN  ack    ARM_DISARM: DENIED (it said: no)");
         assert_eq!(parse_line(&line), Some(e));
@@ -567,7 +620,12 @@ mod tests {
 
     #[test]
     fn levels_order_from_noise_to_trouble() {
-        assert!(Level::Trace < Level::Debug && Level::Debug < Level::Info && Level::Info < Level::Warn && Level::Warn < Level::Error);
+        assert!(
+            Level::Trace < Level::Debug
+                && Level::Debug < Level::Info
+                && Level::Info < Level::Warn
+                && Level::Warn < Level::Error
+        );
         // MAV_SEVERITY: 0 emergency to 7 debug.
         assert_eq!(Level::from_severity(2), Level::Error);
         assert_eq!(Level::from_severity(4), Level::Warn);
@@ -591,7 +649,11 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap().lines().filter(|l| parse_line(l).is_some()).count(), 2);
         let mut again = log();
         again.to_file(&path).unwrap();
-        assert_eq!(std::fs::read_to_string(&path).unwrap().lines().filter(|l| parse_line(l).is_some()).count(), 0, "a new run starts a new file");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap().lines().filter(|l| parse_line(l).is_some()).count(),
+            0,
+            "a new run starts a new file"
+        );
     }
 
     // ---- ping ----
@@ -679,7 +741,13 @@ mod tests {
         v.gps_fix = 3;
         v.sats = 10;
         let report = state_report(&v);
-        let get = |k: &str| report.iter().find(|(key, _)| key == k).map(|(_, val)| val.clone()).unwrap_or_else(|| panic!("no {k} in {report:?}"));
+        let get = |k: &str| {
+            report
+                .iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, val)| val.clone())
+                .unwrap_or_else(|| panic!("no {k} in {report:?}"))
+        };
         assert!(get("link").contains("connected"), "{}", get("link"));
         assert!(get("heartbeat").contains("s ago"), "{}", get("heartbeat"));
         assert_eq!(get("mode"), "QHOVER");
@@ -693,7 +761,8 @@ mod tests {
     #[test]
     fn the_report_says_why_it_will_not_arm() {
         let mut v = vehicle();
-        v.prearm = Some((Instant::now() - Duration::from_secs(7), "PreArm: AHRS: not using configured AHRS type".into()));
+        v.prearm =
+            Some((Instant::now() - Duration::from_secs(7), "PreArm: AHRS: not using configured AHRS type".into()));
         let report = state_report(&v);
         let why = &report.iter().find(|(k, _)| k == "pre-arm").expect("a pre-arm line").1;
         assert!(why.contains("AHRS: not using configured AHRS type") && why.contains("7 s ago"), "{why}");
@@ -749,9 +818,15 @@ mod tests {
     /// acknowledgement that never comes can be matched to the command that never got one.
     #[test]
     fn a_command_is_described_with_its_parameters() {
-        assert_eq!(describe_command("COMPONENT_ARM_DISARM", &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), "COMPONENT_ARM_DISARM 1");
+        assert_eq!(
+            describe_command("COMPONENT_ARM_DISARM", &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            "COMPONENT_ARM_DISARM 1"
+        );
         assert_eq!(describe_command("DO_SET_MODE", &[1.0, 17.0, 0.0, 0.0, 0.0, 0.0, 0.0]), "DO_SET_MODE 1 17");
-        assert_eq!(describe_command("NAV_TAKEOFF", &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0]), "NAV_TAKEOFF 0 0 0 0 0 0 20");
+        assert_eq!(
+            describe_command("NAV_TAKEOFF", &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0]),
+            "NAV_TAKEOFF 0 0 0 0 0 0 20"
+        );
         assert_eq!(describe_command("X", &[0.0; 7]), "X");
     }
 
@@ -786,14 +861,25 @@ mod tests {
     #[test]
     fn the_logs_of_a_run_are_found_and_named() {
         let d = temp_dir("logs");
-        for (p, text) in [("debug/console.log", "x"), ("sitl/arduplane.log", "y"), ("sitl/opponent-2/arduplane.log", "z"), ("sitl/notes.txt", "n"), ("sitl/00000001.BIN", "b")] {
+        for (p, text) in [
+            ("debug/console.log", "x"),
+            ("sitl/arduplane.log", "y"),
+            ("sitl/opponent-2/arduplane.log", "z"),
+            ("sitl/notes.txt", "n"),
+            ("sitl/00000001.BIN", "b"),
+        ] {
             let path = d.join("logs").join(p);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, text).unwrap();
         }
         let found = list_logs(&d.join("logs"));
         let names: Vec<_> = found.iter().map(|l| l.name.as_str()).collect();
-        assert!(names.contains(&"console") && names.contains(&"ArduPlane") && names.contains(&"ArduPlane (computer pilot 2)"), "{names:?}");
+        assert!(
+            names.contains(&"console")
+                && names.contains(&"ArduPlane")
+                && names.contains(&"ArduPlane (computer pilot 2)"),
+            "{names:?}"
+        );
         assert_eq!(found.len(), 3, "only .log files: {names:?}");
         assert!(list_logs(&d.join("nowhere")).is_empty());
     }

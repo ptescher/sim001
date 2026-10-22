@@ -165,7 +165,14 @@ pub struct Rules {
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { stale_after: 5.0, drop_after: 60.0, join_distance: 60.0, join_height: 40.0, join_speed: 8.0, join_margin: 10.0 }
+        Rules {
+            stale_after: 5.0,
+            drop_after: 60.0,
+            join_distance: 60.0,
+            join_height: 40.0,
+            join_speed: 8.0,
+            join_margin: 10.0,
+        }
     }
 }
 
@@ -192,7 +199,8 @@ impl Tracker {
 
     /// Take in one report.
     pub fn observe(&mut self, obs: Observation) {
-        let index = self.tracks.iter().position(|t| t.identities.contains(&obs.identity)).or_else(|| self.joinable(&obs));
+        let index =
+            self.tracks.iter().position(|t| t.identities.contains(&obs.identity)).or_else(|| self.joinable(&obs));
         let index = index.unwrap_or_else(|| {
             self.next_id += 1;
             self.tracks.push(Track {
@@ -267,7 +275,8 @@ impl Tracker {
             .filter(|t| now - t.last_seen < self.rules.drop_after)
             .map(|t| {
                 let mut t = t.clone();
-                t.freshness = if now - t.last_seen < self.rules.stale_after { Freshness::Live } else { Freshness::Stale };
+                t.freshness =
+                    if now - t.last_seen < self.rules.stale_after { Freshness::Live } else { Freshness::Stale };
                 t
             })
             .collect();
@@ -289,7 +298,14 @@ mod tests {
     const HOME: Position = Position { lat: 37.87, lon: -122.27, alt: 50.0 };
 
     fn heard(source: Source, key: &str, time: f64, at: Position) -> Observation {
-        Observation { identity: Identity::new(source, key), time, position: at, velocity: None, heading: None, name: None }
+        Observation {
+            identity: Identity::new(source, key),
+            time,
+            position: at,
+            velocity: None,
+            heading: None,
+            name: None,
+        }
     }
 
     #[test]

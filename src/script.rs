@@ -1,12 +1,12 @@
 //! `--shots <dir>`: scripted demo flight that saves screenshots, for visual regression checks.
 //! With `--ardupilot` it follows a longer timeline and leaves the flying to ArduPilot.
 
+use crate::SharedSim;
 use crate::input::{Action, PilotInput};
 use crate::sim::FlightMode;
-use crate::SharedSim;
 use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy::render::view::screenshot::{save_to_disk, Screenshot};
+use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
 #[derive(Resource)]
 pub struct ShotScript {

@@ -14,14 +14,14 @@
 use communication_remoteid as rid;
 use communication_traffic::{Identity, Observation, Position, Source};
 use mavlink::dialects::common::*;
-use num_traits::FromPrimitive;
 use mavlink::error::MessageReadError;
 use mavlink::{MavHeader, MavlinkReader, MavlinkVersion};
+use num_traits::FromPrimitive;
 use std::collections::{HashMap, VecDeque};
 use std::io::{ErrorKind, Read};
 
-pub use mavlink::dialects::common::MavMessage;
 pub use mavlink::MavHeader as Header;
+pub use mavlink::dialects::common::MavMessage;
 
 /// The component ID that the sender of OpenDroneID messages uses (MAV_COMP_ID_ODID_TXRX_1).
 pub const ODID_COMPONENT: u8 = 236;
@@ -170,7 +170,7 @@ pub fn forward_remote_id(mac: [u8; 6], broadcast: &[u8]) -> Vec<MavMessage> {
                     rid::IdType::UtmAssigned => 3,
                     rid::IdType::SpecificSession => 4,
                     rid::IdType::Other(c) => c,
-                } as u8)
+                })
                 .unwrap_or_default(),
                 ua_type: MavOdidUaType::from_u8(x.ua_type.code()).unwrap_or_default(),
                 uas_id: padded::<20>(x.uas_id.as_bytes()),
@@ -186,7 +186,7 @@ pub fn forward_remote_id(mac: [u8; 6], broadcast: &[u8]) -> Vec<MavMessage> {
                     rid::Status::Emergency => 3,
                     rid::Status::RemoteIdFailure => 4,
                     rid::Status::Other(c) => c,
-                } as u8)
+                })
                 .unwrap_or_default(),
                 direction: x.direction.map_or(36100, |d| (d * 100.0).round() as u16),
                 speed_horizontal: x.speed.map_or(25500, |s| (s * 100.0).round() as u16),
@@ -342,7 +342,7 @@ impl Decoder {
                     time: now,
                     position: Position::new(p.lat as f64 * 1e-7, p.lon as f64 * 1e-7, p.alt as f32 * 1e-3),
                     velocity: Some([p.vx as f32 * 0.01, p.vy as f32 * 0.01, p.vz as f32 * 0.01]),
-                    heading: (p.hdg != u16::MAX).then(|| p.hdg as f32 * 0.01),
+                    heading: (p.hdg != u16::MAX).then_some(p.hdg as f32 * 0.01),
                     name: None,
                 });
             }
@@ -350,7 +350,7 @@ impl Decoder {
                 if !a.flags.contains(AdsbFlags::ADSB_FLAGS_VALID_COORDS) {
                     return;
                 }
-                let heading = a.flags.contains(AdsbFlags::ADSB_FLAGS_VALID_HEADING).then(|| a.heading as f32 * 0.01);
+                let heading = a.flags.contains(AdsbFlags::ADSB_FLAGS_VALID_HEADING).then_some(a.heading as f32 * 0.01);
                 let velocity = a.flags.contains(AdsbFlags::ADSB_FLAGS_VALID_VELOCITY).then(|| {
                     let speed = a.hor_velocity as f32 * 0.01;
                     let course = heading.unwrap_or(0.0).to_radians();
@@ -362,11 +362,19 @@ impl Decoder {
                     position: Position::new(
                         a.lat as f64 * 1e-7,
                         a.lon as f64 * 1e-7,
-                        if a.flags.contains(AdsbFlags::ADSB_FLAGS_VALID_ALTITUDE) { a.altitude as f32 * 1e-3 } else { f32::NAN },
+                        if a.flags.contains(AdsbFlags::ADSB_FLAGS_VALID_ALTITUDE) {
+                            a.altitude as f32 * 1e-3
+                        } else {
+                            f32::NAN
+                        },
                     ),
                     velocity,
                     heading,
-                    name: a.flags.contains(AdsbFlags::ADSB_FLAGS_VALID_CALLSIGN).then(|| cstring(&a.callsign[..])).filter(|s| !s.is_empty()),
+                    name: a
+                        .flags
+                        .contains(AdsbFlags::ADSB_FLAGS_VALID_CALLSIGN)
+                        .then(|| cstring(&a.callsign[..]))
+                        .filter(|s| !s.is_empty()),
                 });
             }
             MavMessage::OPEN_DRONE_ID_BASIC_ID(m) if !is_zero(&m.id_or_mac) => {
@@ -378,10 +386,11 @@ impl Decoder {
                     return;
                 }
                 let key = mac_key(&m.id_or_mac);
-                let speed = (m.speed_horizontal != 25500).then(|| m.speed_horizontal as f32 * 0.01);
-                let course = (m.direction != 36100).then(|| m.direction as f32 * 0.01);
-                let up = (m.speed_vertical != 6300).then(|| m.speed_vertical as f32 * 0.01);
-                let alt = [m.altitude_geodetic, m.altitude_barometric].into_iter().find(|a| *a > -999.0).unwrap_or(f32::NAN);
+                let speed = (m.speed_horizontal != 25500).then_some(m.speed_horizontal as f32 * 0.01);
+                let course = (m.direction != 36100).then_some(m.direction as f32 * 0.01);
+                let up = (m.speed_vertical != 6300).then_some(m.speed_vertical as f32 * 0.01);
+                let alt =
+                    [m.altitude_geodetic, m.altitude_barometric].into_iter().find(|a| *a > -999.0).unwrap_or(f32::NAN);
                 self.report_remote_id(
                     key,
                     now,
@@ -400,7 +409,8 @@ impl Decoder {
                 for message in rid::decode_pack(&pack).unwrap_or_default() {
                     match message {
                         rid::Message::BasicId(b) => {
-                            self.transmitters.entry(key.clone()).or_default().uas_id = Some(b.uas_id).filter(|s| !s.is_empty());
+                            self.transmitters.entry(key.clone()).or_default().uas_id =
+                                Some(b.uas_id).filter(|s| !s.is_empty());
                         }
                         rid::Message::Location(l) if l.lat != 0.0 || l.lon != 0.0 => {
                             let alt = l.geodetic_alt.or(l.pressure_alt).unwrap_or(f32::NAN);
@@ -567,7 +577,9 @@ mod tests {
         let b = beacon(5);
         let mut d = Decoder::new(1);
         let mut stream = vec![];
-        for broadcast in [rid::encode(&remote_id_static(&b)[0]).to_vec(), rid::encode(&remote_id_location(&b, 1.0)).to_vec()] {
+        for broadcast in
+            [rid::encode(&remote_id_static(&b)[0]).to_vec(), rid::encode(&remote_id_location(&b, 1.0)).to_vec()]
+        {
             for m in forward_remote_id(MAC, &broadcast) {
                 assert!(!matches!(m, MavMessage::OPEN_DRONE_ID_MESSAGE_PACK(_)));
                 stream.extend(frame(1, ODID_COMPONENT, 0, &m));

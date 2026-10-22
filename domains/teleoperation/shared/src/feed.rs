@@ -473,7 +473,16 @@ mod tests {
 
     #[test]
     fn a_radio_message_roundtrips() {
-        let r = RadioState { connected: true, roll: -0.5, pitch: 0.25, yaw: 1.0, throttle: 0.75, arm: true, mode: 5, reset_presses: 7 };
+        let r = RadioState {
+            connected: true,
+            roll: -0.5,
+            pitch: 0.25,
+            yaw: 1.0,
+            throttle: 0.75,
+            arm: true,
+            mode: 5,
+            reset_presses: 7,
+        };
         let back = match ClientMsg::decode(&r.encode()).unwrap() {
             ClientMsg::Radio(b) => b,
             other => panic!("{other:?}"),
@@ -488,7 +497,16 @@ mod tests {
         let ClientMsg::Radio(u) = ClientMsg::decode(&unplugged.encode()).unwrap() else { panic!() };
         assert!(!u.connected, "a radio that isn't plugged in stays unplugged across the wire");
         // Out-of-range sticks are clamped, not wrapped.
-        let wild = RadioState { connected: true, roll: 9.0, pitch: -9.0, yaw: 0.0, throttle: 5.0, arm: false, mode: 0, reset_presses: 0 };
+        let wild = RadioState {
+            connected: true,
+            roll: 9.0,
+            pitch: -9.0,
+            yaw: 0.0,
+            throttle: 5.0,
+            arm: false,
+            mode: 0,
+            reset_presses: 0,
+        };
         let ClientMsg::Radio(w) = ClientMsg::decode(&wild.encode()).unwrap() else { panic!() };
         assert!((w.roll - 1.0).abs() < 1e-3 && (w.pitch + 1.0).abs() < 1e-3 && (w.throttle - 1.0).abs() < 1e-3);
     }

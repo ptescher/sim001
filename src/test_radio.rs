@@ -7,12 +7,12 @@
 
 use crate::SharedSim;
 use crate::input::{AxisMap, PilotInput};
-use simulation_aircraft::rc_mode_pwm;
 use bevy::input::InputSystems;
 use bevy::input::gamepad::{
     GamepadAxis, GamepadConnection, GamepadConnectionEvent, RawGamepadAxisChangedEvent, RawGamepadEvent,
 };
 use bevy::prelude::*;
+use simulation_aircraft::rc_mode_pwm;
 use teleoperation_shared::feed::RadioState;
 
 /// Channels 5 and 8 of a TX15 in joystick mode (see controls.cfg.example).
@@ -20,9 +20,7 @@ const ARM_AXIS: GamepadAxis = GamepadAxis::Other(0x0001_0034);
 const MODE_AXIS: GamepadAxis = GamepadAxis::Other(0x0001_0037);
 
 pub fn plugin(app: &mut App) {
-    app.init_resource::<Radio>()
-        .add_systems(Startup, setup)
-        .add_systems(PreUpdate, drive.before(InputSystems));
+    app.init_resource::<Radio>().add_systems(Startup, setup).add_systems(PreUpdate, drive.before(InputSystems));
 }
 
 #[derive(Resource, Default)]

@@ -34,11 +34,14 @@ struct PanelText;
 struct Panel;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(Startup, spawn).add_systems(Update, update.after(crate::camera::update_camera).in_set(SimSet::Visual));
+    app.add_systems(Startup, spawn)
+        .add_systems(Update, update.after(crate::camera::update_camera).in_set(SimSet::Visual));
 }
 
 fn spawn(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
-    let paint = |m: &mut Assets<StandardMaterial>, c: Color| m.add(StandardMaterial { base_color: c, perceptual_roughness: 0.5, ..default() });
+    let paint = |m: &mut Assets<StandardMaterial>, c: Color| {
+        m.add(StandardMaterial { base_color: c, perceptual_roughness: 0.5, ..default() })
+    };
     let orange = paint(&mut materials, Color::srgb(1.0, 0.35, 0.02));
     let white = paint(&mut materials, Color::srgb(0.95, 0.95, 0.95));
 
@@ -46,15 +49,16 @@ fn spawn(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
     let body = meshes.add(finish(Cylinder::new(0.3, PYLON_HEIGHT - 0.8).mesh().resolution(20).build()));
     let top = meshes.add(finish(Cylinder::new(0.3, 0.8).mesh().resolution(20).build()));
     for i in 0..3 {
-        commands
-            .spawn((Pylon(i), Transform::from_translation(PARKED), Visibility::default()))
-            .with_children(|p| {
-                p.spawn(rt(body.clone(), orange.clone(), Transform::from_xyz(0.0, 0.5 * (PYLON_HEIGHT - 0.8), 0.0)));
-                p.spawn(rt(top.clone(), white.clone(), Transform::from_xyz(0.0, PYLON_HEIGHT - 0.4, 0.0)));
-            });
+        commands.spawn((Pylon(i), Transform::from_translation(PARKED), Visibility::default())).with_children(|p| {
+            p.spawn(rt(body.clone(), orange.clone(), Transform::from_xyz(0.0, 0.5 * (PYLON_HEIGHT - 0.8), 0.0)));
+            p.spawn(rt(top.clone(), white.clone(), Transform::from_xyz(0.0, PYLON_HEIGHT - 0.4, 0.0)));
+        });
     }
     // The start line: a white strip on the grass, scaled to its length when a race starts.
-    commands.spawn((StartLine, rt(meshes.add(cuboid(Vec3::new(0.4, 0.03, 1.0))), white, Transform::from_translation(PARKED))));
+    commands.spawn((
+        StartLine,
+        rt(meshes.add(cuboid(Vec3::new(0.4, 0.03, 1.0))), white, Transform::from_translation(PARKED)),
+    ));
     // Cones round the edge of the arena.
     let cone = meshes.add(finish(Cone { radius: 0.35, height: 0.9 }.mesh().resolution(12).build()));
     for i in 0..CONES {
@@ -158,10 +162,19 @@ pub fn panel_text(g: &Session) -> String {
         lines.push(format!("{} left", clock(tag.rules.length - tag.time)));
         for (place, i) in tag.standings().into_iter().enumerate() {
             let mark = if i == tag.it { " <" } else { "" };
-            lines.push(format!("{} {:<8} {}{mark}", place + 1, g.name(i).to_uppercase(), clock(tag.players[i].it_time)));
+            lines.push(format!(
+                "{} {:<8} {}{mark}",
+                place + 1,
+                g.name(i).to_uppercase(),
+                clock(tag.players[i].it_time)
+            ));
         }
         if tag.over() {
-            lines.push(format!("TIME! You were it for {}: {}", clock(tag.players[0].it_time), ordinal(tag.standings().iter().position(|&i| i == 0).unwrap() + 1)));
+            lines.push(format!(
+                "TIME! You were it for {}: {}",
+                clock(tag.players[0].it_time),
+                ordinal(tag.standings().iter().position(|&i| i == 0).unwrap() + 1)
+            ));
         }
     }
     lines.join("\n")

@@ -18,10 +18,10 @@ unsafe fn text<'a>(p: *const c_char) -> Option<&'a str> {
 pub unsafe extern "C" fn t1s_start(address: *const c_char, control_port: u16) -> *const Station {
     let address = unsafe { text(address) }.unwrap_or("tcpout:127.0.0.1:5760");
     let station = Arc::new(Station::start(address));
-    if control_port > 0 {
-        if let Err(e) = control::serve(station.clone(), control_port) {
-            eprintln!("t1s: no control server on port {control_port}: {e}");
-        }
+    if control_port > 0
+        && let Err(e) = control::serve(station.clone(), control_port)
+    {
+        eprintln!("t1s: no control server on port {control_port}: {e}");
     }
     // The app runs as long as the station does.
     Arc::into_raw(station)

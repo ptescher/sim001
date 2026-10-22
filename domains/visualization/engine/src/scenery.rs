@@ -70,15 +70,25 @@ pub fn spawn_scenery(
         let mut sea = crate::mesh_util::GeoBuilder::default();
         let ids: Vec<u32> = [(-half, -half), (half, -half), (half, half), (-half, half)]
             .iter()
-            .map(|&(x, z)| sea.vert(Vec3::new(x, 0.0, z), Vec2::new((x / half * 0.5 + 0.5) * tiles, (z / half * 0.5 + 0.5) * tiles)))
+            .map(|&(x, z)| {
+                sea.vert(
+                    Vec3::new(x, 0.0, z),
+                    Vec2::new((x / half * 0.5 + 0.5) * tiles, (z / half * 0.5 + 0.5) * tiles),
+                )
+            })
             .collect();
         sea.quad(ids[0], ids[1], ids[2], ids[3], Vec3::Y);
-        commands.spawn((Water(water_mat.clone()), rt(meshes.add(sea.build()), water_mat, Transform::from_xyz(0.0, terrain::water_level(), 0.0))));
+        commands.spawn((
+            Water(water_mat.clone()),
+            rt(meshes.add(sea.build()), water_mat, Transform::from_xyz(0.0, terrain::water_level(), 0.0)),
+        ));
     } else {
         let water = meshes.add(lake_mesh());
-        commands.spawn((Water(water_mat.clone()), rt(water, water_mat, Transform::from_xyz(0.0, terrain::WATER_LEVEL, 0.0))));
+        commands.spawn((
+            Water(water_mat.clone()),
+            rt(water, water_mat, Transform::from_xyz(0.0, terrain::WATER_LEVEL, 0.0)),
+        ));
     }
-
 }
 
 /// How much of the lake bed's colour comes back up through `depth` metres of clear water: red
@@ -108,7 +118,10 @@ fn pebble_texture() -> Image {
                 let r = 0.28 + 0.2 * h(3);
                 let ang = h(4) * TAU;
                 let q = Vec2::new(px, py) - centre;
-                let q = Vec2::new(q.x * ang.cos() + q.y * ang.sin(), (-q.x * ang.sin() + q.y * ang.cos()) * (1.2 + 0.5 * h(5)));
+                let q = Vec2::new(
+                    q.x * ang.cos() + q.y * ang.sin(),
+                    (-q.x * ang.sin() + q.y * ang.cos()) * (1.2 + 0.5 * h(5)),
+                );
                 let d = q.length() / r;
                 if d < 1.0 && best.is_none_or(|b| d < b.2) {
                     let tone = 0.75 + 0.5 * h(6);
@@ -180,7 +193,8 @@ pub fn animate_scenery(time: Res<Time>, water: Query<&Water>, mut materials: Res
     let t = time.elapsed_secs();
     for w in water.iter().filter(|_| terrain::real().is_some()) {
         if let Some(mut m) = materials.get_mut(&w.0) {
-            m.uv_transform = Affine2::from_scale_angle_translation(Vec2::splat(22.0), 0.3, Vec2::new(t * 0.006, t * 0.004));
+            m.uv_transform =
+                Affine2::from_scale_angle_translation(Vec2::splat(22.0), 0.3, Vec2::new(t * 0.006, t * 0.004));
         }
     }
 }

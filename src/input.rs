@@ -313,12 +313,27 @@ fn parse_config(text: &str, radio: &mut RadioConfig, pad: &mut GamepadConfig) {
             Some(AxisMap { axis: axis_from_str(it.next()?)?, center: f(it.next()?)?, scale: f(it.next()?)? })
         };
         match k {
-            "radio.roll" => { if let Some(m) = axis_map(v) { radio.roll = m; radio.calibrated = true; } }
-            "radio.pitch" => { if let Some(m) = axis_map(v) { radio.pitch = m; } }
-            "radio.yaw" => { if let Some(m) = axis_map(v) { radio.yaw = m; } }
+            "radio.roll" => {
+                if let Some(m) = axis_map(v) {
+                    radio.roll = m;
+                    radio.calibrated = true;
+                }
+            }
+            "radio.pitch" => {
+                if let Some(m) = axis_map(v) {
+                    radio.pitch = m;
+                }
+            }
+            "radio.yaw" => {
+                if let Some(m) = axis_map(v) {
+                    radio.yaw = m;
+                }
+            }
             "radio.throttle" => {
                 let mut it = v.split(',').map(str::trim);
-                if let (Some(a), Some(lo), Some(hi)) = (it.next().and_then(axis_from_str), it.next().and_then(f), it.next().and_then(f)) {
+                if let (Some(a), Some(lo), Some(hi)) =
+                    (it.next().and_then(axis_from_str), it.next().and_then(f), it.next().and_then(f))
+                {
                     radio.throttle = ThrottleMap { axis: a, low: lo, high: hi };
                 }
             }
@@ -333,13 +348,11 @@ fn parse_config(text: &str, radio: &mut RadioConfig, pad: &mut GamepadConfig) {
             "gamepad.deadzone" => pad.deadzone = f(v).unwrap_or(0.07),
             "gamepad.throttle_rate" => pad.throttle_rate = f(v).unwrap_or(0.7),
             _ => {
-                if let Some(name) = k.strip_prefix("radio.button.") {
-                    if let (Some((a, _)), Some(b)) = (
-                        RADIO_ACTIONS.iter().find(|(a, _)| action_key(*a) == name),
-                        button_from_str(v),
-                    ) {
-                        radio.buttons.insert(*a, b);
-                    }
+                if let Some(name) = k.strip_prefix("radio.button.")
+                    && let (Some((a, _)), Some(b)) =
+                        (RADIO_ACTIONS.iter().find(|(a, _)| action_key(*a) == name), button_from_str(v))
+                {
+                    radio.buttons.insert(*a, b);
                 }
             }
         }
@@ -471,8 +484,18 @@ pub fn read_input(
 
     // Keyboard sticks.
     let k = |c: KeyCode| keys.pressed(c);
-    input.kb.roll = smooth_key(input.kb.roll, k(KeyCode::KeyA) || k(KeyCode::ArrowLeft), k(KeyCode::KeyD) || k(KeyCode::ArrowRight), dt);
-    input.kb.pitch = smooth_key(input.kb.pitch, k(KeyCode::KeyW) || k(KeyCode::ArrowUp), k(KeyCode::KeyS) || k(KeyCode::ArrowDown), dt);
+    input.kb.roll = smooth_key(
+        input.kb.roll,
+        k(KeyCode::KeyA) || k(KeyCode::ArrowLeft),
+        k(KeyCode::KeyD) || k(KeyCode::ArrowRight),
+        dt,
+    );
+    input.kb.pitch = smooth_key(
+        input.kb.pitch,
+        k(KeyCode::KeyW) || k(KeyCode::ArrowUp),
+        k(KeyCode::KeyS) || k(KeyCode::ArrowDown),
+        dt,
+    );
     input.kb.yaw = smooth_key(input.kb.yaw, k(KeyCode::KeyQ), k(KeyCode::KeyE), dt);
     let thr_up = k(KeyCode::ShiftLeft) || k(KeyCode::ShiftRight) || k(KeyCode::Equal);
     let thr_dn = k(KeyCode::ControlLeft) || k(KeyCode::ControlRight) || k(KeyCode::Minus);
@@ -487,7 +510,9 @@ pub fn read_input(
     if keys.just_pressed(KeyCode::Digit0) || keys.just_pressed(KeyCode::Backquote) {
         input.kb.throttle = 0.0;
     }
-    for (i, key) in [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5].iter().enumerate() {
+    for (i, key) in
+        [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5].iter().enumerate()
+    {
         if keys.just_pressed(*key) {
             input.kb.throttle = 0.2 * (i + 1) as f32;
             input.kb_throttle_used = true;
@@ -499,13 +524,15 @@ pub fn read_input(
     // physical device, and gilrs misreads some of them (Switch Pro on macOS).
     let gc_pad = gc.pad.clone().filter(|_| !input.keyboard_only && input.only_pad.is_none());
     let mut chosen: Option<(Entity, &Gamepad, String, Profile)> = None;
-    for (e, pad, name) in pads.iter().filter(|_| !input.keyboard_only).filter(|(e, ..)| input.only_pad.is_none_or(|o| o == *e)) {
+    for (e, pad, name) in
+        pads.iter().filter(|_| !input.keyboard_only).filter(|(e, ..)| input.only_pad.is_none_or(|o| o == *e))
+    {
         let name = name.map(|n| n.as_str().to_string()).unwrap_or_else(|| "controller".into());
-        let profile = input
-            .profile_override
-            .get(&name)
-            .copied()
-            .unwrap_or(if is_radio_name(&input.radio, &name) { Profile::Radio } else { Profile::Gamepad });
+        let profile = input.profile_override.get(&name).copied().unwrap_or(if is_radio_name(&input.radio, &name) {
+            Profile::Radio
+        } else {
+            Profile::Gamepad
+        });
         if profile == Profile::Gamepad && (gc_pad.is_some() || handled_by_game_controller(&name)) {
             continue;
         }
@@ -518,12 +545,12 @@ pub fn read_input(
         }
     }
 
-    if keys.just_pressed(KeyCode::F4) {
-        if let Some((_, _, name, p)) = &chosen {
-            let np = if *p == Profile::Radio { Profile::Gamepad } else { Profile::Radio };
-            input.profile_override.insert(name.clone(), np);
-            input.notice = format!("{name}: using {np:?} profile");
-        }
+    if keys.just_pressed(KeyCode::F4)
+        && let Some((_, _, name, p)) = &chosen
+    {
+        let np = if *p == Profile::Radio { Profile::Gamepad } else { Profile::Radio };
+        input.profile_override.insert(name.clone(), np);
+        input.notice = format!("{name}: using {np:?} profile");
     }
 
     // Raw axis readout (F3) — handy for checking what the radio actually sends.
@@ -576,16 +603,16 @@ pub fn read_input(
             input.notice = "Connect a radio (USB joystick mode) or gamepad first".into();
         }
     }
-    if let (Some(w), Some((_, pad, name, _))) = (input.wizard.as_mut(), &chosen) {
-        if let Some(done) = run_wizard(w, pad, &keys, dt) {
-            input.radio = done;
-            input.profile_override.insert(name.clone(), Profile::Radio);
-            input.notice = match save_config(&input.radio, &input.gamepad) {
-                Ok(()) => format!("Radio calibrated and saved to {CONFIG_PATH}"),
-                Err(e) => format!("Radio calibrated (could not save: {e})"),
-            };
-            input.wizard = None;
-        }
+    if let (Some(w), Some((_, pad, name, _))) = (input.wizard.as_mut(), &chosen)
+        && let Some(done) = run_wizard(w, pad, &keys, dt)
+    {
+        input.radio = done;
+        input.profile_override.insert(name.clone(), Profile::Radio);
+        input.notice = match save_config(&input.radio, &input.gamepad) {
+            Ok(()) => format!("Radio calibrated and saved to {CONFIG_PATH}"),
+            Err(e) => format!("Radio calibrated (could not save: {e})"),
+        };
+        input.wizard = None;
     }
 
     // Controller sticks and buttons.
@@ -655,7 +682,10 @@ pub fn read_input(
     }
     if gc.debug {
         let s = sticks;
-        let key = format!("{:?} {} thr {:.2} roll {:+.2} pitch {:+.2} yaw {:+.2}", input.profile, input.source, s.throttle, s.roll, s.pitch, s.yaw);
+        let key = format!(
+            "{:?} {} thr {:.2} roll {:+.2} pitch {:+.2} yaw {:+.2}",
+            input.profile, input.source, s.throttle, s.roll, s.pitch, s.yaw
+        );
         if *last_debug != key {
             info!("sim input: {key}");
             *last_debug = key;
@@ -708,7 +738,7 @@ fn run_wizard(w: &mut Wizard, pad: &Gamepad, keys: &ButtonInput<KeyCode>, dt: f3
             }
         }
         WizardStep::Axis { which, prompt } => {
-            w.message = format!("{prompt}");
+            w.message = prompt.to_string();
             if let Some((axis, raw, delta)) = biggest() {
                 if delta.abs() > 0.5 {
                     match w.candidate {
@@ -718,10 +748,10 @@ fn run_wizard(w: &mut Wizard, pad: &Gamepad, keys: &ButtonInput<KeyCode>, dt: f3
                             w.hold = 0.0;
                         }
                     }
-                    if let Some((_, ref mut best)) = w.candidate {
-                        if (raw - w.baseline[&axis]).abs() > (*best - w.baseline[&axis]).abs() {
-                            *best = raw;
-                        }
+                    if let Some((_, ref mut best)) = w.candidate
+                        && (raw - w.baseline[&axis]).abs() > (*best - w.baseline[&axis]).abs()
+                    {
+                        *best = raw;
                     }
                     if w.hold > 0.4 {
                         let center = w.baseline[&axis];
@@ -730,7 +760,10 @@ fn run_wizard(w: &mut Wizard, pad: &Gamepad, keys: &ButtonInput<KeyCode>, dt: f3
                         let next = match which {
                             "roll" => {
                                 w.result.roll = m;
-                                WizardStep::Axis { which: "pitch", prompt: "Push the ELEVATOR stick fully UP (forward) and hold" }
+                                WizardStep::Axis {
+                                    which: "pitch",
+                                    prompt: "Push the ELEVATOR stick fully UP (forward) and hold",
+                                }
                             }
                             "pitch" => {
                                 w.result.pitch = m;
@@ -809,11 +842,8 @@ fn apply_gamepad(input: &mut PilotInput, pad: &PadSnapshot, dt: f32, sticks: &mu
     let g = &input.gamepad;
     let dz = |v: f32| if v.abs() < g.deadzone { 0.0 } else { (v - g.deadzone * v.signum()) / (1.0 - g.deadzone) };
     let (l, r) = (pad.left, pad.right);
-    let (yaw, thr_axis, roll, pitch_up) = if g.stick_mode == 1 {
-        (dz(l.x), dz(r.y), dz(r.x), dz(l.y))
-    } else {
-        (dz(l.x), dz(l.y), dz(r.x), dz(r.y))
-    };
+    let (yaw, thr_axis, roll, pitch_up) =
+        if g.stick_mode == 1 { (dz(l.x), dz(r.y), dz(r.x), dz(l.y)) } else { (dz(l.x), dz(l.y), dz(r.x), dz(r.y)) };
     let pressed = |b: GamepadButton| pad.pressed.contains(&b);
     // Throttle stick is spring-centred, so it nudges the throttle up/down.
     let mut thr = input.kb.throttle;
@@ -906,7 +936,11 @@ mod switch_tests {
     fn the_knobs_are_saved_and_read_back() {
         let mut radio = RadioConfig::default();
         assert!(radio.zoom.is_none() && radio.view.is_none());
-        parse_config("radio.zoom = Other(65594), 0.0, 1.0\nradio.view = Other(65595), 0.0, -1.0\n", &mut radio, &mut GamepadConfig::default());
+        parse_config(
+            "radio.zoom = Other(65594), 0.0, 1.0\nradio.view = Other(65595), 0.0, -1.0\n",
+            &mut radio,
+            &mut GamepadConfig::default(),
+        );
         assert!(radio.zoom.is_some());
         assert_eq!(radio.view.expect("view").scale, -1.0);
         let text = config_text(&radio, &GamepadConfig::default());

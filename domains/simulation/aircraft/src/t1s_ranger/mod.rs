@@ -26,7 +26,9 @@ pub fn mix(aileron: f32, elevator: f32, rudder: f32, throttle: [f32; 2]) -> Actu
     c
 }
 
-use crate::{ActuatorCommands, AeroSurface, AircraftParams, ContactPoint, MotorSpec, Output, OutputKind, SurfaceControl};
+use crate::{
+    ActuatorCommands, AeroSurface, AircraftParams, ContactPoint, MotorSpec, Output, OutputKind, SurfaceControl,
+};
 use geom::*;
 use glam::{Quat, Vec3};
 use std::f32::consts::PI;
@@ -44,7 +46,12 @@ pub fn params() -> AircraftParams {
         // Inner (prop-washed) and outer (aileron) wing sections.
         for (s0, s1, control, wash) in [
             (0.0, AILERON_START, SurfaceControl::None, Some((if side < 0.0 { 0 } else { 1 }, 0.45))),
-            (AILERON_START, WING_HALF_SPAN, SurfaceControl::Output { channel: AILERON, gain: -(sidei as f32) * MAX_AILERON }, None),
+            (
+                AILERON_START,
+                WING_HALF_SPAN,
+                SurfaceControl::Output { channel: AILERON, gain: -(sidei as f32) * MAX_AILERON },
+                None,
+            ),
         ] {
             let sm = 0.5 * (s0 + s1);
             let c = wing_chord(sm);
@@ -87,7 +94,10 @@ pub fn params() -> AircraftParams {
             c,
             tail_ar,
             RUDDERVATOR_CHORD_FRAC,
-            SurfaceControl::Output { channel: if side < 0.0 { VTAIL_LEFT } else { VTAIL_RIGHT }, gain: MAX_RUDDERVATOR },
+            SurfaceControl::Output {
+                channel: if side < 0.0 { VTAIL_LEFT } else { VTAIL_RIGHT },
+                gain: MAX_RUDDERVATOR,
+            },
             0.0,
             0.0,
             0.025,
@@ -124,8 +134,22 @@ pub fn params() -> AircraftParams {
         ContactPoint { pos: Vec3::new(0.0, -0.048, -0.12), prop: None },
         ContactPoint { pos: Vec3::new(0.0, -0.045, 0.06), prop: None },
         ContactPoint { pos: Vec3::new(0.0, -0.005, TAIL_END_Z), prop: None },
-        ContactPoint { pos: Vec3::new(-WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), prop: None },
-        ContactPoint { pos: Vec3::new(WING_HALF_SPAN, WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(), wing_le_z(WING_HALF_SPAN) + 0.05), prop: None },
+        ContactPoint {
+            pos: Vec3::new(
+                -WING_HALF_SPAN,
+                WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(),
+                wing_le_z(WING_HALF_SPAN) + 0.05,
+            ),
+            prop: None,
+        },
+        ContactPoint {
+            pos: Vec3::new(
+                WING_HALF_SPAN,
+                WING_Y + WING_HALF_SPAN * WING_DIHEDRAL.sin(),
+                wing_le_z(WING_HALF_SPAN) + 0.05,
+            ),
+            prop: None,
+        },
         ContactPoint { pos: Vec3::new(-0.15, 0.135, 0.40), prop: None },
         ContactPoint { pos: Vec3::new(0.15, 0.135, 0.40), prop: None },
         ContactPoint { pos: Vec3::new(-MOTOR_X, MOTOR_Y - PROP_RADIUS, MOTOR_Z - 0.01), prop: Some(0) },
@@ -203,4 +227,3 @@ fn make_surface(
         is_tail,
     }
 }
-

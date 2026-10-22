@@ -11,11 +11,13 @@
 //!   installed. Neither is tested here: both are best effort, and a missing tool is not an error.
 
 /// Held while the machine should stay awake.
-pub struct KeepAwake(imp::Guard);
+pub struct KeepAwake {
+    _guard: imp::Guard,
+}
 
 /// Start keeping the machine awake. `None` if the OS wouldn't (the sim still runs).
 pub fn keep_awake(reason: &str) -> Option<KeepAwake> {
-    imp::start(reason).map(KeepAwake)
+    imp::start(reason).map(|_guard| KeepAwake { _guard })
 }
 
 #[cfg(target_os = "macos")]
@@ -33,7 +35,8 @@ mod imp {
         let options = NSActivityOptions::UserInitiated
             | NSActivityOptions::IdleDisplaySleepDisabled
             | NSActivityOptions::LatencyCritical;
-        let activity = NSProcessInfo::processInfo().beginActivityWithOptions_reason(options, &NSString::from_str(reason));
+        let activity =
+            NSProcessInfo::processInfo().beginActivityWithOptions_reason(options, &NSString::from_str(reason));
         Some(Guard { activity })
     }
 
@@ -83,7 +86,11 @@ mod imp {
 
     pub fn start(reason: &str) -> Option<Guard> {
         // Feral GameMode: ask its daemon to apply its tuning to this process.
-        let _ = Command::new("gamemoded").args(["-r", &std::process::id().to_string()]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        let _ = Command::new("gamemoded")
+            .args(["-r", &std::process::id().to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
         // Holds the inhibitor for as long as this process lives, even if it is killed: the
         // shell polls for its parent (this process, which systemd-inhibit execs the command under).
         let inhibitor = Command::new("systemd-inhibit")

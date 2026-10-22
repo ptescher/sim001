@@ -28,17 +28,21 @@ fn main() {
             _ => suite = PathBuf::from(a),
         }
     }
-    let mut acceptance = Acceptance::load_for(&suite, "iOS").unwrap_or_else(|e| {
-        eprint!("{e}");
-        std::process::exit(1)
-    }).with_coverage();
+    let mut acceptance = Acceptance::load_for(&suite, "iOS")
+        .unwrap_or_else(|e| {
+            eprint!("{e}");
+            std::process::exit(1)
+        })
+        .with_coverage();
     if let Some(only) = &only {
         acceptance.plans.retain(|p| p.title.to_lowercase().contains(only));
     }
     println!("expect: {} tests from {}", acceptance.plans.len(), suite.display());
 
     let app = root.join("domains/teleoperation/ios/App");
-    println!("expect: building the app and starting it in the Simulator ({device}); the first time takes a few minutes");
+    println!(
+        "expect: building the app and starting it in the Simulator ({device}); the first time takes a few minutes"
+    );
     let bridge = bridge::Bridge::start(&app, &device, BRIDGE_PORT, CONTROL_PORT, &address).unwrap_or_else(|e| {
         eprintln!("expect: {e}");
         std::process::exit(2)
@@ -52,7 +56,9 @@ fn main() {
         let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
         let r = r.results.into_iter().next().unwrap();
         match r.status {
-            expectation_story::Status::Passed => println!("expect: ✓ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32()),
+            expectation_story::Status::Passed => {
+                println!("expect: ✓ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32())
+            }
             // Another system's test, or a feature the app doesn't have yet.
             expectation_story::Status::Unsupported => {}
             _ => println!("expect: ✗ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32()),

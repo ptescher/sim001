@@ -71,12 +71,18 @@ impl RealSite {
     pub fn load(dir: &Path) -> Result<RealSite, String> {
         let meta = PackMeta::read(dir)?;
         let raw = std::fs::read(dir.join("height.f32")).map_err(|e| format!("height.f32: {e}"))?;
-        let mut heights: Vec<f32> = raw.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]) - meta.home_alt).collect();
+        let mut heights: Vec<f32> = raw
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]) - meta.home_alt)
+            .collect();
         let n = meta.height.px as usize;
         if heights.len() != n * n {
             return Err(format!("height.f32 has {} samples, expected {}", heights.len(), n * n));
         }
-        let landcover = image::open(dir.join("landcover.png")).map_err(|e| format!("landcover.png: {e}"))?.into_luma8().into_raw();
+        let landcover =
+            image::open(dir.join("landcover.png")).map_err(|e| format!("landcover.png: {e}"))?.into_luma8().into_raw();
         let water_level = -meta.home_alt;
         // The elevation data holds the sea surface at ~0 m; push sea-level water cells below the
         // water plane so the terrain doesn't poke through it.
@@ -108,7 +114,8 @@ impl RealSite {
             runway: None,
             water_level,
         };
-        let frac = std::env::var("SIM001_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0).clamp(0.0, 1.0);
+        let frac =
+            std::env::var("SIM001_TREE_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0).clamp(0.0, 1.0);
         let pack_trees = mappack::read_trees(&dir.join("trees.bin")).map_err(|e| format!("trees.bin: {e}"))?;
         let keep = (pack_trees.len() as f32 * frac) as usize;
         site.trees = pack_trees
@@ -116,7 +123,13 @@ impl RealSite {
             .take(keep)
             .map(|t| {
                 let (x, z) = (t.east, -t.north);
-                Tree { pos: Vec3::new(x, site.height(x, z), z), height: t.height, conifer: t.conifer, shade: t.shade, dead: false }
+                Tree {
+                    pos: Vec3::new(x, site.height(x, z), z),
+                    height: t.height,
+                    conifer: t.conifer,
+                    shade: t.shade,
+                    dead: false,
+                }
             })
             .collect();
         site.buildings = mappack::read_boxes(&dir.join("buildings.txt"))

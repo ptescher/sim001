@@ -2,14 +2,14 @@
 //! responsive, then handed to the main thread in stages (assets, then trees in batches),
 //! and the ray-traced camera warms up behind the overlay before it fades out.
 
-use crate::theme::{P, color};
+use crate::Obstacles;
 use crate::camera::RenderScale;
-use simulation_physics::Obstacle;
 use crate::terrain::{self, Plant, Tree};
 use crate::terrain_render;
+use crate::theme::{P, color};
 use crate::vegetation::{self, VegetationBuild, VegetationHandles};
-use crate::Obstacles;
 use bevy::prelude::*;
+use simulation_physics::Obstacle;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -36,11 +36,18 @@ struct Shared {
     result: Option<WorldBuild>,
 }
 
+#[allow(clippy::large_enum_variant)] // one value, alive for a few seconds
 enum Phase {
     /// Background generation running.
     Generating,
     /// Uploading terrain chunks to the GPU, a texel budget per frame.
-    Uploading { terrain: Vec<(Mesh, Image)>, total: usize, trees: Vec<Tree>, plants: Vec<Plant>, vegetation: Option<VegetationBuild> },
+    Uploading {
+        terrain: Vec<(Mesh, Image)>,
+        total: usize,
+        trees: Vec<Tree>,
+        plants: Vec<Plant>,
+        vegetation: Option<VegetationBuild>,
+    },
     /// Spawning trees in batches.
     Planting { trees: Vec<Tree>, plants: Vec<Plant>, handles: VegetationHandles, next: usize },
     /// Camera on behind the overlay so pipelines compile and the BVH builds.
@@ -109,7 +116,12 @@ fn start_loading(mut commands: Commands) {
         })
         .expect("spawn world generation thread");
 
-    commands.insert_resource(Loading { shared, phase: Phase::Generating, started: Instant::now(), shown_fraction: 0.0 });
+    commands.insert_resource(Loading {
+        shared,
+        phase: Phase::Generating,
+        started: Instant::now(),
+        shown_fraction: 0.0,
+    });
     spawn_loading_ui(&mut commands);
 }
 
@@ -156,11 +168,23 @@ fn advance_loading(
             }
             terrain_render::spawn_terrain_chunks(batch, &mut commands, &mut meshes, &mut materials, &mut images);
             let done = *total - terrain.len();
-            set_stage(&loading.shared, 0.88 + 0.02 * done as f32 / *total as f32, &format!("Uploading terrain  {done}/{total}"));
+            set_stage(
+                &loading.shared,
+                0.88 + 0.02 * done as f32 / *total as f32,
+                &format!("Uploading terrain  {done}/{total}"),
+            );
             if terrain.is_empty() {
-                let handles = vegetation::upload_vegetation(vegetation.take().unwrap(), settings.raytracing, &mut commands, &mut meshes, &mut materials, &mut images);
+                let handles = vegetation::upload_vegetation(
+                    vegetation.take().unwrap(),
+                    settings.raytracing,
+                    &mut commands,
+                    &mut meshes,
+                    &mut materials,
+                    &mut images,
+                );
                 set_stage(&loading.shared, 0.90, "Planting the forest");
-                loading.phase = Phase::Planting { trees: std::mem::take(trees), plants: std::mem::take(plants), handles, next: 0 };
+                loading.phase =
+                    Phase::Planting { trees: std::mem::take(trees), plants: std::mem::take(plants), handles, next: 0 };
             }
         }
         Phase::Planting { trees, plants, handles, next } => {
@@ -242,7 +266,12 @@ fn spawn_loading_ui(commands: &mut Commands) {
                 BackgroundColor(color(P.screen)),
                 children![(
                     LoadingBar,
-                    Node { width: percent(0.0), height: percent(100.0), border_radius: BorderRadius::all(px(5.0)), ..default() },
+                    Node {
+                        width: percent(0.0),
+                        height: percent(100.0),
+                        border_radius: BorderRadius::all(px(5.0)),
+                        ..default()
+                    },
                     BackgroundColor(color(P.ok)),
                 )],
             ),
@@ -285,7 +314,8 @@ fn update_loading_ui(
         let elapsed = loading.started.elapsed().as_secs_f32();
         t.0 = format!("{stage}   ({elapsed:.0} s)");
     }
-    let tip = tips.0.get((loading.started.elapsed().as_secs() / 5) as usize % tips.0.len().max(1)).copied().unwrap_or("");
+    let tip =
+        tips.0.get((loading.started.elapsed().as_secs() / 5) as usize % tips.0.len().max(1)).copied().unwrap_or("");
     for mut t in &mut texts.p1() {
         if t.0 != tip {
             t.0 = tip.to_string();

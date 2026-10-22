@@ -9,13 +9,16 @@
 //! The same view serves pilots and camera-based systems, so it aims to look like the real
 //! thing: see the domain's README for the photo comparison.
 
+// Bevy systems take many parameters and nested queries.
+#![allow(clippy::too_many_arguments, clippy::type_complexity)]
+
 pub mod camera;
 pub mod capture;
 pub mod clouds;
 
 pub mod field;
-pub mod foliage;
 pub mod foam;
+pub mod foliage;
 pub mod grass;
 pub mod haze;
 pub mod loading;
@@ -23,14 +26,14 @@ pub mod mapgen;
 pub mod meadow;
 pub mod mesh_util;
 pub mod model;
-pub mod rocks;
 pub mod optics;
 pub mod pod;
+pub mod rocks;
 pub mod scenery;
 pub mod terrain_render;
 pub mod theme;
-pub mod upscale;
 pub mod treegen;
+pub mod upscale;
 pub mod vegetation;
 
 pub use visualization_world::{realsite, terrain};
@@ -118,11 +121,7 @@ pub struct EnginePlugin {
 
 impl Default for EnginePlugin {
     fn default() -> Self {
-        Self {
-            raytracing: false,
-            liveries: vec![Color::srgb(1.0, 0.36, 0.05)],
-            tips: vec![],
-        }
+        Self { raytracing: false, liveries: vec![Color::srgb(1.0, 0.36, 0.05)], tips: vec![] }
     }
 }
 
@@ -139,28 +138,26 @@ impl Plugin for EnginePlugin {
             .resource_mut::<Assets<bevy::post_process::auto_exposure::AutoExposureCompensationCurve>>()
             .insert(&camera::METERING, camera::metering_curve())
             .expect("the metering curve's handle is free");
-        app.insert_resource(RenderSettings {
-            raytracing: self.raytracing,
-        })
-        .insert_resource(Liveries(self.liveries.clone()))
-        .insert_resource(loading::Tips(self.tips.clone()))
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(GlobalAmbientLight::NONE)
-        .init_resource::<Scene>()
-        .init_resource::<ViewInput>()
-        .add_systems(Startup, (setup, grass::setup_grass))
-        .add_systems(
-            Update,
-            (
-                model::sync_plane,
-                field::update_windsock,
-                scenery::animate_scenery,
-                camera::update_camera,
-                grass::stream_grass.run_if(in_state(loading::AppState::Running)),
-            )
-                .chain()
-                .in_set(EngineSet::Draw),
-        );
+        app.insert_resource(RenderSettings { raytracing: self.raytracing })
+            .insert_resource(Liveries(self.liveries.clone()))
+            .insert_resource(loading::Tips(self.tips.clone()))
+            .insert_resource(ClearColor(Color::BLACK))
+            .insert_resource(GlobalAmbientLight::NONE)
+            .init_resource::<Scene>()
+            .init_resource::<ViewInput>()
+            .add_systems(Startup, (setup, grass::setup_grass))
+            .add_systems(
+                Update,
+                (
+                    model::sync_plane,
+                    field::update_windsock,
+                    scenery::animate_scenery,
+                    camera::update_camera,
+                    grass::stream_grass.run_if(in_state(loading::AppState::Running)),
+                )
+                    .chain()
+                    .in_set(EngineSet::Draw),
+            );
         camera::camera_plugin(app);
         loading::loading_plugin(app);
     }
@@ -176,14 +173,7 @@ fn setup(
     liveries: Res<Liveries>,
     offscreen: Option<Res<camera::UiOffscreen>>,
 ) {
-    field::spawn_world(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &mut images,
-        &mut media,
-        &settings,
-    );
+    field::spawn_world(&mut commands, &mut meshes, &mut materials, &mut images, &mut media, &settings);
     for (i, accent) in liveries.0.iter().take(PLANES).enumerate() {
         model::spawn_plane(&mut commands, &mut meshes, &mut materials, &mut images, i, *accent);
     }

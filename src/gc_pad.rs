@@ -5,9 +5,9 @@
 //! GameController framework understands the controller natively, so gamepads are read
 //! from here on macOS; gilrs is still used for RC radios (plain HID joysticks).
 
+use bevy::ecs::system::NonSendMarker;
 use bevy::input::gamepad::GamepadButton;
 use bevy::prelude::*;
-use bevy::ecs::system::NonSendMarker;
 
 /// One frame of gamepad state, in Bevy's positional button naming.
 #[derive(Clone, Debug, Default)]
@@ -59,10 +59,7 @@ pub fn poll(mut pads: ResMut<GcPads>, mut init: Local<bool>, _main_thread: NonSe
         let controllers = GCController::controllers();
         for c in controllers.iter().take(if snap.is_some() { 0 } else { usize::MAX }) {
             let Some(g) = c.extendedGamepad() else { continue };
-            let name = c
-                .vendorName()
-                .map(|n| n.to_string())
-                .unwrap_or_else(|| c.productCategory().to_string());
+            let name = c.vendorName().map(|n| n.to_string()).unwrap_or_else(|| c.productCategory().to_string());
             let stick = |d: objc2::rc::Retained<objc2_game_controller::GCControllerDirectionPad>| {
                 Vec2::new(d.xAxis().value(), d.yAxis().value())
             };
@@ -108,7 +105,9 @@ pub fn poll(mut pads: ResMut<GcPads>, mut init: Local<bool>, _main_thread: NonSe
                     let key = (s.left, s.right, s.pressed.len());
                     let changed = match pads.last_logged {
                         None => true,
-                        Some((l, r, n)) => l.distance(s.left) > 0.05 || r.distance(s.right) > 0.05 || n != s.pressed.len(),
+                        Some((l, r, n)) => {
+                            l.distance(s.left) > 0.05 || r.distance(s.right) > 0.05 || n != s.pressed.len()
+                        }
                     };
                     if changed {
                         info!(
@@ -175,7 +174,12 @@ pub fn activate_app(_main_thread: NonSendMarker, mut done: Local<u32>) {
 pub fn activate_app() {}
 
 /// `--debug-input`: report app activation and window focus changes.
-pub fn log_focus(_main_thread: NonSendMarker, pads: Res<GcPads>, windows: Query<&Window>, mut last: Local<Option<(bool, bool)>>) {
+pub fn log_focus(
+    _main_thread: NonSendMarker,
+    pads: Res<GcPads>,
+    windows: Query<&Window>,
+    mut last: Local<Option<(bool, bool)>>,
+) {
     if !pads.debug {
         return;
     }

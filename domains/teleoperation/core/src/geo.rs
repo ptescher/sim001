@@ -78,7 +78,7 @@ impl TerrainMap {
         let height_n = get("height_n")? as usize;
         let heights: Vec<f32> = std::fs::read(dir.join("terrain_height.bin"))
             .ok()
-            .map(|b| b.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+            .map(|b| b.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
             .unwrap_or_default();
         let runway = (|| {
             Some(Runway {

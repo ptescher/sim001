@@ -23,10 +23,13 @@ pub enum Plane {
 
 /// The port SITL instance `instance` sends its servo packets to, with yours on `base`.
 pub fn port_for(base: u16, plane: Plane) -> u16 {
-    simulation_sitl::port_for(base, match plane {
-        Plane::Yours => 0,
-        Plane::Opponent(i) => i as u16 + 1,
-    })
+    simulation_sitl::port_for(
+        base,
+        match plane {
+            Plane::Yours => 0,
+            Plane::Opponent(i) => i as u16 + 1,
+        },
+    )
 }
 
 pub fn spawn_bridge(core: Arc<Mutex<SimCore>>, port: u16, plane: Plane) {
@@ -92,10 +95,10 @@ fn spawn_opponent_bridge(core: Arc<Mutex<SimCore>>, port: u16, i: usize) {
                 move |_, pkt, dt| step_core.lock().unwrap().step_opponent(i, &pkt.pwm, dt),
                 move || {
                     let mut c = idle_core.lock().unwrap();
-                    if let Some(link) = c.others.get_mut(i) {
-                        if link.last_packet.is_some_and(|t| t.elapsed() > Duration::from_secs(1)) {
-                            link.connected = false;
-                        }
+                    if let Some(link) = c.others.get_mut(i)
+                        && link.last_packet.is_some_and(|t| t.elapsed() > Duration::from_secs(1))
+                    {
+                        link.connected = false;
                     }
                 },
             );

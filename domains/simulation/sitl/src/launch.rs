@@ -13,8 +13,13 @@ pub const HOME: &str = "-35.363261,149.165230,584,353";
 /// How SITL is to be started.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Plan {
-    Native { program: PathBuf, args: Vec<String> },
-    Docker { args: Vec<String> },
+    Native {
+        program: PathBuf,
+        args: Vec<String>,
+    },
+    Docker {
+        args: Vec<String>,
+    },
     /// Neither is there: what to do about it.
     Missing(String),
 }
@@ -42,7 +47,8 @@ pub fn native_args(root: &Path, aircraft: &str) -> Vec<String> {
 /// for a ground station.
 pub fn native_instance_args(root: &Path, aircraft: &str, n: u16, home: &str, speedup: f32) -> Vec<String> {
     let parm = |name: &str| root.join("ardupilot").join(name).display().to_string();
-    let mut defaults = vec![root.join(".ardupilot/Tools/autotest/models/plane.parm").display().to_string(), parm("t1s.parm")];
+    let mut defaults =
+        vec![root.join(".ardupilot/Tools/autotest/models/plane.parm").display().to_string(), parm("t1s.parm")];
     if root.join("ardupilot").join(format!("{aircraft}.parm")).exists() {
         defaults.push(parm(&format!("{aircraft}.parm")));
     }
@@ -64,7 +70,19 @@ pub fn native_instance_args(root: &Path, aircraft: &str, n: u16, home: &str, spe
 /// The `docker run` arguments of the station's image for `aircraft`.
 pub fn docker_args(aircraft: &str) -> Vec<String> {
     let a = |s: &str| s.to_string();
-    vec![a("run"), a("--rm"), a("--name"), a(DOCKER_NAME), a("-p"), format!("{MAVLINK_PORT}:{MAVLINK_PORT}"), a("-e"), format!("AIRCRAFT={aircraft}"), a("-e"), a("NOWAIT=1"), a(DOCKER_IMAGE)]
+    vec![
+        a("run"),
+        a("--rm"),
+        a("--name"),
+        a(DOCKER_NAME),
+        a("-p"),
+        format!("{MAVLINK_PORT}:{MAVLINK_PORT}"),
+        a("-e"),
+        format!("AIRCRAFT={aircraft}"),
+        a("-e"),
+        a("NOWAIT=1"),
+        a(DOCKER_IMAGE),
+    ]
 }
 
 /// Native first, then Docker, else say how to get one.
@@ -80,7 +98,12 @@ pub fn plan(root: &Path, aircraft: &str, native: bool, docker_image: bool) -> Pl
 
 /// Whether the Docker image of the station is built.
 pub fn docker_image_exists() -> bool {
-    Command::new("docker").args(["image", "inspect", DOCKER_IMAGE]).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+    Command::new("docker")
+        .args(["image", "inspect", DOCKER_IMAGE])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }
 
 /// Where what ArduPlane prints goes: in the directory it runs in.
@@ -99,7 +122,11 @@ pub fn spawn(dir: &Path, plan: Plan) -> Result<(Child, bool), String> {
             (c, false)
         }
         Plan::Docker { args } => {
-            let _ = Command::new("docker").args(["rm", "-f", DOCKER_NAME]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+            let _ = Command::new("docker")
+                .args(["rm", "-f", DOCKER_NAME])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
             let mut c = Command::new("docker");
             c.args(args);
             (c, true)
@@ -107,13 +134,26 @@ pub fn spawn(dir: &Path, plan: Plan) -> Result<(Child, bool), String> {
         Plan::Missing(why) => return Err(why),
     };
     // What it prints is kept, after a line that says when this start was (a restart adds to the file).
-    let log = std::fs::OpenOptions::new().create(true).append(true).open(log_path(dir)).map_err(|e| format!("cannot open {}: {e}", log_path(dir).display()))?;
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path(dir))
+        .map_err(|e| format!("cannot open {}: {e}", log_path(dir).display()))?;
     {
         use std::io::Write;
-        let _ = writeln!(&log, "--- started {} ---", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()));
+        let _ = writeln!(
+            &log,
+            "--- started {} ---",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+        );
     }
     let err = log.try_clone().map_err(|e| e.to_string())?;
-    let child = cmd.stdin(Stdio::null()).stdout(Stdio::from(log)).stderr(Stdio::from(err)).spawn().map_err(|e| format!("cannot start ArduPilot: {e}"))?;
+    let child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(err))
+        .spawn()
+        .map_err(|e| format!("cannot start ArduPilot: {e}"))?;
     Ok((child, docker))
 }
 
@@ -124,14 +164,22 @@ pub struct Fleet {
 }
 
 impl Fleet {
-    pub fn start(root: &Path, dir: &Path, aircraft: &str, instances: std::ops::Range<u16>, home: &str, speedup: f32) -> Result<Fleet, String> {
+    pub fn start(
+        root: &Path,
+        dir: &Path,
+        aircraft: &str,
+        instances: std::ops::Range<u16>,
+        home: &str,
+        speedup: f32,
+    ) -> Result<Fleet, String> {
         let program = native_binary(root);
         if !program.exists() {
             return Err(format!("no native ArduPlane at {}: run ardupilot/build_native.sh", program.display()));
         }
         let mut fleet = Fleet { children: vec![] };
         for i in instances {
-            let plan = Plan::Native { program: program.clone(), args: native_instance_args(root, aircraft, i, home, speedup) };
+            let plan =
+                Plan::Native { program: program.clone(), args: native_instance_args(root, aircraft, i, home, speedup) };
             fleet.children.push(spawn(&dir.join(format!("instance{i}")), plan)?.0);
         }
         Ok(fleet)
@@ -207,8 +255,14 @@ mod tests {
     fn native_sitl_gets_its_physics_from_the_sim_on_this_machine() {
         let args = native_args(&root(), "t1s-vtol").join(" ");
         assert!(args.contains("--model JSON:127.0.0.1"), "{args}");
-        assert!(args.contains("t1s.parm") && args.contains("t1s-vtol.parm"), "the VTOL's parameters go over the T1-S defaults: {args}");
-        assert!(args.contains("-I0") && args.contains("--serial0 tcp:0"), "it does not wait for a ground station: {args}");
+        assert!(
+            args.contains("t1s.parm") && args.contains("t1s-vtol.parm"),
+            "the VTOL's parameters go over the T1-S defaults: {args}"
+        );
+        assert!(
+            args.contains("-I0") && args.contains("--serial0 tcp:0"),
+            "it does not wait for a ground station: {args}"
+        );
     }
 
     #[test]
@@ -220,7 +274,10 @@ mod tests {
     #[test]
     fn docker_gets_the_plane_and_does_not_wait() {
         let args = docker_args("t1s-vtol").join(" ");
-        assert!(args.contains("AIRCRAFT=t1s-vtol") && args.contains("NOWAIT=1") && args.contains("5760:5760"), "{args}");
+        assert!(
+            args.contains("AIRCRAFT=t1s-vtol") && args.contains("NOWAIT=1") && args.contains("5760:5760"),
+            "{args}"
+        );
     }
 
     /// What ArduPlane prints goes to a file where it runs, so that the console and the launcher

@@ -4,13 +4,13 @@
 //! Shown automatically when a gamepad becomes the active controller, hidden on launch,
 //! toggled with HOME (or H / F1).
 
-use crate::theme::{P, alpha, color};
+use crate::SharedSim;
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
-use simulation_physics::Phase;
-use crate::SharedSim;
+use crate::theme::{P, alpha, color};
 use bevy::input::gamepad::GamepadButton;
 use bevy::prelude::*;
+use simulation_physics::Phase;
 
 const W: f32 = 900.0;
 const H: f32 = 400.0;
@@ -103,7 +103,13 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
         .id();
 
     let mut parts: Vec<Entity> = Vec::new();
-    let part = |commands: &mut Commands, node: Node, color: Color, r: f32, extra: Option<GamepadButton>, text: Option<&str>| -> Entity {
+    let part = |commands: &mut Commands,
+                node: Node,
+                color: Color,
+                r: f32,
+                extra: Option<GamepadButton>,
+                text: Option<&str>|
+     -> Entity {
         let mut e = commands.spawn((Node { border_radius: round(r), ..node }, BackgroundColor(color)));
         if let Some(b) = extra {
             e.insert(ButtonVis(b));
@@ -115,10 +121,38 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
     };
 
     // Shoulders (drawn first so the body overlaps them).
-    parts.push(part(commands, abs_node(282.0, 46.0, 96.0, 34.0), PART, 12.0, Some(GamepadButton::LeftTrigger2), Some("ZL")));
-    parts.push(part(commands, abs_node(522.0, 46.0, 96.0, 34.0), PART, 12.0, Some(GamepadButton::RightTrigger2), Some("ZR")));
-    parts.push(part(commands, abs_node(272.0, 78.0, 116.0, 36.0), PART, 14.0, Some(GamepadButton::LeftTrigger), Some("L")));
-    parts.push(part(commands, abs_node(512.0, 78.0, 116.0, 36.0), PART, 14.0, Some(GamepadButton::RightTrigger), Some("R")));
+    parts.push(part(
+        commands,
+        abs_node(282.0, 46.0, 96.0, 34.0),
+        PART,
+        12.0,
+        Some(GamepadButton::LeftTrigger2),
+        Some("ZL"),
+    ));
+    parts.push(part(
+        commands,
+        abs_node(522.0, 46.0, 96.0, 34.0),
+        PART,
+        12.0,
+        Some(GamepadButton::RightTrigger2),
+        Some("ZR"),
+    ));
+    parts.push(part(
+        commands,
+        abs_node(272.0, 78.0, 116.0, 36.0),
+        PART,
+        14.0,
+        Some(GamepadButton::LeftTrigger),
+        Some("L"),
+    ));
+    parts.push(part(
+        commands,
+        abs_node(512.0, 78.0, 116.0, 36.0),
+        PART,
+        14.0,
+        Some(GamepadButton::RightTrigger),
+        Some("R"),
+    ));
     // Grips and body.
     parts.push(part(commands, abs_node(255.0, 190.0, 130.0, 190.0), BODY, 64.0, None, None));
     parts.push(part(commands, abs_node(515.0, 190.0, 130.0, 190.0), BODY, 64.0, None, None));
@@ -127,7 +161,10 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
     // Left stick, D-pad, right stick (stick wells with moving knobs).
     for (i, (cx, cy)) in [(330.0, 175.0), (500.0, 250.0)].into_iter().enumerate() {
         let well = commands
-            .spawn((Node { border_radius: round(34.0), ..abs_node(cx - 34.0, cy - 34.0, 68.0, 68.0) }, BackgroundColor(PART)))
+            .spawn((
+                Node { border_radius: round(34.0), ..abs_node(cx - 34.0, cy - 34.0, 68.0, 68.0) },
+                BackgroundColor(PART),
+            ))
             .id();
         let knob = commands
             .spawn((
@@ -157,7 +194,14 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
         (GamepadButton::South, 0.0, 32.0, "B"),
         (GamepadButton::West, -32.0, 0.0, "Y"),
     ] {
-        parts.push(part(commands, abs_node(fx + ox - 15.0, fy + oy - 15.0, 30.0, 30.0), PART, 15.0, Some(b), Some(letter)));
+        parts.push(part(
+            commands,
+            abs_node(fx + ox - 15.0, fy + oy - 15.0, 30.0, 30.0),
+            PART,
+            15.0,
+            Some(b),
+            Some(letter),
+        ));
     }
     // Minus, plus, home, capture.
     parts.push(part(commands, abs_node(392.0, 126.0, 22.0, 22.0), PART, 11.0, Some(GamepadButton::Select), Some("-")));
@@ -199,11 +243,7 @@ pub fn spawn_pad_overlay(commands: &mut Commands) {
                 ..default()
             }
         };
-        parts.push(
-            commands
-                .spawn((label, Text::default(), small.clone(), TextColor(TEXT), text_node))
-                .id(),
-        );
+        parts.push(commands.spawn((label, Text::default(), small.clone(), TextColor(TEXT), text_node)).id());
     }
     // Home: label centred at the top.
     parts.push(commands.spawn((abs_node(474.0, 26.0, 1.0, 132.0), BackgroundColor(LINE))).id());
@@ -246,7 +286,16 @@ pub fn update_pad_overlay(
     let is_gamepad = input.profile == Some(Profile::Gamepad) && input.pad_view.is_some();
     let (phase, mode, high_rates, ap_enabled, ap_arm, ap_mode, diff, direct) = {
         let c = sim.0.lock().unwrap();
-        (c.state.phase, c.mode, c.high_rates, c.ap.enabled, c.ap.arm_switch, c.rc_mode_name(c.ap.mode_index), c.diff_thrust, c.direct)
+        (
+            c.state.phase,
+            c.mode,
+            c.high_rates,
+            c.ap.enabled,
+            c.ap.arm_switch,
+            c.rc_mode_name(c.ap.mode_index),
+            c.diff_thrust,
+            c.direct,
+        )
     };
 
     // Auto-show when a gamepad takes over; auto-hide when the plane is thrown.
@@ -292,10 +341,18 @@ pub fn update_pad_overlay(
             Label::Minus => "Pause".to_string(),
             Label::Plus => "Reset to hand".to_string(),
             Label::LeftStick => {
-                if mode1 { "Pitch (up/down), rudder (left/right)".into() } else { "Throttle (up/down), rudder (left/right)".into() }
+                if mode1 {
+                    "Pitch (up/down), rudder (left/right)".into()
+                } else {
+                    "Throttle (up/down), rudder (left/right)".into()
+                }
             }
             Label::RightStick => {
-                if mode1 { "Throttle (up/down), roll (left/right)".into() } else { "Pitch (up/down), roll (left/right)".into() }
+                if mode1 {
+                    "Throttle (up/down), roll (left/right)".into()
+                } else {
+                    "Pitch (up/down), roll (left/right)".into()
+                }
             }
             Label::DpadUp => {
                 if ap_enabled {
@@ -305,13 +362,25 @@ pub fn update_pad_overlay(
                 }
             }
             Label::X => {
-                if ap_enabled && !direct { format!("Next ArduPilot mode ({})", ap_mode) } else { format!("Flight mode: {}", mode.label()) }
+                if ap_enabled && !direct {
+                    format!("Next ArduPilot mode ({})", ap_mode)
+                } else {
+                    format!("Flight mode: {}", mode.label())
+                }
             }
             Label::A => format!("Camera: {cam_label}"),
             Label::B => {
-                if phase == Phase::Held { "Hand launch (or throttle > 55%)".into() } else { "Hand launch".into() }
+                if phase == Phase::Held {
+                    "Hand launch (or throttle > 55%)".into()
+                } else {
+                    "Hand launch".into()
+                }
             }
-            Label::Y => format!("Rates: {}  (diff thrust {})", if high_rates { "HIGH" } else { "LOW" }, if diff { "on" } else { "off" }),
+            Label::Y => format!(
+                "Rates: {}  (diff thrust {})",
+                if high_rates { "HIGH" } else { "LOW" },
+                if diff { "on" } else { "off" }
+            ),
             Label::Home => "HOME  show / hide this layout".to_string(),
         };
         if text.0 != s {

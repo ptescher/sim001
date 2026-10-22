@@ -233,7 +233,9 @@ pub fn write_trees(path: &Path, trees: &[PackTree]) -> std::io::Result<()> {
 pub fn read_trees(path: &Path) -> std::io::Result<Vec<PackTree>> {
     let b = std::fs::read(path)?;
     let f = |i: usize| f32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
-    Ok(b.chunks_exact(14)
+    Ok(b.as_chunks::<14>()
+        .0
+        .iter()
         .enumerate()
         .map(|(k, _)| {
             let i = k * 14;
@@ -259,7 +261,9 @@ pub struct PackBox {
 pub fn write_boxes(path: &Path, boxes: &[PackBox]) -> std::io::Result<()> {
     let s: String = boxes
         .iter()
-        .map(|b| format!("{:.2} {:.2} {:.2} {:.2} {:.2} {:.1}\n", b.north, b.east, b.length, b.width, b.height, b.heading))
+        .map(|b| {
+            format!("{:.2} {:.2} {:.2} {:.2} {:.2} {:.1}\n", b.north, b.east, b.length, b.width, b.height, b.heading)
+        })
         .collect();
     std::fs::write(path, s)
 }
@@ -270,7 +274,14 @@ pub fn read_boxes(path: &Path) -> Vec<PackBox> {
         .lines()
         .filter_map(|l| {
             let v: Vec<f32> = l.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-            (v.len() == 6).then(|| PackBox { north: v[0], east: v[1], length: v[2], width: v[3], height: v[4], heading: v[5] })
+            (v.len() == 6).then(|| PackBox {
+                north: v[0],
+                east: v[1],
+                length: v[2],
+                width: v[3],
+                height: v[4],
+                heading: v[5],
+            })
         })
         .collect()
 }

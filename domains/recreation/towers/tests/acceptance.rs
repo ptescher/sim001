@@ -359,7 +359,8 @@ fn the_section_documents_itself_with_pictures_of_the_map() {
     } else {
         a.docs(Some(&report)).write(&out).unwrap();
     }
-    let shot = out.join("screenshots/towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second/01.svg");
+    let shot = out
+        .join("screenshots/towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second/01.svg");
     let svg = std::fs::read_to_string(&shot).unwrap_or_else(|e| panic!("{}: {e}", shot.display()));
     assert!(svg.contains("BLUE 20"), "the score after 10 s with two towers: {svg}");
 }

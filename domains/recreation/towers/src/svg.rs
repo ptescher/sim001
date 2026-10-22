@@ -77,7 +77,10 @@ pub fn map_svg(view: &TeamView, rules: &Rules) -> String {
         let alpha = if t.seen { 1.0 } else { 0.55 };
         let r = rules.circle_radius * scale;
         if t.contested {
-            let _ = write!(s, r##"<circle cx="{x:.1}" cy="{y:.1}" r="{r:.1}" fill="none" stroke="{amber}" stroke-width="2.5"/>"##);
+            let _ = write!(
+                s,
+                r##"<circle cx="{x:.1}" cy="{y:.1}" r="{r:.1}" fill="none" stroke="{amber}" stroke-width="2.5"/>"##
+            );
         } else {
             let _ = write!(
                 s,
@@ -95,7 +98,8 @@ pub fn map_svg(view: &TeamView, rules: &Rules) -> String {
         // The control bar: right of the middle towards Blue, left towards Red.
         let (bw, by) = (44.0, y + 14.0);
         let filled = t.control.clamp(-1.0, 1.0) * bw * 0.5;
-        let (from, bar) = if filled >= 0.0 { (x, team_colour(Team::Blue)) } else { (x + filled, team_colour(Team::Red)) };
+        let (from, bar) =
+            if filled >= 0.0 { (x, team_colour(Team::Blue)) } else { (x + filled, team_colour(Team::Red)) };
         let _ = write!(
             s,
             r##"<rect x="{:.1}" y="{by:.1}" width="{bw}" height="5" fill="{}"/><rect x="{from:.1}" y="{by:.1}" width="{:.1}" height="5" fill="{bar}" fill-opacity="{alpha}"/><rect x="{:.1}" y="{:.1}" width="1" height="7" fill="{white}"/>"##,
@@ -132,7 +136,8 @@ pub fn map_svg(view: &TeamView, rules: &Rules) -> String {
     let letter = |t: Team| &team_name(t)[..1];
     for (j, d) in view.drones.iter().enumerate() {
         let (x, y) = at(d.at);
-        let (colour, fill) = if d.phase == Phase::Down { (grey.as_str(), true) } else { (tint.as_str(), d.phase == Phase::Flying) };
+        let (colour, fill) =
+            if d.phase == Phase::Down { (grey.as_str(), true) } else { (tint.as_str(), d.phase == Phase::Flying) };
         s += &drone(x, y, d.vel, colour, fill, 1.0);
         // Drones on top of each other (at the base) get their labels one under the other.
         let below = view.drones[..j].iter().filter(|o| (at(o.at).0 - x).hypot(at(o.at).1 - y) < 16.0).count();
@@ -209,7 +214,9 @@ fn drone(x: f32, y: f32, vel: Vec2, colour: &str, filled: bool, alpha: f32) -> S
     if filled {
         format!(r##"<polygon points="{pts}" fill="{colour}" fill-opacity="{alpha}"/>"##)
     } else {
-        format!(r##"<polygon points="{pts}" fill="none" stroke="{colour}" stroke-opacity="{alpha}" stroke-width="1.2"/>"##)
+        format!(
+            r##"<polygon points="{pts}" fill="none" stroke="{colour}" stroke-opacity="{alpha}" stroke-width="1.2"/>"##
+        )
     }
 }
 

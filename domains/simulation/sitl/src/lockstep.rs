@@ -80,7 +80,13 @@ mod tests {
     fn a_repeated_frame_gets_the_same_answer_without_stepping() {
         let mut l = Lockstep::default();
         let mut steps = 0;
-        let mut run = |l: &mut Lockstep, f| l.answer(&pkt(f), |_, _, _| { steps += 1; format!("r{steps}") }).to_owned();
+        let mut run = |l: &mut Lockstep, f| {
+            l.answer(&pkt(f), |_, _, _| {
+                steps += 1;
+                format!("r{steps}")
+            })
+            .to_owned()
+        };
         assert_eq!(run(&mut l, 1), "r1");
         assert_eq!(run(&mut l, 1), "r1");
         assert_eq!(run(&mut l, 2), "r2");
@@ -91,7 +97,10 @@ mod tests {
         let mut l = Lockstep::default();
         let mut seen = vec![];
         for f in [5, 6, 1] {
-            l.answer(&pkt(f), |k, _, _| { seen.push(k); "x".into() });
+            l.answer(&pkt(f), |k, _, _| {
+                seen.push(k);
+                "x".into()
+            });
         }
         assert_eq!(seen, [Step::Fresh, Step::Fresh, Step::Restarted]);
     }
