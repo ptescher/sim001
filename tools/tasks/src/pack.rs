@@ -16,7 +16,9 @@ pub fn screenshot_refs(html: &str) -> BTreeSet<String> {
     html.match_indices("screenshots/")
         .filter_map(|(at, _)| {
             let rest = &html[at..];
-            let end = rest.find(|c: char| matches!(c, '"' | '\'' | ')' | '<' | '>') || c.is_whitespace()).unwrap_or(rest.len());
+            let end = rest
+                .find(|c: char| matches!(c, '"' | '\'' | ')' | '<' | '>') || c.is_whitespace())
+                .unwrap_or(rest.len());
             let path = &rest[..end];
             (path.ends_with(".jpg") || path.ends_with(".svg")).then(|| path.to_string())
         })
@@ -28,14 +30,18 @@ pub fn shrink_jpeg(src: &Path, dst: &Path) -> Result<(), String> {
     let img = image::open(src).map_err(|e| format!("{}: {e}", src.display()))?;
     let img = if img.width() > WIDTH { img.resize(WIDTH, u32::MAX, FilterType::Lanczos3) } else { img };
     let mut out = Vec::new();
-    JpegEncoder::new_with_quality(&mut out, QUALITY).encode_image(&img.to_rgb8()).map_err(|e| format!("{}: {e}", dst.display()))?;
+    JpegEncoder::new_with_quality(&mut out, QUALITY)
+        .encode_image(&img.to_rgb8())
+        .map_err(|e| format!("{}: {e}", dst.display()))?;
     std::fs::create_dir_all(dst.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(dst, out).map_err(|e| format!("{}: {e}", dst.display()))
 }
 
 fn pages(dir: &Path) -> Vec<PathBuf> {
     std::fs::read_dir(dir)
-        .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "html")).collect())
+        .map(|d| {
+            d.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "html")).collect()
+        })
         .unwrap_or_default()
 }
 
@@ -57,7 +63,8 @@ pub fn pack(root: &Path) -> Result<usize, String> {
     std::fs::create_dir_all(site.join("results")).map_err(|e| e.to_string())?;
     for entry in std::fs::read_dir(&results).map_err(|e| e.to_string())? {
         let from = entry.map_err(|e| e.to_string())?.path();
-        std::fs::copy(&from, site.join("results").join(from.file_name().unwrap())).map_err(|e| format!("{}: {e}", from.display()))?;
+        std::fs::copy(&from, site.join("results").join(from.file_name().unwrap()))
+            .map_err(|e| format!("{}: {e}", from.display()))?;
     }
     for r in &refs {
         let (from, to) = (docs.join(r), site.join(r));
@@ -100,7 +107,10 @@ mod tests {
         let html = r#"<img src="screenshots/sim--first-throw/00.jpg"> <a href='screenshots/x--y/03.svg'>
             <img src="screenshots/a/b.png"> screenshots/notquoted.jpg more <img src="../screenshots/sim--first-throw/00.jpg">"#;
         let found: Vec<_> = screenshot_refs(html).into_iter().collect();
-        assert_eq!(found, vec!["screenshots/notquoted.jpg", "screenshots/sim--first-throw/00.jpg", "screenshots/x--y/03.svg"]);
+        assert_eq!(
+            found,
+            vec!["screenshots/notquoted.jpg", "screenshots/sim--first-throw/00.jpg", "screenshots/x--y/03.svg"]
+        );
     }
 
     #[test]
@@ -114,7 +124,10 @@ mod tests {
         shrink_jpeg(&d.join("small.jpg"), &d.join("out/small.jpg")).unwrap();
         assert_eq!(image::image_dimensions(d.join("out/big.jpg")).unwrap(), (960, 540));
         assert_eq!(image::image_dimensions(d.join("out/small.jpg")).unwrap(), (400, 300));
-        assert!(std::fs::metadata(d.join("out/big.jpg")).unwrap().len() < std::fs::metadata(d.join("big.jpg")).unwrap().len());
+        assert!(
+            std::fs::metadata(d.join("out/big.jpg")).unwrap().len()
+                < std::fs::metadata(d.join("big.jpg")).unwrap().len()
+        );
     }
 
     /// The results are copied, and only the screenshots the pages show come along, the old ones'
@@ -126,7 +139,11 @@ mod tests {
         std::fs::create_dir_all(docs.join("results")).unwrap();
         std::fs::create_dir_all(docs.join("site")).unwrap();
         std::fs::write(docs.join("results/sim.tsv"), "results").unwrap();
-        std::fs::write(docs.join("site/section.html"), r#"<img src="screenshots/t1/00.jpg"><img src="screenshots/t1/01.svg">"#).unwrap();
+        std::fs::write(
+            docs.join("site/section.html"),
+            r#"<img src="screenshots/t1/00.jpg"><img src="screenshots/t1/01.svg">"#,
+        )
+        .unwrap();
         let shot = image::RgbImage::from_fn(1200, 700, |x, _| image::Rgb([(x % 200) as u8, 40, 40]));
         for name in ["t1/00.jpg", "old/00.jpg"] {
             std::fs::create_dir_all(docs.join("screenshots").join(name).parent().unwrap()).unwrap();

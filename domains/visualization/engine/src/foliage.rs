@@ -101,7 +101,8 @@ impl Canvas {
                 p[i] = p[i] * a + avg[i] * (1.0 - a);
             }
         }
-        let coverage = |px: &[[f32; 4]], scale: f32| px.iter().filter(|p| p[3] * scale > cutoff).count() as f32 / px.len() as f32;
+        let coverage =
+            |px: &[[f32; 4]], scale: f32| px.iter().filter(|p| p[3] * scale > cutoff).count() as f32 / px.len() as f32;
         let target = coverage(&self.px, 1.0);
         let to_srgb = |c: f32| {
             let c = c.clamp(0.0, 1.0);
@@ -129,7 +130,12 @@ impl Canvas {
                 hi
             };
             for p in &level {
-                data.extend_from_slice(&[to_srgb(p[0]), to_srgb(p[1]), to_srgb(p[2]), ((p[3] * scale).clamp(0.0, 1.0) * 255.0) as u8]);
+                data.extend_from_slice(&[
+                    to_srgb(p[0]),
+                    to_srgb(p[1]),
+                    to_srgb(p[2]),
+                    ((p[3] * scale).clamp(0.0, 1.0) * 255.0) as u8,
+                ]);
             }
             mips += 1;
             if w == 1 && h == 1 {
@@ -191,7 +197,7 @@ pub fn spruce_spray_texture(seed: u32) -> Image {
         let base = main_start.lerp(main_end, t);
         for side in [-1.0f32, 1.0] {
             k += 1;
-            let ang = (48.0 + 18.0 * rnd(seed, k)) .to_radians() * side;
+            let ang = (48.0 + 18.0 * rnd(seed, k)).to_radians() * side;
             let len = h as f32 * (0.42 - 0.26 * t) * (0.8 + 0.4 * rnd(seed, k + 500));
             let tip = base + Vec2::new(ang.cos(), ang.sin()) * len;
             stems.push((base, tip, 0.6));

@@ -6,21 +6,23 @@
 //! The viewer steers the gimbal (pan / tilt / zoom); the gimbal slews at a finite rate, like a
 //! real sensor ball. With no viewer the camera renders a tiny frame and nothing is read back.
 
+use crate::SharedSim;
 use crate::camera::{RenderScale, add_raytracing, scene_look};
 use crate::sim::SimCore;
-use crate::SharedSim;
-use visualization_engine::RenderSettings;
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
 use bevy::render::gpu_readback::{Readback, ReadbackComplete};
 use bevy::render::render_resource::{Extent3d, TextureFormat, TextureUsages};
+use recreation_games::Kind;
 use std::io::Read;
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
-use recreation_games::Kind;
-use teleoperation_shared::feed::{Arena, ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, GameClock, GameKind, GameStatus, Gimbal, write_frame};
+use teleoperation_shared::feed::{
+    Arena, ClientMsg, FLAG_DIRECT, FORMAT_BGRA8, FrameHeader, GameClock, GameKind, GameStatus, Gimbal, write_frame,
+};
+use visualization_engine::RenderSettings;
 
 /// Camera position in the airframe (Bevy body axes: +X right, +Y up, -Z forward): the lens of the
 /// gimbal hanging under the front of the pod, on the surface of its ball (see `optics`), so that
@@ -76,13 +78,21 @@ pub fn feed_plugin(app: &mut App, cfg: FeedConfig, core: Arc<Mutex<SimCore>>) {
         .expect("spawn feed server");
     let size = cfg.size;
     app.insert_resource(FeedLink(shared))
-        .add_systems(Startup, move |commands: Commands, images: ResMut<Assets<Image>>, settings: Res<RenderSettings>| {
-            spawn_feed_camera(commands, images, settings, size)
-        })
+        .add_systems(
+            Startup,
+            move |commands: Commands, images: ResMut<Assets<Image>>, settings: Res<RenderSettings>| {
+                spawn_feed_camera(commands, images, settings, size)
+            },
+        )
         .add_systems(Update, update_feed.after(crate::SimSet::Logic));
 }
 
-fn spawn_feed_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>, settings: Res<RenderSettings>, size: UVec2) {
+fn spawn_feed_camera(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    settings: Res<RenderSettings>,
+    size: UVec2,
+) {
     // BGRA8 sRGB is what the ground station's renderer takes, so frames go out untouched.
     let mut target = Image::new_target_texture(IDLE_SIZE.x, IDLE_SIZE.y, TextureFormat::Bgra8UnormSrgb, None);
     target.texture_descriptor.usage |= TextureUsages::COPY_SRC;
@@ -92,7 +102,11 @@ fn spawn_feed_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>, 
         Camera3d::default(),
         Camera { order: -1, ..default() },
         RenderTarget::Image(image.clone().into()),
-        Projection::Perspective(PerspectiveProjection { fov: vfov(teleoperation_shared::feed::HFOV_DEFAULT, size).to_radians(), near: 0.02, ..default() }),
+        Projection::Perspective(PerspectiveProjection {
+            fov: vfov(teleoperation_shared::feed::HFOV_DEFAULT, size).to_radians(),
+            near: 0.02,
+            ..default()
+        }),
         Transform::default(),
         scene_look(),
     ));
@@ -136,10 +150,10 @@ fn update_feed(
     // the atmosphere probe, so idle means tiny instead).
     let want = if live { st.size } else { IDLE_SIZE };
     let handle = st.image.clone();
-    if images.get(&handle).is_some_and(|img| img.size() != want) {
-        if let Some(mut img) = images.get_mut(&handle) {
-            img.resize(Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 });
-        }
+    if images.get(&handle).is_some_and(|img| img.size() != want)
+        && let Some(mut img) = images.get_mut(&handle)
+    {
+        img.resize(Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 });
     }
     match (live, st.readback) {
         (true, None) => {
@@ -174,7 +188,8 @@ fn update_feed(
     let Ok((mut t, mut proj)) = cam.single_mut() else { return };
     t.translation = pos + rot * MOUNT;
     // Pan about the body's up axis (+ = right), then tilt about the ball's own right axis.
-    t.rotation = rot * Quat::from_rotation_y(-st.gimbal.pan.to_radians()) * Quat::from_rotation_x(st.gimbal.tilt.to_radians());
+    t.rotation =
+        rot * Quat::from_rotation_y(-st.gimbal.pan.to_radians()) * Quat::from_rotation_x(st.gimbal.tilt.to_radians());
     if let Projection::Perspective(p) = &mut *proj {
         p.fov = vfov(st.gimbal.hfov, st.size).to_radians();
     }
@@ -204,7 +219,11 @@ fn on_readback(ev: On<ReadbackComplete>, link: Res<FeedLink>, sim: Res<SharedSim
             },
         });
         // The sim's x is east and -z north.
-        let arena = c.game.as_ref().filter(|g| g.kind == Kind::Tag).map(|g| Arena { north: -g.arena.centre.z, east: g.arena.centre.x, radius: g.arena.radius });
+        let arena = c.game.as_ref().filter(|g| g.kind == Kind::Tag).map(|g| Arena {
+            north: -g.arena.centre.z,
+            east: g.arena.centre.x,
+            radius: g.arena.radius,
+        });
         (c.state.time as f32, c.resets, if c.ap.enabled && c.direct { FLAG_DIRECT } else { 0 }, arena, game)
     };
     let header = FrameHeader {
@@ -257,7 +276,9 @@ fn viewer(shared: &Arc<Shared>, core: Arc<Mutex<SimCore>>, mut stream: TcpStream
             while rd.read_exact(&mut b).is_ok() {
                 match ClientMsg::decode(&b) {
                     Ok(ClientMsg::Gimbal(g)) => *shared.commanded.lock().unwrap() = Some(g),
-                    Ok(ClientMsg::Status(st)) => core.lock().unwrap().ap.gcs = Some((Instant::now(), st.armed, st.mode)),
+                    Ok(ClientMsg::Status(st)) => {
+                        core.lock().unwrap().ap.gcs = Some((Instant::now(), st.armed, st.mode))
+                    }
                     Ok(ClientMsg::Radio(r)) => core.lock().unwrap().test_radio = Some(r),
                     Ok(ClientMsg::Key(teleoperation_shared::feed::Key::Reset)) => core.lock().unwrap().reset(),
                     Ok(ClientMsg::Key(k)) => core.lock().unwrap().toggle_game(match k {

@@ -103,7 +103,8 @@ fn character(seed: u32) -> Character {
     let crown_base = r.range(0.16, 0.40);
     let dead_lower = r.range(0.0, 0.45);
     // Most stand straight; some lean, as trees do on a slope or in the wind.
-    let (lean_size, lean_az) = if r.f() < 0.3 { (r.range(0.04, 0.11), r.f() * TAU) } else { (r.range(0.0, 0.012), r.f() * TAU) };
+    let (lean_size, lean_az) =
+        if r.f() < 0.3 { (r.range(0.04, 0.11), r.f() * TAU) } else { (r.range(0.0, 0.012), r.f() * TAU) };
     let top = match r.f() {
         x if x < 0.14 => Top::Broken,
         x if x < 0.26 => Top::Forked,
@@ -190,7 +191,11 @@ fn sample(nodes: &[Node], t: f32) -> Node {
     let i = (f as usize).min(nodes.len() - 2);
     let k = f - i as f32;
     let (a, b) = (nodes[i], nodes[i + 1]);
-    Node { pos: a.pos.lerp(b.pos, k), dir: a.dir.lerp(b.dir, k).normalize(), radius: a.radius + (b.radius - a.radius) * k }
+    Node {
+        pos: a.pos.lerp(b.pos, k),
+        dir: a.dir.lerp(b.dir, k).normalize(),
+        radius: a.radius + (b.radius - a.radius) * k,
+    }
 }
 
 /// Rotate `dir` away from `parent` by `angle`, around azimuth `az` (about the parent axis).
@@ -228,15 +233,33 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
                 Top::Broken => height * rng.range(0.78, 0.9),
                 _ => height * 1.02,
             };
-            let trunk = Branch { origin: Vec3::ZERO, dir: Vec3::new(ch.lean.x, 1.0, ch.lean.z), length, radius: height * 0.0125, level: 0 };
+            let trunk = Branch {
+                origin: Vec3::ZERO,
+                dir: Vec3::new(ch.lean.x, 1.0, ch.lean.z),
+                length,
+                radius: height * 0.0125,
+                level: 0,
+            };
             let taper = if ch.top == Top::Broken { 0.55 } else { 0.97 };
             let trunk_nodes = grow(&trunk, if mid { 6 } else { 14 }, taper, 0.012, ch.lean * 0.3, 0.0, &mut rng);
             tube(&mut wood, &trunk_nodes, if mid { 6 } else { 9 }, 0.5);
             // The wider sprays of the mid-range tree hang lower, so it starts a little higher.
             let crown_base = if low { ch.crown_base * 0.25 } else { ch.crown_base + if mid { 0.05 } else { 0.0 } };
-            let count = if low { 40 } else if mid { 58 } else { 150 };
+            let count = if low {
+                40
+            } else if mid {
+                58
+            } else {
+                150
+            };
             // Fewer branches, each carrying a wider spray, so that the crown is as full.
-            let fill = if low { 3.0 } else if mid { 1.8 } else { 1.0 };
+            let fill = if low {
+                3.0
+            } else if mid {
+                1.8
+            } else {
+                1.0
+            };
             let max_len = height * 0.23;
             for k in 0..count {
                 let t = crown_base + (1.0 - crown_base) * (k as f32 + rng.f() * 0.5) / count as f32;
@@ -247,11 +270,18 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
                 // (Every fourth stays live, and nothing here asks the random numbers, so that the full
                 // and the mid-range tree die in the same places.)
                 let bare = (k as f32) < ch.dead_lower * count as f32 * 0.6 && k % 4 != 0;
-                let len = max_len * from_top.powf(0.8) * rng.range(0.8, 1.15) * if bare { 0.4 } else { 1.0 } + height * 0.015;
+                let len =
+                    max_len * from_top.powf(0.8) * rng.range(0.8, 1.15) * if bare { 0.4 } else { 1.0 } + height * 0.015;
                 let angle = (55.0 + 50.0 * from_top + rng.range(-8.0, 8.0)).to_radians();
                 let az = k as f32 * GOLDEN_ANGLE + rng.range(-0.2, 0.2);
                 let dir = child_dir(Vec3::Y, az, angle);
-                let b = Branch { origin: at.pos, dir, length: len, radius: (at.radius * 0.35).max(height * 0.0012), level: 1 };
+                let b = Branch {
+                    origin: at.pos,
+                    dir,
+                    length: len,
+                    radius: (at.radius * 0.35).max(height * 0.0012),
+                    level: 1,
+                };
                 let gravity = Vec3::NEG_Y * (0.06 + 0.08 * from_top + if bare { 0.12 } else { 0.0 });
                 let nodes = grow(&b, if mid { 3 } else { 5 }, 0.85, 0.05, gravity, 0.25 * from_top, &mut rng);
                 if !mid || bare {
@@ -263,12 +293,19 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
                 // Spray along the branch itself (two crossed cards).
                 let spine: Vec<Vec3> = nodes.iter().map(|n| n.pos).collect();
                 let flat = nodes[nodes.len() / 2].dir.cross(Vec3::Y).normalize_or(Vec3::X);
-                let widths: Vec<f32> = (0..nodes.len()).map(|i| len * 0.75 * fill * (1.0 - 0.4 * i as f32 / nodes.len() as f32)).collect();
+                let widths: Vec<f32> =
+                    (0..nodes.len()).map(|i| len * 0.75 * fill * (1.0 - 0.4 * i as f32 / nodes.len() as f32)).collect();
                 card(&mut leaves, &spine, flat, &widths, axis);
                 let steep = (flat * 0.4 + Vec3::Y * 0.9).normalize();
                 card(&mut leaves, &spine, steep, &widths, axis);
                 // Secondary twigs alternating left/right, roughly horizontal.
-                let twigs = if low { 0 } else if mid { 2 } else { 5 + (len / height * 45.0) as u32 };
+                let twigs = if low {
+                    0
+                } else if mid {
+                    2
+                } else {
+                    5 + (len / height * 45.0) as u32
+                };
                 for j in 0..twigs {
                     let tt = 0.2 + 0.75 * (j as f32 + rng.f() * 0.5) / twigs as f32;
                     let p = sample(&nodes, tt);
@@ -291,7 +328,11 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
                 Top::Whole => {
                     for a in [0.0f32, PI * 0.5] {
                         let across = Vec3::new(a.cos(), 0.0, a.sin());
-                        let spine = [top - Vec3::Y * height * 0.08, top - Vec3::Y * height * 0.03, top + Vec3::Y * height * 0.02];
+                        let spine = [
+                            top - Vec3::Y * height * 0.08,
+                            top - Vec3::Y * height * 0.03,
+                            top + Vec3::Y * height * 0.02,
+                        ];
                         card(&mut leaves, &spine, across, &[height * 0.06, height * 0.04, height * 0.015], axis);
                     }
                 }
@@ -301,18 +342,32 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
                 Top::Forked => {
                     for a in [0.0f32, PI * 0.5] {
                         let across = Vec3::new(a.cos(), 0.0, a.sin());
-                        let spine = [top - Vec3::Y * height * 0.08, top - Vec3::Y * height * 0.03, top + Vec3::Y * height * 0.02];
+                        let spine = [
+                            top - Vec3::Y * height * 0.08,
+                            top - Vec3::Y * height * 0.03,
+                            top + Vec3::Y * height * 0.02,
+                        ];
                         card(&mut leaves, &spine, across, &[height * 0.06, height * 0.04, height * 0.015], axis);
                     }
                     let at = sample(&trunk_nodes, 0.8);
                     let az = rng.f() * TAU;
-                    let b = Branch { origin: at.pos, dir: child_dir(Vec3::Y, az, 0.3), length: height * 0.24, radius: at.radius * 0.45, level: 1 };
+                    let b = Branch {
+                        origin: at.pos,
+                        dir: child_dir(Vec3::Y, az, 0.3),
+                        length: height * 0.24,
+                        radius: at.radius * 0.45,
+                        level: 1,
+                    };
                     let nodes = grow(&b, if mid { 3 } else { 6 }, 0.9, 0.03, Vec3::ZERO, 0.0, &mut rng);
                     tube(&mut wood, &nodes, if mid { 4 } else { 6 }, 1.0);
                     for a in [0.0f32, PI * 0.5] {
                         let across = Vec3::new(a.cos(), 0.0, a.sin());
                         let tip = nodes.last().unwrap().pos;
-                        let spine = [tip - Vec3::Y * height * 0.1, tip - Vec3::Y * height * 0.04, tip + Vec3::Y * height * 0.02];
+                        let spine = [
+                            tip - Vec3::Y * height * 0.1,
+                            tip - Vec3::Y * height * 0.04,
+                            tip + Vec3::Y * height * 0.02,
+                        ];
                         card(&mut leaves, &spine, across, &[height * 0.07, height * 0.045, height * 0.015], axis);
                     }
                 }
@@ -320,7 +375,13 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
         }
         Species::Snag => {
             let ch = character(seed);
-            let trunk = Branch { origin: Vec3::ZERO, dir: Vec3::new(ch.lean.x, 1.0, ch.lean.z), length: height * 0.95, radius: height * 0.0135, level: 0 };
+            let trunk = Branch {
+                origin: Vec3::ZERO,
+                dir: Vec3::new(ch.lean.x, 1.0, ch.lean.z),
+                length: height * 0.95,
+                radius: height * 0.0135,
+                level: 0,
+            };
             let trunk_nodes = grow(&trunk, if mid { 6 } else { 14 }, 0.8, 0.02, ch.lean * 0.3, 0.0, &mut rng);
             tube(&mut wood, &trunk_nodes, if mid { 6 } else { 9 }, 0.5);
             // Stubs and a few longer dead branches, all bare, weathered to points.
@@ -332,14 +393,24 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
                 let len = height * rng.range(0.02, 0.1) * (0.4 + from_top * 1.6).min(1.6);
                 let angle = rng.range(60.0, 110.0).to_radians();
                 let dir = child_dir(Vec3::Y, k as f32 * GOLDEN_ANGLE + rng.range(-0.3, 0.3), angle);
-                let b = Branch { origin: at.pos, dir, length: len, radius: (at.radius * 0.3).max(height * 0.001), level: 1 };
+                let b = Branch {
+                    origin: at.pos,
+                    dir,
+                    length: len,
+                    radius: (at.radius * 0.3).max(height * 0.001),
+                    level: 1,
+                };
                 let nodes = grow(&b, if mid { 2 } else { 3 }, 0.9, 0.06, Vec3::NEG_Y * 0.05, 0.0, &mut rng);
                 tube(&mut wood, &nodes, if mid { 3 } else { 4 }, 2.0);
             }
             // A few dry tufts of needles that never fell.
             for k in 0..2 {
                 let at = sample(&trunk_nodes, 0.5 + 0.2 * k as f32);
-                let spine = [at.pos, at.pos + Vec3::new(0.4, 0.1, 0.0) * height * 0.05, at.pos + Vec3::new(0.7, -0.1, 0.1) * height * 0.05];
+                let spine = [
+                    at.pos,
+                    at.pos + Vec3::new(0.4, 0.1, 0.0) * height * 0.05,
+                    at.pos + Vec3::new(0.7, -0.1, 0.1) * height * 0.05,
+                ];
                 card(&mut leaves, &spine, Vec3::Z, &[height * 0.03, height * 0.025, height * 0.01], axis);
             }
         }
@@ -350,7 +421,13 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
             for k in 0..stems {
                 let az = k as f32 * GOLDEN_ANGLE + rng.range(-0.3, 0.3);
                 let origin = Vec3::new(az.cos(), 0.0, az.sin()) * height * 0.06;
-                let b = Branch { origin, dir: child_dir(Vec3::Y, az, rng.range(15.0, 45.0).to_radians()), length: height * rng.range(0.8, 1.05), radius: height * 0.012, level: 0 };
+                let b = Branch {
+                    origin,
+                    dir: child_dir(Vec3::Y, az, rng.range(15.0, 45.0).to_radians()),
+                    length: height * rng.range(0.8, 1.05),
+                    radius: height * 0.012,
+                    level: 0,
+                };
                 let nodes = grow(&b, 3, 0.8, 0.05, Vec3::Y * 0.05, 0.0, &mut rng);
                 tube(&mut wood, &nodes, 4, 1.0);
                 for c in 0..4 {
@@ -363,13 +440,20 @@ pub fn generate_lod(species: Species, seed: u32, height: f32, lod: Lod) -> TreeM
                     let along = (out * 0.6 + Vec3::Y * 0.4).normalize();
                     let spine = [q.pos - along * size * 0.3, q.pos, q.pos + along * size * 0.4];
                     card(&mut leaves, &spine, across, &[size, size, size * 0.7], around);
-                    card(&mut leaves, &spine, (across + Vec3::Y * 0.8).normalize(), &[size * 0.8, size * 0.8, size * 0.5], around);
+                    card(
+                        &mut leaves,
+                        &spine,
+                        (across + Vec3::Y * 0.8).normalize(),
+                        &[size * 0.8, size * 0.8, size * 0.5],
+                        around,
+                    );
                 }
             }
         }
         Species::Aspen => {
             let lean = Vec3::new(rng.range(-0.04, 0.04), 1.0, rng.range(-0.04, 0.04));
-            let trunk = Branch { origin: Vec3::ZERO, dir: lean, length: height * 0.88, radius: height * 0.011, level: 0 };
+            let trunk =
+                Branch { origin: Vec3::ZERO, dir: lean, length: height * 0.88, radius: height * 0.011, level: 0 };
             let trunk_nodes = grow(&trunk, if mid { 8 } else { 12 }, 0.8, 0.02, Vec3::Y * 0.02, 0.0, &mut rng);
             tube(&mut wood, &trunk_nodes, if mid { 6 } else { 8 }, 0.35);
             let crown_centre = Vec3::new(0.0, height * 0.66, 0.0);
@@ -442,7 +526,8 @@ mod tests {
             for seed in [11, 12] {
                 let full = generate_lod(species, seed, height, Lod::Full);
                 let mid = generate_lod(species, seed, height, Lod::Mid);
-                let (full_tris, mid_tris) = (triangles(&full.wood) + triangles(&full.foliage), triangles(&mid.wood) + triangles(&mid.foliage));
+                let (full_tris, mid_tris) =
+                    (triangles(&full.wood) + triangles(&full.foliage), triangles(&mid.wood) + triangles(&mid.foliage));
                 assert!(mid_tris <= budget, "mid tree has {mid_tris} triangles, budget {budget}");
                 assert!(mid_tris * 4 <= full_tris, "mid {mid_tris} is not much less than full {full_tris}");
                 let ((full_top, full_reach), (mid_top, mid_reach)) = (extent(&full), extent(&mid));
@@ -456,7 +541,9 @@ mod tests {
     /// (lowest needle, trunk top as a fraction of the height, how far the top is from the base
     /// as a fraction of the height).
     fn character(t: &TreeMeshes, height: f32) -> (f32, f32, f32) {
-        let pos = |m: &Mesh| m.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| a.as_float3()).map(|p| p.to_vec()).unwrap_or_default();
+        let pos = |m: &Mesh| {
+            m.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| a.as_float3()).map(|p| p.to_vec()).unwrap_or_default()
+        };
         let lowest = pos(&t.foliage).iter().map(|v| v[1]).fold(f32::MAX, f32::min);
         let top = pos(&t.wood).into_iter().max_by(|a, b| a[1].total_cmp(&b[1])).expect("wood");
         (lowest / height, top[1] / height, top[0].hypot(top[2]) / height)
@@ -496,7 +583,11 @@ mod tests {
         let snag = generate_lod(Species::Snag, 5, 18.0, Lod::Full);
         let live = generate_lod(Species::Spruce, 5, 18.0, Lod::Full);
         assert!(triangles(&snag.wood) > 100, "a snag has a trunk and stubs");
-        assert!(triangles(&snag.foliage) * 20 <= triangles(&live.foliage), "{} needle triangles", triangles(&snag.foliage));
+        assert!(
+            triangles(&snag.foliage) * 20 <= triangles(&live.foliage),
+            "{} needle triangles",
+            triangles(&snag.foliage)
+        );
         let (top, _) = extent(&snag);
         assert!(top > 18.0 * 0.8, "a snag stands tall ({top})");
         let mid = generate_lod(Species::Snag, 5, 18.0, Lod::Mid);

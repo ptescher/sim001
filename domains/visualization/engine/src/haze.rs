@@ -5,11 +5,11 @@
 //! how much air each pixel looks through (thinner higher up), and blends towards the haze.
 
 use bevy::asset::{embedded_asset, load_embedded_asset};
+use bevy::camera::MainPassResolutionOverride;
 use bevy::core_pipeline::{
     FullscreenShader,
     schedule::{Core3d, Core3dSystems},
 };
-use bevy::camera::MainPassResolutionOverride;
 use bevy::prelude::*;
 use bevy::render::{
     Render, RenderApp, RenderStartup, RenderSystems,
@@ -18,7 +18,8 @@ use bevy::render::{
         BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, CachedRenderPipelineId, ColorTargetState,
         ColorWrites, FragmentState, LoadOp, Operations, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
         RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, ShaderType,
-        SpecializedRenderPipeline, SpecializedRenderPipelines, StoreOp, TextureFormat, TextureSampleType, TextureUsages,
+        SpecializedRenderPipeline, SpecializedRenderPipelines, StoreOp, TextureFormat, TextureSampleType,
+        TextureUsages,
         binding_types::{sampler, texture_2d, uniform_buffer},
     },
     renderer::{RenderContext, RenderDevice, ViewQuery},
@@ -96,7 +97,12 @@ struct HazePipeline {
     shader: Handle<Shader>,
 }
 
-fn init_pipeline(mut commands: Commands, device: Res<RenderDevice>, fullscreen: Res<FullscreenShader>, assets: Res<AssetServer>) {
+fn init_pipeline(
+    mut commands: Commands,
+    device: Res<RenderDevice>,
+    fullscreen: Res<FullscreenShader>,
+    assets: Res<AssetServer>,
+) {
     let layout = BindGroupLayoutDescriptor::new(
         "haze_layout",
         &BindGroupLayoutEntries::sequential(

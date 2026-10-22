@@ -169,8 +169,7 @@ fn main() {
     let ports: Vec<u16> = (0..n as u16).map(|i| launch::MAVLINK_PORT + 10 * (a.first_instance + i)).collect();
     let home = cognition_agent::parse_home(launch::HOME).expect("the SITL home");
     let mut ground = ground::Ground::connect(&names, &ports, home);
-    let mut commanders: Vec<(Team, Commander)> =
-        Team::BOTH
+    let mut commanders: Vec<(Team, Commander)> = Team::BOTH
         .into_iter()
         .filter(|t| !a.people[t.index()] && !a.nobody[t.index()])
         .map(|t| (t, Commander::new(rules)))

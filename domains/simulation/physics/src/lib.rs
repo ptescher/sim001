@@ -160,7 +160,6 @@ impl Carry {
     }
 }
 
-
 fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
     let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
@@ -604,7 +603,11 @@ pub fn step(
     s.rot = (s.rot * Quat::from_scaled_axis(s.omega * dt)).normalize();
 
     // Settle when resting on the ground to avoid jitter.
-    if s.on_ground && s.vel.length() < 0.05 && s.omega.length() < 0.05 && p.motors.iter().map(|m| cmd.out[m.channel]).sum::<f32>() < 0.05 {
+    if s.on_ground
+        && s.vel.length() < 0.05
+        && s.omega.length() < 0.05
+        && p.motors.iter().map(|m| cmd.out[m.channel]).sum::<f32>() < 0.05
+    {
         s.vel = Vec3::ZERO;
         s.omega = Vec3::ZERO;
     }
@@ -663,7 +666,11 @@ mod tests {
             gyro_att = (gyro_att * Quat::from_scaled_axis(s.omega * dt)).normalize();
         }
         assert!(s.rot.angle_between(s.hand_rot) < 1e-3, "settled in the hand");
-        assert!(gyro_att.angle_between(s.rot) < 0.01, "gyros track the motion: off by {:.3} rad", gyro_att.angle_between(s.rot));
+        assert!(
+            gyro_att.angle_between(s.rot) < 0.01,
+            "gyros track the motion: off by {:.3} rad",
+            gyro_att.angle_between(s.rot)
+        );
         assert_eq!(s.omega, Vec3::ZERO);
     }
 
@@ -698,7 +705,6 @@ mod tests {
         assert!(peak < 4.0 * GRAVITY, "peak specific force {:.0} m/s^2", peak);
     }
 }
-
 
 #[cfg(test)]
 mod rotor_tests {
@@ -961,7 +967,8 @@ mod hover_tests {
             let (_, _, q) = (0.0, 0.0, body_rates(s.omega).0);
             thr = (thr + 0.05 * (speed - s.airspeed) * dt).clamp(0.05, 1.0);
             elev = (elev + 0.01 * (0.0 - s.vel.y) * dt).clamp(-0.5, 0.5);
-            let mut cmd = simulation_aircraft::t1s_ranger::mix(0.0, (elev + 0.15 * (-q)).clamp(-1.0, 1.0), 0.0, [0.0, 0.0]);
+            let mut cmd =
+                simulation_aircraft::t1s_ranger::mix(0.0, (elev + 0.15 * (-q)).clamp(-1.0, 1.0), 0.0, [0.0, 0.0]);
             cmd.out[MOTOR_LEFT] = thr;
             cmd.out[MOTOR_RIGHT] = thr;
             cmd.out[TILT_LEFT] = 1.0;
@@ -997,7 +1004,10 @@ mod hover_tests {
         }
         let (amps, speed) = best;
         let cruise = minutes_at(&p, amps);
-        println!("hover {:.1} A, {hover:.1} min; best cruise {amps:.1} A at {speed:.0} m/s, {cruise:.1} min", s.current);
+        println!(
+            "hover {:.1} A, {hover:.1} min; best cruise {amps:.1} A at {speed:.0} m/s, {cruise:.1} min",
+            s.current
+        );
         assert!((8.0..12.5).contains(&hover), "hover lasts {hover:.1} min, HEEWING says about 10");
         // Known gap: the model's cruise is about half as long as HEEWING's 45 minutes. The
         // airframe's drag is too high for that (a lift to drag ratio of about 4), and nothing

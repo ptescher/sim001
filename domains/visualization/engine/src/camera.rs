@@ -91,7 +91,12 @@ pub struct UiOffscreen(pub UVec2);
 #[derive(Resource, Clone)]
 pub struct UiImage(pub Handle<Image>);
 
-pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: &mut Assets<Image>, offscreen: Option<UiOffscreen>) {
+pub fn spawn_camera(
+    commands: &mut Commands,
+    settings: &RenderSettings,
+    images: &mut Assets<Image>,
+    offscreen: Option<UiOffscreen>,
+) {
     use bevy::camera::RenderTarget;
     use bevy::image::ImageSampler;
     use bevy::render::render_resource::TextureFormat;
@@ -100,7 +105,13 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
     target.sampler = ImageSampler::linear();
     let image = images.add(target);
     let upscale = settings.raytracing && std::env::var("SIM001_UPSCALE").map_or(true, |v| v != "0");
-    commands.insert_resource(RenderScale { scale: if settings.raytracing { 0.0 } else { 1.0 }, auto: settings.raytracing, image: image.clone(), suspended: true, upscale });
+    commands.insert_resource(RenderScale {
+        scale: if settings.raytracing { 0.0 } else { 1.0 },
+        auto: settings.raytracing,
+        image: image.clone(),
+        suspended: true,
+        upscale,
+    });
 
     // Window camera: draws the upscaled scene image and the HUD at full resolution.
     let mut ui_camera = commands.spawn((Camera2d, Camera { order: 1, ..default() }, bevy::ui::IsDefaultUiCamera));
@@ -138,7 +149,8 @@ pub fn spawn_camera(commands: &mut Commands, settings: &RenderSettings, images: 
 }
 
 /// Bevy's auto exposure brings the scene's average to 1.0; a camera brings it to mid grey.
-pub const METERING: Handle<AutoExposureCompensationCurve> = bevy::asset::uuid_handle!("6f1d2c3e-7a0b-4b8e-9a51-3c0e2d9b7a14");
+pub const METERING: Handle<AutoExposureCompensationCurve> =
+    bevy::asset::uuid_handle!("6f1d2c3e-7a0b-4b8e-9a51-3c0e2d9b7a14");
 
 /// About 2.5 stops down, at every brightness: the average lands on 18% grey.
 pub fn metering_curve() -> AutoExposureCompensationCurve {
@@ -175,7 +187,11 @@ pub fn scene_look() -> impl Bundle {
             color: Color::srgb(0.62, 0.72, 0.85),
             directional_light_color: Color::srgba(1.0, 0.95, 0.85, 0.3),
             directional_light_exponent: 20.0,
-            falloff: FogFalloff::from_visibility_colors(25_000.0, Color::srgb(0.40, 0.48, 0.60), Color::srgb(0.75, 0.83, 0.95)),
+            falloff: FogFalloff::from_visibility_colors(
+                25_000.0,
+                Color::srgb(0.40, 0.48, 0.60),
+                Color::srgb(0.75, 0.83, 0.95),
+            ),
         },
         crate::clouds::Clouds::default(),
         Bloom::NATURAL,
@@ -191,7 +207,11 @@ pub fn feed_solari_settings() -> SolariLighting {
 
 /// Solari needs storage access to the main texture and MSAA off.
 pub fn add_raytracing(cam: &mut EntityCommands) {
-    cam.insert((solari_settings(), CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING), crate::haze::Haze::default()));
+    cam.insert((
+        solari_settings(),
+        CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING),
+        crate::haze::Haze::default(),
+    ));
 }
 
 /// A camera placed by hand, for pictures of the scenery: heights are above the ground.
@@ -208,7 +228,11 @@ impl View {
     /// ground, and the field of view (default 60 degrees).
     pub fn parse(s: &str) -> Option<View> {
         let n: Vec<f32> = s.split(',').map(|s| s.trim().parse().ok()).collect::<Option<_>>()?;
-        (n.len() >= 6).then(|| View { eye: Vec3::new(n[0], n[1], n[2]), target: Vec3::new(n[3], n[4], n[5]), fov: n.get(6).copied().unwrap_or(60.0) })
+        (n.len() >= 6).then(|| View {
+            eye: Vec3::new(n[0], n[1], n[2]),
+            target: Vec3::new(n[3], n[4], n[5]),
+            fov: n.get(6).copied().unwrap_or(60.0),
+        })
     }
 
     pub fn transform(&self) -> Transform {
@@ -222,7 +246,14 @@ impl View {
 pub struct PinnedView(pub Option<View>);
 
 pub fn camera_plugin(app: &mut App) {
-    app.init_resource::<PinnedView>().insert_resource(CamState { mode: CamMode::LineOfSight, auto_zoom: true, knob_view: None, chase_pos: Vec3::ZERO, fov: 50.0 })
+    app.init_resource::<PinnedView>()
+        .insert_resource(CamState {
+            mode: CamMode::LineOfSight,
+            auto_zoom: true,
+            knob_view: None,
+            chase_pos: Vec3::ZERO,
+            fov: 50.0,
+        })
         .add_systems(Update, update_render_scale);
 }
 
@@ -281,10 +312,11 @@ fn update_render_scale(
         rs.auto = true;
         *auto = AutoScale::default();
     }
-    if rs.auto && !rs.suspended {
-        if let Some(scale) = auto_scale(&mut auto, rs.scale, time.delta_secs()) {
-            rs.scale = scale;
-        }
+    if rs.auto
+        && !rs.suspended
+        && let Some(scale) = auto_scale(&mut auto, rs.scale, time.delta_secs())
+    {
+        rs.scale = scale;
     }
     // With temporal upscaling the picture is always the window's size and the camera draws a
     // part of it; without, the picture itself is smaller and the screen stretches it.
@@ -302,7 +334,11 @@ fn update_render_scale(
     // Only take a mutable borrow when resizing: `get_mut` flags the asset as modified.
     if images.get(&handle).is_some_and(|img| img.size() != want) {
         if let Some(mut img) = images.get_mut(&handle) {
-            img.resize(bevy::render::render_resource::Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 });
+            img.resize(bevy::render::render_resource::Extent3d {
+                width: want.x,
+                height: want.y,
+                depth_or_array_layers: 1,
+            });
         }
         auto.settle = 2;
     }
@@ -456,9 +492,14 @@ fn solari_settings() -> SolariLighting {
         secondary_di_samples: env("SIM001_DI2").map(|v| v as u32).unwrap_or(1),
         max_bounces: env("SIM001_BOUNCES").map(|v| v as u32).unwrap_or(2),
         world_cache_position_base_cell_size: env("SIM001_CELL").unwrap_or(0.4),
-        world_cache_max_temporal_samples: env("SIM001_WC_TEMPORAL").unwrap_or(defaults.world_cache_max_temporal_samples),
-        world_cache_direct_light_sample_count: env("SIM001_WC_DI").map(|v| v as u32).unwrap_or(defaults.world_cache_direct_light_sample_count),
-        world_cache_cell_updates_soft_target: env("SIM001_WC_UPDATES").map(|v| v as u32).unwrap_or(defaults.world_cache_cell_updates_soft_target),
+        world_cache_max_temporal_samples: env("SIM001_WC_TEMPORAL")
+            .unwrap_or(defaults.world_cache_max_temporal_samples),
+        world_cache_direct_light_sample_count: env("SIM001_WC_DI")
+            .map(|v| v as u32)
+            .unwrap_or(defaults.world_cache_direct_light_sample_count),
+        world_cache_cell_updates_soft_target: env("SIM001_WC_UPDATES")
+            .map(|v| v as u32)
+            .unwrap_or(defaults.world_cache_cell_updates_soft_target),
         world_cache_max_gi_ray_distance: 120.0,
         ..defaults
     }

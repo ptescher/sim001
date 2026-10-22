@@ -8,7 +8,7 @@
 //! What a runner needs from outside (ArduPilot, Docker) it asks the expectation framework for: a
 //! runner whose dependency cannot be had says so, and its tests are "not supported yet".
 
-use crate::limit::{run as run_limited, Ended};
+use crate::limit::{Ended, run as run_limited};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -31,7 +31,15 @@ fn s(v: &[&str]) -> Vec<String> {
 }
 
 fn cargo(name: &'static str, root: &Path, args: &[&str], secs: u64) -> Step {
-    Step { name, program: "cargo".into(), args: s(args), dir: root.to_path_buf(), env: vec![], limit: Duration::from_secs(secs), may_fail: false }
+    Step {
+        name,
+        program: "cargo".into(),
+        args: s(args),
+        dir: root.to_path_buf(),
+        env: vec![],
+        limit: Duration::from_secs(secs),
+        may_fail: false,
+    }
 }
 
 /// The steps of `tasks docs`.
@@ -67,24 +75,43 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     out.push(windowless);
 
     // The league plays thousands of games in the fast arena: minutes, with no window.
-    let mut league = cargo("the league", root, &["test", "--release", "-p", "cognition_league", "--test", "acceptance"], 900);
+    let mut league =
+        cargo("the league", root, &["test", "--release", "-p", "cognition_league", "--test", "acceptance"], 900);
     league.env.push(docs_env.clone());
     league.may_fail = true;
     out.push(league);
 
-    let mut agent = cargo("the AGENT mode in ArduPilot SITL", root, &["test", "--release", "-p", "cognition_runner", "--test", "acceptance"], 400);
+    let mut agent = cargo(
+        "the AGENT mode in ArduPilot SITL",
+        root,
+        &["test", "--release", "-p", "cognition_runner", "--test", "acceptance"],
+        400,
+    );
     agent.env.push(docs_env.clone());
     agent.may_fail = true;
     out.push(agent);
 
     // A whole game of Towers between two computer teams, six ArduPlane SITL drones.
-    let mut towers = cargo("the Towers game server", root, &["test", "--release", "-p", "recreation_towers_server", "--test", "acceptance"], 900);
+    let mut towers = cargo(
+        "the Towers game server",
+        root,
+        &["test", "--release", "-p", "recreation_towers_server", "--test", "acceptance"],
+        900,
+    );
     towers.env.push(docs_env);
     towers.may_fail = true;
     out.push(towers);
 
     out.push(cargo("build the sim", root, &["build", "--release"], 900));
-    let sim_plain = Step { name: "the sim", program: sim.clone(), args: s(&["--expect", "--docs", &docs_arg]), dir: root.to_path_buf(), env: vec![], limit: Duration::from_secs(480), may_fail: true };
+    let sim_plain = Step {
+        name: "the sim",
+        program: sim.clone(),
+        args: s(&["--expect", "--docs", &docs_arg]),
+        dir: root.to_path_buf(),
+        env: vec![],
+        limit: Duration::from_secs(480),
+        may_fail: true,
+    };
     out.push(sim_plain);
     // The VTOL on its own: ArduPilot flies it (the sim asks the harness for ArduPilot).
     out.push(Step {
@@ -137,7 +164,12 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
             may_fail: true,
         });
     }
-    out.push(cargo("the manual", root, &["run", "-q", "-p", "expectation", "--", "docs", "expectations", &docs_arg], 600));
+    out.push(cargo(
+        "the manual",
+        root,
+        &["run", "-q", "-p", "expectation", "--", "docs", "expectations", &docs_arg],
+        600,
+    ));
     out
 }
 
@@ -153,7 +185,9 @@ pub fn run(root: &Path, no_station: bool) -> i32 {
         let ended = run_limited(&mut command(&step), step.limit);
         match (&ended, step.may_fail) {
             (Ended::Exited(0), _) => {}
-            (Ended::TimedOut, true) => println!("== {} ran out of time ({} s): its results so far stand", step.name, step.limit.as_secs()),
+            (Ended::TimedOut, true) => {
+                println!("== {} ran out of time ({} s): its results so far stand", step.name, step.limit.as_secs())
+            }
             (e, true) => println!("== {}: {e:?} (its failed tests are in the manual)", step.name),
             (e, false) => {
                 eprintln!("== {} failed: {e:?}", step.name);
@@ -236,7 +270,8 @@ mod tests {
     #[test]
     fn only_the_tests_may_fail() {
         for step in steps(&root(), false) {
-            let chore = step.name == "build the sim" || step.name == "the manual" || step.name == "the domains with no window";
+            let chore =
+                step.name == "build the sim" || step.name == "the manual" || step.name == "the domains with no window";
             assert_eq!(step.may_fail, !chore, "{}", step.name);
         }
     }
@@ -244,7 +279,8 @@ mod tests {
     #[test]
     fn the_runners_write_their_results_where_the_manual_reads_them() {
         for step in steps(&root(), false) {
-            let writes = step.args.iter().any(|a| a == "/checkout/docs") || step.env.iter().any(|(k, v)| k == "SIM001_DOCS" && v == "/checkout/docs");
+            let writes = step.args.iter().any(|a| a == "/checkout/docs")
+                || step.env.iter().any(|(k, v)| k == "SIM001_DOCS" && v == "/checkout/docs");
             let is_runner = !matches!(step.name, "build the sim");
             assert_eq!(writes, is_runner, "{}", step.name);
         }
@@ -268,18 +304,26 @@ mod every_runner {
             for module in std::fs::read_dir(domain.path()).into_iter().flatten().flatten() {
                 let path = module.path();
                 let name = |p: &Path| {
-                    std::fs::read_to_string(p.join("Cargo.toml"))
-                        .ok()
-                        .and_then(|t| t.lines().find_map(|l| l.strip_prefix("name = \"").map(|n| n.trim_end_matches('"').to_string())))
+                    std::fs::read_to_string(p.join("Cargo.toml")).ok().and_then(|t| {
+                        t.lines().find_map(|l| l.strip_prefix("name = \"").map(|n| n.trim_end_matches('"').to_string()))
+                    })
                 };
                 if path.join("tests/acceptance.rs").exists() {
                     let n = name(&path).unwrap();
-                    assert!(runs(&format!("-p {n} ")) || runs(&format!("-p {n}")), "{n}'s acceptance tests are not run by `tasks docs`");
+                    assert!(
+                        runs(&format!("-p {n} ")) || runs(&format!("-p {n}")),
+                        "{n}'s acceptance tests are not run by `tasks docs`"
+                    );
                 }
                 let main = path.join("src/main.rs");
-                if std::fs::read_to_string(&main).is_ok_and(|m| m.contains("\"--expect\"")) && path.join("Cargo.lock").exists() {
+                if std::fs::read_to_string(&main).is_ok_and(|m| m.contains("\"--expect\""))
+                    && path.join("Cargo.lock").exists()
+                {
                     let dir = path.display().to_string();
-                    assert!(lines.iter().any(|l| l.starts_with(&dir) && l.contains("--expect")), "{dir} has an --expect that `tasks docs` does not run");
+                    assert!(
+                        lines.iter().any(|l| l.starts_with(&dir) && l.contains("--expect")),
+                        "{dir} has an --expect that `tasks docs` does not run"
+                    );
                 }
             }
         }

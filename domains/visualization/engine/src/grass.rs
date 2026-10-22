@@ -48,7 +48,8 @@ struct Tile {
 pub struct GrassTile;
 
 fn rnd(a: i32, b: i32, k: u32) -> f32 {
-    let mut h = (a as u32).wrapping_mul(0x8da6_b343) ^ (b as u32).wrapping_mul(0xd816_3841) ^ k.wrapping_mul(0xcb1a_b31f);
+    let mut h =
+        (a as u32).wrapping_mul(0x8da6_b343) ^ (b as u32).wrapping_mul(0xd816_3841) ^ k.wrapping_mul(0xcb1a_b31f);
     h = (h ^ (h >> 13)).wrapping_mul(0x5bd1_e995);
     h ^= h >> 15;
     (h & 0xffffff) as f32 / 0xffffff as f32
@@ -212,9 +213,15 @@ pub fn placements(ix: i32, iz: i32) -> Vec<Placement> {
                     height,
                     width,
                     flower: is_flower.then_some(kind),
-                    tint: [tint * (1.0 + dry + sunny * 1.2), tint * (1.0 - dry * 0.15 + sunny * 0.15), tint * (1.0 - dry * 0.4 - sunny * 0.3)],
+                    tint: [
+                        tint * (1.0 + dry + sunny * 1.2),
+                        tint * (1.0 - dry * 0.15 + sunny * 0.15),
+                        tint * (1.0 - dry * 0.4 - sunny * 0.3),
+                    ],
                     yaw: rnd(ix, iz, k * 7 + 1) * TAU,
-                    seed: ix.wrapping_mul(73856093) as u32 ^ iz.wrapping_mul(19349663) as u32 ^ k.wrapping_mul(83492791),
+                    seed: ix.wrapping_mul(73856093) as u32
+                        ^ iz.wrapping_mul(19349663) as u32
+                        ^ k.wrapping_mul(83492791),
                 });
             }
         }
@@ -281,21 +288,33 @@ fn near_mesh(ix: i32, iz: i32) -> Option<Mesh> {
                 let r = rnd(f as i32, (pl.seed & 0xffff) as i32, 2).sqrt() * pl.width * 0.4;
                 let off = Vec3::new(a.cos() * r, 0.0, a.sin() * r);
                 let ground = terrain::ground_height(pl.pos.x + off.x, pl.pos.z + off.z) - 0.02 - centre.y;
-                let height = pl.height * (0.85 + 0.3 * rnd(f as i32, (pl.seed & 0xffff) as i32, 3))
+                let height = pl.height
+                    * (0.85 + 0.3 * rnd(f as i32, (pl.seed & 0xffff) as i32, 3))
                     * match kind {
                         Flower::Lupine => 1.5,
                         // Clover holds its heads just above its leaves.
                         Flower::Clover => 0.45,
                         _ => 1.0,
                     };
-                meadow::flower(&mut parts, kind, Vec3::new(at.x + off.x, ground, at.z + off.z), pl.up, height, pl.seed.wrapping_add(f * 977));
+                meadow::flower(
+                    &mut parts,
+                    kind,
+                    Vec3::new(at.x + off.x, ground, at.z + off.z),
+                    pl.up,
+                    height,
+                    pl.seed.wrapping_add(f * 977),
+                );
             }
         }
     }
     (parts.tris() > 0).then(|| parts.into_mesh())
 }
 
-pub fn setup_grass(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+pub fn setup_grass(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     let material = materials.add(StandardMaterial {
         base_color_texture: Some(images.add(atlas())),
         alpha_mode: AlphaMode::Mask(0.5),
@@ -369,7 +388,15 @@ pub fn stream_grass(
     for &(_, ix, iz) in wanted.iter().take(SPAWNS_PER_FRAME) {
         let centre = tile_centre(ix, iz);
         let spawn = |commands: &mut Commands, meshes: &mut Assets<Mesh>, mesh: Mesh| {
-            commands.spawn((GrassTile, Mesh3d(meshes.add(mesh)), MeshMaterial3d(grass.material.clone()), Transform::from_translation(centre), everywhere.clone())).id()
+            commands
+                .spawn((
+                    GrassTile,
+                    Mesh3d(meshes.add(mesh)),
+                    MeshMaterial3d(grass.material.clone()),
+                    Transform::from_translation(centre),
+                    everywhere.clone(),
+                ))
+                .id()
         };
         let grass_mesh = tile_mesh(ix, iz, false);
         let flower_mesh = tile_mesh(ix, iz, true);
@@ -396,7 +423,13 @@ pub fn stream_grass(
     for &(_, ix, iz) in near.iter().filter(|_| solid_enabled).take(NEAR_BUILDS_PER_FRAME) {
         let Some(mesh) = near_mesh(ix, iz) else { continue };
         let solid = commands
-            .spawn((GrassTile, Mesh3d(meshes.add(mesh)), MeshMaterial3d(grass.solid_material.clone()), Transform::from_translation(tile_centre(ix, iz)), solid_range.clone()))
+            .spawn((
+                GrassTile,
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(grass.solid_material.clone()),
+                Transform::from_translation(tile_centre(ix, iz)),
+                solid_range.clone(),
+            ))
             .id();
         let tile = grass.tiles.get_mut(&(ix, iz)).unwrap();
         tile.solid = Some(solid);
@@ -444,7 +477,10 @@ mod tests {
         for f in [Flower::Daisy, Flower::Hawkweed, Flower::Clover, Flower::Lupine, Flower::Paintbrush] {
             assert!(count.get(&f).copied().unwrap_or(0) > 20, "{f:?}: {:?}", count.get(&f));
         }
-        let (common, rare) = (count[&Flower::Hawkweed].min(count[&Flower::Daisy]), count[&Flower::Paintbrush].max(count[&Flower::Lupine]));
+        let (common, rare) = (
+            count[&Flower::Hawkweed].min(count[&Flower::Daisy]),
+            count[&Flower::Paintbrush].max(count[&Flower::Lupine]),
+        );
         assert!(common > rare, "the rare flowers are as common as the common ones: {count:?}");
     }
 
@@ -456,7 +492,10 @@ mod tests {
             assert!((1..PANELS).contains(&panel), "{f:?} has panel {panel}");
         }
         let panels: std::collections::HashSet<_> =
-            [Flower::Daisy, Flower::Hawkweed, Flower::Clover, Flower::Lupine, Flower::Paintbrush].iter().map(|f| card_panel(*f)).collect();
+            [Flower::Daisy, Flower::Hawkweed, Flower::Clover, Flower::Lupine, Flower::Paintbrush]
+                .iter()
+                .map(|f| card_panel(*f))
+                .collect();
         assert_eq!(panels.len(), 5, "two flowers share a card");
         assert_eq!(atlas().width(), 256 * PANELS);
     }

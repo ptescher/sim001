@@ -34,7 +34,9 @@ pub fn plugin(app: &mut App, capture: Capture) {
     for (name, _) in &capture.views {
         std::fs::remove_file(capture.dir.join(format!("{name}.png"))).ok();
     }
-    app.insert_resource(capture).init_resource::<Progress>().add_systems(Update, step.run_if(in_state(AppState::Running)));
+    app.insert_resource(capture)
+        .init_resource::<Progress>()
+        .add_systems(Update, step.run_if(in_state(AppState::Running)));
 }
 
 fn step(
@@ -49,7 +51,8 @@ fn step(
     // Full resolution: the pictures are for looking at closely. (SIM001_SCALE renders at a
     // fraction instead, to compare the upscaling with a full-size picture.)
     scale.auto = false;
-    scale.scale = std::env::var("SIM001_SCALE").ok().and_then(|v| v.parse::<f32>().ok()).map_or(1.0, |s| s.clamp(0.1, 1.0));
+    scale.scale =
+        std::env::var("SIM001_SCALE").ok().and_then(|v| v.parse::<f32>().ok()).map_or(1.0, |s| s.clamp(0.1, 1.0));
     let Some((name, view)) = capture.views.get(progress.next) else {
         // Saving happens a few frames later, on another thread: wait for the last file.
         progress.done += time.delta_secs();

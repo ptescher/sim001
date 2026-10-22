@@ -43,8 +43,10 @@ pub struct Skill {
 }
 
 pub const ACE: Skill = Skill { name: "ace", max_bank: 72.0 * DEG, turn_radius: 30.0, throttle: 1.0, awareness: 80.0 };
-pub const CLUB: Skill = Skill { name: "club", max_bank: 66.0 * DEG, turn_radius: 34.0, throttle: 0.92, awareness: 60.0 };
-pub const ROOKIE: Skill = Skill { name: "rookie", max_bank: 58.0 * DEG, turn_radius: 40.0, throttle: 0.85, awareness: 40.0 };
+pub const CLUB: Skill =
+    Skill { name: "club", max_bank: 66.0 * DEG, turn_radius: 34.0, throttle: 0.92, awareness: 60.0 };
+pub const ROOKIE: Skill =
+    Skill { name: "rookie", max_bank: 58.0 * DEG, turn_radius: 40.0, throttle: 0.85, awareness: 40.0 };
 
 /// What the pilot's hands do: -1..1 for the surfaces (aileron right, elevator nose up, rudder
 /// nose right positive), 0..1 for the throttle. With a radio, they are the sticks that move
@@ -104,14 +106,17 @@ impl Path {
             .map(|i| {
                 let mut turn = heading(i) - heading((i + n - 1) % n);
                 turn = (turn + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
-                let ds = 0.5 * (flat(points[(i + 1) % n] - points[i]).length() + flat(points[i] - points[(i + n - 1) % n]).length());
+                let ds = 0.5
+                    * (flat(points[(i + 1) % n] - points[i]).length()
+                        + flat(points[i] - points[(i + n - 1) % n]).length());
                 if ds > 1e-4 { turn / ds } else { 0.0 }
             })
             .collect();
         // Smoothed over a few metres, so a polygon's corners read as the arcs they stand for.
         let spacing = d / n as f32;
         let w = ((3.0 / spacing.max(0.05)) as usize).max(1);
-        let curvature = (0..n).map(|i| (0..=2 * w).map(|k| raw[(i + n + k - w) % n]).sum::<f32>() / (2 * w + 1) as f32).collect();
+        let curvature =
+            (0..n).map(|i| (0..=2 * w).map(|k| raw[(i + n + k - w) % n]).sum::<f32>() / (2 * w + 1) as f32).collect();
         Path { points, along, curvature, closed: true }
     }
 
@@ -190,11 +195,15 @@ impl Fbwa {
                     let mut w = l.split_whitespace();
                     (w.next() == Some(name)).then(|| w.next()?.parse::<f32>().ok()).flatten()
                 })
-                .last()
+                .next_back()
                 .unwrap_or(default)
                 .to_radians()
         };
-        Fbwa { roll_limit: get("ROLL_LIMIT_DEG", 45.0), pitch_max: get("PTCH_LIM_MAX_DEG", 20.0), pitch_min: get("PTCH_LIM_MIN_DEG", -25.0) }
+        Fbwa {
+            roll_limit: get("ROLL_LIMIT_DEG", 45.0),
+            pitch_max: get("PTCH_LIM_MAX_DEG", 20.0),
+            pitch_min: get("PTCH_LIM_MIN_DEG", -25.0),
+        }
     }
 }
 
@@ -236,7 +245,15 @@ impl Pilot {
 
     /// Fly at a bank angle (rad, right wing down positive) and a climb rate (m/s), at a
     /// throttle. Close to the ground it levels the wings and climbs, whatever it was asked.
-    pub fn hold(&mut self, s: &FlightState, bank: f32, climb: f32, throttle: f32, ground: &dyn Terrain, dt: f32) -> Controls {
+    pub fn hold(
+        &mut self,
+        s: &FlightState,
+        bank: f32,
+        climb: f32,
+        throttle: f32,
+        ground: &dyn Terrain,
+        dt: f32,
+    ) -> Controls {
         let (roll, pitch, _) = physics::euler(s.rot);
         let (p, q, _) = physics::body_rates(s.omega);
         let v = s.airspeed.max(8.0);
@@ -274,7 +291,8 @@ impl Pilot {
         // What the pilot knows of the T1-S's elevator: what the wing must lift, against the
         // airspeed (see `ELEVATOR_FOR_LIFT`), and the trim learns what is left over.
         let feel = ELEVATOR_LEVEL + ELEVATOR_FOR_LIFT * n / (v * v);
-        let elevator = feel + (1.6 * (wanted_pitch - pitch) - 0.15 * (q - turn_rate)) * gain + self.trim - 1.5 * buffet * gain;
+        let elevator =
+            feel + (1.6 * (wanted_pitch - pitch) - 0.15 * (q - turn_rate)) * gain + self.trim - 1.5 * buffet * gain;
         // Slow in a turn: open the throttle, or the turn bleeds the speed away.
         let throttle = if v < 20.0 { throttle.max(((20.0 - v) / 4.0).min(1.0)) } else { throttle };
         Controls { aileron, elevator, rudder: 0.3 * aileron, throttle }
@@ -365,7 +383,15 @@ impl Pilot {
     }
 
     /// Fly along a line `height` metres above it, at a throttle.
-    pub fn follow(&mut self, s: &FlightState, path: &Path, height: f32, throttle: f32, ground: &dyn Terrain, dt: f32) -> Controls {
+    pub fn follow(
+        &mut self,
+        s: &FlightState,
+        path: &Path,
+        height: f32,
+        throttle: f32,
+        ground: &dyn Terrain,
+        dt: f32,
+    ) -> Controls {
         let i = path.nearest(s.pos, self.cursor);
         self.cursor = Some(i);
         let v = flat(s.vel);
@@ -417,7 +443,13 @@ mod tests {
     }
 
     /// Flies for `seconds`, the pilot choosing the controls every step, and looks at each step.
-    fn fly(p: &AircraftParams, s: &mut FlightState, seconds: f32, mut pilot: impl FnMut(&FlightState) -> Controls, mut look: impl FnMut(&FlightState)) {
+    fn fly(
+        p: &AircraftParams,
+        s: &mut FlightState,
+        seconds: f32,
+        mut pilot: impl FnMut(&FlightState) -> Controls,
+        mut look: impl FnMut(&FlightState),
+    ) {
         for _ in 0..(seconds / DT) as usize {
             let c = pilot(s).mix();
             physics::step(p, s, &c, &Environment::default(), &Flat, &[], DT);
@@ -479,13 +511,19 @@ mod tests {
         let mut pilot = Pilot::new(ACE);
         let (mut worst_height, mut worst_bank) = (0.0f32, 0.0f32);
         let mut t = 0.0;
-        fly(&p, &mut s, 12.0, |s| pilot.hold(s, 65.0 * DEG, 0.0, 1.0, &Flat, DT), |s| {
-            t += DT;
-            if t > 3.0 {
-                worst_height = worst_height.max((s.pos.y - 20.0).abs());
-                worst_bank = worst_bank.max((physics::euler(s.rot).0 - 65.0 * DEG).abs());
-            }
-        });
+        fly(
+            &p,
+            &mut s,
+            12.0,
+            |s| pilot.hold(s, 65.0 * DEG, 0.0, 1.0, &Flat, DT),
+            |s| {
+                t += DT;
+                if t > 3.0 {
+                    worst_height = worst_height.max((s.pos.y - 20.0).abs());
+                    worst_bank = worst_bank.max((physics::euler(s.rot).0 - 65.0 * DEG).abs());
+                }
+            },
+        );
         assert_eq!(s.phase, Phase::Flying);
         assert!(worst_height < 3.0, "height off by {worst_height:.1} m");
         assert!(worst_bank < 8.0 * DEG, "bank off by {:.1} deg", worst_bank / DEG);
@@ -497,15 +535,21 @@ mod tests {
         let mut pilot = Pilot::new(ACE);
         let mut worst = 0.0f32;
         let t = std::cell::Cell::new(0.0f32);
-        fly(&p, &mut s, 16.0, |s| {
-            let bank = if (t.get() / 4.0) as i32 % 2 == 0 { 60.0 } else { -60.0 };
-            pilot.hold(s, bank * DEG, 0.0, 1.0, &Flat, DT)
-        }, |s| {
-            t.set(t.get() + DT);
-            if t.get() > 2.0 {
-                worst = worst.max((s.pos.y - 20.0).abs());
-            }
-        });
+        fly(
+            &p,
+            &mut s,
+            16.0,
+            |s| {
+                let bank = if (t.get() / 4.0) as i32 % 2 == 0 { 60.0 } else { -60.0 };
+                pilot.hold(s, bank * DEG, 0.0, 1.0, &Flat, DT)
+            },
+            |s| {
+                t.set(t.get() + DT);
+                if t.get() > 2.0 {
+                    worst = worst.max((s.pos.y - 20.0).abs());
+                }
+            },
+        );
         assert_eq!(s.phase, Phase::Flying);
         assert!(worst < 4.0, "height off by {worst:.1} m");
     }
@@ -537,13 +581,19 @@ mod tests {
         let mut pilot = Pilot::new(ACE);
         let (mut worst_track, mut worst_height) = (0.0f32, 0.0f32);
         let mut t = 0.0;
-        fly(&p, &mut s, 40.0, |s| pilot.follow(s, &path, 10.0, 1.0, &Flat, DT), |s| {
-            t += DT;
-            if t > 5.0 {
-                worst_track = worst_track.max((flat_dist(s.pos, centre) - radius).abs());
-                worst_height = worst_height.max((s.pos.y - 10.0).abs());
-            }
-        });
+        fly(
+            &p,
+            &mut s,
+            40.0,
+            |s| pilot.follow(s, &path, 10.0, 1.0, &Flat, DT),
+            |s| {
+                t += DT;
+                if t > 5.0 {
+                    worst_track = worst_track.max((flat_dist(s.pos, centre) - radius).abs());
+                    worst_height = worst_height.max((s.pos.y - 10.0).abs());
+                }
+            },
+        );
         assert_eq!(s.phase, Phase::Flying);
         assert!(worst_track < 5.0, "off the circle by {worst_track:.1} m");
         assert!(worst_height < 4.0, "height off by {worst_height:.1} m");
@@ -572,7 +622,10 @@ mod tests {
         let (centre, radius, speed) = (Vec3::new(-60.0, 0.0, -40.0), 40.0f32, 18.0f32);
         let other = |t: f32| {
             let a = t * speed / radius;
-            (centre + Vec3::new(a.cos(), 0.0, -a.sin()) * radius + Vec3::Y * 20.0, Vec3::new(-a.sin(), 0.0, -a.cos()) * speed)
+            (
+                centre + Vec3::new(a.cos(), 0.0, -a.sin()) * radius + Vec3::Y * 20.0,
+                Vec3::new(-a.sin(), 0.0, -a.cos()) * speed,
+            )
         };
         let mut t = 0.0;
         let mut closest = f32::MAX;
@@ -638,7 +691,16 @@ mod probe {
                     simulation_physics::step(&p, &mut s, &c.mix(), &Environment::default(), &Flat, &[], dt);
                 }
                 let (roll, pitch, _) = physics::euler(s.rot);
-                println!("bank {bank:>4} thr {thr}: trim {:+.3} elevator {:+.3} v {:.1} vy {:+.2} roll {:.0} pitch {:+.1} radius {:.1}", pilot.trim, c.elevator, s.vel.length(), s.vel.y, roll / DEG, pitch / DEG, s.vel.length().powi(2) / (GRAVITY * roll.tan().abs().max(1e-3)));
+                println!(
+                    "bank {bank:>4} thr {thr}: trim {:+.3} elevator {:+.3} v {:.1} vy {:+.2} roll {:.0} pitch {:+.1} radius {:.1}",
+                    pilot.trim,
+                    c.elevator,
+                    s.vel.length(),
+                    s.vel.y,
+                    roll / DEG,
+                    pitch / DEG,
+                    s.vel.length().powi(2) / (GRAVITY * roll.tan().abs().max(1e-3))
+                );
             }
         }
     }

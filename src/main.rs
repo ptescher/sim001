@@ -21,28 +21,31 @@
 //!   --direct                                    with --ardupilot: start with the sticks flying (J toggles)
 //!   --expect [suite] [--docs dir]               run the acceptance tests in expectations/ (and write the docs)
 
+// Bevy systems take many parameters and nested queries.
+#![allow(clippy::too_many_arguments, clippy::type_complexity)]
+
 mod acceptance;
 // The 3D view is the visualization domain's engine; the sim is one of its sources.
 use visualization_engine::{camera, loading, mapgen, mesh_util, model, terrain, theme};
-mod test_radio;
 mod ardupilot;
-mod sitl;
-mod flight_computer;
-mod gc_pad;
-mod games;
-mod hud;
 mod feed;
+mod flight_computer;
+mod games;
+mod gc_pad;
+mod hud;
 mod input;
+mod pad_overlay;
 mod placement;
 mod power;
 mod radio;
-mod pad_overlay;
 mod radio_overlay;
 mod script;
 mod selftest;
 mod sim;
+mod sitl;
 #[cfg(target_os = "macos")]
 mod switch_hid;
+mod test_radio;
 
 use bevy::prelude::*;
 use bevy::window::{PresentMode, WindowLevel, WindowResolution};
@@ -72,7 +75,11 @@ fn main() {
         selftest::run_all();
         return;
     }
-    if let Some(dir) = args.iter().position(|a| a == "--export-map").map(|i| args.get(i + 1).map_or("domains/teleoperation/console/assets", |s| s.as_str())) {
+    if let Some(dir) = args
+        .iter()
+        .position(|a| a == "--export-map")
+        .map(|i| args.get(i + 1).map_or("domains/teleoperation/console/assets", |s| s.as_str()))
+    {
         mapgen::export(dir);
         return;
     }
@@ -80,7 +87,9 @@ fn main() {
     if let Some(name) = args.iter().position(|a| a == "--map").and_then(|i| args.get(i + 1)) {
         let maps = sitl::resource_root().join("maps");
         if let Err(e) = terrain::load_site(&maps, name) {
-            eprintln!("--map {name}: {e}\nBuild it with: cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- {name}");
+            eprintln!(
+                "--map {name}: {e}\nBuild it with: cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- {name}"
+            );
             std::process::exit(1);
         }
         let r = terrain::real().unwrap();
@@ -120,7 +129,10 @@ fn main() {
     // somebody else runs: the station, ardupilot/run_sitl.sh) the sim starts one for itself.
     let mut ap_enabled = flag("--ardupilot");
     if ap_enabled && !params.flight_controller {
-        eprintln!("--ardupilot: the {} has no flight controller (only a receiver and ESCs), so ArduPilot has nothing to fly", aircraft.title);
+        eprintln!(
+            "--ardupilot: the {} has no flight controller (only a receiver and ESCs), so ArduPilot has nothing to fly",
+            aircraft.title
+        );
         std::process::exit(1);
     }
     let root_buf = sitl::resource_root();
@@ -132,7 +144,11 @@ fn main() {
     if flag("--expect") && params.flight_controller && !ap_enabled {
         ap_enabled = true;
         ap_by_service = true;
-        services.lock().unwrap().add(simulation_sitl::service::ardupilot(root, aircraft.id, &sitl::data_dir(root).join("logs/sitl")));
+        services.lock().unwrap().add(simulation_sitl::service::ardupilot(
+            root,
+            aircraft.id,
+            &sitl::data_dir(root).join("logs/sitl"),
+        ));
     }
     let own_sitl = if params.flight_controller && !ap_enabled {
         let plan = sitl::plan(root, aircraft.id, sitl::native_binary(root).exists(), sitl::docker_image_exists());
@@ -187,7 +203,8 @@ fn main() {
     // `--expect [suite]` runs the suite (default expectations/); `--docs [dir]` writes the docs.
     let value = |name: &str| arg(name).filter(|v| !v.starts_with("--")).cloned();
     let expect = flag("--expect").then(|| {
-        value("--expect").map_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations"), Into::into)
+        value("--expect")
+            .map_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations"), Into::into)
     });
     let docs = flag("--docs").then(|| value("--docs").unwrap_or_else(|| "docs".into()).into());
     let shots = flag("--shots") || expect.is_some();
@@ -241,13 +258,16 @@ fn main() {
         )
         .add_systems(
             Update,
-            (hud::update_hud, pad_overlay::update_pad_overlay, radio_overlay::update_radio_overlay).chain().in_set(SimSet::Visual),
+            (hud::update_hud, pad_overlay::update_pad_overlay, radio_overlay::update_radio_overlay)
+                .chain()
+                .in_set(SimSet::Visual),
         );
     games::plugin(&mut app);
     let home = arg("--home")
         .and_then(|s| {
             let v: Vec<f64> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
-            (v.len() >= 2).then(|| communication_traffic::Position::new(v[0], v[1], v.get(2).copied().unwrap_or(0.0) as f32))
+            (v.len() >= 2)
+                .then(|| communication_traffic::Position::new(v[0], v[1], v.get(2).copied().unwrap_or(0.0) as f32))
         })
         // ardupilot/start.sh's default home.
         .unwrap_or(communication_traffic::Position::new(-35.363261, 149.165230, 584.0));
@@ -285,11 +305,19 @@ fn main() {
                 }
             },
             // On a real TX15 (a serial device), the ground station is served through the radio.
-            None => arg("--radio-upstream").cloned().or(ground_station_via_radio.map(|a| a.to_string())).unwrap_or(autopilot),
+            None => arg("--radio-upstream")
+                .cloned()
+                .or(ground_station_via_radio.map(|a| a.to_string()))
+                .unwrap_or(autopilot),
         };
         radio::plugin(
             &mut app,
-            radio::Config { port, upstream, home, rate: arg("--radio-rate").and_then(|r| r.parse().ok()).unwrap_or(10_000.0) },
+            radio::Config {
+                port,
+                upstream,
+                home,
+                rate: arg("--radio-rate").and_then(|r| r.parse().ok()).unwrap_or(10_000.0),
+            },
         );
     }
     if let Some(cfg) = feed {
@@ -303,7 +331,10 @@ fn main() {
         app.insert_resource(script::ShotScript { dir: dir.clone(), t: 0.0, done: vec![] })
             .add_systems(
                 Update,
-                script::run_script.after(SimSet::Input).before(SimSet::Logic).run_if(in_state(loading::AppState::Running)),
+                script::run_script
+                    .after(SimSet::Input)
+                    .before(SimSet::Logic)
+                    .run_if(in_state(loading::AppState::Running)),
             )
             .add_systems(Update, script::log_state.after(SimSet::Visual))
             .add_systems(Update, script::shot_loading.run_if(in_state(loading::AppState::Loading)));
@@ -312,7 +343,14 @@ fn main() {
         app.add_plugins(test_radio::plugin);
     }
     if let Some(suite) = expect {
-        acceptance::plugin(&mut app, suite, docs, params.flight_controller, ap_enabled && !direct, services.into_inner().unwrap());
+        acceptance::plugin(
+            &mut app,
+            suite,
+            docs,
+            params.flight_controller,
+            ap_enabled && !direct,
+            services.into_inner().unwrap(),
+        );
     }
     let exit = app.run();
     sitl::stop();
@@ -357,7 +395,11 @@ fn publish_scene(sim: Res<SharedSim>, input: Res<PilotInput>, mut scene: ResMut<
             },
         };
     }
-    scene.wind = Wind { from_dir: c.wind.from_dir, speed: c.wind.speed, at_sock: c.wind_at(Vec3::new(18.0, 5.0, 6.0), c.state.time) };
+    scene.wind = Wind {
+        from_dir: c.wind.from_dir,
+        speed: c.wind.speed,
+        at_sock: c.wind_at(Vec3::new(18.0, 5.0, 6.0), c.state.time),
+    };
     view.cycle |= input.has(Action::Camera);
     view.toggle_auto_zoom |= input.has(Action::Zoom);
     view.view_knob = input.radio_view;
@@ -366,7 +408,10 @@ fn publish_scene(sim: Res<SharedSim>, input: Res<PilotInput>, mut scene: ResMut<
 
 /// Cmd-Q (macOS) / Ctrl-Q elsewhere ends the sim.
 /// F11 switches between a window and borderless full screen.
-fn toggle_fullscreen(keys: Res<ButtonInput<KeyCode>>, mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>) {
+fn toggle_fullscreen(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+) {
     use bevy::window::{MonitorSelection, WindowMode};
     if !keys.just_pressed(KeyCode::F11) {
         return;
@@ -380,7 +425,8 @@ fn toggle_fullscreen(keys: Res<ButtonInput<KeyCode>>, mut windows: Query<&mut Wi
 }
 
 fn quit_on_cmd_q(keys: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppExit>) {
-    let modifier = keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight, KeyCode::ControlLeft, KeyCode::ControlRight]);
+    let modifier =
+        keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight, KeyCode::ControlLeft, KeyCode::ControlRight]);
     if modifier && keys.just_pressed(KeyCode::KeyQ) {
         exit.write(AppExit::Success);
     }

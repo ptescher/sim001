@@ -30,7 +30,7 @@ fn main() {
         let (north, east) = (100.0 + 40.0 * a.sin(), 40.0 * a.cos());
         // The track: d(north) = cos a, d(east) = -sin a, so the heading is -a.
         let yaw = (-a).rem_euclid(TAU) as f32;
-        if (t * 10.0) as u64 % 10 == 0 {
+        if ((t * 10.0) as u64).is_multiple_of(10) {
             send(MavMessage::HOME_POSITION(HOME_POSITION_DATA {
                 latitude: (HOME.0 * 1e7) as i32,
                 longitude: (HOME.1 * 1e7) as i32,
@@ -39,7 +39,13 @@ fn main() {
             }));
         }
         // An anticlockwise turn at 12 m/s on 40 m: about 20 degrees of left bank.
-        send(MavMessage::ATTITUDE(ATTITUDE_DATA { time_boot_ms: ms, roll: -20f32.to_radians(), pitch: 3f32.to_radians(), yaw, ..Default::default() }));
+        send(MavMessage::ATTITUDE(ATTITUDE_DATA {
+            time_boot_ms: ms,
+            roll: -20f32.to_radians(),
+            pitch: 3f32.to_radians(),
+            yaw,
+            ..Default::default()
+        }));
         let lat = HOME.0 + north / M_PER_DEG;
         let lon = HOME.1 + east / (M_PER_DEG * HOME.0.to_radians().cos());
         send(MavMessage::GLOBAL_POSITION_INT(GLOBAL_POSITION_INT_DATA {

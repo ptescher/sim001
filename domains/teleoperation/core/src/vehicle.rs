@@ -34,17 +34,11 @@ pub const PLANE_MODES: &[(u32, &str)] = &[
 ];
 
 pub fn mode_name(custom_mode: u32) -> &'static str {
-    PLANE_MODES
-        .iter()
-        .find(|(m, _)| *m == custom_mode)
-        .map_or("UNKNOWN", |(_, n)| n)
+    PLANE_MODES.iter().find(|(m, _)| *m == custom_mode).map_or("UNKNOWN", |(_, n)| n)
 }
 
 pub fn mode_number(name: &str) -> Option<u32> {
-    PLANE_MODES
-        .iter()
-        .find(|(_, n)| *n == name)
-        .map(|(m, _)| *m)
+    PLANE_MODES.iter().find(|(_, n)| *n == name).map(|(m, _)| *m)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -122,8 +116,7 @@ pub struct LinkInfo {
 impl LinkInfo {
     /// Heartbeat seen within the last 3 s.
     pub fn alive(&self) -> bool {
-        self.last_heartbeat
-            .is_some_and(|t| t.elapsed().as_secs_f32() < 3.0)
+        self.last_heartbeat.is_some_and(|t| t.elapsed().as_secs_f32() < 3.0)
     }
 }
 
@@ -236,11 +229,7 @@ impl Vehicle {
     pub fn new(address: &str) -> Self {
         Self {
             start: Instant::now(),
-            link: LinkInfo {
-                address: address.to_string(),
-                status: "starting".into(),
-                ..Default::default()
-            },
+            link: LinkInfo { address: address.to_string(), status: "starting".into(), ..Default::default() },
             sysid: 1,
             compid: 1,
             have_heartbeat: false,
@@ -318,11 +307,7 @@ impl Vehicle {
     }
 
     pub fn mode(&self) -> &'static str {
-        if self.have_heartbeat {
-            mode_name(self.custom_mode)
-        } else {
-            "----"
-        }
+        if self.have_heartbeat { mode_name(self.custom_mode) } else { "----" }
     }
 
     /// Average cell voltage, if a battery is reported.
@@ -375,8 +360,7 @@ impl Vehicle {
     }
 
     pub fn flight_secs(&self) -> f32 {
-        self.armed_since
-            .map_or(self.last_flight_secs, |t| t.elapsed().as_secs_f32())
+        self.armed_since.map_or(self.last_flight_secs, |t| t.elapsed().as_secs_f32())
     }
 
     /// Notes what the autopilot answered to a command.
@@ -390,21 +374,21 @@ impl Vehicle {
     pub fn push_log(&mut self, source: &'static str, severity: u8, text: impl Into<String>) {
         let text = text.into();
         // The debug log has every line, repeats and all.
-        let (src, level) = if source == "FC" { (crate::debug::Source::Fc, crate::debug::Level::from_severity(severity)) } else { (crate::debug::Source::Gcs, crate::debug::Level::from_severity(severity)) };
+        let (src, level) = if source == "FC" {
+            (crate::debug::Source::Fc, crate::debug::Level::from_severity(severity))
+        } else {
+            (crate::debug::Source::Gcs, crate::debug::Level::from_severity(severity))
+        };
         self.debug.record(level, src, text.clone());
         // ArduPilot repeats some messages (e.g. PreArm) every few seconds: collapse repeats.
-        if let Some(last) = self.log.back_mut() {
-            if last.text == text && last.time.elapsed().as_secs_f32() < 30.0 {
-                last.time = Instant::now();
-                return;
-            }
+        if let Some(last) = self.log.back_mut()
+            && last.text == text
+            && last.time.elapsed().as_secs_f32() < 30.0
+        {
+            last.time = Instant::now();
+            return;
         }
-        self.log.push_back(LogLine {
-            time: Instant::now(),
-            severity,
-            source,
-            text,
-        });
+        self.log.push_back(LogLine { time: Instant::now(), severity, source, text });
         while self.log.len() > 400 {
             self.log.pop_front();
         }
@@ -490,11 +474,7 @@ mod tests {
     }
 
     fn from(system_id: u8) -> MavHeader {
-        MavHeader {
-            system_id,
-            component_id: 1,
-            sequence: 0,
-        }
+        MavHeader { system_id, component_id: 1, sequence: 0 }
     }
 
     fn report(v: &mut Vehicle, alt: f32, down: f32) {
@@ -569,22 +549,8 @@ mod tests {
         };
         let mut mac = [0u8; 20];
         mac[..6].copy_from_slice(&[0x60, 0, 0, 0, 0, 2]);
-        assert!(v.hear_traffic(
-            MavHeader {
-                system_id: 1,
-                component_id: 236,
-                sequence: 0
-            },
-            &heard(mac)
-        ));
-        assert!(v.hear_traffic(
-            MavHeader {
-                system_id: 1,
-                component_id: 236,
-                sequence: 1
-            },
-            &heard([0; 20])
-        ));
+        assert!(v.hear_traffic(MavHeader { system_id: 1, component_id: 236, sequence: 0 }, &heard(mac)));
+        assert!(v.hear_traffic(MavHeader { system_id: 1, component_id: 236, sequence: 1 }, &heard([0; 20])));
         let seen = v.other_aircraft();
         assert_eq!(seen.len(), 1, "{seen:?}");
         assert_eq!(seen[0].source_label(), "RID");

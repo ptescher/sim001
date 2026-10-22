@@ -52,10 +52,7 @@ struct StickCal {
 pub fn start(debug: bool) -> SharedHidPad {
     let shared: SharedHidPad = Arc::new(Mutex::new(None));
     let out = shared.clone();
-    std::thread::Builder::new()
-        .name("switch-pro-hid".into())
-        .spawn(move || run(out, debug))
-        .expect("spawn HID thread");
+    std::thread::Builder::new().name("switch-pro-hid".into()).spawn(move || run(out, debug)).expect("spawn HID thread");
     shared
 }
 
@@ -70,16 +67,14 @@ fn run(shared: SharedHidPad, debug: bool) {
     loop {
         let _ = api.refresh_devices();
         let found = api.device_list().any(|d| d.vendor_id() == VID && d.product_id() == PID_PRO);
-        if found {
-            if let Ok(dev) = api.open(VID, PID_PRO) {
-                if debug {
-                    println!("Switch Pro HID: opened");
-                }
-                read_loop(&dev, &shared, debug);
-                *shared.lock().unwrap() = None;
-                if debug {
-                    println!("Switch Pro HID: disconnected");
-                }
+        if found && let Ok(dev) = api.open(VID, PID_PRO) {
+            if debug {
+                println!("Switch Pro HID: opened");
+            }
+            read_loop(&dev, &shared, debug);
+            *shared.lock().unwrap() = None;
+            if debug {
+                println!("Switch Pro HID: disconnected");
             }
         }
         std::thread::sleep(Duration::from_millis(500));
@@ -111,7 +106,10 @@ fn read_loop(dev: &hidapi::HidDevice, shared: &SharedHidPad, debug: bool) {
         };
 
         // Ask for the factory stick calibration (left 0x603D, right 0x6046, 9 bytes each).
-        if (cal_left.is_none() || cal_right.is_none()) && cal_requests < 6 && last_cal_request.elapsed() > Duration::from_millis(300) {
+        if (cal_left.is_none() || cal_right.is_none())
+            && cal_requests < 6
+            && last_cal_request.elapsed() > Duration::from_millis(300)
+        {
             last_cal_request = Instant::now();
             cal_requests += 1;
             let addr: u32 = if cal_left.is_none() { 0x603D } else { 0x6046 };

@@ -7,9 +7,9 @@
 //! home) and `terrain_map.txt` (georeference). Map coordinates are metres north/east of home,
 //! which is the pilot box: the same origin ArduPilot SITL uses for its home position.
 
+use crate::field::sun_dir;
 use crate::terrain;
 use crate::terrain_render::surface_color;
-use crate::field::sun_dir;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::math::{Vec2, Vec3};

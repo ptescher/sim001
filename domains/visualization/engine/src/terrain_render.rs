@@ -82,11 +82,16 @@ fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
     f[F_N2] = fbm(x / 11.0, z / 11.0, 3);
     let field_edge = 205.0 + 15.0 * gradient_noise(x / 40.0, z / 40.0);
     f[F_FIELD] = 1.0 - smoothstep(field_edge - 6.0, field_edge, r);
-    f[F_FOREST] = if r > 140.0 { smoothstep(0.1, 0.6, terrain::forest_density(x, z)) * smoothstep(140.0, 180.0, r) } else { 0.0 };
+    f[F_FOREST] =
+        if r > 140.0 { smoothstep(0.1, 0.6, terrain::forest_density(x, z)) * smoothstep(140.0, 180.0, r) } else { 0.0 };
     f[F_MOSS] = if f[F_FOREST] > 0.0 { smoothstep(0.55, 0.75, fbm(x / 6.0 + 9.0, z / 6.0, 3)) } else { 0.0 };
     f[F_DRIFT] = smoothstep(0.50, 0.75, fbm(x / 18.0 + 3.0, z / 18.0 - 8.0, 3));
     f[F_KIND] = fbm(x / 40.0 - 2.0, z / 40.0 + 5.0, 2);
-    f[F_LAKE] = if Vec2::new(x, z).distance(terrain::LAKE_CENTER) < terrain::LAKE_RADIUS * 2.0 { terrain::lake_factor(x, z) } else { 9.0 };
+    f[F_LAKE] = if Vec2::new(x, z).distance(terrain::LAKE_CENTER) < terrain::LAKE_RADIUS * 2.0 {
+        terrain::lake_factor(x, z)
+    } else {
+        9.0
+    };
     if slope > 0.2 || h > 140.0 {
         f[F_ROCK] = (smoothstep(0.30, 0.48, slope + 0.08 * gradient_noise(x / 25.0, z / 25.0))
             + smoothstep(180.0, 260.0, h + 30.0 * gradient_noise(x / 120.0, z / 120.0)))
@@ -95,8 +100,11 @@ fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
         f[F_STRATA] = 0.93 + 0.07 * (h * 0.12 + gradient_noise(x / 30.0, z / 30.0) * 4.0).sin();
     }
     if h > 230.0 {
-        f[F_SNOW] = smoothstep(290.0, 330.0, h + 45.0 * gradient_noise(x / 150.0, z / 150.0) + 12.0 * gradient_noise(x / 23.0, z / 23.0))
-            * (1.0 - smoothstep(0.45, 0.65, slope));
+        f[F_SNOW] = smoothstep(
+            290.0,
+            330.0,
+            h + 45.0 * gradient_noise(x / 150.0, z / 150.0) + 12.0 * gradient_noise(x / 23.0, z / 23.0),
+        ) * (1.0 - smoothstep(0.45, 0.65, slope));
     }
     f
 }
@@ -141,7 +149,13 @@ fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
         let hsh = terrain::hash_pub(cell_x, cell_z);
         if hsh < (0.03 + 0.16 * drift) * (1.0 - smoothstep(90.0, 150.0, f[F_H])) {
             let pick = terrain::hash_pub(cell_x + 7, cell_z - 3) + (f[F_KIND] - 0.5) * 0.4;
-            let flower = if pick < 0.45 { [0.70, 0.40, 0.02] } else if pick < 0.8 { [0.66, 0.66, 0.60] } else { [0.28, 0.08, 0.34] };
+            let flower = if pick < 0.45 {
+                [0.70, 0.40, 0.02]
+            } else if pick < 0.8 {
+                [0.66, 0.66, 0.60]
+            } else {
+                [0.28, 0.08, 0.34]
+            };
             c = mix(c, flower, 0.85);
         }
     }
@@ -212,7 +226,8 @@ fn bake_real(site: &crate::realsite::RealSite, x0: f32, z0: f32, size: f32, res:
                     let x = x0 + (col as f32 + 0.5) / res as f32 * size;
                     let z = z0 + (row as f32 + 0.5) / res as f32 * size;
                     let c = site.color(x, z);
-                    let grain = 0.92 + 0.10 * gradient_noise(x * 2.3, z * 2.3) + 0.05 * gradient_noise(x * 7.9, z * 7.9);
+                    let grain =
+                        0.92 + 0.10 * gradient_noise(x * 2.3, z * 2.3) + 0.05 * gradient_noise(x * 7.9, z * 7.9);
                     *px = c.map(|v| v * grain);
                 }
             });
@@ -262,7 +277,12 @@ fn bake_chunk(x0: f32, z0: f32, size: f32, res: u32) -> Vec<[f32; 3]> {
                     let (gx, gz) = (u * g as f32, v * g as f32);
                     let (ix, iz) = ((gx as usize).min(g - 1), (gz as usize).min(g - 1));
                     let (fx, fz) = (gx - ix as f32, gz - iz as f32);
-                    let (a, b, c, d) = (&coarse[iz * gw + ix], &coarse[iz * gw + ix + 1], &coarse[(iz + 1) * gw + ix], &coarse[(iz + 1) * gw + ix + 1]);
+                    let (a, b, c, d) = (
+                        &coarse[iz * gw + ix],
+                        &coarse[iz * gw + ix + 1],
+                        &coarse[(iz + 1) * gw + ix],
+                        &coarse[(iz + 1) * gw + ix + 1],
+                    );
                     for q in 0..NF {
                         f[q] = (a[q] * (1.0 - fx) + b[q] * fx) * (1.0 - fz) + (c[q] * (1.0 - fx) + d[q] * fx) * fz;
                     }
@@ -412,7 +432,13 @@ pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<(Mesh, Image
                 if a.abs() > half || b.abs() > half { 0 } else { RING_CELLS[(a.abs().max(b.abs()) as usize).min(4)] }
             };
             let neighbours = [cells_at(ci, cj - 1), cells_at(ci, cj + 1), cells_at(ci - 1, cj), cells_at(ci + 1, cj)];
-            specs.push(((ci as f32 - 0.5) * size, (cj as f32 - 0.5) * size, RING_CELLS[ring], RING_TEX[ring], neighbours));
+            specs.push((
+                (ci as f32 - 0.5) * size,
+                (cj as f32 - 0.5) * size,
+                RING_CELLS[ring],
+                RING_TEX[ring],
+                neighbours,
+            ));
         }
     }
     // Meshes in parallel (the texture bake below is itself multithreaded per chunk).
@@ -524,11 +550,16 @@ pub fn ground_cover(x: f32, z: f32) -> Cover {
         density,
         height,
         flowers: 0.12 + 0.45 * drift,
-        flower_kind: if kind < 0.42 { 0 } else if kind < 0.58 { 1 } else { 2 },
+        flower_kind: if kind < 0.42 {
+            0
+        } else if kind < 0.58 {
+            1
+        } else {
+            2
+        },
         dry: dryness,
     }
 }
-
 
 #[cfg(test)]
 mod tests {

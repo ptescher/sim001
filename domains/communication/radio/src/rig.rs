@@ -5,8 +5,8 @@ use crate::relay::Relay;
 use communication_air::{Air, Emitter, Listener, Technology};
 use communication_remoteid as rid;
 use communication_telemetry::{
-    AUTOPILOT_COMPONENT, Beacon, Decoder, MavMessage, ODID_COMPONENT, forward_remote_id, frame, global_position, heartbeat,
-    remote_id_location,
+    AUTOPILOT_COMPONENT, Beacon, Decoder, MavMessage, ODID_COMPONENT, forward_remote_id, frame, global_position,
+    heartbeat, remote_id_location,
 };
 use communication_traffic::{Identity, Position, Source, Track, Tracker};
 use mavlink::dialects::common::*;
@@ -212,16 +212,53 @@ impl Rig {
         let messages: [MavMessage; 7] = [
             heartbeat(&own),
             global_position(&own, (now * 1000.0) as u32),
-            MavMessage::ATTITUDE(ATTITUDE_DATA { time_boot_ms: (now * 1000.0) as u32, roll: 0.1, pitch: 0.05, yaw: 1.5, rollspeed: 0.01, pitchspeed: 0.02, yawspeed: 0.03 }),
-            MavMessage::VFR_HUD(VFR_HUD_DATA { airspeed: 18.0, groundspeed: 17.0, heading: 90, throttle: 55, alt: 80.0, climb: 0.5 }),
-            MavMessage::SYS_STATUS(SYS_STATUS_DATA { voltage_battery: 15_400, current_battery: 1200, battery_remaining: 80, ..Default::default() }),
-            MavMessage::GPS_RAW_INT(GPS_RAW_INT_DATA { time_usec: (now * 1e6) as u64, fix_type: GpsFixType::GPS_FIX_TYPE_3D_FIX, lat: 378_701_000, lon: -1_222_723_000, alt: 50_000, eph: 90, epv: 120, vel: 1700, cog: 9000, satellites_visible: 14, ..Default::default() }),
-            MavMessage::NAV_CONTROLLER_OUTPUT(NAV_CONTROLLER_OUTPUT_DATA { nav_bearing: 90, target_bearing: 90, wp_dist: 250, ..Default::default() }),
+            MavMessage::ATTITUDE(ATTITUDE_DATA {
+                time_boot_ms: (now * 1000.0) as u32,
+                roll: 0.1,
+                pitch: 0.05,
+                yaw: 1.5,
+                rollspeed: 0.01,
+                pitchspeed: 0.02,
+                yawspeed: 0.03,
+            }),
+            MavMessage::VFR_HUD(VFR_HUD_DATA {
+                airspeed: 18.0,
+                groundspeed: 17.0,
+                heading: 90,
+                throttle: 55,
+                alt: 80.0,
+                climb: 0.5,
+            }),
+            MavMessage::SYS_STATUS(SYS_STATUS_DATA {
+                voltage_battery: 15_400,
+                current_battery: 1200,
+                battery_remaining: 80,
+                ..Default::default()
+            }),
+            MavMessage::GPS_RAW_INT(GPS_RAW_INT_DATA {
+                time_usec: (now * 1e6) as u64,
+                fix_type: GpsFixType::GPS_FIX_TYPE_3D_FIX,
+                lat: 378_701_000,
+                lon: -1_222_723_000,
+                alt: 50_000,
+                eph: 90,
+                epv: 120,
+                vel: 1700,
+                cog: 9000,
+                satellites_visible: 14,
+                ..Default::default()
+            }),
+            MavMessage::NAV_CONTROLLER_OUTPUT(NAV_CONTROLLER_OUTPUT_DATA {
+                nav_bearing: 90,
+                target_bearing: 90,
+                wp_dist: 250,
+                ..Default::default()
+            }),
         ];
-        for i in 0..self.own_timers.len() {
+        for (i, message) in messages.iter().enumerate() {
             if self.own_timers[i].due(now) {
                 let seq = self.next_seq();
-                let f = frame(OWN_SYSID, AUTOPILOT_COMPONENT, seq, &messages[i]);
+                let f = frame(OWN_SYSID, AUTOPILOT_COMPONENT, seq, message);
                 self.relay.from_plane(&f, now);
             }
         }
@@ -238,7 +275,13 @@ impl Rig {
         // The other planes transmit; the receivers on the pilot's plane hear what is in range.
         let listener = Listener {
             position: FIELD,
-            hears: vec![Technology::MavlinkNetwork, Technology::Bluetooth4, Technology::Bluetooth5, Technology::WifiNan, Technology::Adsb],
+            hears: vec![
+                Technology::MavlinkNetwork,
+                Technology::Bluetooth4,
+                Technology::Bluetooth5,
+                Technology::WifiNan,
+                Technology::Adsb,
+            ],
         };
         let heard = self.air.step(STEP, &mut self.emitters, &[listener]);
         self.relay.pass_on(heard, now);
@@ -268,7 +311,8 @@ impl Rig {
     /// The marker of the other plane.
     pub fn other(&self) -> Option<Track> {
         let mav = Identity::new(Source::Mavlink, OTHER_SYSID.to_string());
-        let rid = Identity::new(Source::RemoteId, OTHER_MAC.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(":"));
+        let rid =
+            Identity::new(Source::RemoteId, OTHER_MAC.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(":"));
         self.tracks().into_iter().find(|t| t.identities.contains(&mav) || t.identities.contains(&rid))
     }
 

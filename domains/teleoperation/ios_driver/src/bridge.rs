@@ -15,10 +15,17 @@ pub struct Bridge {
 impl Bridge {
     /// Start `xcodebuild test` on the app's UI test and wait for it to connect. The first run
     /// builds the Rust station and the app, so it is given a good while.
-    pub fn start(app_dir: &Path, device: &str, bridge_port: u16, control_port: u16, address: &str) -> Result<Bridge, String> {
+    pub fn start(
+        app_dir: &Path,
+        device: &str,
+        bridge_port: u16,
+        control_port: u16,
+        address: &str,
+    ) -> Result<Bridge, String> {
         let listener = TcpListener::bind(("127.0.0.1", bridge_port)).map_err(|e| format!("port {bridge_port}: {e}"))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
-        let log = std::fs::File::create(std::env::temp_dir().join("sim001_ios_expect_xcodebuild.log")).map_err(|e| e.to_string())?;
+        let log = std::fs::File::create(std::env::temp_dir().join("sim001_ios_expect_xcodebuild.log"))
+            .map_err(|e| e.to_string())?;
         let mut xcodebuild = Command::new("xcodebuild")
             .current_dir(app_dir)
             .args(["test", "-project", "T1SGroundStation.xcodeproj", "-scheme", "T1SGroundStation"])

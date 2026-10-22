@@ -60,18 +60,8 @@ pub fn spawn(address: String, vehicle: Shared) -> Sender<Cmd> {
 
 enum Xfer {
     Idle,
-    Upload {
-        items: Vec<MISSION_ITEM_INT_DATA>,
-        plan: Vec<Waypoint>,
-        last: Instant,
-        tries: u8,
-    },
-    Download {
-        items: Vec<Option<Waypoint>>,
-        next: u16,
-        last: Instant,
-        tries: u8,
-    },
+    Upload { items: Vec<MISSION_ITEM_INT_DATA>, plan: Vec<Waypoint>, last: Instant, tries: u8 },
+    Download { items: Vec<Option<Waypoint>>, next: u16, last: Instant, tries: u8 },
 }
 
 struct Session {
@@ -144,11 +134,7 @@ fn run(address: String, vehicle: Shared, rx: Receiver<Cmd>) {
 }
 
 fn header() -> MavHeader {
-    MavHeader {
-        system_id: GCS_SYSID,
-        component_id: GCS_COMPID,
-        sequence: 0,
-    }
+    MavHeader { system_id: GCS_SYSID, component_id: GCS_COMPID, sequence: 0 }
 }
 
 impl Session {
@@ -183,8 +169,7 @@ impl Session {
         loop {
             match self.conn.recv() {
                 Ok((hdr, msg)) => self.handle(vehicle, hdr, msg),
-                Err(MessageReadError::Io(e))
-                    if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+                Err(MessageReadError::Io(e)) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
                 Err(MessageReadError::Io(e)) => return e.to_string(),
                 Err(_) => {} // bad CRC / unknown message: skip
             }
@@ -216,11 +201,8 @@ impl Session {
                 v.link.rate = n as f32 / dt;
                 self.rate_window = (now, v.link.messages);
                 if v.link.connected {
-                    v.link.status = if v.link.alive() {
-                        format!("{} msg/s", v.link.rate.round())
-                    } else {
-                        "no heartbeat".into()
-                    };
+                    v.link.status =
+                        if v.link.alive() { format!("{} msg/s", v.link.rate.round()) } else { "no heartbeat".into() };
                 }
             }
             (v.link.alive(), v.home.is_some())
@@ -231,10 +213,7 @@ impl Session {
         }
         // ArduPilot streams by SRx rate groups; ask for what the displays need. Re-sent
         // periodically so a rebooted autopilot picks the rates up again.
-        if self
-            .last_streams
-            .is_none_or(|t| now.duration_since(t) > Duration::from_secs(15))
-        {
+        if self.last_streams.is_none_or(|t| now.duration_since(t) > Duration::from_secs(15)) {
             self.last_streams = Some(now);
             for (stream, hz) in [
                 (MavDataStream::MAV_DATA_STREAM_RAW_SENSORS, 2),
@@ -254,13 +233,10 @@ impl Session {
                 }));
             }
         }
-        if !have_home
-            && self
-                .home_requested
-                .is_none_or(|t| now.duration_since(t) > Duration::from_secs(3))
-        {
+        if !have_home && self.home_requested.is_none_or(|t| now.duration_since(t) > Duration::from_secs(3)) {
             self.home_requested = Some(now);
-            self.command_long(vehicle, 
+            self.command_long(
+                vehicle,
                 MavCmd::MAV_CMD_REQUEST_MESSAGE,
                 [MSG_HOME_POSITION, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             );
@@ -294,7 +270,12 @@ impl Session {
             let token = v.start.elapsed().as_nanos() as i64 + 1;
             v.ping.sent(token, now);
             drop(v);
-            self.send(MavMessage::TIMESYNC(TIMESYNC_DATA { tc1: 0, ts1: token, target_system: self.target.0, target_component: self.target.1 }));
+            self.send(MavMessage::TIMESYNC(TIMESYNC_DATA {
+                tc1: 0,
+                ts1: token,
+                target_system: self.target.0,
+                target_component: self.target.1,
+            }));
             v = vehicle.lock().unwrap();
         }
         // What changed in its state, looked at once a second.
@@ -313,11 +294,9 @@ impl Session {
         let log = |sev: u8, s: String| vehicle.lock().unwrap().push_log("GCS", sev, s);
         match cmd {
             Cmd::Arm(arm) => {
-                log(
-                    6,
-                    format!("Command: {}", if arm { "ARM" } else { "DISARM" }),
-                );
-                self.command_long(vehicle, 
+                log(6, format!("Command: {}", if arm { "ARM" } else { "DISARM" }));
+                self.command_long(
+                    vehicle,
                     MavCmd::MAV_CMD_COMPONENT_ARM_DISARM,
                     [arm as u8 as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -325,7 +304,8 @@ impl Session {
             Cmd::ForceDisarm => {
                 log(4, "Command: FORCE DISARM".into());
                 // param2 21196: ArduPilot's magic value to disarm regardless of state.
-                self.command_long(vehicle, 
+                self.command_long(
+                    vehicle,
                     MavCmd::MAV_CMD_COMPONENT_ARM_DISARM,
                     [0.0, 21196.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -333,7 +313,8 @@ impl Session {
             Cmd::Reboot => {
                 log(4, "Command: REBOOT autopilot".into());
                 // param1 1 = reboot; param6 20190226 = ArduPilot's magic value to allow it armed.
-                self.command_long(vehicle, 
+                self.command_long(
+                    vehicle,
                     MavCmd::MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN,
                     [1.0, 0.0, 0.0, 0.0, 0.0, 20190226.0, 0.0],
                 );
@@ -341,16 +322,10 @@ impl Session {
             Cmd::SetMode(m) => {
                 log(6, format!("Command: mode {}", mode_name(m)));
                 // param1 = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, param2 = custom mode.
-                self.command_long(vehicle, 
-                    MavCmd::MAV_CMD_DO_SET_MODE,
-                    [1.0, m as f32, 0.0, 0.0, 0.0, 0.0, 0.0],
-                );
+                self.command_long(vehicle, MavCmd::MAV_CMD_DO_SET_MODE, [1.0, m as f32, 0.0, 0.0, 0.0, 0.0, 0.0]);
             }
             Cmd::Goto { lat, lon, alt } => {
-                log(
-                    6,
-                    format!("Command: fly to {lat:.6}, {lon:.6} at {alt:.0} m"),
-                );
+                log(6, format!("Command: fly to {lat:.6}, {lon:.6} at {alt:.0} m"));
                 vehicle.lock().unwrap().guided_target = Some((lat, lon, alt));
                 self.send(MavMessage::COMMAND_INT(COMMAND_INT_DATA {
                     param1: -1.0, // default ground speed
@@ -370,26 +345,17 @@ impl Session {
             }
             Cmd::Takeoff { alt } => {
                 log(6, format!("Command: take off vertically to {alt:.0} m"));
-                self.command_long(vehicle, 
-                    MavCmd::MAV_CMD_DO_SET_MODE,
-                    [1.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                );
+                self.command_long(vehicle, MavCmd::MAV_CMD_DO_SET_MODE, [1.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
                 // The takeoff is refused until the vehicle is in GUIDED, and refused again once the
                 // rotors have spooled up for GUIDED's hover (about 0.7 s later: "Already flying").
                 // The mode change takes effect on the next of ArduPilot's main loops.
                 std::thread::sleep(Duration::from_millis(150));
-                self.command_long(vehicle, 
-                    MavCmd::MAV_CMD_NAV_TAKEOFF,
-                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, alt],
-                );
+                self.command_long(vehicle, MavCmd::MAV_CMD_NAV_TAKEOFF, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, alt]);
             }
             Cmd::Upload(plan) => self.start_upload(vehicle, plan),
             Cmd::Download => self.start_download(vehicle),
             Cmd::ClearMission => {
-                vehicle
-                    .lock()
-                    .unwrap()
-                    .push_log("GCS", 6, "Command: clear the vehicle's mission");
+                vehicle.lock().unwrap().push_log("GCS", 6, "Command: clear the vehicle's mission");
                 self.send(MavMessage::MISSION_CLEAR_ALL(MISSION_CLEAR_ALL_DATA {
                     target_system: self.target.0,
                     target_component: self.target.1,
@@ -397,25 +363,24 @@ impl Session {
                 }));
             }
             Cmd::RcOverride(ch) => {
-                self.send(MavMessage::RC_CHANNELS_OVERRIDE(
-                    RC_CHANNELS_OVERRIDE_DATA {
-                        chan1_raw: ch[0],
-                        chan2_raw: ch[1],
-                        chan3_raw: ch[2],
-                        chan4_raw: ch[3],
-                        chan5_raw: ch[4],
-                        chan6_raw: ch[5],
-                        chan7_raw: ch[6],
-                        chan8_raw: ch[7],
-                        target_system: self.target.0,
-                        target_component: self.target.1,
-                        ..Default::default()
-                    },
-                ));
+                self.send(MavMessage::RC_CHANNELS_OVERRIDE(RC_CHANNELS_OVERRIDE_DATA {
+                    chan1_raw: ch[0],
+                    chan2_raw: ch[1],
+                    chan3_raw: ch[2],
+                    chan4_raw: ch[3],
+                    chan5_raw: ch[4],
+                    chan6_raw: ch[5],
+                    chan7_raw: ch[6],
+                    chan8_raw: ch[7],
+                    target_system: self.target.0,
+                    target_component: self.target.1,
+                    ..Default::default()
+                }));
             }
             Cmd::SetCurrentWp(seq) => {
                 log(6, format!("Command: set current waypoint {seq}"));
-                self.command_long(vehicle, 
+                self.command_long(
+                    vehicle,
                     MavCmd::MAV_CMD_DO_SET_MISSION_CURRENT,
                     [seq as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 );
@@ -433,12 +398,7 @@ impl Session {
         // Item 0 is home on ArduPilot; it is overwritten by the vehicle but must be present.
         let mut items = vec![mission_item(
             0,
-            &Waypoint {
-                kind: WpKind::Waypoint,
-                lat: home.0,
-                lon: home.1,
-                alt: 0.0,
-            },
+            &Waypoint { kind: WpKind::Waypoint, lat: home.0, lon: home.1, alt: 0.0 },
             self.target,
         )];
         items[0].frame = MavFrame::MAV_FRAME_GLOBAL;
@@ -451,12 +411,7 @@ impl Session {
             v.push_log("GCS", 6, format!("Mission upload: {} items", plan.len()));
         }
         self.send_count(items.len() as u16);
-        self.xfer = Xfer::Upload {
-            items,
-            plan,
-            last: Instant::now(),
-            tries: 0,
-        };
+        self.xfer = Xfer::Upload { items, plan, last: Instant::now(), tries: 0 };
     }
 
     fn send_count(&self, count: u16) {
@@ -470,19 +425,12 @@ impl Session {
 
     fn start_download(&mut self, vehicle: &Shared) {
         vehicle.lock().unwrap().mission_status = "downloading".into();
-        self.send(MavMessage::MISSION_REQUEST_LIST(
-            MISSION_REQUEST_LIST_DATA {
-                target_system: self.target.0,
-                target_component: self.target.1,
-                ..Default::default()
-            },
-        ));
-        self.xfer = Xfer::Download {
-            items: vec![],
-            next: 0,
-            last: Instant::now(),
-            tries: 0,
-        };
+        self.send(MavMessage::MISSION_REQUEST_LIST(MISSION_REQUEST_LIST_DATA {
+            target_system: self.target.0,
+            target_component: self.target.1,
+            ..Default::default()
+        }));
+        self.xfer = Xfer::Download { items: vec![], next: 0, last: Instant::now(), tries: 0 };
     }
 
     fn request_item(&self, seq: u16) {
@@ -506,9 +454,7 @@ impl Session {
         }
         let mut fail = false;
         match &mut self.xfer {
-            Xfer::Upload {
-                items, last, tries, ..
-            } => {
+            Xfer::Upload { items, last, tries, .. } => {
                 *tries += 1;
                 *last = now;
                 fail = *tries > 4;
@@ -517,24 +463,17 @@ impl Session {
                     self.send_count(n);
                 }
             }
-            Xfer::Download {
-                items,
-                next,
-                last,
-                tries,
-            } => {
+            Xfer::Download { items, next, last, tries } => {
                 *tries += 1;
                 *last = now;
                 fail = *tries > 4;
                 if !fail {
                     if items.is_empty() {
-                        self.send(MavMessage::MISSION_REQUEST_LIST(
-                            MISSION_REQUEST_LIST_DATA {
-                                target_system: self.target.0,
-                                target_component: self.target.1,
-                                ..Default::default()
-                            },
-                        ));
+                        self.send(MavMessage::MISSION_REQUEST_LIST(MISSION_REQUEST_LIST_DATA {
+                            target_system: self.target.0,
+                            target_component: self.target.1,
+                            ..Default::default()
+                        }));
                     } else {
                         let seq = *next;
                         self.request_item(seq);
@@ -570,26 +509,18 @@ impl Session {
         }
         match msg {
             MavMessage::HEARTBEAT(hb) => {
-                if hb.mavtype == MavType::MAV_TYPE_GCS
-                    || hb.autopilot == MavAutopilot::MAV_AUTOPILOT_INVALID
-                {
+                if hb.mavtype == MavType::MAV_TYPE_GCS || hb.autopilot == MavAutopilot::MAV_AUTOPILOT_INVALID {
                     return;
                 }
                 self.target = (hdr.system_id, hdr.component_id);
                 v.sysid = hdr.system_id;
                 v.compid = hdr.component_id;
-                let armed = hb
-                    .base_mode
-                    .contains(MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED);
+                let armed = hb.base_mode.contains(MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED);
                 if armed != v.armed && v.have_heartbeat {
                     v.push_log(
                         "GCS",
                         if armed { 4 } else { 6 },
-                        if armed {
-                            "Vehicle ARMED"
-                        } else {
-                            "Vehicle disarmed"
-                        },
+                        if armed { "Vehicle ARMED" } else { "Vehicle disarmed" },
                     );
                 }
                 if armed && !v.armed {
@@ -607,11 +538,7 @@ impl Session {
                     }
                 }
                 if !v.have_heartbeat {
-                    v.push_log(
-                        "GCS",
-                        6,
-                        format!("Heartbeat from system {} ({:?})", hdr.system_id, hb.mavtype),
-                    );
+                    v.push_log("GCS", 6, format!("Heartbeat from system {} ({:?})", hdr.system_id, hb.mavtype));
                 }
                 v.have_heartbeat = true;
                 v.armed = armed;
@@ -656,11 +583,7 @@ impl Session {
                 // A full LiHV cell is 4.35 V (a plain LiPo cell 4.2 V), so this never undercounts a charged pack.
                 let cells = (v.batt_v / 4.4).ceil() as u8;
                 v.batt_cells = v.batt_cells.max(cells);
-                v.batt_a = if s.current_battery >= 0 {
-                    s.current_battery as f32 * 0.01
-                } else {
-                    0.0
-                };
+                v.batt_a = if s.current_battery >= 0 { s.current_battery as f32 * 0.01 } else { 0.0 };
                 v.batt_pct = s.battery_remaining;
             }
             MavMessage::BATTERY_STATUS(b) => {
@@ -671,11 +594,7 @@ impl Session {
             MavMessage::GPS_RAW_INT(g) => {
                 v.gps_fix = g.fix_type as u8;
                 v.sats = g.satellites_visible;
-                v.hdop = if g.eph == u16::MAX {
-                    99.9
-                } else {
-                    g.eph as f32 * 0.01
-                };
+                v.hdop = if g.eph == u16::MAX { 99.9 } else { g.eph as f32 * 0.01 };
             }
             MavMessage::WIND(w) => {
                 v.wind_dir = w.direction.rem_euclid(360.0);
@@ -701,19 +620,9 @@ impl Session {
                 v.aspd_error = n.aspd_error * 0.01;
             }
             MavMessage::HOME_POSITION(h) => {
-                let home = (
-                    h.latitude as f64 * 1e-7,
-                    h.longitude as f64 * 1e-7,
-                    h.altitude as f32 * 1e-3,
-                );
-                if v.home
-                    .is_none_or(|o| (o.0 - home.0).abs() + (o.1 - home.1).abs() > 1e-7)
-                {
-                    v.push_log(
-                        "GCS",
-                        6,
-                        format!("Home {:.6}, {:.6}, {:.0} m AMSL", home.0, home.1, home.2),
-                    );
+                let home = (h.latitude as f64 * 1e-7, h.longitude as f64 * 1e-7, h.altitude as f32 * 1e-3);
+                if v.home.is_none_or(|o| (o.0 - home.0).abs() + (o.1 - home.1).abs() > 1e-7) {
+                    v.push_log("GCS", 6, format!("Home {:.6}, {:.6}, {:.0} m AMSL", home.0, home.1, home.2));
                 }
                 v.home = Some(home);
             }
@@ -746,18 +655,14 @@ impl Session {
                 let raw = &t.text[..];
                 // A chunk that fills all 50 bytes (no NUL) continues in the next one.
                 let last_chunk = raw.contains(&0);
-                let piece = String::from_utf8_lossy(raw)
-                    .trim_end_matches('\0')
-                    .to_string();
+                let piece = String::from_utf8_lossy(raw).trim_end_matches('\0').to_string();
                 let severity = t.severity as u8;
                 let full = if t.id == 0 {
                     Some((severity, piece))
                 } else {
                     // Reassemble ArduPilot's chunked text (same id, chunk_seq 0, 1, ...).
                     let mut buf = match self.text_chunks.take() {
-                        Some((id, next, sev, text)) if id == t.id && next == t.chunk_seq => {
-                            (id, next, sev, text)
-                        }
+                        Some((id, next, sev, text)) if id == t.id && next == t.chunk_seq => (id, next, sev, text),
                         Some((_, _, sev, text)) => {
                             // A different message started: flush what we had.
                             log_text(&mut v, sev, text);
@@ -780,12 +685,8 @@ impl Session {
             }
             MavMessage::COMMAND_ACK(a) => {
                 let ok = a.result == MavResult::MAV_RESULT_ACCEPTED;
-                let name = format!("{:?}", a.command)
-                    .trim_start_matches("MAV_CMD_")
-                    .to_string();
-                let res = format!("{:?}", a.result)
-                    .trim_start_matches("MAV_RESULT_")
-                    .to_string();
+                let name = format!("{:?}", a.command).trim_start_matches("MAV_CMD_").to_string();
+                let res = format!("{:?}", a.result).trim_start_matches("MAV_RESULT_").to_string();
                 // Stream/home requests are routine; only report their failures.
                 if !(ok && name == "REQUEST_MESSAGE") {
                     v.push_log("GCS", if ok { 6 } else { 4 }, format!("{name}: {res}"));
@@ -797,29 +698,21 @@ impl Session {
             // Mission protocol: the vehicle pulls items during an upload...
             MavMessage::MISSION_REQUEST_INT(MISSION_REQUEST_INT_DATA { seq, .. })
             | MavMessage::MISSION_REQUEST(MISSION_REQUEST_DATA { seq, .. }) => {
-                if let Xfer::Upload {
-                    items, last, tries, ..
-                } = &mut self.xfer
+                if let Xfer::Upload { items, last, tries, .. } = &mut self.xfer
+                    && let Some(item) = items.get(seq as usize)
                 {
-                    if let Some(item) = items.get(seq as usize) {
-                        *last = Instant::now();
-                        *tries = 0;
-                        v.mission_status = format!("uploading {}/{}", seq + 1, items.len());
-                        let item = item.clone();
-                        drop(v);
-                        self.send(MavMessage::MISSION_ITEM_INT(item));
-                    }
+                    *last = Instant::now();
+                    *tries = 0;
+                    v.mission_status = format!("uploading {}/{}", seq + 1, items.len());
+                    let item = item.clone();
+                    drop(v);
+                    self.send(MavMessage::MISSION_ITEM_INT(item));
                 }
             }
             MavMessage::MISSION_ACK(a) => {
                 if let Xfer::Upload { plan, .. } = &self.xfer {
                     if a.mavtype == MavMissionResult::MAV_MISSION_ACCEPTED {
-                        let home = v.home.map(|h| Waypoint {
-                            kind: WpKind::Waypoint,
-                            lat: h.0,
-                            lon: h.1,
-                            alt: 0.0,
-                        });
+                        let home = v.home.map(|h| Waypoint { kind: WpKind::Waypoint, lat: h.0, lon: h.1, alt: 0.0 });
                         v.mission = home.into_iter().chain(plan.iter().copied()).collect();
                         v.mission_status = format!("{} items on vehicle", plan.len());
                         v.push_log("GCS", 6, "Mission upload accepted");
@@ -832,13 +725,7 @@ impl Session {
             }
             // ...and pushes them during a download.
             MavMessage::MISSION_COUNT(c) => {
-                if let Xfer::Download {
-                    items,
-                    next,
-                    last,
-                    tries,
-                } = &mut self.xfer
-                {
+                if let Xfer::Download { items, next, last, tries } = &mut self.xfer {
                     *items = vec![None; c.count as usize];
                     *next = 0;
                     *last = Instant::now();
@@ -856,30 +743,24 @@ impl Session {
                 }
             }
             MavMessage::MISSION_ITEM_INT(it) => {
-                if let Xfer::Download {
-                    items,
-                    next,
-                    last,
-                    tries,
-                } = &mut self.xfer
+                if let Xfer::Download { items, next, last, tries } = &mut self.xfer
+                    && it.seq == *next
+                    && (it.seq as usize) < items.len()
                 {
-                    if it.seq == *next && (it.seq as usize) < items.len() {
-                        items[it.seq as usize] = Some(waypoint_from(&it));
-                        *next += 1;
-                        *last = Instant::now();
-                        *tries = 0;
-                        if (*next as usize) < items.len() {
-                            let n = *next;
-                            drop(v);
-                            self.request_item(n);
-                        } else {
-                            v.mission = items.iter().flatten().copied().collect();
-                            v.mission_status =
-                                format!("{} items on vehicle", v.mission.len().saturating_sub(1));
-                            self.xfer = Xfer::Idle;
-                            drop(v);
-                            self.send_mission_ack();
-                        }
+                    items[it.seq as usize] = Some(waypoint_from(&it));
+                    *next += 1;
+                    *last = Instant::now();
+                    *tries = 0;
+                    if (*next as usize) < items.len() {
+                        let n = *next;
+                        drop(v);
+                        self.request_item(n);
+                    } else {
+                        v.mission = items.iter().flatten().copied().collect();
+                        v.mission_status = format!("{} items on vehicle", v.mission.len().saturating_sub(1));
+                        self.xfer = Xfer::Idle;
+                        drop(v);
+                        self.send_mission_ack();
                     }
                 }
             }
@@ -950,10 +831,5 @@ fn waypoint_from(it: &MISSION_ITEM_INT_DATA) -> Waypoint {
         MavCmd::MAV_CMD_NAV_RETURN_TO_LAUNCH => WpKind::Rtl,
         c => WpKind::Other(c as u16),
     };
-    Waypoint {
-        kind,
-        lat: it.x as f64 * 1e-7,
-        lon: it.y as f64 * 1e-7,
-        alt: it.z,
-    }
+    Waypoint { kind, lat: it.x as f64 * 1e-7, lon: it.y as f64 * 1e-7, alt: it.z }
 }

@@ -110,7 +110,10 @@ impl Plugin for TemporalUpscalePlugin {
                 ),
             )
             // After the passes that work at the main pass's size, before the ones at full size.
-            .add_systems(Core3d, temporal_upscale.in_set(Core3dSystems::EarlyPostProcess).after(crate::clouds::CloudsSet));
+            .add_systems(
+                Core3d,
+                temporal_upscale.in_set(Core3dSystems::EarlyPostProcess).after(crate::clouds::CloudsSet),
+            );
     }
 }
 
@@ -170,7 +173,11 @@ fn prepare_history(
         let one = textures.get(&device, descriptor.clone());
         descriptor.label = Some("upscale_history_2");
         let two = textures.get(&device, descriptor);
-        let history = if frame.0.is_multiple_of(2) { UpscaleHistory { write: one, read: two } } else { UpscaleHistory { write: two, read: one } };
+        let history = if frame.0.is_multiple_of(2) {
+            UpscaleHistory { write: one, read: two }
+        } else {
+            UpscaleHistory { write: two, read: one }
+        };
         commands.entity(entity).insert(history);
     }
 }
@@ -210,7 +217,12 @@ struct UpscalePipeline {
     shader: Handle<Shader>,
 }
 
-fn init_pipeline(mut commands: Commands, device: Res<RenderDevice>, fullscreen: Res<FullscreenShader>, assets: Res<AssetServer>) {
+fn init_pipeline(
+    mut commands: Commands,
+    device: Res<RenderDevice>,
+    fullscreen: Res<FullscreenShader>,
+    assets: Res<AssetServer>,
+) {
     let layout = BindGroupLayoutDescriptor::new(
         "upscale_layout",
         &BindGroupLayoutEntries::sequential(
@@ -227,7 +239,8 @@ fn init_pipeline(mut commands: Commands, device: Res<RenderDevice>, fullscreen: 
             ),
         ),
     );
-    let sampler = |filter| device.create_sampler(&SamplerDescriptor { mag_filter: filter, min_filter: filter, ..default() });
+    let sampler =
+        |filter| device.create_sampler(&SamplerDescriptor { mag_filter: filter, min_filter: filter, ..default() });
     commands.insert_resource(UpscalePipeline {
         layout,
         linear: sampler(FilterMode::Linear),
@@ -246,7 +259,11 @@ impl SpecializedRenderPipeline for UpscalePipeline {
             layout: vec![self.layout.clone()],
             vertex: self.fullscreen.to_vertex_state(),
             // The picture, and the same colour into the history (with how sure we are of it in alpha).
-            fragment: Some(FragmentState { shader: self.shader.clone(), targets: vec![target.clone(), target], ..default() }),
+            fragment: Some(FragmentState {
+                shader: self.shader.clone(),
+                targets: vec![target.clone(), target],
+                ..default()
+            }),
             ..default()
         }
     }
@@ -321,7 +338,9 @@ fn temporal_upscale(
             uniforms,
         )),
     );
-    let attachment = |view| Some(RenderPassColorAttachment { view, depth_slice: None, resolve_target: None, ops: Operations::default() });
+    let attachment = |view| {
+        Some(RenderPassColorAttachment { view, depth_slice: None, resolve_target: None, ops: Operations::default() })
+    };
     let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
         label: Some("temporal_upscale"),
         color_attachments: &[attachment(post.destination), attachment(&history.write.default_view)],
@@ -369,7 +388,11 @@ mod tests {
         assert_eq!(render_resolution(full, 2.0), full, "no bigger than the window");
         let tiny = render_resolution(full, 0.001);
         assert!(tiny.x >= 64 && tiny.y >= 36, "{tiny} is too small");
-        assert_eq!(render_resolution(UVec2::new(50, 50), 0.5), UVec2::new(50, 50), "a tiny window is not shrunk below its own size");
+        assert_eq!(
+            render_resolution(UVec2::new(50, 50), 0.5),
+            UVec2::new(50, 50),
+            "a tiny window is not shrunk below its own size"
+        );
     }
 
     /// Textures are sampled finer when the picture is rendered smaller, by one mip level for

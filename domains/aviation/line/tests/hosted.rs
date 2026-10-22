@@ -17,7 +17,12 @@ struct Uart {
 
 impl Uart {
     fn new() -> Uart {
-        Uart { listener: TcpListener::bind("127.0.0.1:0").unwrap(), fc: FlightComputer::new(), line: None, started: Instant::now() }
+        Uart {
+            listener: TcpListener::bind("127.0.0.1:0").unwrap(),
+            fc: FlightComputer::new(),
+            line: None,
+            started: Instant::now(),
+        }
     }
 
     fn addr(&self) -> String {

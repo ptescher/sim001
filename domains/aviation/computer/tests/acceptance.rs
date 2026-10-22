@@ -122,12 +122,12 @@ impl World {
             }
         }
         // What ArduPilot says, once the line is up.
-        if let (Some(text), false) = (&self.message, self.message_sent) {
-            if t > 0.5 {
-                self.seq = self.seq.wrapping_add(1);
-                self.fc.from_autopilot(&status_text(self.seq, text));
-                self.message_sent = true;
-            }
+        if let (Some(text), false) = (&self.message, self.message_sent)
+            && t > 0.5
+        {
+            self.seq = self.seq.wrapping_add(1);
+            self.fc.from_autopilot(&status_text(self.seq, text));
+            self.message_sent = true;
         }
         // The flight computer to the TX15, and the TX15 to the ground station.
         let down = self.fc.to_line(&self.vehicle, t);
@@ -192,17 +192,32 @@ fn driver() -> Bindings<World> {
         .observe("the pitch channel", |w| w.us(1))
         .observe("the throttle channel", |w| w.us(2))
         .observe("the arm channel", |w| w.us(4))
-        .observe("the TX15 screen mode", |w| if w.warm { w.vehicle.mode.clone() } else { w.handset.screen.mode.clone() })
-        .observe("the TX15 screen arming", |w| if (if w.warm { w.vehicle.armed } else { w.handset.screen.armed }) { "armed" } else { "disarmed" })
-        .observe("the TX15 screen battery", |w| if w.warm { w.vehicle.volts as f64 } else { w.handset.screen.volts as f64 })
+        .observe(
+            "the TX15 screen mode",
+            |w| if w.warm { w.vehicle.mode.clone() } else { w.handset.screen.mode.clone() },
+        )
+        .observe("the TX15 screen arming", |w| {
+            if if w.warm { w.vehicle.armed } else { w.handset.screen.armed } { "armed" } else { "disarmed" }
+        })
+        .observe(
+            "the TX15 screen battery",
+            |w| if w.warm { w.vehicle.volts as f64 } else { w.handset.screen.volts as f64 },
+        )
         .observe("the TX15 screen bank", |w| {
             // (Degrees to radians and back is not exact: the pilot reads whole tenths.)
             let deg = if w.warm { w.vehicle.roll.to_degrees() } else { w.handset.screen.roll };
             (deg as f64 * 10.0).round() / 10.0
         })
-        .observe("the TX15 screen airspeed", |w| if w.warm { w.vehicle.airspeed as f64 } else { w.handset.screen.airspeed as f64 })
-        .observe("the TX15 screen climb", |w| if w.warm { w.vehicle.climb as f64 } else { w.handset.screen.climb as f64 })
-        .observe("the TX15 screen satellites", |w| if w.warm { w.vehicle.sats as f64 } else { w.handset.screen.sats as f64 })
+        .observe("the TX15 screen airspeed", |w| {
+            if w.warm { w.vehicle.airspeed as f64 } else { w.handset.screen.airspeed as f64 }
+        })
+        .observe(
+            "the TX15 screen climb",
+            |w| if w.warm { w.vehicle.climb as f64 } else { w.handset.screen.climb as f64 },
+        )
+        .observe("the TX15 screen satellites", |w| {
+            if w.warm { w.vehicle.sats as f64 } else { w.handset.screen.sats as f64 }
+        })
         .observe("the TX15 screen message", |w| {
             if w.warm {
                 w.message.clone().unwrap_or_else(|| "none".into())
@@ -210,17 +225,27 @@ fn driver() -> Bindings<World> {
                 w.handset.screen.messages.last().map_or("none".to_string(), |m| m.text.clone())
             }
         })
-        .observe("the TX15 uplink quality", |w| if w.warm { if w.handset.connected() { 100.0 } else { 0.0 } } else { w.handset.quality(w.t) as f64 })
-        .observe("the ground station telemetry", |w| {
-            if (if w.warm { w.telemetry } else { w.last_heartbeat.is_some_and(|h| w.t - h < 3.0) }) { "flowing" } else { "silent" }
+        .observe("the TX15 uplink quality", |w| {
+            if w.warm { if w.handset.connected() { 100.0 } else { 0.0 } } else { w.handset.quality(w.t) as f64 }
         })
-        .observe("the ground station map distance", |w| if w.warm { w.north as f64 } else { w.station_lat.map_or(0.0, |l| ((l - HOME_LAT) * 111_320.0).round()) })
+        .observe("the ground station telemetry", |w| {
+            if if w.warm { w.telemetry } else { w.last_heartbeat.is_some_and(|h| w.t - h < 3.0) } {
+                "flowing"
+            } else {
+                "silent"
+            }
+        })
+        .observe("the ground station map distance", |w| {
+            if w.warm { w.north as f64 } else { w.station_lat.map_or(0.0, |l| ((l - HOME_LAT) * 111_320.0).round()) }
+        })
         .observe("the ground station telemetry rate", |w| w.station_bytes as f64 / (w.t - w.started).max(1.0))
         .observe("the autopilot command", |w| if w.command_received { "received" } else { "not received" })
         .set("the TX15", |w, v| w.handset.set_connected(v.as_str() == Some("connected")))
         .set("the TX15 roll stick", |w, v| w.handset.channels[0] = stick(v.as_f64().unwrap()))
         .set("the TX15 pitch stick", |w, v| w.handset.channels[1] = stick(v.as_f64().unwrap()))
-        .set("the TX15 throttle stick", |w, v| w.handset.channels[2] = (1000.0 + 10.0 * v.as_f64().unwrap()).round() as u16)
+        .set("the TX15 throttle stick", |w, v| {
+            w.handset.channels[2] = (1000.0 + 10.0 * v.as_f64().unwrap()).round() as u16
+        })
         .set("the TX15 arm switch", |w, v| w.handset.channels[4] = if v.as_str() == Some("on") { 1900 } else { 1100 })
         .set("the corrupted frames", |w, v| w.handset.corrupt = v.as_f64().unwrap() as f32 / 100.0)
         .set("the TX15 screen mode", |w, v| w.vehicle.mode = v.as_str().unwrap().to_string())
@@ -280,8 +305,11 @@ fn every_test_of_the_section_passes() {
     }
     println!("{}", report.failures(&a.suite, &a.plans));
     assert!(ran.len() >= 3, "only {} tests in the section", ran.len());
-    let bad: Vec<_> =
-        ran.iter().filter(|(_, r)| r.status != Status::Passed).map(|(p, r)| format!("{}: {:?}", p.title, r.status)).collect();
+    let bad: Vec<_> = ran
+        .iter()
+        .filter(|(_, r)| r.status != Status::Passed)
+        .map(|(p, r)| format!("{}: {:?}", p.title, r.status))
+        .collect();
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
 }
 
@@ -299,6 +327,9 @@ fn the_section_documents_itself_with_pictures_of_the_screen() {
     } else {
         a.docs(Some(&report)).write(&out).unwrap();
     }
-    let any = std::fs::read_dir(out.join("screenshots")).unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains("flight-display"));
+    let any = std::fs::read_dir(out.join("screenshots"))
+        .unwrap()
+        .flatten()
+        .any(|e| e.file_name().to_string_lossy().contains("flight-display"));
     assert!(any, "no pictures of the flight display in {}", out.display());
 }

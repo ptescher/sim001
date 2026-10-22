@@ -72,7 +72,17 @@ fn mix3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
 
 /// A blade of grass: a ribbon of three sections that narrows to a point and arches over by
 /// `bend` (the tip's reach, as a share of the height), dark at the root and light at the tip.
-pub fn blade(p: &mut Parts, base: Vec3, up: Vec3, height: f32, width: f32, az: f32, bend: f32, dark: [f32; 3], light: [f32; 3]) {
+pub fn blade(
+    p: &mut Parts,
+    base: Vec3,
+    up: Vec3,
+    height: f32,
+    width: f32,
+    az: f32,
+    bend: f32,
+    dark: [f32; 3],
+    light: [f32; 3],
+) {
     let (e1, e2) = basis(up);
     let lean = e1 * az.cos() + e2 * az.sin();
     let across = up.cross(lean).normalize_or(e2);
@@ -155,7 +165,8 @@ fn leaf(p: &mut Parts, base: Vec3, up: Vec3, az: f32, length: f32, width: f32, c
     let mid = base + dir * length * 0.5 + up * length * 0.12;
     let tip = base + dir * length + up * length * 0.1;
     let n = (up * 0.9 + dir * 0.2).normalize();
-    let (a, b) = (p.vert(base - side * 0.4, n, col.map(|v| v * 0.7)), p.vert(base + side * 0.4, n, col.map(|v| v * 0.7)));
+    let (a, b) =
+        (p.vert(base - side * 0.4, n, col.map(|v| v * 0.7)), p.vert(base + side * 0.4, n, col.map(|v| v * 0.7)));
     let (c, d) = (p.vert(mid + side, n, col), p.vert(mid - side, n, col));
     let t = p.vert(tip, n, col.map(|v| v * 1.15));
     p.quad(a, b, c, d);
@@ -198,7 +209,12 @@ pub fn flower(p: &mut Parts, kind: Flower, base: Vec3, up: Vec3, height: f32, se
                 let side = axis.cross(d).normalize_or(u) * 0.0032;
                 let (i, o) = (top + d * 0.007, top + d * 0.027 - axis * 0.005);
                 let n = (axis * 0.8 + d * 0.3).normalize();
-                let q = [p.vert(i - side, n, white.map(|x| x * 0.9)), p.vert(i + side, n, white.map(|x| x * 0.9)), p.vert(o + side * 1.2, n, white), p.vert(o - side * 1.2, n, white)];
+                let q = [
+                    p.vert(i - side, n, white.map(|x| x * 0.9)),
+                    p.vert(i + side, n, white.map(|x| x * 0.9)),
+                    p.vert(o + side * 1.2, n, white),
+                    p.vert(o - side * 1.2, n, white),
+                ];
                 p.quad(q[0], q[1], q[2], q[3]);
             }
             leaf(p, base, up, az + 0.5, 0.07, 0.014, [0.14, 0.38, 0.09]);
@@ -216,7 +232,11 @@ pub fn flower(p: &mut Parts, kind: Flower, base: Vec3, up: Vec3, height: f32, se
                 let side = axis.cross(d).normalize_or(u) * 0.0035;
                 let n = (axis * 0.8 + d * 0.3).normalize();
                 let tip = top + d * 0.024 - axis * 0.004;
-                let (a, b, c) = (p.vert(top + d * 0.003 - side, n, gold.map(|x| x * 0.85)), p.vert(top + d * 0.003 + side, n, gold.map(|x| x * 0.85)), p.vert(tip, n, gold));
+                let (a, b, c) = (
+                    p.vert(top + d * 0.003 - side, n, gold.map(|x| x * 0.85)),
+                    p.vert(top + d * 0.003 + side, n, gold.map(|x| x * 0.85)),
+                    p.vert(tip, n, gold),
+                );
                 p.tri(a, b, c);
             }
             leaf(p, base, up, az + 1.0, 0.06, 0.01, [0.15, 0.36, 0.09]);
@@ -225,8 +245,11 @@ pub fn flower(p: &mut Parts, kind: Flower, base: Vec3, up: Vec3, height: f32, se
         Flower::Clover => {
             let pink = tweak([0.80, 0.28, 0.52]);
             let low = pink.map(|x| (x * 1.1 + 0.08).min(1.0));
-            let a: Vec<u32> = (0..8).map(|k| p.vert(top + ring(k, 8) * 0.011, (ring(k, 8) * 0.6 + axis).normalize(), low)).collect();
-            let b: Vec<u32> = (0..8).map(|k| p.vert(top + axis * 0.012 + ring(k, 8) * 0.0105, (ring(k, 8) * 0.4 + axis).normalize(), pink)).collect();
+            let a: Vec<u32> =
+                (0..8).map(|k| p.vert(top + ring(k, 8) * 0.011, (ring(k, 8) * 0.6 + axis).normalize(), low)).collect();
+            let b: Vec<u32> = (0..8)
+                .map(|k| p.vert(top + axis * 0.012 + ring(k, 8) * 0.0105, (ring(k, 8) * 0.4 + axis).normalize(), pink))
+                .collect();
             let cap = p.vert(top + axis * 0.022, axis, pink.map(|x| x * 0.9));
             for k in 0..8 {
                 let k2 = (k + 1) % 8;
@@ -244,7 +267,12 @@ pub fn flower(p: &mut Parts, kind: Flower, base: Vec3, up: Vec3, height: f32, se
                     let side = up.cross(out).normalize_or(d2);
                     let c = [0.17, 0.42, 0.12];
                     let n = (up + out * 0.2).normalize();
-                    let q = [p.vert(at, n, c.map(|x| x * 0.7)), p.vert(at + out * 0.014 + side * 0.009, n, c), p.vert(at + out * 0.03, n, c.map(|x| x * 1.15)), p.vert(at + out * 0.014 - side * 0.009, n, c)];
+                    let q = [
+                        p.vert(at, n, c.map(|x| x * 0.7)),
+                        p.vert(at + out * 0.014 + side * 0.009, n, c),
+                        p.vert(at + out * 0.03, n, c.map(|x| x * 1.15)),
+                        p.vert(at + out * 0.014 - side * 0.009, n, c),
+                    ];
                     p.quad(q[0], q[1], q[2], q[3]);
                 }
             }
@@ -259,9 +287,13 @@ pub fn flower(p: &mut Parts, kind: Flower, base: Vec3, up: Vec3, height: f32, se
                 let side = up.cross(out).normalize_or(e2) * 0.006;
                 let size = 0.018 * (1.0 - 0.45 * t);
                 let col = tweak(mix3([0.42, 0.22, 0.72], [0.55, 0.45, 0.90], t));
-                let apex = p.vert(at + out * size + up * 0.003, (out + up * 0.4).normalize(), col.map(|x| (x * 1.1).min(1.0)));
+                let apex =
+                    p.vert(at + out * size + up * 0.003, (out + up * 0.4).normalize(), col.map(|x| (x * 1.1).min(1.0)));
                 let ring4 = [at + up * 0.006, at + side, at - up * 0.006, at - side];
-                let vs: Vec<u32> = ring4.iter().map(|q| p.vert(*q, (*q - at + out * 0.4).normalize_or(up), col.map(|x| x * 0.85))).collect();
+                let vs: Vec<u32> = ring4
+                    .iter()
+                    .map(|q| p.vert(*q, (*q - at + out * 0.4).normalize_or(up), col.map(|x| x * 0.85)))
+                    .collect();
                 for i in 0..4 {
                     p.tri(vs[i], vs[(i + 1) % 4], apex);
                 }
@@ -285,7 +317,10 @@ pub fn flower(p: &mut Parts, kind: Flower, base: Vec3, up: Vec3, height: f32, se
                     let d = ring(k + ringk * 3, count);
                     let side = axis.cross(d).normalize_or(u) * 0.004;
                     let n = (axis * 0.6 + d * 0.5).normalize();
-                    let (a, b) = (p.vert(top + d * 0.004 - side, n, [0.62, 0.05, 0.03]), p.vert(top + d * 0.004 + side, n, [0.62, 0.05, 0.03]));
+                    let (a, b) = (
+                        p.vert(top + d * 0.004 - side, n, [0.62, 0.05, 0.03]),
+                        p.vert(top + d * 0.004 + side, n, [0.62, 0.05, 0.03]),
+                    );
                     let tip = p.vert(top + d * reach + axis * rise, n, tweak([0.90, 0.24, 0.05]));
                     p.tri(a, b, tip);
                 }
@@ -342,8 +377,10 @@ mod tests {
         clump(&mut p, Vec3::new(1.0, 0.0, 2.0), Vec3::Y, 7, 0.3, 0.08, [0.3, 0.5, 0.15]);
         let blades = p.tris() / 5;
         assert!((10..=16).contains(&blades), "{blades} blades");
-        let heights: Vec<f32> = (0..blades).map(|b| p.pos[b * 7..b * 7 + 7].iter().map(|v| v[1]).fold(f32::MIN, f32::max)).collect();
-        let spread = heights.iter().cloned().fold(f32::MIN, f32::max) - heights.iter().cloned().fold(f32::MAX, f32::min);
+        let heights: Vec<f32> =
+            (0..blades).map(|b| p.pos[b * 7..b * 7 + 7].iter().map(|v| v[1]).fold(f32::MIN, f32::max)).collect();
+        let spread =
+            heights.iter().cloned().fold(f32::MIN, f32::max) - heights.iter().cloned().fold(f32::MAX, f32::min);
         assert!(spread > 0.05, "all the same height ({spread})");
         let far = p.pos.iter().map(|v| (v[0] - 1.0).hypot(v[2] - 2.0)).fold(0.0f32, f32::max);
         assert!(far < 0.08 + 0.3 * 0.6, "a clump is wider than that ({far})");
@@ -367,7 +404,10 @@ mod tests {
             assert!((top(&p) / height - 1.0).abs() < 0.12, "{kind:?}: {} high against {height}", top(&p));
             let c = head_colour(&p, 0.75);
             assert!(colour(c), "{kind:?}: the head is {c:?}");
-            assert!(p.nrm.iter().all(|n| (Vec3::from_array(*n).length() - 1.0).abs() < 1e-3), "{kind:?}: normals are unit");
+            assert!(
+                p.nrm.iter().all(|n| (Vec3::from_array(*n).length() - 1.0).abs() < 1e-3),
+                "{kind:?}: normals are unit"
+            );
             // It stands on the ground: nothing below it.
             assert!(p.pos.iter().all(|v| v[1] > -0.01), "{kind:?} dips below the ground");
         }

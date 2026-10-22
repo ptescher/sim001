@@ -12,6 +12,7 @@ pub enum Ended {
     CouldNotStart(String),
 }
 
+#[cfg(test)]
 impl Ended {
     pub fn ok(&self) -> bool {
         matches!(self, Ended::Exited(0))

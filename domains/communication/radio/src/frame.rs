@@ -50,9 +50,11 @@ impl Framer {
 /// Who sent a frame and what it is.
 pub fn info(frame: &[u8]) -> Option<Info> {
     match *frame.first()? {
-        0xFD if frame.len() >= 10 => {
-            Some(Info { sysid: frame[5], component: frame[6], msgid: u32::from_le_bytes([frame[7], frame[8], frame[9], 0]) })
-        }
+        0xFD if frame.len() >= 10 => Some(Info {
+            sysid: frame[5],
+            component: frame[6],
+            msgid: u32::from_le_bytes([frame[7], frame[8], frame[9], 0]),
+        }),
         0xFE if frame.len() >= 6 => Some(Info { sysid: frame[3], component: frame[4], msgid: frame[5] as u32 }),
         _ => None,
     }
@@ -64,7 +66,30 @@ pub fn info(frame: &[u8]) -> Option<Info> {
 pub fn is_stream(msgid: u32) -> bool {
     matches!(
         msgid,
-        0 | 1 | 24 | 27 | 29 | 30 | 32 | 33 | 35 | 36 | 42 | 62 | 65 | 74 | 116 | 125 | 136 | 152 | 163 | 168 | 178 | 182 | 193 | 241 | 246
+        0 | 1
+            | 24
+            | 27
+            | 29
+            | 30
+            | 32
+            | 33
+            | 35
+            | 36
+            | 42
+            | 62
+            | 65
+            | 74
+            | 116
+            | 125
+            | 136
+            | 152
+            | 163
+            | 168
+            | 178
+            | 182
+            | 193
+            | 241
+            | 246
             | 12900..=12919
     )
 }
@@ -76,7 +101,14 @@ mod tests {
     use communication_traffic::Position;
 
     fn beacon() -> Beacon {
-        Beacon { sysid: 4, position: Position::new(1.0, 2.0, 3.0), velocity: [0.0; 3], heading: 0.0, uas_id: "x".into(), mac: [0; 6] }
+        Beacon {
+            sysid: 4,
+            position: Position::new(1.0, 2.0, 3.0),
+            velocity: [0.0; 3],
+            heading: 0.0,
+            uas_id: "x".into(),
+            mac: [0; 6],
+        }
     }
 
     #[test]

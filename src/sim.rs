@@ -1,11 +1,11 @@
 //! Simulation core shared between the render thread and the ArduPilot bridge thread.
 
-use recreation_games::{Field, Kind, PILOTS, Radio, Session, Surroundings};
-use recreation_games::pilot::Fbwa;
-use simulation_aircraft::{ActuatorCommands, AircraftParams, t1s_ranger};
-use simulation_physics::{self as physics, Environment, FlightState, Obstacle, Phase};
 use crate::terrain;
 use bevy::math::Vec3;
+use recreation_games::pilot::Fbwa;
+use recreation_games::{Field, Kind, PILOTS, Radio, Session, Surroundings};
+use simulation_aircraft::{ActuatorCommands, AircraftParams, t1s_ranger};
+use simulation_physics::{self as physics, Environment, FlightState, Obstacle, Phase};
 use std::f32::consts::PI;
 use std::time::Instant;
 
@@ -123,7 +123,10 @@ impl ApWatch {
             None => o.push_str("no heartbeat"),
         }
         match self.ekf_flags {
-            Some(f) => o.push_str(&format!("; estimator flags {f:#06x}{}", if self.estimator_ready() { " (ready)" } else { " (not ready)" })),
+            Some(f) => o.push_str(&format!(
+                "; estimator flags {f:#06x}{}",
+                if self.estimator_ready() { " (ready)" } else { " (not ready)" }
+            )),
             None => o.push_str("; no estimator status"),
         }
         if let Some(rc) = self.rc {
@@ -231,7 +234,11 @@ fn expo(x: f32, e: f32) -> f32 {
 impl SimCore {
     pub fn new(params: AircraftParams, obstacles: Vec<Obstacle>, ap_enabled: bool, ap_port: u16) -> Self {
         let state = FlightState::new(&params, &terrain::start());
-        let parked = if ap_enabled { (0..PILOTS.len()).map(|i| FlightState::new(&params, &Self::field().hand(i))).collect() } else { vec![] };
+        let parked = if ap_enabled {
+            (0..PILOTS.len()).map(|i| FlightState::new(&params, &Self::field().hand(i))).collect()
+        } else {
+            vec![]
+        };
         Self {
             params,
             state,
@@ -465,7 +472,11 @@ impl SimCore {
         // The computer pilots fly in the same wind, over the same ground and trees.
         if let Some(game) = &mut self.game {
             let w = self.wind;
-            let world = Surroundings { ground: &terrain::WorldTerrain, obstacles: &self.obstacles, wind: &move |p, t| wind_at(&w, p, t) };
+            let world = Surroundings {
+                ground: &terrain::WorldTerrain,
+                obstacles: &self.obstacles,
+                wind: &move |p, t| wind_at(&w, p, t),
+            };
             game.step(&self.state, &world, dt);
         }
     }
@@ -527,7 +538,11 @@ impl SimCore {
             c(s.yaw),
             // RC5_OPTION = 153 (arm/disarm switch), on channel 5 as ExpressLRS needs. In a game
             // with ArduPilot nobody arms before GO, so the switch is held off until then.
-            if self.radio_arm.unwrap_or(self.ap.arm_switch) && (!self.ap.enabled || self.may_launch()) { 1900 } else { 1100 },
+            if self.radio_arm.unwrap_or(self.ap.arm_switch) && (!self.ap.enabled || self.may_launch()) {
+                1900
+            } else {
+                1100
+            },
             1500,
             1500,
             self.radio_mode.unwrap_or_else(|| simulation_aircraft::rc_mode_pwm(self.ap.mode_index)),
@@ -716,7 +731,11 @@ mod tests {
             assert_eq!(c.rc_channels()[7], pwm);
         }
         c.radio_mode = None;
-        assert_eq!(c.rc_channels()[7], simulation_aircraft::rc_mode_pwm(c.ap.mode_index), "without one, the mode key's slot");
+        assert_eq!(
+            c.rc_channels()[7],
+            simulation_aircraft::rc_mode_pwm(c.ap.mode_index),
+            "without one, the mode key's slot"
+        );
     }
 
     /// What the HUD shows of the switches is what ArduPilot is being sent, from the radio or the keys.
@@ -732,7 +751,8 @@ mod tests {
     }
 
     /// The pulse width of each of the 16 outputs, all idle: what a disarmed autopilot sends.
-    const IDLE: [u16; 16] = [1500, 1500, 1000, 1500, 1500, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+    const IDLE: [u16; 16] =
+        [1500, 1500, 1000, 1500, 1500, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
 
     /// Steps your plane (as its autopilot's bridge does) and each computer pilot's (as theirs
     /// do), with every autopilot idle; returns the computer pilots' last JSON replies.
@@ -795,7 +815,11 @@ mod tests {
         c.radio_arm = Some(true);
         assert_eq!(c.rc_channels()[4], 1100, "held off during the countdown");
         run_ardupilot(&mut c, recreation_games::COUNTDOWN + 3.0);
-        assert!(matches!(c.game.as_ref().unwrap().clock, Clock::Running { .. }), "{:?}", c.game.as_ref().unwrap().clock);
+        assert!(
+            matches!(c.game.as_ref().unwrap().clock, Clock::Running { .. }),
+            "{:?}",
+            c.game.as_ref().unwrap().clock
+        );
         assert_eq!(c.rc_channels()[4], 1900, "at GO it goes through");
     }
 
@@ -912,7 +936,11 @@ mod tests {
         c.sticks.throttle = 0.9;
         run(&mut c, 12.0);
         let g = c.game.as_ref().unwrap();
-        assert!(g.opponents.iter().all(|o| o.state.phase == Phase::Flying), "{:?}", g.opponents.iter().map(|o| o.state.phase).collect::<Vec<_>>());
+        assert!(
+            g.opponents.iter().all(|o| o.state.phase == Phase::Flying),
+            "{:?}",
+            g.opponents.iter().map(|o| o.state.phase).collect::<Vec<_>>()
+        );
     }
 
     /// The T1-S has no Q modes, whatever mode name it reports.

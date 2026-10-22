@@ -324,7 +324,7 @@ fn encode_altitude(v: Option<f32>) -> [u8; 2] {
 
 fn decode_altitude(b: &[u8]) -> Option<f32> {
     let raw = u16::from_le_bytes([b[0], b[1]]);
-    (raw != 0).then(|| raw as f32 * 0.5 - 1000.0)
+    (raw != 0).then_some(raw as f32 * 0.5 - 1000.0)
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -418,9 +418,8 @@ pub fn decode(b: &[u8]) -> Result<Message, Error> {
         TYPE_LOCATION => {
             let ew = b[1] >> 1 & 1;
             let direction = (b[2] != 181 || ew == 0).then(|| b[2] as f32 + if ew == 1 { 180.0 } else { 0.0 });
-            let speed = (b[3] != 255).then(|| {
-                if b[1] & 1 == 1 { b[3] as f32 * 0.75 + 255.0 * 0.25 } else { b[3] as f32 * 0.25 }
-            });
+            let speed = (b[3] != 255)
+                .then(|| if b[1] & 1 == 1 { b[3] as f32 * 0.75 + 255.0 * 0.25 } else { b[3] as f32 * 0.25 });
             let ts = u16::from_le_bytes([b[21], b[22]]);
             Message::Location(Location {
                 status: Status::from_code(b[1] >> 4),
@@ -605,7 +604,11 @@ mod tests {
     #[test]
     fn the_other_messages_survive_the_trip() {
         let all = [
-            Message::BasicId(BasicId { id_type: IdType::CaaRegistration, ua_type: UaType::Glider, uas_id: "FIN87astrdge12k8".into() }),
+            Message::BasicId(BasicId {
+                id_type: IdType::CaaRegistration,
+                ua_type: UaType::Glider,
+                uas_id: "FIN87astrdge12k8".into(),
+            }),
             Message::SelfId(SelfId { description_type: 0, text: "Pylon race, Berkeley".into() }),
             Message::OperatorId(OperatorId { id_type: 0, id: "FIN87astrdge12k8".into() }),
             Message::System(System {
@@ -629,7 +632,10 @@ mod tests {
             match (&m, &back) {
                 (Message::System(a), Message::System(b)) => {
                     assert!((a.operator_lat - b.operator_lat).abs() < 1e-7);
-                    assert_eq!(System { operator_lat: 0.0, operator_lon: 0.0, ..a.clone() }, System { operator_lat: 0.0, operator_lon: 0.0, ..b.clone() });
+                    assert_eq!(
+                        System { operator_lat: 0.0, operator_lon: 0.0, ..a.clone() },
+                        System { operator_lat: 0.0, operator_lon: 0.0, ..b.clone() }
+                    );
                 }
                 _ => assert_eq!(m, back),
             }
@@ -645,7 +651,11 @@ mod tests {
 
     #[test]
     fn a_pack_has_a_three_byte_header_then_the_messages() {
-        let basic = Message::BasicId(BasicId { id_type: IdType::SerialNumber, ua_type: UaType::Aeroplane, uas_id: "T1S0001".into() });
+        let basic = Message::BasicId(BasicId {
+            id_type: IdType::SerialNumber,
+            ua_type: UaType::Aeroplane,
+            uas_id: "T1S0001".into(),
+        });
         let loc = Message::Location(flying());
         let pack = encode_pack(&[basic.clone(), loc.clone()]);
         assert_eq!(pack.len(), 3 + 2 * 25);

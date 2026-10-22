@@ -34,12 +34,19 @@ impl Hosted {
         let relay = TcpListener::bind("127.0.0.1:0")?;
         relay.set_nonblocking(true)?;
         let addr = relay.local_addr()?;
-        let state = Arc::new(Mutex::new(State { pilot: Pilot::AT_REST, plugged_in: true, radio: None, started: Instant::now() }));
+        let state = Arc::new(Mutex::new(State {
+            pilot: Pilot::AT_REST,
+            plugged_in: true,
+            radio: None,
+            started: Instant::now(),
+        }));
         let keeper = Arc::downgrade(&state);
         let uart = uart.to_string();
         std::thread::Builder::new().name("tx15-line".into()).spawn(move || keep_the_line(keeper, &uart))?;
         let relaying = Arc::downgrade(&state);
-        std::thread::Builder::new().name("tx15-relay".into()).spawn(move || relay_for_ground_station(relaying, relay))?;
+        std::thread::Builder::new()
+            .name("tx15-relay".into())
+            .spawn(move || relay_for_ground_station(relaying, relay))?;
         Ok((Hosted(state), addr))
     }
 
@@ -69,7 +76,10 @@ impl Hosted {
     /// What the lamps show: `NO LINK` until the flight computer has said something.
     pub fn lamps(&self) -> Lamps {
         let s = self.0.lock().unwrap();
-        let live = s.radio.as_ref().and_then(|r| r.with(|r| r.screen().last_frame.map(|_| (r.screen().mode.clone(), r.screen().armed))));
+        let live = s
+            .radio
+            .as_ref()
+            .and_then(|r| r.with(|r| r.screen().last_frame.map(|_| (r.screen().mode.clone(), r.screen().armed))));
         match live {
             Some((mode, armed)) => Lamps { mode, armed },
             None => Lamps { mode: "NO LINK".into(), armed: false },
@@ -99,14 +109,12 @@ fn keep_the_line(radio: Weak<Mutex<State>>, uart: &str) {
             let s = state.lock().unwrap();
             !s.radio.as_ref().is_some_and(|r| r.with(|r| r.alive()))
         };
-        if wanted {
-            if let Ok(wire) = TcpWire::connect(uart) {
-                let mut tx15 = Tx15::new(wire);
-                let mut s = state.lock().unwrap();
-                tx15.fly(s.pilot);
-                tx15.connect(s.plugged_in);
-                s.radio = Some(tx15.run());
-            }
+        if wanted && let Ok(wire) = TcpWire::connect(uart) {
+            let mut tx15 = Tx15::new(wire);
+            let mut s = state.lock().unwrap();
+            tx15.fly(s.pilot);
+            tx15.connect(s.plugged_in);
+            s.radio = Some(tx15.run());
         }
         drop(state);
         std::thread::sleep(Duration::from_millis(100));

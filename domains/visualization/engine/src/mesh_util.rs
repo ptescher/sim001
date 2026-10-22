@@ -3,8 +3,8 @@
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{Image, ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
-use bevy::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy::math::DVec3;
+use bevy::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
@@ -60,7 +60,7 @@ impl GeoBuilder {
 fn smooth_normals(pos: &[Vec3], idx: &[u32]) -> Vec<[f32; 3]> {
     let mut acc = vec![DVec3::ZERO; pos.len()];
     let p = |i: u32| pos[i as usize].as_dvec3();
-    for t in idx.chunks_exact(3) {
+    for t in idx.as_chunks::<3>().0 {
         let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
         let face = (b - a).cross(c - a).normalize_or_zero();
         for (k, (o, x, y)) in [(a, b, c), (b, c, a), (c, a, b)].into_iter().enumerate() {
@@ -85,7 +85,11 @@ pub fn loft_n(stations: &[(f32, f32, f32, f32)], center_x: f32, segments: usize,
         for j in 0..=segments {
             let t = j as f32 / segments as f32 * std::f32::consts::TAU;
             let (c, s) = (t.cos(), t.sin());
-            let p = Vec3::new(center_x + rx * c.signum() * c.abs().powf(2.0 / n), cy + ry * s.signum() * s.abs().powf(2.0 / n), z);
+            let p = Vec3::new(
+                center_x + rx * c.signum() * c.abs().powf(2.0 / n),
+                cy + ry * s.signum() * s.abs().powf(2.0 / n),
+                z,
+            );
             ring.push(b.vert(p, Vec2::new(j as f32 / segments as f32, si as f32 / (stations.len() - 1) as f32)));
         }
         rings.push(ring);
@@ -123,7 +127,8 @@ pub fn loft_n(stations: &[(f32, f32, f32, f32)], center_x: f32, segments: usize,
 /// Cambered airfoil (NACA 4-digit style): returns (camber, half thickness) at chord fraction x.
 fn airfoil(x: f32, thickness: f32, camber: f32) -> (f32, f32) {
     let p = 0.35;
-    let yt = 5.0 * thickness * (0.2969 * x.sqrt() - 0.126 * x - 0.3516 * x * x + 0.2843 * x.powi(3) - 0.1036 * x.powi(4));
+    let yt =
+        5.0 * thickness * (0.2969 * x.sqrt() - 0.126 * x - 0.3516 * x * x + 0.2843 * x.powi(3) - 0.1036 * x.powi(4));
     let yc = if x < p {
         camber / (p * p) * (2.0 * p * x - x * x)
     } else {
@@ -172,9 +177,9 @@ pub fn airfoil_panel(s: &PanelSpec) -> (Mesh, Mesh) {
     let mut bot = GeoBuilder::default();
     for (mb, is_top) in [(&mut top, true), (&mut bot, false)] {
         let mut rows = [Vec::new(), Vec::new()];
-        for k in 0..2 {
+        for (k, row) in rows.iter_mut().enumerate() {
             for (i, &x) in xs.iter().enumerate() {
-                rows[k].push(mb.vert(point(k, x, is_top), Vec2::new(i as f32 / n as f32, k as f32)));
+                row.push(mb.vert(point(k, x, is_top), Vec2::new(i as f32 / n as f32, k as f32)));
             }
         }
         let out = if is_top { s.up } else { -s.up };
@@ -275,37 +280,6 @@ pub fn texture(size: u32, f: impl Fn(f32, f32) -> [f32; 3]) -> Image {
     image
 }
 
-#[cfg(test)]
-mod tests {
-    /// Parts of a model in metres have triangles of a few square millimetres. Their vertices
-    /// still get unit normals: a zero one turns the shading into a hole.
-    #[test]
-    fn tiny_triangles_still_get_unit_normals() {
-        use super::*;
-        for size in [1.0f32, 1e-2, 3e-3, 1e-3] {
-            let mut b = GeoBuilder::default();
-            let v: Vec<u32> = [Vec3::ZERO, Vec3::X * size, Vec3::new(size, size, 0.0), Vec3::Y * size].iter().map(|p| b.vert(*p, Vec2::ZERO)).collect();
-            b.quad(v[0], v[1], v[2], v[3], Vec3::Z);
-            let m = b.build();
-            let n = m.attribute(Mesh::ATTRIBUTE_NORMAL).and_then(|a| a.as_float3()).unwrap();
-            for p in n {
-                assert!((Vec3::from(*p).length() - 1.0).abs() < 1e-3, "size {size}: normal {p:?}");
-                assert!(p[2] > 0.99, "size {size}: normal {p:?} does not face out");
-            }
-        }
-    }
-
-    #[test]
-    fn mip_chain_keeps_colour() {
-        let img = super::texture(64, |_, _| [0.1, 0.3, 0.05]);
-        let data = img.data.as_ref().unwrap();
-        let mip0 = &data[0..4];
-        let last = &data[data.len() - 4..];
-        println!("mips {} len {} mip0 {:?} last {:?}", img.texture_descriptor.mip_level_count, data.len(), mip0, last);
-        assert_eq!(mip0, last);
-    }
-}
-
 /// Tangent-space normal map (linear RGBA8) from a tileable height function on [0,1)^2,
 /// with a mip chain and a repeating sampler.
 pub fn normal_map(size: u32, strength: f32, height: impl Fn(f32, f32) -> f32 + Sync) -> Image {
@@ -336,7 +310,10 @@ pub fn normal_map(size: u32, strength: f32, height: impl Fn(f32, f32) -> f32 + S
         level = (0..m * m)
             .map(|i| {
                 let (x, y) = (i % m, i / m);
-                (level[2 * y * n + 2 * x] + level[2 * y * n + 2 * x + 1] + level[(2 * y + 1) * n + 2 * x] + level[(2 * y + 1) * n + 2 * x + 1])
+                (level[2 * y * n + 2 * x]
+                    + level[2 * y * n + 2 * x + 1]
+                    + level[(2 * y + 1) * n + 2 * x]
+                    + level[(2 * y + 1) * n + 2 * x + 1])
                     .normalize_or(Vec3::Z)
             })
             .collect();
@@ -361,4 +338,38 @@ pub fn normal_map(size: u32, strength: f32, height: impl Fn(f32, f32) -> f32 + S
         ..ImageSamplerDescriptor::linear()
     });
     image
+}
+
+#[cfg(test)]
+mod tests {
+    /// Parts of a model in metres have triangles of a few square millimetres. Their vertices
+    /// still get unit normals: a zero one turns the shading into a hole.
+    #[test]
+    fn tiny_triangles_still_get_unit_normals() {
+        use super::*;
+        for size in [1.0f32, 1e-2, 3e-3, 1e-3] {
+            let mut b = GeoBuilder::default();
+            let v: Vec<u32> = [Vec3::ZERO, Vec3::X * size, Vec3::new(size, size, 0.0), Vec3::Y * size]
+                .iter()
+                .map(|p| b.vert(*p, Vec2::ZERO))
+                .collect();
+            b.quad(v[0], v[1], v[2], v[3], Vec3::Z);
+            let m = b.build();
+            let n = m.attribute(Mesh::ATTRIBUTE_NORMAL).and_then(|a| a.as_float3()).unwrap();
+            for p in n {
+                assert!((Vec3::from(*p).length() - 1.0).abs() < 1e-3, "size {size}: normal {p:?}");
+                assert!(p[2] > 0.99, "size {size}: normal {p:?} does not face out");
+            }
+        }
+    }
+
+    #[test]
+    fn mip_chain_keeps_colour() {
+        let img = super::texture(64, |_, _| [0.1, 0.3, 0.05]);
+        let data = img.data.as_ref().unwrap();
+        let mip0 = &data[0..4];
+        let last = &data[data.len() - 4..];
+        println!("mips {} len {} mip0 {:?} last {:?}", img.texture_descriptor.mip_level_count, data.len(), mip0, last);
+        assert_eq!(mip0, last);
+    }
 }

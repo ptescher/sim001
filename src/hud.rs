@@ -1,14 +1,14 @@
 //! On-screen display: telemetry, warnings, stick gauges, help and controller debug.
 
-use crate::theme::{P, alpha, color, geometry};
+use crate::SharedSim;
 use crate::camera::CamState;
 use crate::input::{Action, PilotInput, Profile};
-use simulation_physics::{self as physics, Phase};
 use crate::sim::wrap_deg;
 use crate::terrain;
-use crate::SharedSim;
-use visualization_engine::RenderSettings;
+use crate::theme::{P, alpha, color, geometry};
 use bevy::prelude::*;
+use simulation_physics::{self as physics, Phase};
+use visualization_engine::RenderSettings;
 
 #[derive(Component)]
 pub struct OsdText;
@@ -117,7 +117,13 @@ pub fn spawn_hud(commands: &mut Commands) {
         font(13.0),
         TextColor(color(P.text)),
         panel,
-        Node { position_type: PositionType::Absolute, top: px(150.0), right: px(10.0), padding: px(6.0).all(), ..default() },
+        Node {
+            position_type: PositionType::Absolute,
+            top: px(150.0),
+            right: px(10.0),
+            padding: px(6.0).all(),
+            ..default()
+        },
         Visibility::Hidden,
     ));
 
@@ -221,10 +227,19 @@ pub fn update_hud(
         )
     };
     let input_line = match input.profile {
-        Some(Profile::Radio) => format!("Radio: {}{}", input.source, if input.radio.calibrated { "" } else { " (uncalibrated: F2)" }),
+        Some(Profile::Radio) => {
+            format!("Radio: {}{}", input.source, if input.radio.calibrated { "" } else { " (uncalibrated: F2)" })
+        }
         Some(Profile::Gamepad) => format!("Gamepad: {}", input.source),
         None => "Keyboard (connect TX15/gamepad any time)".into(),
     };
+    let render_line = format!(
+        "{} {:.0}%{} | {:.0} fps",
+        if settings.raytracing { "RAY TRACED (Solari)" } else { "raster" },
+        render_scale.scale * 100.0,
+        if render_scale.auto { " auto" } else { "" },
+        diagnostics.get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS).and_then(|d| d.smoothed()).unwrap_or(0.0)
+    );
     let osd = format!(
         "{mode_line}\n{input_line}\nCAM {}{} | {}\n\
 THR {:3.0}%   AS {:4.1} m/s   GS {:4.1} m/s\n\
@@ -234,16 +249,7 @@ BAT {:5.2} V ({:.2} V/cell)  {:4.1} A  {:4.0} mAh  {:3.0}%\n\
 WIND {:.1} m/s from {:03.0} deg  turb {:.0}%{}",
         cam.mode.label(),
         if cam.auto_zoom && cam.mode == crate::camera::CamMode::LineOfSight { " (auto-zoom)" } else { "" },
-        format!(
-            "{} {:.0}%{} | {:.0} fps",
-            if settings.raytracing { "RAY TRACED (Solari)" } else { "raster" },
-            render_scale.scale * 100.0,
-            if render_scale.auto { " auto" } else { "" },
-            diagnostics
-                .get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS)
-                .and_then(|d| d.smoothed())
-                .unwrap_or(0.0)
-        ),
+        render_line,
         thr * 100.0,
         s.airspeed,
         gs,
@@ -298,7 +304,10 @@ WIND {:.1} m/s from {:03.0} deg  turb {:.0}%{}",
                         } else if !armed {
                             "Arm ArduPilot: L (or B, or ARM in the GCS), then throttle up to launch".into()
                         } else if waits_for_throw {
-                            format!("{} takeoff: throw it (SPACE or B), the motors start after the throw", mode.unwrap_or("AUTO"))
+                            format!(
+                                "{} takeoff: throw it (SPACE or B), the motors start after the throw",
+                                mode.unwrap_or("AUTO")
+                            )
                         } else if stick_up && mode.is_none() {
                             "No motor from ArduPilot. Arming is refused with throttle up:\nthrottle to zero, flip L off and on. (AUTO / TAKEOFF wait for a throw: SPACE)".into()
                         } else {

@@ -169,7 +169,13 @@ pub fn link_stats_frame(s: &LinkStats) -> Vec<u8> {
 }
 
 pub fn parse_link_stats(p: &[u8]) -> Option<LinkStats> {
-    (p.len() >= 10).then(|| LinkStats { rssi: p[0], quality: p[2], snr: p[3] as i8, rf_mode: p[5], tx_power_mw_index: p[6] })
+    (p.len() >= 10).then(|| LinkStats {
+        rssi: p[0],
+        quality: p[2],
+        snr: p[3] as i8,
+        rf_mode: p[5],
+        tx_power_mw_index: p[6],
+    })
 }
 
 pub fn battery_frame(volts: f32, amps: f32, used_mah: u32, percent: u8) -> Vec<u8> {

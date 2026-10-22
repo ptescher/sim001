@@ -10,7 +10,9 @@ use bevy::prelude::*;
 use std::f32::consts::TAU;
 
 fn hash3(x: i32, y: i32, z: i32) -> f32 {
-    let mut h = (x as u32).wrapping_mul(0x8da6_b343) ^ (y as u32).wrapping_mul(0xd816_3841) ^ (z as u32).wrapping_mul(0xcb1a_b31f);
+    let mut h = (x as u32).wrapping_mul(0x8da6_b343)
+        ^ (y as u32).wrapping_mul(0xd816_3841)
+        ^ (z as u32).wrapping_mul(0xcb1a_b31f);
     h = (h ^ (h >> 13)).wrapping_mul(0x5bd1_e995);
     h ^= h >> 15;
     (h & 0x00ff_ffff) as f32 / 0x00ff_ffff as f32
@@ -156,7 +158,15 @@ fn trunk(radius: f32, height: f32, taper: f32) -> Mesh {
 
 /// Lumpy blob cluster (aspen canopy or boulder): displaced icospheres (subdivision `detail`)
 /// merged.
-pub fn lumpy(seed: u32, blobs: usize, spread: Vec3, blob_r: f32, bump: f32, flat_bottom: Option<f32>, detail: u32) -> Mesh {
+pub fn lumpy(
+    seed: u32,
+    blobs: usize,
+    spread: Vec3,
+    blob_r: f32,
+    bump: f32,
+    flat_bottom: Option<f32>,
+    detail: u32,
+) -> Mesh {
     let ico = Sphere::new(1.0).mesh().ico(detail).unwrap();
     let base_pos: Vec<Vec3> = match ico.attribute(Mesh::ATTRIBUTE_POSITION) {
         Some(bevy::mesh::VertexAttributeValues::Float32x3(v)) => v.iter().map(|p| Vec3::from_array(*p)).collect(),
@@ -168,8 +178,11 @@ pub fn lumpy(seed: u32, blobs: usize, spread: Vec3, blob_r: f32, bump: f32, flat
         let c = if k == 0 {
             Vec3::ZERO
         } else {
-            Vec3::new(rnd(seed, 3 * k as u32) - 0.5, rnd(seed, 3 * k as u32 + 1) - 0.5, rnd(seed, 3 * k as u32 + 2) - 0.5)
-                * spread
+            Vec3::new(
+                rnd(seed, 3 * k as u32) - 0.5,
+                rnd(seed, 3 * k as u32 + 1) - 0.5,
+                rnd(seed, 3 * k as u32 + 2) - 0.5,
+            ) * spread
         };
         let r = blob_r * (0.75 + 0.5 * rnd(seed, 500 + k as u32));
         let off = Vec3::splat(seed as f32 * 3.7 + k as f32 * 11.0);
@@ -289,10 +302,12 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         let t = crate::treegen::generate_lod(sp, seed, h, lod);
         (t.wood, t.foliage)
     };
-    let spruce_gen: Vec<_> = (0..SPRUCE_VARIANTS).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Full)).collect();
+    let spruce_gen: Vec<_> =
+        (0..SPRUCE_VARIANTS).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Full)).collect();
     let aspen_gen: Vec<_> = (0..ASPEN_VARIANTS).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Full)).collect();
     // The same seeds, so that a tree keeps its shape as it comes closer.
-    let spruce_mid: Vec<_> = (0..SPRUCE_VARIANTS).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Mid)).collect();
+    let spruce_mid: Vec<_> =
+        (0..SPRUCE_VARIANTS).map(|s| grow(Species::Spruce, 11 + s, SPRUCE_REF, Lod::Mid)).collect();
     let aspen_mid: Vec<_> = (0..ASPEN_VARIANTS).map(|s| grow(Species::Aspen, 51 + s, ASPEN_REF, Lod::Mid)).collect();
     let snag_gen: Vec<_> = (0..4).map(|s| grow(Species::Snag, 31 + s, SPRUCE_REF, Lod::Full)).collect();
     let snag_mid: Vec<_> = (0..4).map(|s| grow(Species::Snag, 31 + s, SPRUCE_REF, Lod::Mid)).collect();
@@ -300,7 +315,8 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
     let shrub_gen: Vec<_> = (0..6).map(|s| grow(Species::Shrub, 91 + s, SHRUB_REF, Lod::Low)).collect();
     let spruce_solid: Vec<_> = (0..5).map(spruce_foliage).collect();
     // Far crowns are seen from 200 m out: a coarse icosphere per blob is plenty.
-    let aspen_solid: Vec<_> = (0..4).map(|s| lumpy(100 + s, 6, Vec3::new(0.45, 0.9, 0.45), 0.42, 0.25, None, 1)).collect();
+    let aspen_solid: Vec<_> =
+        (0..4).map(|s| lumpy(100 + s, 6, Vec3::new(0.45, 0.9, 0.45), 0.42, 0.25, None, 1)).collect();
     let aspen_distant = lumpy(150, 1, Vec3::ZERO, 0.55, 0.2, None, 0);
     let spruce_distant = spruce_distant();
     let spruce_proxy = spruce_proxy();
@@ -316,8 +332,10 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
     let mut place = |x: f32, z: f32, size: f32, sink: f32, k: u32| {
         let h = terrain::ground_height(x, z);
         let n = terrain::ground_normal(x, z);
-        let rot = Quat::from_rotation_arc(Vec3::Y, n.lerp(Vec3::Y, 0.5).normalize()) * Quat::from_rotation_y(rnd(k, 1) * TAU);
-        let s = Vec3::new(size * (0.8 + 0.4 * rnd(k, 2)), size * (0.55 + 0.35 * rnd(k, 3)), size * (0.8 + 0.4 * rnd(k, 4)));
+        let rot =
+            Quat::from_rotation_arc(Vec3::Y, n.lerp(Vec3::Y, 0.5).normalize()) * Quat::from_rotation_y(rnd(k, 1) * TAU);
+        let s =
+            Vec3::new(size * (0.8 + 0.4 * rnd(k, 2)), size * (0.55 + 0.35 * rnd(k, 3)), size * (0.8 + 0.4 * rnd(k, 4)));
         boulders.push((k as usize, Transform::from_xyz(x, h - sink * s.y, z).with_rotation(rot).with_scale(s)));
         // A big boulder has smaller ones round it, where pieces have broken off and rolled.
         if size > 2.2 && k < 1000 {
@@ -329,7 +347,10 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
                 let sh = terrain::ground_height(sx, sz);
                 let spin = Quat::from_rotation_y(rnd(k, 90 + j) * TAU);
                 let sv = Vec3::new(small, small * (0.5 + 0.4 * rnd(k, 100 + j)), small);
-                boulders.push((5000 + (k as usize) * 8 + j as usize, Transform::from_xyz(sx, sh - 0.3 * sv.y, sz).with_rotation(spin).with_scale(sv)));
+                boulders.push((
+                    5000 + (k as usize) * 8 + j as usize,
+                    Transform::from_xyz(sx, sh - 0.3 * sv.y, sz).with_rotation(spin).with_scale(sv),
+                ));
             }
         }
     };
@@ -373,7 +394,8 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
                 continue;
             }
             let slope = 1.0 - terrain::ground_normal(x, z).y;
-            let rocky = ((slope - 0.12) * 5.0).clamp(0.0, 1.0) * 0.6 + gradient_noise(x / 200.0, z / 200.0).max(0.0) * 0.25;
+            let rocky =
+                ((slope - 0.12) * 5.0).clamp(0.0, 1.0) * 0.6 + gradient_noise(x / 200.0, z / 200.0).max(0.0) * 0.25;
             if rnd(k, 32) < rocky {
                 let size = 2.5 + 9.0 * rnd(k, 33).powi(2) * (0.5 + slope);
                 place(x, z, size, 0.35, k);
@@ -433,14 +455,16 @@ pub fn upload_vegetation(
         })
     };
     // Solid crowns: used far away (raster) and as the ray-tracing proxy (shadows/reflections).
-    let spruce_solid_mats: Vec<_> = [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
-        .iter()
-        .map(|&(r, g, b)| lit_mat(materials, Color::linear_rgb(r, g, b), 0.85))
-        .collect();
-    let spruce_proxy_mats: Vec<_> = [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
-        .iter()
-        .map(|&(r, g, b)| mat(materials, Color::linear_rgb(r * 0.3, g * 0.3, b * 0.3), 0.9))
-        .collect();
+    let spruce_solid_mats: Vec<_> =
+        [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
+            .iter()
+            .map(|&(r, g, b)| lit_mat(materials, Color::linear_rgb(r, g, b), 0.85))
+            .collect();
+    let spruce_proxy_mats: Vec<_> =
+        [(0.026, 0.058, 0.032), (0.031, 0.066, 0.032), (0.024, 0.054, 0.036), (0.036, 0.074, 0.032)]
+            .iter()
+            .map(|&(r, g, b)| mat(materials, Color::linear_rgb(r * 0.3, g * 0.3, b * 0.3), 0.9))
+            .collect();
     let aspen_solid_mats: Vec<_> = [(0.060, 0.120, 0.028), (0.078, 0.135, 0.030), (0.050, 0.100, 0.026)]
         .iter()
         .map(|&(r, g, b)| lit_mat(materials, Color::linear_rgb(r, g, b), 0.75))
@@ -471,9 +495,11 @@ pub fn upload_vegetation(
     };
     let spray_tex: Vec<_> = b.spray_tex.into_iter().map(|i| images.add(i)).collect();
     let leaf_tex: Vec<_> = b.leaf_tex.into_iter().map(|i| images.add(i)).collect();
-    let tints = [Vec3::new(1.0, 1.0, 1.0), Vec3::new(1.1, 1.08, 0.95), Vec3::new(0.88, 0.92, 1.05), Vec3::new(1.2, 1.15, 0.9)];
+    let tints =
+        [Vec3::new(1.0, 1.0, 1.0), Vec3::new(1.1, 1.08, 0.95), Vec3::new(0.88, 0.92, 1.05), Vec3::new(1.2, 1.15, 0.9)];
     // Spruce needles a little darker and bluer than the painted texture (Engelmann / blue spruce).
-    let spray_mats: Vec<_> = (0..4).map(|k| card_mat(materials, spray_tex[k % 3].clone(), tints[k] * Vec3::new(0.72, 0.76, 0.86))).collect();
+    let spray_mats: Vec<_> =
+        (0..4).map(|k| card_mat(materials, spray_tex[k % 3].clone(), tints[k] * Vec3::new(0.72, 0.76, 0.86))).collect();
     let leaf_mats: Vec<_> = (0..3).map(|k| card_mat(materials, leaf_tex[k % 2].clone(), tints[k])).collect();
     let bark_mat = |m: &mut Assets<StandardMaterial>, tex: Handle<Image>| {
         m.add(StandardMaterial {
@@ -517,7 +543,11 @@ pub fn upload_vegetation(
     let cobble_meshes: Vec<_> = b.cobble_meshes.into_iter().map(|m| meshes.add(m)).collect();
     for (k, tf) in &b.boulders {
         // Cobbles and the small pieces round a boulder are the cheap meshes.
-        let mesh = if *k >= 1000 { &cobble_meshes[k % cobble_meshes.len()] } else { &boulder_meshes[k % boulder_meshes.len()] };
+        let mesh = if *k >= 1000 {
+            &cobble_meshes[k % cobble_meshes.len()]
+        } else {
+            &boulder_meshes[k % boulder_meshes.len()]
+        };
         commands.spawn(rt(mesh.clone(), rock_mats[k % rock_mats.len()].clone(), *tf));
     }
     info!("placed {} boulders", b.boulders.len());
@@ -582,7 +612,8 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
     }
     let h = t.height;
     let yaw = Quat::from_rotation_y(rnd(i as u32, 7) * TAU);
-    let tilt = Quat::from_rotation_x((rnd(i as u32, 8) - 0.5) * 0.06) * Quat::from_rotation_z((rnd(i as u32, 9) - 0.5) * 0.06);
+    let tilt =
+        Quat::from_rotation_x((rnd(i as u32, 8) - 0.5) * 0.06) * Quat::from_rotation_z((rnd(i as u32, 9) - 0.5) * 0.06);
     let base = t.pos - Vec3::Y * 0.3;
     let shade = t.shade as usize;
     if t.conifer && t.dead {
@@ -605,7 +636,8 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         let w = h * (0.55 + 0.3 * rnd(i as u32, 11));
         let (wood, cards) = &v.spruce_gen[i % v.spruce_gen.len()];
         let k = h / SPRUCE_REF;
-        let gen_tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::new(k * w / h, k, k * w / h));
+        let gen_tf =
+            Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::new(k * w / h, k, k * w / h));
         if rt_wood {
             commands.spawn((RaytracingMesh3d(wood.clone()), MeshMaterial3d(v.bark.clone()), gen_tf));
         }
@@ -622,7 +654,11 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         // Ray-tracing proxy for the needle mass: a smooth cone a bit inside the visible crown.
         let proxy = tf.with_scale(Vec3::new(w * 0.62, h * 0.92, w * 0.62));
         if proxies {
-            commands.spawn((RaytracingMesh3d(v.spruce_proxy.clone()), MeshMaterial3d(v.spruce_proxy_mats[shade % 4].clone()), proxy));
+            commands.spawn((
+                RaytracingMesh3d(v.spruce_proxy.clone()),
+                MeshMaterial3d(v.spruce_proxy_mats[shade % 4].clone()),
+                proxy,
+            ));
         }
     } else {
         let h = h * 0.8;
@@ -638,9 +674,11 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
         commands.spawn((Mesh3d(mid_cards.clone()), MeshMaterial3d(v.leaf_mats[shade % 3].clone()), gen_tf, mid));
         let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(h));
         commands.spawn((Mesh3d(v.aspen_trunk.clone()), MeshMaterial3d(v.aspen_bark.clone()), tf, far.clone()));
-        let canopy = Transform::from_translation(base + Vec3::Y * h * 0.68)
-            .with_rotation(yaw)
-            .with_scale(Vec3::new(h * 0.36, h * 0.5, h * 0.36));
+        let canopy = Transform::from_translation(base + Vec3::Y * h * 0.68).with_rotation(yaw).with_scale(Vec3::new(
+            h * 0.36,
+            h * 0.5,
+            h * 0.36,
+        ));
         let solid = v.aspen_solid[i % v.aspen_solid.len()].clone();
         let solid_mat = v.aspen_solid_mats[shade % 3].clone();
         commands.spawn((Mesh3d(solid.clone()), MeshMaterial3d(solid_mat.clone()), canopy, far));
@@ -650,6 +688,37 @@ pub fn spawn_tree(commands: &mut Commands, v: &VegetationHandles, i: usize, t: &
             commands.spawn((RaytracingMesh3d(solid), MeshMaterial3d(v.aspen_proxy_mats[shade % 3].clone()), proxy));
         }
     }
+}
+
+/// Spawns one sapling or shrub: raster only, drawn out to a couple of hundred metres.
+pub fn spawn_plant(commands: &mut Commands, v: &VegetationHandles, i: usize, p: &terrain::Plant) {
+    use bevy::camera::visibility::VisibilityRange;
+    // SIM001_PLANT_FRAC keeps only a share of the saplings and shrubs (for timing).
+    let keep = std::env::var("SIM001_PLANT_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
+    if rnd(i as u32, 98) > keep {
+        return;
+    }
+    let yaw = Quat::from_rotation_y(rnd(i as u32, 17) * TAU);
+    let tilt = Quat::from_rotation_x((rnd(i as u32, 18) - 0.5) * 0.12)
+        * Quat::from_rotation_z((rnd(i as u32, 19) - 0.5) * 0.12);
+    let base = p.pos - Vec3::Y * 0.1;
+    let shade = p.shade as usize;
+    let (wood, cards) = match p.kind {
+        terrain::PlantKind::Sapling => &v.sapling_gen[i % v.sapling_gen.len()],
+        terrain::PlantKind::Shrub => &v.shrub_gen[i % v.shrub_gen.len()],
+    };
+    let (reference, reach) = match p.kind {
+        terrain::PlantKind::Sapling => (SAPLING_REF, 220.0),
+        terrain::PlantKind::Shrub => (SHRUB_REF, 160.0),
+    };
+    let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(p.height / reference));
+    let range = VisibilityRange::abrupt(0.0, reach);
+    let (wood_mat, card_mat) = match p.kind {
+        terrain::PlantKind::Sapling => (v.bark.clone(), v.spray_mats[shade % 4].clone()),
+        terrain::PlantKind::Shrub => (v.aspen_bark.clone(), v.leaf_mats[shade % 3].clone()),
+    };
+    commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(wood_mat), tf, range.clone()));
+    commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(card_mat), tf, range));
 }
 
 #[cfg(test)]
@@ -669,7 +738,8 @@ mod tests {
         let mut world = World::new();
         let mut queue = bevy::ecs::world::CommandQueue::default();
         let mut commands = Commands::new(&mut queue, &world);
-        let handles = upload_vegetation(build_vegetation(|_| {}), false, &mut commands, &mut meshes, &mut materials, &mut images);
+        let handles =
+            upload_vegetation(build_vegetation(|_| {}), false, &mut commands, &mut meshes, &mut materials, &mut images);
         queue.apply(&mut world);
         for h in handles.leaf_mats.iter().chain(&handles.spray_mats) {
             assert_eq!(materials.get(h).unwrap().emissive, LinearRgba::BLACK, "a raster leaf glows");
@@ -687,7 +757,8 @@ mod tests {
         let mut commands_world = World::new();
         let mut queue = bevy::ecs::world::CommandQueue::default();
         let mut commands = Commands::new(&mut queue, &commands_world);
-        let handles = upload_vegetation(build_vegetation(|_| {}), true, &mut commands, &mut meshes, &mut materials, &mut images);
+        let handles =
+            upload_vegetation(build_vegetation(|_| {}), true, &mut commands, &mut meshes, &mut materials, &mut images);
         queue.apply(&mut commands_world);
         let ray_traced = handles.ray_traced_materials();
         assert!(!ray_traced.is_empty());
@@ -714,37 +785,10 @@ mod tests {
         for r in &ranges {
             assert!(r.is_abrupt(), "{:?} fades", (&r.start_margin, &r.end_margin));
         }
-        assert!(ranges[0].end_margin.end >= 100.0 && ranges[0].end_margin.end <= 200.0, "the full tree is for the near range");
+        assert!(
+            ranges[0].end_margin.end >= 100.0 && ranges[0].end_margin.end <= 200.0,
+            "the full tree is for the near range"
+        );
         assert!(ranges[1].end_margin.end > 400.0, "the mid tree reaches well out");
     }
-}
-
-/// Spawns one sapling or shrub: raster only, drawn out to a couple of hundred metres.
-pub fn spawn_plant(commands: &mut Commands, v: &VegetationHandles, i: usize, p: &terrain::Plant) {
-    use bevy::camera::visibility::VisibilityRange;
-    // SIM001_PLANT_FRAC keeps only a share of the saplings and shrubs (for timing).
-    let keep = std::env::var("SIM001_PLANT_FRAC").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
-    if rnd(i as u32, 98) > keep {
-        return;
-    }
-    let yaw = Quat::from_rotation_y(rnd(i as u32, 17) * TAU);
-    let tilt = Quat::from_rotation_x((rnd(i as u32, 18) - 0.5) * 0.12) * Quat::from_rotation_z((rnd(i as u32, 19) - 0.5) * 0.12);
-    let base = p.pos - Vec3::Y * 0.1;
-    let shade = p.shade as usize;
-    let (wood, cards) = match p.kind {
-        terrain::PlantKind::Sapling => &v.sapling_gen[i % v.sapling_gen.len()],
-        terrain::PlantKind::Shrub => &v.shrub_gen[i % v.shrub_gen.len()],
-    };
-    let (reference, reach) = match p.kind {
-        terrain::PlantKind::Sapling => (SAPLING_REF, 220.0),
-        terrain::PlantKind::Shrub => (SHRUB_REF, 160.0),
-    };
-    let tf = Transform::from_translation(base).with_rotation(tilt * yaw).with_scale(Vec3::splat(p.height / reference));
-    let range = VisibilityRange::abrupt(0.0, reach);
-    let (wood_mat, card_mat) = match p.kind {
-        terrain::PlantKind::Sapling => (v.bark.clone(), v.spray_mats[shade % 4].clone()),
-        terrain::PlantKind::Shrub => (v.aspen_bark.clone(), v.leaf_mats[shade % 3].clone()),
-    };
-    commands.spawn((Mesh3d(wood.clone()), MeshMaterial3d(wood_mat), tf, range.clone()));
-    commands.spawn((Mesh3d(cards.clone()), MeshMaterial3d(card_mat), tf, range));
 }

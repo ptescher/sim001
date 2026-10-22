@@ -93,7 +93,11 @@ pub const BAUD: u32 = 420_000;
 fn open_device(path: &str) -> std::io::Result<Line> {
     use std::os::fd::AsRawFd;
     use std::os::unix::fs::OpenOptionsExt;
-    let f = std::fs::OpenOptions::new().read(true).write(true).custom_flags(libc::O_NOCTTY | libc::O_NONBLOCK).open(path)?;
+    let f = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NOCTTY | libc::O_NONBLOCK)
+        .open(path)?;
     let fd = f.as_raw_fd();
     // SAFETY: fd is open; termios is plain data; IOSSIOSPEED takes a pointer to a speed_t.
     unsafe {
@@ -207,7 +211,10 @@ pub fn vehicle(c: &SimCore, home: &Position) -> Vehicle {
 pub fn spawn(core: Core, cfg: Config) -> std::io::Result<Option<SocketAddr>> {
     let listener = match cfg.line.strip_prefix("tcp:") {
         Some(port) => {
-            let l = TcpListener::bind(("127.0.0.1", port.parse::<u16>().map_err(|e| std::io::Error::new(ErrorKind::InvalidInput, e))?))?;
+            let l = TcpListener::bind((
+                "127.0.0.1",
+                port.parse::<u16>().map_err(|e| std::io::Error::new(ErrorKind::InvalidInput, e))?,
+            ))?;
             println!("flight computer: waiting for the TX15 on {}", l.local_addr()?);
             Some(l)
         }
@@ -335,11 +342,11 @@ fn run(core: &Core, cfg: &Config, mut line: Line, ground_station: Option<&TcpLis
         // The ground station's relay: what it says goes down to the radio, and what the radio
         // forwards for it comes out here.
         if let Some(l) = ground_station {
-            if gs.is_none() {
-                if let Ok((s, _)) = l.accept() {
-                    let _ = (s.set_nonblocking(true), s.set_nodelay(true));
-                    gs = Some(s);
-                }
+            if gs.is_none()
+                && let Ok((s, _)) = l.accept()
+            {
+                let _ = (s.set_nonblocking(true), s.set_nodelay(true));
+                gs = Some(s);
             }
             if let Some(s) = &mut gs {
                 let mut keep = true;
@@ -500,10 +507,17 @@ mod tests {
             libc::close(s);
             (std::fs::File::from_raw_fd(m), std::ffi::CStr::from_ptr(name.as_ptr()).to_string_lossy().into_owned())
         };
-        let core: Core =
-            Arc::new(Mutex::new(SimCore::new((simulation_aircraft::find("t1s-vtol").unwrap().params)(), vec![], true, 9002)));
+        let core: Core = Arc::new(Mutex::new(SimCore::new(
+            (simulation_aircraft::find("t1s-vtol").unwrap().params)(),
+            vec![],
+            true,
+            9002,
+        )));
         let home = Position::new(-35.363261, 149.16523, 584.0);
-        let gs_addr = spawn(core.clone(), Config { line: name, autopilot: "127.0.0.1:1".into(), home, mavlink_rate: None }).unwrap().expect("a ground station port");
+        let gs_addr =
+            spawn(core.clone(), Config { line: name, autopilot: "127.0.0.1:1".into(), home, mavlink_rate: None })
+                .unwrap()
+                .expect("a ground station port");
 
         let mut radio = master;
         let mut ground_station = TcpStream::connect(gs_addr).unwrap();
@@ -518,7 +532,9 @@ mod tests {
             radio.write_all(&crsf::rc_frame(&channels)).unwrap();
             if carried.is_empty() {
                 // The radio carries what the ground station sent on to the plane, and telemetry up.
-                radio.write_all(&crsf::envelopes(crsf::ADDR_RADIO, b"telemetry for the ground station").concat()).unwrap();
+                radio
+                    .write_all(&crsf::envelopes(crsf::ADDR_RADIO, b"telemetry for the ground station").concat())
+                    .unwrap();
             }
             std::thread::sleep(Duration::from_millis(20));
             // SAFETY: a plain non-blocking read on a descriptor we own.
@@ -537,26 +553,32 @@ mod tests {
             }
             ground_station.set_read_timeout(Some(Duration::from_millis(1))).unwrap();
             let mut got = [0u8; 256];
-            if let Ok(n) = ground_station.read(&mut got) {
-                if got[..n].windows(16).any(|w| w == b"telemetry for th") {
-                    assert!(seen.contains(&crsf::TYPE_ATTITUDE), "attitude came down the cable: {seen:?}");
-                    assert!(seen.contains(&crsf::TYPE_BATTERY), "battery came down the cable");
-                    assert_eq!(carried, b"a command from the ground station", "the ground station's command went down to the radio");
-                    assert!(core.lock().unwrap().rc_channels()[0] >= 1890, "the roll stick went through the cable");
-                    return;
-                }
+            if let Ok(n) = ground_station.read(&mut got)
+                && got[..n].windows(16).any(|w| w == b"telemetry for th")
+            {
+                assert!(seen.contains(&crsf::TYPE_ATTITUDE), "attitude came down the cable: {seen:?}");
+                assert!(seen.contains(&crsf::TYPE_BATTERY), "battery came down the cable");
+                assert_eq!(
+                    carried, b"a command from the ground station",
+                    "the ground station's command went down to the radio"
+                );
+                assert!(core.lock().unwrap().rc_channels()[0] >= 1890, "the roll stick went through the cable");
+                return;
             }
         }
         panic!("the radio's telemetry for the ground station never came out (seen {seen:?}, carried {carried:?})");
     }
 
-
     /// computer gives them to ArduPilot as radio channels, ArduPilot's MAVLink comes back down the
     /// same UART to the "station", and the station's bytes reach ArduPilot.
     #[test]
     fn sticks_go_up_and_the_stations_telemetry_comes_down_the_uart() {
-        let core: Core =
-            Arc::new(Mutex::new(SimCore::new((simulation_aircraft::find("t1s-vtol").unwrap().params)(), vec![], true, 9002)));
+        let core: Core = Arc::new(Mutex::new(SimCore::new(
+            (simulation_aircraft::find("t1s-vtol").unwrap().params)(),
+            vec![],
+            true,
+            9002,
+        )));
         // ArduPilot's MAVLink port: a stand-in that sends a message and keeps what it gets.
         let ap = TcpListener::bind("127.0.0.1:0").unwrap();
         let ap_addr = ap.local_addr().unwrap().to_string();
@@ -578,7 +600,8 @@ mod tests {
         }
         let port = free_port();
         let home = Position::new(-35.363261, 149.16523, 584.0);
-        spawn(core.clone(), Config { line: format!("tcp:{port}"), autopilot: ap_addr, home, mavlink_rate: None }).unwrap();
+        spawn(core.clone(), Config { line: format!("tcp:{port}"), autopilot: ap_addr, home, mavlink_rate: None })
+            .unwrap();
         let tx15_addr = tx15(core.clone(), &format!("tcp:127.0.0.1:{port}")).unwrap();
         // The station connects where the radio relay would.
         let mut station = TcpStream::connect(tx15_addr).unwrap();
@@ -591,7 +614,10 @@ mod tests {
         while Instant::now() < end && !received.lock().unwrap().windows(16).any(|w| w == b"from the station") {
             std::thread::sleep(Duration::from_millis(20));
         }
-        assert!(received.lock().unwrap().windows(16).any(|w| w == b"from the station"), "the station's bytes reach ArduPilot");
+        assert!(
+            received.lock().unwrap().windows(16).any(|w| w == b"from the station"),
+            "the station's bytes reach ArduPilot"
+        );
         let c = core.lock().unwrap();
         let rc = c.rc_channels();
         assert!(rc[0] >= 1995, "the roll stick went through the UART: {rc:?}");

@@ -42,7 +42,15 @@ fn main() {
     let flag = |f: &str| args.iter().any(|a| a == f);
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     if flag("--help") || flag("-h") {
-        println!("{}", include_str!("main.rs").lines().take_while(|l| l.starts_with("//!")).map(|l| l.trim_start_matches("//!").strip_prefix(' ').unwrap_or("")).collect::<Vec<_>>().join("\n"));
+        println!(
+            "{}",
+            include_str!("main.rs")
+                .lines()
+                .take_while(|l| l.starts_with("//!"))
+                .map(|l| l.trim_start_matches("//!").strip_prefix(' ').unwrap_or(""))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
         return;
     }
     if let Some(name) = arg("--map") {
@@ -53,9 +61,9 @@ fn main() {
         }
     }
     // A real place's map pack knows where its pilot box is.
-    let home = arg("--home").and_then(|s| Home::parse(&s)).or_else(|| {
-        terrain::real().map(|r| Home { lat: r.meta.home_lat, lon: r.meta.home_lon, alt: r.meta.home_alt })
-    });
+    let home = arg("--home")
+        .and_then(|s| Home::parse(&s))
+        .or_else(|| terrain::real().map(|r| Home { lat: r.meta.home_lat, lon: r.meta.home_lon, alt: r.meta.home_alt }));
     let watcher = Arc::new(Mutex::new(Watcher::new(home)));
     let source = match arg("--tcp") {
         Some(addr) => {
@@ -76,7 +84,10 @@ fn main() {
         .filter_map(|(i, _)| args.get(i + 1))
         .map(|s| {
             let (name, v) = s.split_once('=').unwrap_or(("view", s));
-            (name.to_string(), View::parse(v).unwrap_or_else(|| panic!("--at {s}: expected NAME=x,agl,z,tx,tagl,tz[,fov]")))
+            (
+                name.to_string(),
+                View::parse(v).unwrap_or_else(|| panic!("--at {s}: expected NAME=x,agl,z,tx,tagl,tz[,fov]")),
+            )
         })
         .collect();
 
@@ -84,7 +95,10 @@ fn main() {
     if std::env::var_os("SIM001_FPS").is_some() {
         app.add_plugins((
             bevy::diagnostic::FrameTimeDiagnosticsPlugin::default(),
-            bevy::diagnostic::LogDiagnosticsPlugin { filter: Some([bevy::diagnostic::FrameTimeDiagnosticsPlugin::FRAME_TIME].into_iter().collect()), ..default() },
+            bevy::diagnostic::LogDiagnosticsPlugin {
+                filter: Some([bevy::diagnostic::FrameTimeDiagnosticsPlugin::FRAME_TIME].into_iter().collect()),
+                ..default()
+            },
         ));
     }
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -96,7 +110,11 @@ fn main() {
         }),
         ..default()
     }))
-    .add_plugins(EnginePlugin { raytracing: flag("--raytrace"), tips: vec!["Waiting for the scenery. The plane appears when its telemetry arrives."], ..default() })
+    .add_plugins(EnginePlugin {
+        raytracing: flag("--raytrace"),
+        tips: vec!["Waiting for the scenery. The plane appears when its telemetry arrives."],
+        ..default()
+    })
     .insert_resource(Telemetry(watcher))
     .insert_resource(Source(source))
     .insert_resource(Parked(arg("--plane").map(|p| parked_pose(&p))))
@@ -104,7 +122,14 @@ fn main() {
     .add_systems(Update, (keys, publish).before(EngineSet::Draw))
     .add_systems(Update, update_status);
     if let Some(dir) = arg("--capture") {
-        capture::plugin(&mut app, capture::Capture { dir: dir.into(), views, settle_secs: std::env::var("SIM001_SETTLE").ok().and_then(|v| v.parse().ok()).unwrap_or(4.0) });
+        capture::plugin(
+            &mut app,
+            capture::Capture {
+                dir: dir.into(),
+                views,
+                settle_secs: std::env::var("SIM001_SETTLE").ok().and_then(|v| v.parse().ok()).unwrap_or(4.0),
+            },
+        );
     }
     app.run();
 }
@@ -148,10 +173,17 @@ fn pilot_box() -> Vec3 {
 fn parked_pose(s: &str) -> Pose {
     let n: Vec<f32> = s.split(',').filter_map(|v| v.trim().parse().ok()).collect();
     assert!(n.len() >= 3, "--plane {s}: expected x,agl,z[,heading,roll,tilt]");
-    let (heading, roll) = (n.get(3).copied().unwrap_or(0.0).to_radians(), n.get(4).copied().unwrap_or(0.0).to_radians());
+    let (heading, roll) =
+        (n.get(3).copied().unwrap_or(0.0).to_radians(), n.get(4).copied().unwrap_or(0.0).to_radians());
     let tilt = n.get(5).copied().unwrap_or(0.0).to_radians();
     let ground = terrain::ground_height(n[0], n[2]);
-    Pose { pos: Vec3::new(n[0], ground + n[1], n[2]), rot: Quat::from_rotation_y(-heading) * Quat::from_rotation_z(-roll), spool: vec![0.6, 0.6, 0.6], tilt: vec![tilt, tilt, 0.0], ..default() }
+    Pose {
+        pos: Vec3::new(n[0], ground + n[1], n[2]),
+        rot: Quat::from_rotation_y(-heading) * Quat::from_rotation_z(-roll),
+        spool: vec![0.6, 0.6, 0.6],
+        tilt: vec![tilt, tilt, 0.0],
+        ..default()
+    }
 }
 
 fn publish(telemetry: Res<Telemetry>, parked: Res<Parked>, mut scene: ResMut<Scene>) {
@@ -166,7 +198,9 @@ fn publish(telemetry: Res<Telemetry>, parked: Res<Parked>, mut scene: ResMut<Sce
 fn keys(keys: Res<ButtonInput<KeyCode>>, mut view: ResMut<ViewInput>, mut exit: MessageWriter<AppExit>) {
     view.cycle |= keys.just_pressed(KeyCode::KeyC);
     view.toggle_auto_zoom |= keys.just_pressed(KeyCode::KeyZ);
-    if keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight, KeyCode::ControlLeft, KeyCode::ControlRight]) && keys.just_pressed(KeyCode::KeyQ) {
+    if keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight, KeyCode::ControlLeft, KeyCode::ControlRight])
+        && keys.just_pressed(KeyCode::KeyQ)
+    {
         exit.write(AppExit::Success);
     }
 }
@@ -181,11 +215,22 @@ fn spawn_status(mut commands: Commands) {
     ));
 }
 
-fn update_status(telemetry: Res<Telemetry>, source: Res<Source>, cam: Res<visualization_engine::camera::CamState>, mut text: Query<&mut Text, With<Status>>) {
+fn update_status(
+    telemetry: Res<Telemetry>,
+    source: Res<Source>,
+    cam: Res<visualization_engine::camera::CamState>,
+    mut text: Query<&mut Text, With<Status>>,
+) {
     let w = telemetry.0.lock().unwrap();
     let line = match w.placement() {
         None => format!("Waiting for telemetry on {}", source.0),
-        Some(p) => format!("{}  |  {:.0} m north, {:.0} m east, {:.0} m up  |  C: view", cam.mode.label(), -p.offset.z, p.offset.x, p.offset.y),
+        Some(p) => format!(
+            "{}  |  {:.0} m north, {:.0} m east, {:.0} m up  |  C: view",
+            cam.mode.label(),
+            -p.offset.z,
+            p.offset.x,
+            p.offset.y
+        ),
     };
     for mut t in &mut text {
         if t.0 != line {

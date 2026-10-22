@@ -80,15 +80,28 @@ pub fn spawn_radio_overlay(commands: &mut Commands) {
         .id();
     let mut parts: Vec<Entity> = Vec::new();
     // The body, and the two gimbals with their knobs.
-    parts.push(commands.spawn((Node { border_radius: BorderRadius::all(px(60.0)), ..abs(20.0, 20.0, W - 40.0, H - 40.0) }, BackgroundColor(BODY))).id());
+    parts.push(
+        commands
+            .spawn((
+                Node { border_radius: BorderRadius::all(px(60.0)), ..abs(20.0, 20.0, W - 40.0, H - 40.0) },
+                BackgroundColor(BODY),
+            ))
+            .id(),
+    );
     for (i, cx) in [150.0, W - 150.0].into_iter().enumerate() {
         let well = commands
-            .spawn((Node { border_radius: BorderRadius::all(px(WELL / 2.0)), ..abs(cx - WELL / 2.0, 120.0, WELL, WELL) }, BackgroundColor(PART)))
+            .spawn((
+                Node { border_radius: BorderRadius::all(px(WELL / 2.0)), ..abs(cx - WELL / 2.0, 120.0, WELL, WELL) },
+                BackgroundColor(PART),
+            ))
             .id();
         let knob = commands
             .spawn((
                 Gimbal(i as u8),
-                Node { border_radius: BorderRadius::all(px(KNOB / 2.0)), ..abs((WELL - KNOB) / 2.0, (WELL - KNOB) / 2.0, KNOB, KNOB) },
+                Node {
+                    border_radius: BorderRadius::all(px(KNOB / 2.0)),
+                    ..abs((WELL - KNOB) / 2.0, (WELL - KNOB) / 2.0, KNOB, KNOB)
+                },
                 BackgroundColor(MUTED),
             ))
             .id();
@@ -101,7 +114,14 @@ pub fn spawn_radio_overlay(commands: &mut Commands) {
                     Text::default(),
                     small.clone(),
                     TextColor(TEXT),
-                    Node { position_type: PositionType::Absolute, left: px(cx - 130.0), top: px(250.0), width: px(260.0), justify_content: JustifyContent::Center, ..default() },
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(cx - 130.0),
+                        top: px(250.0),
+                        width: px(260.0),
+                        justify_content: JustifyContent::Center,
+                        ..default()
+                    },
                 ))
                 .id(),
         );
@@ -111,13 +131,26 @@ pub fn spawn_radio_overlay(commands: &mut Commands) {
     let x0 = (W - 6.0 * slot_w - 5.0 * gap) / 2.0;
     parts.push(
         commands
-            .spawn((FcPart, Text::new("MODE (CH8: SA + SB)"), small.clone(), TextColor(MUTED), Node { position_type: PositionType::Absolute, left: px(x0), top: px(38.0), ..default() }))
+            .spawn((
+                FcPart,
+                Text::new("MODE (CH8: SA + SB)"),
+                small.clone(),
+                TextColor(MUTED),
+                Node { position_type: PositionType::Absolute, left: px(x0), top: px(38.0), ..default() },
+            ))
             .id(),
     );
     for i in 0..6 {
         let slot = commands
-            
-            .spawn((FcPart, ModeSlot(i), Node { border_radius: BorderRadius::all(px(8.0)), ..abs(x0 + i as f32 * (slot_w + gap), 62.0, slot_w, 30.0) }, BackgroundColor(PART)))
+            .spawn((
+                FcPart,
+                ModeSlot(i),
+                Node {
+                    border_radius: BorderRadius::all(px(8.0)),
+                    ..abs(x0 + i as f32 * (slot_w + gap), 62.0, slot_w, 30.0)
+                },
+                BackgroundColor(PART),
+            ))
             .id();
         commands.entity(slot).with_child((Text::default(), small.clone(), TextColor(TEXT)));
         parts.push(slot);
@@ -136,7 +169,18 @@ pub fn spawn_radio_overlay(commands: &mut Commands) {
     );
     parts.push(
         commands
-            .spawn((FcPart, Text::new("ARM (CH5: SE)"), small, TextColor(MUTED), Node { position_type: PositionType::Absolute, left: px((W - 150.0) / 2.0), top: px(100.0), ..default() }))
+            .spawn((
+                FcPart,
+                Text::new("ARM (CH5: SE)"),
+                small,
+                TextColor(MUTED),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px((W - 150.0) / 2.0),
+                    top: px(100.0),
+                    ..default()
+                },
+            ))
             .id(),
     );
     commands.entity(root).add_children(&parts);

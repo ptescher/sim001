@@ -184,7 +184,10 @@ impl Course {
 pub enum Status {
     Racing,
     /// Across the line after the last lap: the time from GO, and that time with the cuts added.
-    Finished { time: f32, corrected: f32 },
+    Finished {
+        time: f32,
+        corrected: f32,
+    },
     /// Two cuts.
     Disqualified,
     /// Crashed, or picked up.
@@ -222,7 +225,15 @@ pub struct Racer {
 
 impl Racer {
     fn new() -> Racer {
-        Racer { laps: 0, next: Gate::Pylon(0), cuts: 0, status: Status::Racing, gates: 0, last_gate: 0.0, last_pos: None }
+        Racer {
+            laps: 0,
+            next: Gate::Pylon(0),
+            cuts: 0,
+            status: Status::Racing,
+            gates: 0,
+            last_gate: 0.0,
+            last_pos: None,
+        }
     }
 }
 
@@ -374,7 +385,10 @@ mod tests {
     fn the_outside_line_keeps_its_distance_from_the_pylons() {
         let c = course();
         let line = c.outside_line(20.0, 1.0);
-        let closest = line.iter().map(|p| c.pylons.iter().map(|q| dist(*p, *q)).fold(f32::MAX, f32::min)).fold(f32::MAX, f32::min);
+        let closest = line
+            .iter()
+            .map(|p| c.pylons.iter().map(|q| dist(*p, *q)).fold(f32::MAX, f32::min))
+            .fold(f32::MAX, f32::min);
         assert!((closest - 20.0).abs() < 0.05, "closest {closest}");
         let length: f32 = (0..line.len()).map(|i| dist(line[i], line[(i + 1) % line.len()])).sum();
         let expected = 400.0 + std::f32::consts::TAU * 20.0;
@@ -419,7 +433,9 @@ mod tests {
         assert_eq!(race.racers[0].cuts, 0);
         fly(&mut race, 0, &line, 4, &mut t);
         assert_eq!(race.racers[0].laps, 5);
-        assert!(matches!(race.racers[0].status, Status::Finished { time, corrected } if time == corrected && time > 0.0));
+        assert!(
+            matches!(race.racers[0].status, Status::Finished { time, corrected } if time == corrected && time > 0.0)
+        );
         assert!(race.over());
     }
 
@@ -502,7 +518,9 @@ mod tests {
             t3 += 0.04;
             race.observe(3, *p, t3);
         }
-        let (Status::Finished { corrected: c0, .. }, Status::Finished { corrected: c1, .. }) = (race.racers[0].status, race.racers[1].status) else {
+        let (Status::Finished { corrected: c0, .. }, Status::Finished { corrected: c1, .. }) =
+            (race.racers[0].status, race.racers[1].status)
+        else {
             panic!("both finish: {:?}", race.racers)
         };
         assert!(c0 > c1, "the cut costs 10 %: {c0} against {c1}");

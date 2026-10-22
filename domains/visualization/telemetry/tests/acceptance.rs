@@ -28,7 +28,16 @@ struct World {
 
 impl World {
     fn new() -> World {
-        World { watcher: Watcher::new(None), flowing: false, north: 0.0, height: 0.0, bank: 0.0, heading: "north", t: 0.0, seq: 0 }
+        World {
+            watcher: Watcher::new(None),
+            flowing: false,
+            north: 0.0,
+            height: 0.0,
+            bank: 0.0,
+            heading: "north",
+            t: 0.0,
+            seq: 0,
+        }
     }
 
     fn yaw(&self) -> f32 {
@@ -98,7 +107,13 @@ fn view_svg(w: &World) -> String {
     );
     // From above: 140 px is 200 m; the pilot box in the middle.
     let (bx, by, k) = (190.0f32, 170.0f32, 140.0 / 200.0);
-    s += &format!(r##"<rect x="{}" y="{}" width="10" height="10" fill="none" stroke="{grey}"/><text x="{}" y="{}" fill="{grey}">PILOT BOX</text><text x="{bx}" y="44" fill="{grey}" text-anchor="middle">N</text>"##, bx - 5.0, by - 5.0, bx + 10.0, by + 18.0);
+    s += &format!(
+        r##"<rect x="{}" y="{}" width="10" height="10" fill="none" stroke="{grey}"/><text x="{}" y="{}" fill="{grey}">PILOT BOX</text><text x="{bx}" y="44" fill="{grey}" text-anchor="middle">N</text>"##,
+        bx - 5.0,
+        by - 5.0,
+        bx + 10.0,
+        by + 18.0
+    );
     match w.placed() {
         Some(p) => {
             let (x, y) = (bx + p.offset.x * k, by + p.offset.z * k);
@@ -106,7 +121,12 @@ fn view_svg(w: &World) -> String {
             let d = glam::Vec2::new(nose.x, nose.z).normalize_or(glam::Vec2::NEG_Y);
             let side = glam::Vec2::new(-d.y, d.x);
             let pt = |a: f32, b: f32| format!("{:.1},{:.1}", x + d.x * a + side.x * b, y + d.y * a + side.y * b);
-            s += &format!(r##"<polygon points="{} {} {}" fill="{green}"/>"##, pt(12.0, 0.0), pt(-8.0, 8.0), pt(-8.0, -8.0));
+            s += &format!(
+                r##"<polygon points="{} {} {}" fill="{green}"/>"##,
+                pt(12.0, 0.0),
+                pt(-8.0, 8.0),
+                pt(-8.0, -8.0)
+            );
             s += &format!(
                 r##"<text x="{:.1}" y="{:.1}" fill="{green}" text-anchor="middle">{:.0} m N, {:.0} m up, heading {}</text>"##,
                 x.clamp(110.0, 270.0),
@@ -127,13 +147,16 @@ fn view_svg(w: &World) -> String {
                 cx + half * bank.cos(),
                 cy - half * bank.sin()
             );
-            s += &format!(r##"<text x="{cx}" y="290" fill="{green}" text-anchor="middle">right wing {}</text>"##, match right.y {
-                y if y < -0.1 => "low",
-                y if y > 0.1 => "high",
-                _ => "level",
-            });
+            s += &format!(
+                r##"<text x="{cx}" y="290" fill="{green}" text-anchor="middle">right wing {}</text>"##,
+                match right.y {
+                    y if y < -0.1 => "low",
+                    y if y > 0.1 => "high",
+                    _ => "level",
+                }
+            );
         }
-        None => s += &format!(r##"<text x="320" y="170" fill="#ffb21f" text-anchor="middle">NO PLANE IN THE VIEW</text>"##),
+        None => s += r##"<text x="320" y="170" fill="#ffb21f" text-anchor="middle">NO PLANE IN THE VIEW</text>"##,
     }
     s += &format!(
         r##"<text x="14" y="345" fill="{}">TELEMETRY {}</text><text x="160" y="345" fill="{text}">reported: {:.0} m N, {:.0} m up, bank {:.0}°, heading {}</text><text x="626" y="345" fill="{cyan}" text-anchor="end">{:.1} s</text></svg>"##,
@@ -163,8 +186,12 @@ fn driver() -> Bindings<World> {
         .observe("the reported bank", |w| w.bank as f64)
         .observe("the reported heading", |w| w.heading)
         .observe("the plane in the view", |w| if w.placed().is_some() { "shown" } else { "missing" })
-        .observe("the distance north of the pilot box in the view", |w| w.placed().map_or(f64::NAN, |p| (-p.offset.z).round() as f64))
-        .observe("the height above the pilot box in the view", |w| w.placed().map_or(f64::NAN, |p| p.offset.y.round() as f64))
+        .observe("the distance north of the pilot box in the view", |w| {
+            w.placed().map_or(f64::NAN, |p| (-p.offset.z).round() as f64)
+        })
+        .observe("the height above the pilot box in the view", |w| {
+            w.placed().map_or(f64::NAN, |p| p.offset.y.round() as f64)
+        })
         .observe("the right wing in the view", |w| match w.placed().map(|p| (p.rot * Vec3::X).y) {
             Some(y) if y < -0.1 => "low",
             Some(y) if y > 0.1 => "high",
@@ -210,7 +237,11 @@ fn every_test_of_the_section_passes() {
         println!("{:?} {}", r.status, p.title);
     }
     assert!(!ran.is_empty(), "only {} tests in the section", ran.len());
-    let bad: Vec<_> = ran.iter().filter(|(_, r)| r.status != Status::Passed).map(|(p, r)| format!("{}: {:?}", p.title, r.status)).collect();
+    let bad: Vec<_> = ran
+        .iter()
+        .filter(|(_, r)| r.status != Status::Passed)
+        .map(|(p, r)| format!("{}: {:?}", p.title, r.status))
+        .collect();
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
 }
 

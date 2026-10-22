@@ -1,9 +1,9 @@
 //! Headless flight-model checks: `cargo run --release --bin sim001 -- --selftest`.
 
-use simulation_physics::{self as physics, Phase};
 use crate::sim::{FlightMode, SimCore};
 use crate::terrain;
 use bevy::math::{Quat, Vec3};
+use simulation_physics::{self as physics, Phase};
 
 const DT: f32 = 1.0 / 600.0;
 
@@ -31,8 +31,12 @@ fn run(c: &mut SimCore, secs: f32) {
 pub fn run_all() {
     let p = (simulation_aircraft::find("t1s-ranger").unwrap().params)();
     let wing_area: f32 = p.surfaces.iter().filter(|s| !s.is_tail).map(|s| s.area).sum();
-    println!("T1-S model: mass {:.2} kg, wing area {:.4} m^2, wing loading {:.1} g/dm^2",
-        p.mass, wing_area, p.mass * 1000.0 / (wing_area * 100.0));
+    println!(
+        "T1-S model: mass {:.2} kg, wing area {:.4} m^2, wing loading {:.1} g/dm^2",
+        p.mass,
+        wing_area,
+        p.mass * 1000.0 / (wing_area * 100.0)
+    );
 
     // 1. Trimmed level flight vs throttle (manual, sticks centred).
     println!("\n-- Hands-off flight, manual mode, sticks centred --");
@@ -46,8 +50,13 @@ pub fn run_all() {
         let (roll, pitch, _) = physics::euler(c.state.rot);
         println!(
             "thr {:.2}: airspeed {:5.1} m/s, climb {:+5.2} m/s, pitch {:+5.1}°, roll {:+5.1}°, AoA(wing) {:+5.1}°, current {:4.1} A",
-            thr, c.state.airspeed, (c.state.pos.y - y0) / 5.0, pitch.to_degrees(), roll.to_degrees(),
-            c.state.alpha[1].to_degrees(), c.state.current
+            thr,
+            c.state.airspeed,
+            (c.state.pos.y - y0) / 5.0,
+            pitch.to_degrees(),
+            roll.to_degrees(),
+            c.state.alpha[1].to_degrees(),
+            c.state.current
         );
     }
 
@@ -94,13 +103,21 @@ pub fn run_all() {
         for _ in 0..(0.6 / DT) as usize {
             c.step_standalone(DT);
             let (p, q, r) = physics::body_rates(c.state.omega);
-            if p.abs() > peak.0.abs() { peak.0 = p; }
-            if q.abs() > peak.1.abs() { peak.1 = q; }
-            if r.abs() > peak.2.abs() { peak.2 = r; }
+            if p.abs() > peak.0.abs() {
+                peak.0 = p;
+            }
+            if q.abs() > peak.1.abs() {
+                peak.1 = q;
+            }
+            if r.abs() > peak.2.abs() {
+                peak.2 = r;
+            }
         }
         println!(
             "{name:20}: peak roll {:+6.0}°/s  pitch {:+6.0}°/s  yaw {:+6.0}°/s",
-            peak.0.to_degrees(), peak.1.to_degrees(), peak.2.to_degrees()
+            peak.0.to_degrees(),
+            peak.1.to_degrees(),
+            peak.2.to_degrees()
         );
     }
 
@@ -117,7 +134,11 @@ pub fn run_all() {
                 let (_, pitch, _) = physics::euler(c.state.rot);
                 println!(
                     "t={:4.1}s phase {:?} alt {:5.1} m airspeed {:4.1} m/s pitch {:+5.1}°",
-                    c.state.time, c.state.phase, c.state.pos.y - g0, c.state.airspeed, pitch.to_degrees()
+                    c.state.time,
+                    c.state.phase,
+                    c.state.pos.y - g0,
+                    c.state.airspeed,
+                    pitch.to_degrees()
                 );
             }
         }
@@ -135,7 +156,12 @@ pub fn run_all() {
         c.state.rot = Quat::from_rotation_z(-60f32.to_radians());
         run(&mut c, 3.0);
         let (roll, pitch, _) = physics::euler(c.state.rot);
-        println!("\n{:?} mode from 60° bank after 3 s: roll {:+.1}°, pitch {:+.1}°", mode, roll.to_degrees(), pitch.to_degrees());
+        println!(
+            "\n{:?} mode from 60° bank after 3 s: roll {:+.1}°, pitch {:+.1}°",
+            mode,
+            roll.to_degrees(),
+            pitch.to_degrees()
+        );
     }
 
     // 6. Glide to landing on the runway.
@@ -149,8 +175,13 @@ pub fn run_all() {
         run(&mut c, 12.0);
         println!(
             "phase {:?} {} | on ground {} | speed {:.2} m/s | pos ({:.0}, {:.2}, {:.0})",
-            c.state.phase, c.state.crash_reason, c.state.on_ground, c.state.vel.length(),
-            c.state.pos.x, c.state.pos.y, c.state.pos.z
+            c.state.phase,
+            c.state.crash_reason,
+            c.state.on_ground,
+            c.state.vel.length(),
+            c.state.pos.x,
+            c.state.pos.y,
+            c.state.pos.z
         );
     }
 
@@ -163,7 +194,10 @@ pub fn run_all() {
         run(&mut c, 60.0);
         println!(
             "\n50% throttle: {:.1} A, {:.2} V, {:.0} mAh/min -> ~{:.0} min on 1800 mAh",
-            c.state.current, c.state.voltage, c.state.used_mah, 1800.0 * 0.8 / c.state.used_mah
+            c.state.current,
+            c.state.voltage,
+            c.state.used_mah,
+            1800.0 * 0.8 / c.state.used_mah
         );
     }
 
@@ -173,5 +207,3 @@ pub fn run_all() {
     c.step_ardupilot(&[1500, 1500, 1000, 1500, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 1.0 / 1200.0);
     print!("\nSample JSON reply:{}", c.sitl_json());
 }
-
-

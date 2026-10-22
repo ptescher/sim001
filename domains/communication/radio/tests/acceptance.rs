@@ -95,7 +95,10 @@ fn map_svg(w: &World) -> String {
             reach * ring
         );
     }
-    let _ = write!(s, r##"<path d="M320 168 L328 188 L320 184 L312 188 Z" fill="#52c76a" stroke="#000"/><text x="334" y="196" fill="#52c76a">YOU</text>"##);
+    let _ = write!(
+        s,
+        r##"<path d="M320 168 L328 188 L320 184 L312 188 Z" fill="#52c76a" stroke="#000"/><text x="334" y="196" fill="#52c76a">YOU</text>"##
+    );
     for t in &tracks {
         let (n, e) = FIELD.offset_to(&t.position);
         let (x, y) = (320.0 + e * scale, 180.0 - n * scale);
@@ -196,9 +199,15 @@ fn every_test_of_the_section_passes() {
     let ours = a.suite.subtree(section);
     let report = a.run(&mut driver(), &RunOptions::default());
     let ran: Vec<_> = a.plans.iter().zip(&report.results).filter(|(p, _)| ours.contains(&p.section)).collect();
-    for (p, r) in &ran { println!("{:?} {}", r.status, p.title); }
+    for (p, r) in &ran {
+        println!("{:?} {}", r.status, p.title);
+    }
     assert!(ran.len() >= 4, "only {} tests in the section", ran.len());
-    let bad: Vec<_> = ran.iter().filter(|(_, r)| r.status != Status::Passed).map(|(p, r)| format!("{}: {:?}", p.title, r.status)).collect();
+    let bad: Vec<_> = ran
+        .iter()
+        .filter(|(_, r)| r.status != Status::Passed)
+        .map(|(p, r)| format!("{}: {:?}", p.title, r.status))
+        .collect();
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
 }
 
@@ -215,6 +224,9 @@ fn the_section_documents_itself_with_pictures_of_the_map() {
     } else {
         a.docs(Some(&report)).write(&out).unwrap();
     }
-    let section = std::fs::read_dir(out.join("screenshots")).unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains("friend"));
+    let section = std::fs::read_dir(out.join("screenshots"))
+        .unwrap()
+        .flatten()
+        .any(|e| e.file_name().to_string_lossy().contains("friend"));
     assert!(section, "no pictures of the friend story in {}", out.display());
 }

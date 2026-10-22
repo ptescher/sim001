@@ -64,7 +64,10 @@ pub fn surface(z: f32, x: f32, up: bool) -> Option<(Vec3, Vec3)> {
     };
     let p = point(z, x)?;
     let h = 0.0008;
-    let (dz, dx) = (point(z + h, x).unwrap_or(p) - point(z - h, x).unwrap_or(p), point(z, x + h).unwrap_or(p) - point(z, x - h).unwrap_or(p));
+    let (dz, dx) = (
+        point(z + h, x).unwrap_or(p) - point(z - h, x).unwrap_or(p),
+        point(z, x + h).unwrap_or(p) - point(z, x - h).unwrap_or(p),
+    );
     let n = dz.cross(dx).normalize_or(Vec3::Y);
     Some((p, if (n.y > 0.0) == up { n } else { -n }))
 }
@@ -153,7 +156,8 @@ pub struct Details {
 }
 
 pub fn details() -> Details {
-    let (front_vent, hatch, slot, rear_vent) = ((-0.258f32, -0.236f32), (-0.172f32, -0.02f32), (-0.075f32, -0.063f32), (0.040f32, 0.062f32));
+    let (front_vent, hatch, slot, rear_vent) =
+        ((-0.258f32, -0.236f32), (-0.172f32, -0.02f32), (-0.075f32, -0.063f32), (0.040f32, 0.062f32));
     let mut dark = Vec::new();
     let mut slats = Vec::new();
     // The vent at the nose: a dark recess crossed by slats.
@@ -183,7 +187,7 @@ pub fn details() -> Details {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::prelude::*;
+
     use simulation_aircraft::t1s_ranger::geom::*;
 
     /// What the manufacturer's three-view drawing says of the pod (the T1's, 730 mm across, scaled
@@ -231,7 +235,11 @@ mod tests {
         assert!(pos.len() >= 8);
         for p in pos {
             let on = surface(p[2], p[0], true).expect("over the pod");
-            assert!((Vec3::from(*p) - on.0).dot(on.1).abs() < 0.0012, "{p:?} is {} off the surface", (Vec3::from(*p) - on.0).dot(on.1));
+            assert!(
+                (Vec3::from(*p) - on.0).dot(on.1).abs() < 0.0012,
+                "{p:?} is {} off the surface",
+                (Vec3::from(*p) - on.0).dot(on.1)
+            );
             assert!((Vec3::from(*p) - on.0).dot(on.1) > 0.0, "{p:?} is under the surface");
         }
     }
@@ -243,7 +251,12 @@ mod tests {
         let d = details();
         assert!(d.front_louvres >= 6 && d.rear_louvres >= 4, "louvres {} and {}", d.front_louvres, d.rear_louvres);
         // The hatch outline spans most of the middle of the top.
-        assert!(d.hatch.0 > -0.20 && d.hatch.0 < -0.14 && d.hatch.1 > -0.04 && d.hatch.1 < 0.03, "hatch from {} to {}", d.hatch.0, d.hatch.1);
+        assert!(
+            d.hatch.0 > -0.20 && d.hatch.0 < -0.14 && d.hatch.1 > -0.04 && d.hatch.1 < 0.03,
+            "hatch from {} to {}",
+            d.hatch.0,
+            d.hatch.1
+        );
         assert!(d.front_vent.1 < d.hatch.0 && d.hatch.1 < d.rear_vent.0, "the hatches overlap");
         assert!(d.front_vent.0 > NOSE_Z + 0.01, "the vent is on the nose");
         let tris: usize = d.meshes.iter().map(|m| m.indices().map_or(0, |i| i.len() / 3)).sum();
@@ -256,4 +269,3 @@ mod tests {
         }
     }
 }
-

@@ -2,9 +2,9 @@
 //! lake, rolling hills further out and mountains on the horizon) or a real place loaded from a
 //! map pack (`--map cypress`, see `realsite`). World frame: +X east, +Y up, -Z north.
 
-use simulation_physics::Obstacle;
 use crate::realsite::RealSite;
 use glam::{Vec2, Vec3};
+use simulation_physics::Obstacle;
 use std::sync::OnceLock;
 
 static SITE: OnceLock<Option<RealSite>> = OnceLock::new();
@@ -143,7 +143,8 @@ pub fn lake_factor(x: f32, z: f32) -> f32 {
     }
     let d = Vec2::new(x, z) - LAKE_CENTER;
     let a = d.y.atan2(d.x);
-    let wobble = 1.0 + 0.22 * gradient_noise(a.cos() * 1.6 + 4.0, a.sin() * 1.6 - 2.0)
+    let wobble = 1.0
+        + 0.22 * gradient_noise(a.cos() * 1.6 + 4.0, a.sin() * 1.6 - 2.0)
         + 0.08 * gradient_noise(a.cos() * 4.0 - 1.0, a.sin() * 4.0 + 6.0);
     d.length() / (LAKE_RADIUS * wobble)
 }
@@ -276,13 +277,22 @@ pub fn trees() -> Vec<Tree> {
             let near_line = 1.0 - smoothstep(treeline - 80.0, treeline, h) * 0.45;
             // The trees of a stand are of an age: tall in an old stand, short in a young one.
             let age = fbm(x / 75.0 - 30.0, z / 75.0 + 12.0, 2);
-            let height = (10.0 + 18.0 * smoothstep(0.25, 0.75, age)) * (0.82 + 0.36 * hash(ix + 77, iz - 33)) * near_line;
+            let height =
+                (10.0 + 18.0 * smoothstep(0.25, 0.75, age)) * (0.82 + 0.36 * hash(ix + 77, iz - 33)) * near_line;
             // Subalpine fir and spruce, with a few aspen groves in the lower, gentler ground.
-            let aspen_zone = ((1.0 - smoothstep(300.0, 700.0, r)) * 0.45 + fbm(x / 120.0, z / 120.0, 2) * 0.25 - 0.45).max(0.0);
+            let aspen_zone =
+                ((1.0 - smoothstep(300.0, 700.0, r)) * 0.45 + fbm(x / 120.0, z / 120.0, 2) * 0.25 - 0.45).max(0.0);
             let conifer = hash(ix - 5, iz + 9) > aspen_zone;
             // A few stand dead, more where the trees are hardest pressed.
-            let dead = conifer && hash(ix * 5 + 1, iz * 11 + 7) < 0.025 + 0.07 * smoothstep(treeline - 90.0, treeline, h);
-            out.push(Tree { pos: Vec3::new(x, h, z), height, conifer, shade: (hash(ix + 2, iz + 2) * 4.0) as u8, dead });
+            let dead =
+                conifer && hash(ix * 5 + 1, iz * 11 + 7) < 0.025 + 0.07 * smoothstep(treeline - 90.0, treeline, h);
+            out.push(Tree {
+                pos: Vec3::new(x, h, z),
+                height,
+                conifer,
+                shade: (hash(ix + 2, iz + 2) * 4.0) as u8,
+                dead,
+            });
         }
     }
     out
@@ -318,7 +328,12 @@ pub fn undergrowth() -> Vec<Plant> {
             let shade = (hash(ix + 6, iz + 6) * 4.0) as u8;
             // Willow and juniper thickets round the lake, in clumps.
             if lake > 1.0 && lake < 1.9 && fbm(x / 22.0, z / 22.0, 2) > 0.45 && roll < 0.35 {
-                out.push(Plant { pos: Vec3::new(x, h, z), height: 0.9 + 1.4 * hash(ix + 40, iz - 3), kind: PlantKind::Shrub, shade });
+                out.push(Plant {
+                    pos: Vec3::new(x, h, z),
+                    height: 0.9 + 1.4 * hash(ix + 40, iz - 3),
+                    kind: PlantKind::Shrub,
+                    shade,
+                });
                 continue;
             }
             if lake < 1.2 || h > treeline {
@@ -328,10 +343,20 @@ pub fn undergrowth() -> Vec<Plant> {
             let sapling_odds = ((wood + 0.35) * 0.32).clamp(0.0, 0.3);
             if roll < sapling_odds {
                 let young = hash(ix + 91, iz + 17);
-                out.push(Plant { pos: Vec3::new(x, h, z), height: 1.5 + 3.8 * young * young, kind: PlantKind::Sapling, shade });
+                out.push(Plant {
+                    pos: Vec3::new(x, h, z),
+                    height: 1.5 + 3.8 * young * young,
+                    kind: PlantKind::Sapling,
+                    shade,
+                });
             } else if wood > -0.2 && wood < 0.3 && roll > 0.93 {
                 // Juniper and the like along the woods' edges.
-                out.push(Plant { pos: Vec3::new(x, h, z), height: 0.7 + 1.6 * hash(ix + 5, iz + 55), kind: PlantKind::Shrub, shade });
+                out.push(Plant {
+                    pos: Vec3::new(x, h, z),
+                    height: 0.7 + 1.6 * hash(ix + 5, iz + 55),
+                    kind: PlantKind::Shrub,
+                    shade,
+                });
             }
         }
     }
@@ -383,7 +408,6 @@ pub fn obstacles(trees: &[Tree], buildings: &[Building]) -> Vec<Obstacle> {
     o
 }
 
-
 /// The world's ground, as the physics sees it.
 pub struct WorldTerrain;
 
@@ -405,7 +429,10 @@ impl simulation_physics::Terrain for WorldTerrain {
 /// Where a plane starts: on the ground at the pilot box, pointing down the runway.
 pub fn start() -> simulation_physics::Start {
     let p = pilot_pos();
-    simulation_physics::Start { pos: Vec3::new(p.x - 0.5, ground_height(p.x, p.z), p.z - 0.6), heading: launch_heading() }
+    simulation_physics::Start {
+        pos: Vec3::new(p.x - 0.5, ground_height(p.x, p.z), p.z - 0.6),
+        heading: launch_heading(),
+    }
 }
 
 #[cfg(test)]
@@ -443,7 +470,12 @@ mod tests {
             }
         }
         // Random pairs: the same trees against ones a long way off.
-        let far: f64 = trees.iter().step_by(7).enumerate().map(|(k, t)| (trees[(k * 7 + trees.len() / 2) % trees.len()].height - t.height).abs() as f64).sum::<f64>()
+        let far: f64 = trees
+            .iter()
+            .step_by(7)
+            .enumerate()
+            .map(|(k, t)| (trees[(k * 7 + trees.len() / 2) % trees.len()].height - t.height).abs() as f64)
+            .sum::<f64>()
             / trees.iter().step_by(7).count() as f64;
         let near = near / n.max(1) as f64;
         assert!(near < far * 0.8, "neighbours differ by {near:.2} m, strangers by {far:.2} m");
@@ -461,7 +493,12 @@ mod tests {
         let high: Vec<_> = conifers.iter().filter(|t| t.pos.y > 150.0).collect();
         let low: Vec<_> = conifers.iter().filter(|t| t.pos.y < 60.0).collect();
         let share = |v: &[&&Tree]| v.iter().filter(|t| t.dead).count() as f32 / v.len().max(1) as f32;
-        assert!(share(&high) > share(&low), "no more dead trees near the treeline ({} against {})", share(&high), share(&low));
+        assert!(
+            share(&high) > share(&low),
+            "no more dead trees near the treeline ({} against {})",
+            share(&high),
+            share(&low)
+        );
     }
 
     /// Young trees and shrubs grow among the big ones and at the edges of the woods, not in the
@@ -481,12 +518,21 @@ mod tests {
             assert!(!(p.pos.x.abs() < 40.0 && r < 400.0), "a plant in the runway corridor at {:?}", p.pos);
             assert!(r >= 150.0, "a plant on the flying field at {:?}", p.pos);
         }
-        assert!(plants.iter().any(|p| p.kind == PlantKind::Sapling) && plants.iter().any(|p| p.kind == PlantKind::Shrub));
+        assert!(
+            plants.iter().any(|p| p.kind == PlantKind::Sapling) && plants.iter().any(|p| p.kind == PlantKind::Shrub)
+        );
         let trees = trees();
         let g = grid(trees.iter().enumerate().map(|(i, t)| (t.pos.x, t.pos.z, i)), 30.0);
         let near_tree = |x: f32, z: f32| {
             let cell = ((x / 30.0).floor() as i32, (z / 30.0).floor() as i32);
-            (-1..=1).any(|dx| (-1..=1).any(|dz| g.get(&(cell.0 + dx, cell.1 + dz)).into_iter().flatten().any(|&(tx, tz, _)| (tx - x).hypot(tz - z) < 25.0)))
+            (-1..=1).any(|dx| {
+                (-1..=1).any(|dz| {
+                    g.get(&(cell.0 + dx, cell.1 + dz))
+                        .into_iter()
+                        .flatten()
+                        .any(|&(tx, tz, _)| (tx - x).hypot(tz - z) < 25.0)
+                })
+            })
         };
         let saplings: Vec<_> = plants.iter().filter(|p| p.kind == PlantKind::Sapling).collect();
         let among = saplings.iter().filter(|p| near_tree(p.pos.x, p.pos.z)).count() as f32 / saplings.len() as f32;

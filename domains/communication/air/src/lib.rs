@@ -12,7 +12,8 @@
 
 use communication_remoteid as rid;
 use communication_telemetry::{
-    AUTOPILOT_COMPONENT, Beacon, ODID_COMPONENT, adsb, frame, global_position, heartbeat, remote_id_location, remote_id_static,
+    AUTOPILOT_COMPONENT, Beacon, ODID_COMPONENT, adsb, frame, global_position, heartbeat, remote_id_location,
+    remote_id_static,
 };
 use communication_traffic::Position;
 
@@ -149,7 +150,12 @@ impl Emitter {
             while self.next_position < end && !radios.contains(&Technology::MavlinkNetwork) {
                 let t = self.next_position;
                 self.next_position += POSITION_INTERVAL;
-                let f = frame(b.sysid, AUTOPILOT_COMPONENT, self.next_seq(), &adsb(&b, 0xA00000 + b.sysid as u32, &self.callsign, 0));
+                let f = frame(
+                    b.sysid,
+                    AUTOPILOT_COMPONENT,
+                    self.next_seq(),
+                    &adsb(&b, 0xA00000 + b.sysid as u32, &self.callsign, 0),
+                );
                 out.push((t, Technology::Adsb, Payload::Mavlink(f)));
             }
         }
@@ -166,7 +172,11 @@ impl Emitter {
                 if radio == Technology::Bluetooth4 {
                     // Legacy advertising carries one message: the ID goes out in turn with the position.
                     if with_static {
-                        out.push((t, radio, Payload::RemoteId { mac: b.mac, bytes: rid::encode(&remote_id_static(&b)[0]).to_vec() }));
+                        out.push((
+                            t,
+                            radio,
+                            Payload::RemoteId { mac: b.mac, bytes: rid::encode(&remote_id_static(&b)[0]).to_vec() },
+                        ));
                     }
                     out.push((t, radio, Payload::RemoteId { mac: b.mac, bytes: rid::encode(&location).to_vec() }));
                 } else {
@@ -332,7 +342,9 @@ mod tests {
 
     #[test]
     fn nothing_is_heard_past_the_range_of_the_radio() {
-        for (tech, far) in [(Technology::Bluetooth4, 400.0), (Technology::Bluetooth5, 1500.0), (Technology::MavlinkNetwork, 6000.0)] {
+        for (tech, far) in
+            [(Technology::Bluetooth4, 400.0), (Technology::Bluetooth5, 1500.0), (Technology::MavlinkNetwork, 6000.0)]
+        {
             let mut e = [Emitter::new(beacon(2, FIELD.moved(far, 0.0, 0.0)), vec![tech])];
             let heard = run(&mut Air::new(1), &mut e, &[listener(&[tech])], 10);
             assert!(heard.is_empty(), "{tech:?} heard at {far} m");
@@ -368,12 +380,18 @@ mod tests {
     #[test]
     fn a_silent_device_sends_nothing() {
         let mut e = [Emitter::new(beacon(2, FIELD), vec![])];
-        assert!(run(&mut Air::new(1), &mut e, &[listener(&[Technology::MavlinkNetwork, Technology::Bluetooth5])], 10).is_empty());
+        assert!(
+            run(&mut Air::new(1), &mut e, &[listener(&[Technology::MavlinkNetwork, Technology::Bluetooth5])], 10)
+                .is_empty()
+        );
     }
 
     #[test]
     fn a_listener_only_hears_the_radios_it_is_tuned_to() {
-        let mut e = [Emitter::new(beacon(2, FIELD.moved(100.0, 0.0, 0.0)), vec![Technology::MavlinkNetwork, Technology::Bluetooth5])];
+        let mut e = [Emitter::new(
+            beacon(2, FIELD.moved(100.0, 0.0, 0.0)),
+            vec![Technology::MavlinkNetwork, Technology::Bluetooth5],
+        )];
         let heard = run(&mut Air::new(1), &mut e, &[listener(&[Technology::Bluetooth5])], 5);
         assert!(!heard.is_empty() && heard.iter().all(|r| r.technology == Technology::Bluetooth5));
     }

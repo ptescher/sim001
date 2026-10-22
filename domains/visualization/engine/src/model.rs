@@ -1,11 +1,11 @@
 //! Procedural 3D model of the HEEWING T1-S Ranger, with moving control surfaces and props.
 
-use simulation_aircraft::t1s_ranger::geom::*;
-use crate::foam::{foam_normal, foam_texture, world_uv, GRAIN_MEAN};
-use crate::mesh_util::{airfoil_panel, cuboid, loft, GeoBuilder, PanelSpec};
 use crate::Scene;
+use crate::foam::{GRAIN_MEAN, foam_normal, foam_texture, world_uv};
+use crate::mesh_util::{GeoBuilder, PanelSpec, airfoil_panel, cuboid, loft};
 use bevy::prelude::*;
 use bevy::solari::prelude::RaytracingMesh3d;
+use simulation_aircraft::t1s_ranger::geom::*;
 
 /// A plane in the view: 0 is yours, and 1 to 3 are the computer pilots' in a game.
 #[derive(Component)]
@@ -100,7 +100,14 @@ pub fn rt(mesh: Handle<Mesh>, mat: Handle<StandardMaterial>, t: Transform) -> im
 
 /// Spawns plane `plane`, with its markings (wing tips, nose stripe, ailerons, ruddervators) in
 /// `accent`.
-pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>, images: &mut Assets<Image>, plane: usize, accent: Color) {
+pub fn spawn_plane(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    images: &mut Assets<Image>,
+    plane: usize,
+    accent: Color,
+) {
     let mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32, metal: f32| {
         m.add(StandardMaterial {
             base_color: c,
@@ -137,7 +144,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         foam_bottom: foam(materials, [0.15, 0.15, 0.158], 0.9),
         surface: foam(materials, [0.22, 0.22, 0.23], 0.86),
         accent: mat(materials, accent, 0.45, 0.0),
-        accent_foam: foam(materials, [accent_linear.red * 0.8, accent_linear.green * 0.8, accent_linear.blue * 0.8], 0.8),
+        accent_foam: foam(
+            materials,
+            [accent_linear.red * 0.8, accent_linear.green * 0.8, accent_linear.blue * 0.8],
+            0.8,
+        ),
         fuselage: foam(materials, [0.17, 0.17, 0.18], 0.86),
         carbon: mat(materials, Color::srgb(0.04, 0.042, 0.048), 0.3, 0.2),
         black: mat(materials, Color::srgb(0.02, 0.02, 0.024), 0.5, 0.0),
@@ -149,7 +160,9 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
 
     let root = commands.spawn((PlaneRoot(plane), Transform::from_translation(PARKED), Visibility::default())).id();
     let mut children: Vec<Entity> = Vec::new();
-    let add = |children: &mut Vec<Entity>, commands: &mut Commands, b: (Handle<Mesh>, Handle<StandardMaterial>, Transform)| {
+    let add = |children: &mut Vec<Entity>,
+               commands: &mut Commands,
+               b: (Handle<Mesh>, Handle<StandardMaterial>, Transform)| {
         children.push(commands.spawn(rt(b.0, b.1, b.2)).id());
     };
 
@@ -228,7 +241,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
             origin: Vec3::ZERO,
         });
         add(&mut children, commands, (meshes.add(world_uv(tip_top)), m.accent_foam.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(world_uv(tip_bot)), m.accent_foam.clone(), Transform::from_translation(-up * 0.0060)));
+        add(
+            &mut children,
+            commands,
+            (meshes.add(world_uv(tip_bot)), m.accent_foam.clone(), Transform::from_translation(-up * 0.0060)),
+        );
 
         // Aileron, hinged at its leading edge.
         let hx = 1.0 - AILERON_CHORD_FRAC;
@@ -269,24 +286,51 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         let hinge = Vec3::new(mx, my, TILT_PIVOT_Z);
         let reach = MOTOR_Z - TILT_PIVOT_Z;
         let servo = meshes.add(cuboid(Vec3::new(0.012, 0.018, 0.028)));
-        add(&mut children, commands, (servo, m.black.clone(), Transform::from_xyz(mx + side * 0.011, my - 0.006, TILT_PIVOT_Z + 0.004)));
+        add(
+            &mut children,
+            commands,
+            (servo, m.black.clone(), Transform::from_xyz(mx + side * 0.011, my - 0.006, TILT_PIVOT_Z + 0.004)),
+        );
         let tilt_pivot = commands
-            .spawn((TiltVis(plane, if side < 0.0 { 0 } else { 1 }), Transform::from_translation(hinge), Visibility::default()))
+            .spawn((
+                TiltVis(plane, if side < 0.0 { 0 } else { 1 }),
+                Transform::from_translation(hinge),
+                Visibility::default(),
+            ))
             .id();
         let mut on_arm: Vec<Entity> = Vec::new();
         let arm = meshes.add(cuboid(Vec3::new(0.010, 0.008, -reach)));
         on_arm.push(commands.spawn(rt(arm, m.carbon.clone(), Transform::from_xyz(0.0, 0.0, 0.5 * reach))).id());
         let nacelle = meshes.add(loft(
-            &[(reach + 0.022, 0.011, 0.011, 0.0), (reach + 0.04, 0.016, 0.017, 0.0), (reach + 0.075, 0.016, 0.017, 0.0), (reach + 0.1, 0.008, 0.008, 0.0)],
+            &[
+                (reach + 0.022, 0.011, 0.011, 0.0),
+                (reach + 0.04, 0.016, 0.017, 0.0),
+                (reach + 0.075, 0.016, 0.017, 0.0),
+                (reach + 0.1, 0.008, 0.008, 0.0),
+            ],
             0.0,
             16,
             false,
         ));
         on_arm.push(commands.spawn(rt(nacelle, m.black.clone(), Transform::IDENTITY)).id());
-        let bell = meshes.add(loft(&[(reach + 0.004, 0.0115, 0.0115, 0.0), (reach + 0.024, 0.0115, 0.0115, 0.0)], 0.0, 20, true));
+        let bell = meshes.add(loft(
+            &[(reach + 0.004, 0.0115, 0.0115, 0.0), (reach + 0.024, 0.0115, 0.0115, 0.0)],
+            0.0,
+            20,
+            true,
+        ));
         on_arm.push(commands.spawn(rt(bell, m.metal.clone(), Transform::IDENTITY)).id());
         let motor_index = if side < 0.0 { 0 } else { 1 };
-        on_arm.extend(spawn_rotor(commands, meshes, materials, &m, plane, motor_index, Vec3::new(0.0, 0.0, reach), side < 0.0));
+        on_arm.extend(spawn_rotor(
+            commands,
+            meshes,
+            materials,
+            &m,
+            plane,
+            motor_index,
+            Vec3::new(0.0, 0.0, reach),
+            side < 0.0,
+        ));
         commands.entity(tilt_pivot).add_children(&on_arm);
         children.push(tilt_pivot);
     }
@@ -315,7 +359,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         add(&mut children, commands, (meshes.add(world_uv(bot)), m.foam_bottom.clone(), Transform::IDENTITY));
         let (cap_top, cap_bot) = panel(STAB_HALF_SPAN - 0.04, STAB_HALF_SPAN, 0.0, hx - 0.01, 0.0025, Vec3::ZERO);
         add(&mut children, commands, (meshes.add(world_uv(cap_top)), m.accent_foam.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(world_uv(cap_bot)), m.accent_foam.clone(), Transform::from_xyz(0.0, -0.005, 0.0)));
+        add(
+            &mut children,
+            commands,
+            (meshes.add(world_uv(cap_bot)), m.accent_foam.clone(), Transform::from_xyz(0.0, -0.005, 0.0)),
+        );
         let hinge_root = le(0.004) + Vec3::Z * hx * chord(0.004);
         let hinge_tip = le(STAB_HALF_SPAN) + Vec3::Z * hx * chord(STAB_HALF_SPAN);
         let (top, bot) = airfoil_panel(&PanelSpec {
@@ -335,7 +383,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
             axis = -axis;
         }
         let pivot = commands
-            .spawn((ControlSurfaceVis { plane, drive: Drive::Elevator, axis }, Transform::from_translation(hinge_root), Visibility::default()))
+            .spawn((
+                ControlSurfaceVis { plane, drive: Drive::Elevator, axis },
+                Transform::from_translation(hinge_root),
+                Visibility::default(),
+            ))
             .id();
         let t = commands.spawn(rt(meshes.add(world_uv(top)), m.surface.clone(), Transform::IDENTITY)).id();
         let b = commands.spawn(rt(meshes.add(world_uv(bot)), m.surface.clone(), Transform::IDENTITY)).id();
@@ -367,7 +419,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         add(&mut children, commands, (meshes.add(world_uv(bot)), m.foam_top.clone(), Transform::IDENTITY));
         let (cap_a, cap_b) = panel(FIN_HEIGHT - 0.04, FIN_HEIGHT, 0.0, hx - 0.01, 0.0025, Vec3::ZERO);
         add(&mut children, commands, (meshes.add(world_uv(cap_a)), m.accent_foam.clone(), Transform::IDENTITY));
-        add(&mut children, commands, (meshes.add(world_uv(cap_b)), m.accent_foam.clone(), Transform::from_xyz(-0.005, 0.0, 0.0)));
+        add(
+            &mut children,
+            commands,
+            (meshes.add(world_uv(cap_b)), m.accent_foam.clone(), Transform::from_xyz(-0.005, 0.0, 0.0)),
+        );
         let hinge_root = le(0.004) + Vec3::Z * hx * chord(0.004);
         let hinge_tip = le(FIN_HEIGHT) + Vec3::Z * hx * chord(FIN_HEIGHT);
         let (a, b) = panel(0.006, FIN_HEIGHT - 0.002, hx + 0.006, 1.0, 0.0, hinge_root);
@@ -389,7 +445,8 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         let rotor = commands
             .spawn((
                 RearRotor(plane),
-                Transform::from_xyz(0.0, REAR_ROTOR_Y, REAR_ROTOR_Z).with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                Transform::from_xyz(0.0, REAR_ROTOR_Y, REAR_ROTOR_Z)
+                    .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
                 Visibility::default(),
             ))
             .id();
@@ -397,7 +454,11 @@ pub fn spawn_plane(commands: &mut Commands, meshes: &mut Assets<Mesh>, materials
         let bell = meshes.add(loft(&[(0.004, 0.0115, 0.0115, 0.0), (0.026, 0.0115, 0.0115, 0.0)], 0.0, 20, true));
         parts.push(commands.spawn(rt(bell, m.metal.clone(), Transform::IDENTITY)).id());
         let mast = meshes.add(cuboid(Vec3::new(0.009, 0.009, REAR_ROTOR_Y - 0.026)));
-        parts.push(commands.spawn(rt(mast, m.carbon.clone(), Transform::from_xyz(0.0, 0.0, 0.5 * (REAR_ROTOR_Y - 0.026) + 0.026))).id());
+        parts.push(
+            commands
+                .spawn(rt(mast, m.carbon.clone(), Transform::from_xyz(0.0, 0.0, 0.5 * (REAR_ROTOR_Y - 0.026) + 0.026)))
+                .id(),
+        );
         parts.extend(spawn_rotor(commands, meshes, materials, &m, plane, 2, Vec3::ZERO, true));
         commands.entity(rotor).add_children(&parts);
         children.push(rotor);
@@ -417,9 +478,15 @@ fn spawn_rotor(
     at: Vec3,
     clockwise: bool,
 ) -> Vec<Entity> {
-    let prop_pivot = commands.spawn((PropVis(plane, motor), Transform::from_translation(at), Visibility::default())).id();
+    let prop_pivot =
+        commands.spawn((PropVis(plane, motor), Transform::from_translation(at), Visibility::default())).id();
     let blade = meshes.add(prop_blades(ROTOR_RADIUS, if clockwise { 1.0 } else { -1.0 }));
-    let spinner = meshes.add(loft(&[(-0.016, 0.001, 0.001, 0.0), (-0.009, 0.0075, 0.0075, 0.0), (0.0, 0.0105, 0.0105, 0.0)], 0.0, 18, false));
+    let spinner = meshes.add(loft(
+        &[(-0.016, 0.001, 0.001, 0.0), (-0.009, 0.0075, 0.0075, 0.0), (0.0, 0.0105, 0.0105, 0.0)],
+        0.0,
+        18,
+        false,
+    ));
     let bl = commands.spawn(rt(blade, m.prop.clone(), Transform::from_xyz(0.0, 0.0, -0.002))).id();
     let sp = commands.spawn(rt(spinner, m.accent.clone(), Transform::IDENTITY)).id();
     commands.entity(prop_pivot).add_children(&[bl, sp]);
@@ -435,7 +502,12 @@ fn spawn_rotor(
     });
     let disc_mesh = meshes.add(Circle::new(ROTOR_RADIUS).mesh().build());
     let disc = commands
-        .spawn((PropDisc(plane, motor, disc_mat.clone()), Mesh3d(disc_mesh), MeshMaterial3d(disc_mat), Transform::from_translation(at + Vec3::new(0.0, 0.0, -0.003))))
+        .spawn((
+            PropDisc(plane, motor, disc_mat.clone()),
+            Mesh3d(disc_mesh),
+            MeshMaterial3d(disc_mat),
+            Transform::from_translation(at + Vec3::new(0.0, 0.0, -0.003)),
+        ))
         .id();
     vec![prop_pivot, disc]
 }
@@ -446,7 +518,10 @@ pub fn sync_plane(
     mut surfaces: Query<(&ControlSurfaceVis, &mut Transform), Without<PlaneRoot>>,
     mut tilts: Query<(&TiltVis, &mut Transform), (Without<PlaneRoot>, Without<ControlSurfaceVis>)>,
     mut rears: Query<(&RearRotor, &mut Transform), (Without<PlaneRoot>, Without<ControlSurfaceVis>, Without<TiltVis>)>,
-    mut props: Query<(&PropVis, &mut Transform), (Without<PlaneRoot>, Without<ControlSurfaceVis>, Without<TiltVis>, Without<RearRotor>)>,
+    mut props: Query<
+        (&PropVis, &mut Transform),
+        (Without<PlaneRoot>, Without<ControlSurfaceVis>, Without<TiltVis>, Without<RearRotor>),
+    >,
     discs: Query<&PropDisc>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     time: Res<Time>,
@@ -494,7 +569,8 @@ pub fn sync_plane(
         // translucent disc carry the "fast" look.
         let dir = if p.1 == 1 { -1.0 } else { 1.0 };
         let a = &mut angles[p.0][p.1];
-        *a = (*a + dir * s.spool.get(p.1).copied().unwrap_or(0.0).sqrt() * 21.0 * time.delta_secs()) % std::f32::consts::TAU;
+        *a = (*a + dir * s.spool.get(p.1).copied().unwrap_or(0.0).sqrt() * 21.0 * time.delta_secs())
+            % std::f32::consts::TAU;
         t.rotation = Quat::from_rotation_z(*a);
     }
     for d in &discs {

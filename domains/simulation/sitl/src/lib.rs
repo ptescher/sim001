@@ -7,8 +7,8 @@
 
 pub mod launch;
 pub mod lockstep;
-pub mod service;
 pub mod sensors;
+pub mod service;
 
 pub use lockstep::{Lockstep, Step, dt_for};
 pub use sensors::sensor_json;

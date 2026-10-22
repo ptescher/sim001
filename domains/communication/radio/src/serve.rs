@@ -136,7 +136,14 @@ mod tests {
         let plane_addr = plane.local_addr().unwrap().to_string();
         let (got_tx, got_rx) = channel();
         let ack = vec![0xFD, 3, 0, 0, 1, 1, 1, 77, 0, 0, 1, 2, 3, 0, 0];
-        let me = Beacon { sysid: 1, position: Position::new(37.87, -122.27, 50.0), velocity: [0.0; 3], heading: 0.0, uas_id: "me".into(), mac: [0; 6] };
+        let me = Beacon {
+            sysid: 1,
+            position: Position::new(37.87, -122.27, 50.0),
+            velocity: [0.0; 3],
+            heading: 0.0,
+            uas_id: "me".into(),
+            mac: [0; 6],
+        };
         let position = frame(1, 1, 0, &global_position(&me, 1));
         let (ack2, position2) = (ack.clone(), position.clone());
         std::thread::spawn(move || {
@@ -168,7 +175,13 @@ mod tests {
             let mut s = shared.lock().unwrap();
             let now = s.now();
             s.relay.pass_on(
-                vec![Reception { listener: 0, emitter: 0, technology: Technology::MavlinkNetwork, time: now, payload: Payload::Mavlink(f.clone()) }],
+                vec![Reception {
+                    listener: 0,
+                    emitter: 0,
+                    technology: Technology::MavlinkNetwork,
+                    time: now,
+                    payload: Payload::Mavlink(f.clone()),
+                }],
                 now,
             );
         }
