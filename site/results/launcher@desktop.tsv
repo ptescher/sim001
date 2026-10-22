@@ -87,3 +87,42 @@ check	1	e:nothing	-
 check	1	e:idle	-
 step	1	passed	1	screenshots/launcher--coverage--render-docs-writes-the-manual/01.jpg	-
 check	1	e:the manual build	-
+plan	launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger	passed	0c17e2aa4d3408a6
+step	0	passed	1	screenshots/launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger/00.jpg	-
+check	1	e:GROUND STATION	-
+check	1	e:WITH ARDUPILOT	-
+check	1	e:ALPINE VALLEY	-
+check	1	e:off	-
+check	1	e:LAUNCH	-
+check	1	e:nothing	-
+check	1	e:idle	-
+step	1	passed	1	screenshots/launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger/01.jpg	-
+check	1	e:the radio wizard	-
+check	1	e:the T1-S Ranger	-
+plan	launcher--state--launch-starts-the-station-with-ardupilot	passed	295c7cd3e43a3bca
+step	0	passed	1	screenshots/launcher--state--launch-starts-the-station-with-ardupilot/00.jpg	-
+check	1	e:GROUND STATION	-
+check	1	e:WITH ARDUPILOT	-
+check	1	e:ALPINE VALLEY	-
+check	1	e:off	-
+check	1	e:LAUNCH	-
+check	1	e:nothing	-
+check	1	e:idle	-
+check	1	e:missing	-
+step	1	passed	1	screenshots/launcher--state--launch-starts-the-station-with-ardupilot/01.jpg	-
+check	1	e:the ground station	-
+check	1	e:through ArduPilot	-
+check	1	e:STOP	-
+check	1	e:running	-
+plan	launcher--state--render-docs-writes-the-manual	passed	c0926c856d36b3c7
+step	0	passed	1	screenshots/launcher--state--render-docs-writes-the-manual/00.jpg	-
+check	1	e:GROUND STATION	-
+check	1	e:WITH ARDUPILOT	-
+check	1	e:ALPINE VALLEY	-
+check	1	e:off	-
+check	1	e:LAUNCH	-
+check	1	e:nothing	-
+check	1	e:idle	-
+check	1	e:missing	-
+step	1	passed	1	screenshots/launcher--state--render-docs-writes-the-manual/01.jpg	-
+check	1	e:the manual build	-
