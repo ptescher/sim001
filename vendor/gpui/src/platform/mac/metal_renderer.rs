@@ -433,14 +433,20 @@ impl MetalRenderer {
         descriptor.set_storage_mode(metal::MTLStorageMode::Managed);
         descriptor.set_usage(metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead);
         let texture = self.device.new_texture(&descriptor);
-        let mut instance_buffer = self.instance_buffer_pool.lock().acquire(&self.device);
-        let result = self.draw_primitives(scene, &mut instance_buffer, &texture, viewport_size);
-        let command_buffer = match result {
-            Ok(command_buffer) => command_buffer,
-            Err(err) => {
-                log::error!("failed to capture: {err}");
-                self.instance_buffer_pool.lock().release(instance_buffer);
-                return None;
+        // As in `draw`: a scene too large for the instance buffer gets a larger one.
+        let (instance_buffer, command_buffer) = loop {
+            let mut instance_buffer = self.instance_buffer_pool.lock().acquire(&self.device);
+            match self.draw_primitives(scene, &mut instance_buffer, &texture, viewport_size) {
+                Ok(command_buffer) => break (instance_buffer, command_buffer),
+                Err(err) => {
+                    let mut instance_buffer_pool = self.instance_buffer_pool.lock();
+                    let buffer_size = instance_buffer_pool.buffer_size;
+                    if buffer_size >= 256 * 1024 * 1024 {
+                        log::error!("failed to capture: {err}");
+                        return None;
+                    }
+                    instance_buffer_pool.reset(buffer_size * 2);
+                }
             }
         };
         let blit = command_buffer.new_blit_command_encoder();

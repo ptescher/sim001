@@ -1591,7 +1591,7 @@ impl Driver for ConsoleDriver {
             let (width, height) = ((image.width() as f32 / scale) as u32, (image.height() as f32 / scale) as u32);
             let rgb = image.resize_exact(width, height, image::imageops::FilterType::Triangle).into_rgb8();
             let mut jpeg = Vec::new();
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90).encode_image(&rgb).ok()?;
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80).encode_image(&rgb).ok()?;
             Some(jpeg)
         })?;
         // With the TX15 on the serial line, its screen goes above the console's.
