@@ -116,7 +116,7 @@ impl Ground {
         if now >= self.next_plans {
             self.next_plans = now + PLAN_EVERY;
             for (i, d) in self.drones.iter_mut().enumerate().filter(|(i, _)| wing[*i] && agent[*i]) {
-                let order = w.orders[i].unwrap_or(Order::Hold);
+                let order = w.orders[i].unwrap_or(Order::Home);
                 d.plan_id = d.plan_id.wrapping_add(1).max(1);
                 let plan = plan_for(&w.game, i, order, (self.home.0, self.home.1), d.plan_id);
                 sends.plans.push((i, plan));
