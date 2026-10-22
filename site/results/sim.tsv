@@ -13,7 +13,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97397065162659	-
+check	1	n:99.9767005443573	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -55,7 +55,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97875690460205	-
+check	1	n:99.98117089271545	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -89,7 +89,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.9678909778595	-
+check	1	n:99.97496604919434	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -97,7 +97,7 @@ step	1	passed	1	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back
 check	1	e:flying	-
 step	2	passed	1	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back-up/02.jpg	-
 check	1	n:0	-
-step	3	passed	9	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back-up/03.jpg	-
+step	3	passed	8	screenshots/sim--your-first-throw--throttle-up-then-pick-it-back-up/03.jpg	-
 check	1	e:in hand	-
 plan	sim--watching-from-every-view--throw-it-then-step-through-the-views	passed	e5226fec772a793d
 step	0	passed	1	screenshots/sim--watching-from-every-view--throw-it-then-step-through-the-views/00.jpg	-
@@ -113,7 +113,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97232556343079	-
+check	1	n:99.97786283493042	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -139,7 +139,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.98416304588318	-
+check	1	n:99.96520280838013	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -163,7 +163,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97163414955139	-
+check	1	n:99.9777615070343	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -191,7 +191,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.95900988578796	-
+check	1	n:99.96886849403381	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -249,15 +249,15 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
-plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	unsupported	8d823740ed274f32
-step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 40 more things yet.
+plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	unsupported	52d71af43d0b054f
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the airframe, arrange the arm switch and 43 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
-plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	390d16bf2a758a1e
-step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 46 more things yet.
+plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	0f2a95e6bcc6503d
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the airframe, arrange the arm switch and 49 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
@@ -266,16 +266,16 @@ step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
 step	7	unsupported	0	-	-
 step	8	unsupported	0	-	-
-plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	unsupported	e785728ef515c9bc
-step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 44 more things yet.
+plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	unsupported	57b92d5a10dc864e
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the airframe, arrange the arm switch and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
-plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	unsupported	40a4fa78f44fd4cb
-step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 36 more things yet.
+plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	unsupported	05786749d70772f3
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the airframe, arrange the arm switch and 38 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
@@ -392,7 +392,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97190833091736	-
+check	1	n:99.97771382331848	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -412,7 +412,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97849464416504	-
+check	1	n:99.98023509979248	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -434,7 +434,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97218251228333	-
+check	1	n:99.97779726982117	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -456,7 +456,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97199773788452	-
+check	1	n:99.97777342796326	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -476,7 +476,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97191429138184	-
+check	1	n:99.97771978378296	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -496,7 +496,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97186660766602	-
+check	1	n:99.97775554656982	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -518,7 +518,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97251629829407	-
+check	1	n:99.97778534889221	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -538,7 +538,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.9724805355072	-
+check	1	n:99.97771382331848	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -560,7 +560,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97276067733765	-
+check	1	n:99.97780323028564	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -580,7 +580,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.972665309906	-
+check	1	n:99.97777938842773	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -602,12 +602,12 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.9723494052887	-
+check	1	n:99.97783899307251	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
 step	1	passed	1	screenshots/sim--coverage--v-fits-a-fresh-battery/01.jpg	-
-check	1	n:99.99079704284668	-
+check	1	n:99.99192357063293	-
 plan	sim--recreation--coverage--the-key-of-the-game-stops-it	passed	0f9643c6879ff348
 step	0	passed	1	screenshots/sim--recreation--coverage--the-key-of-the-game-stops-it/00.jpg	-
 check	1	n:0	-
@@ -622,7 +622,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97174143791199	-
+check	1	n:99.9779224395752	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -649,7 +649,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.9724268913269	-
+check	1	n:99.97786283493042	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -688,7 +688,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.97372627258301	-
+check	1	n:99.98117089271545	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -716,7 +716,7 @@ check	1	n:1	-
 step	6	passed	1	screenshots/sim--recreation--coverage--a-second-cut-disqualifies-you/06.jpg	-
 check	1	n:2	-
 check	1	e:stopped	-
-plan	sim--recreation--coverage--out-of-the-arena-you-are-it	passed	2f4e6d83f660a635
+plan	sim--recreation--coverage--out-of-the-arena-you-are-it	failed	2f4e6d83f660a635
 step	0	passed	1	screenshots/sim--recreation--coverage--out-of-the-arena-you-are-it/00.jpg	-
 check	1	n:0	-
 check	1	e:centred	-
@@ -730,7 +730,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.96705055236816	-
+check	1	n:99.98074173927307	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -748,8 +748,7 @@ check	1	e:flying	-
 check	1	e:running	-
 step	4	passed	1	screenshots/sim--recreation--coverage--out-of-the-arena-you-are-it/04.jpg	-
 check	1	e:an opponent	-
-step	5	passed	1	screenshots/sim--recreation--coverage--out-of-the-arena-you-are-it/05.jpg	-
-check	1	e:you	-
+step	5	failed	0	screenshots/sim--recreation--coverage--out-of-the-arena-you-are-it/05.jpg	couldn't make it happen that the pilot leaves the arena: waited 60 s for the plane to leave the arena
 plan	sim--recreation--coverage--two-minutes-of-tag	passed	87caef8d01c11c93
 step	0	passed	1	screenshots/sim--recreation--coverage--two-minutes-of-tag/00.jpg	-
 check	1	n:0	-
@@ -764,7 +763,7 @@ check	1	e:line of sight	-
 check	1	e:on	-
 check	1	e:hidden	-
 check	1	e:running	-
-check	1	n:99.96399283409119	-
+check	1	n:99.98248815536499	-
 check	1	e:free flight	-
 check	1	e:off	-
 check	1	e:in hand	-
@@ -881,8 +880,8 @@ step	1	unsupported	0	-	-
 plan	gcs--coverage--auto-twice-goes-anyway	unsupported	97a0c342ae06c08b
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the home position, arrange the last plan item and 26 more things yet.
 step	1	unsupported	0	-	-
-plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	465cb87be3a3784d
-step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the arm switch, arrange the autopilot mode and 36 more things yet.
+plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	33dc467a22f5e1d7
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the airframe, arrange the arm switch and 38 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 plan	gcs--radio-setup--coverage--f2-calibrates-the-radio	unsupported	9abcbc49d7cda3ee

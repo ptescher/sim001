@@ -445,6 +445,15 @@ name = "aviation_crsf"
 version = "0.1.0"
 
 [[package]]
+name = "aviation_line"
+version = "0.1.0"
+dependencies = [
+ "aviation_computer",
+ "aviation_crsf",
+ "simulation_aircraft",
+]
+
+[[package]]
 name = "base64"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
