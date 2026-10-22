@@ -61,10 +61,12 @@ There is no fighting in version 1: a team keeps the other out of a tower by bein
 | --- | --- | --- |
 | `recreation_towers` | `domains/recreation/towers` | The rules, the referee, vision and fog, the team view, orders, the seat protocol's messages and the scripted brain. Depends on `glam` and `serde`. No I/O |
 | `recreation_towers_server` | `domains/recreation/towers_server` | The game server (`towers_server`): SITL fleet, physics, referee, seats over TCP, orders to plans |
-| `teleoperation_command` | `domains/teleoperation/command` | The commander app (binary `sim001_command`): the field with its fog, the towers, the roster, select and order. GPUI, outside the workspace like the console, reusing its theme and drawing |
+| `teleoperation_command` | `domains/teleoperation/command` | The commander app (binary `sim001_command`): the field with its fog, the towers, the roster, select and order. GPUI, outside the workspace like the console, with a copy of its theme and drawing |
 
 ## Phases
 
+Done: 1, 2 and 3. The commander app (`domains/teleoperation/command`, `sim001_command --serve`)
+takes a person's seat; its tests click it on a fresh practice game of a real server each.
 Done: 1 and 2. A whole game between two computer commanders plays on six real ArduPlane SITL
 drones at about 6.5 times real time (a 4.5 minute game in about 45 s), and the server's
 acceptance test checks the fog from a seat against a spectator.
@@ -79,6 +81,13 @@ Settled on the way:
   towers are 220 m apart, so with 200 m an enemy circling the next tower pinned a defender.
 - Two commanders deadlocked one against one at every tower. A drone that is behind at a
   contested tower for 10 s gives it up and stays away 30 s; who arrived first decides.
+- The app keeps the server's input open (`--stop-with-stdin`): when the app quits, or dies, or a
+  test starts a fresh game, the server stops its six ArduPlanes. Killing the server itself would
+  leave them running.
+- A drone's order echoes back in its team's map, so the app shows what the server has. Until its
+  seat orders it, a drone circles over its base (HOME). `--red nobody` makes a practice game.
+- The app copies the console's drawing helpers and look (`draw.rs`, `theme.rs`): the console is
+  a binary, not a library. A shared GPUI crate would end the copy.
 - Red won both full games so far (500 to 394, 500 to 409). Red circles 4 m higher; whether that
   or something else favours it is not known yet.
 

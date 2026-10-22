@@ -94,12 +94,37 @@ Vocabulary:
 
   # The computer commander of a team (recreation_towers::Commander): its orders to the Blue
   # drones. The first Blue drone stands at the west end of the Blue base, the third at the east end.
-  State: the order of the first Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower
+  State: the order of the first Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
     Shows: {value}: the first Blue drone gets the order to {value}
-  State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower
+  State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
     Shows: {value}: the second Blue drone gets the order to {value}
-  State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower
+  State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
     Shows: {value}: the third Blue drone gets the order to {value}
+  # The commander app (domains/teleoperation/command), in the Blue seat of a game on the server.
+  State: the seat of the app is none | Blue | refused
+    Shows: Blue: the top bar of the app says BLUE COMMANDER
+    Shows: refused: the top bar of the app says why the server refused the seat
+  State: the towers on the app's map are 0..5
+    Shows: 5: the map shows the five towers, each with its circle and its control bar
+  State: the selected drone is none | the first Blue drone | the second Blue drone | the third Blue drone
+    Set: click {value} in the list of drones
+    Shows: the first Blue drone: B1 is lit in the list of drones, and a ring goes round B1 on the map
+  State: the west tower on the Blue map is held by Blue | held by Red | neutral
+    Shows: held by Blue: the west tower on the map turns blue
+    Shows: neutral: the west tower on the map is grey
+  Event: the commander joins the game
+    Say: run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`. The app starts a game server with six ArduPilot drones and takes the Blue seat. With `--red nobody`, nobody commands Red, and its drones circle over their base: a game to practise in
+  Event: the commander selects the first Blue drone
+    Say: click B1 in the list of drones, or press 1
+  Event: the commander sends the selected drone to the west tower
+    Say: click the west tower on the map
+  Event: the commander holds the selected drone
+    Say: click HOLD
+  Event: the commander sends the selected drone home
+    Say: click HOME
+  Event: the game runs for 2 minutes
+    Say: wait until the clock has run for 2 minutes
+
   Event: the computer commander of Blue decides
     Say: wait for the next decision of the computer commander. It decides once each second
   Event: the computer commander of Blue plays for 15 seconds

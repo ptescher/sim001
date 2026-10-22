@@ -1,0 +1,43 @@
+Feature: Commanding from the app
+  The commander app is the seat of a person. It shows the map of your team: the field, the
+  towers as your team last saw them, your drones, and the enemy drones that your team sees or
+  saw. The rest of the field is dark: that is the fog. The top bar shows the clock and the
+  score of each team.
+
+  To give an order, click a drone in the list of drones, or press its number. Then click a tower
+  on the map, and the drone goes to take it. Click anywhere else on the field, and the drone goes
+  there and circles. HOLD makes the drone circle where it is. HOME sends it back over its base.
+  The list of drones shows the order that the server has for each drone. Until you give a drone
+  an order, it circles over its base: HOME.
+
+  Expectation: The app takes the Blue seat
+    When the commander joins the game
+    Then the seat of the app is Blue
+    And the towers on the app's map are 5
+
+  Expectation: A click on a drone selects it
+    When the commander selects the first Blue drone
+    Then the selected drone is the first Blue drone
+
+  Expectation: A click on a tower sends the selected drone to take it
+    Given the selected drone is the first Blue drone
+    When the commander sends the selected drone to the west tower
+    Then the order of the first Blue drone is take the west tower
+
+  Expectation: HOLD makes the selected drone circle where it is
+    Given the selected drone is the first Blue drone
+    When the commander holds the selected drone
+    Then the order of the first Blue drone is hold
+
+  Expectation: HOME sends the selected drone back over its base
+    Given the selected drone is the first Blue drone
+    When the commander sends the selected drone home
+    Then the order of the first Blue drone is go home
+
+  Expectation: A drone sent to a tower that nobody fights for takes it
+    One drone takes a neutral tower in 20 s, but it must take off and fly there first. From the
+    Blue base to the west tower is about 370 m.
+
+    Given the order of the first Blue drone is take the west tower
+    When the game runs for 2 minutes
+    Then the west tower on the Blue map is held by Blue
