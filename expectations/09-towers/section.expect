@@ -113,7 +113,7 @@ Vocabulary:
     Shows: held by Blue: the west tower on the map turns blue
     Shows: neutral: the west tower on the map is grey
   Event: the commander joins the game
-    Say: run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`. The app starts a game server with six ArduPilot drones and takes the Blue seat. With `--red nobody`, nobody commands Red, and its drones circle over their base: a game to practise in
+    Say: wait until the top bar says BLUE COMMANDER
   Event: the commander selects the first Blue drone
     Say: click B1 in the list of drones, or press 1
   Event: the commander sends the selected drone to the west tower
@@ -146,7 +146,7 @@ Vocabulary:
   State: the Red drones that the Blue seat saw are 0..3
     Shows: at least 1: a seat that watches Blue gets Red drones when Blue sees them
   Event: two computer teams play a game of Towers
-    Say: run `cargo run --release -p recreation_towers_server -- --speedup 10`, and wait for the end of the game. The server starts six ArduPlane SITL drones, and a computer commander for each team
+    Say: wait for the end of the game. The server flies the drones with a computer commander for each team
 
   Phrase: a game of Towers is in play
     Say: start a game of Towers. All the drones stand at their bases
