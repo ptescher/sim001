@@ -1,0 +1,12 @@
+[package]
+name = "cognition_towers"
+version = "0.1.0"
+edition = "2024"
+description = "Cognition domain: the fast Towers arena. Two captains (recreation_towers commanders, in this process or each in a process of its own) play a seeded game of Towers with drones that fly their orders on their own, headless and in milliseconds"
+
+[dependencies]
+recreation_towers = { path = "../../recreation/towers" }
+fastrand = "2"
+glam = { version = "0.33", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

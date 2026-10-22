@@ -34,6 +34,8 @@ pub enum Reason {
     TestsFail,
     /// Its code changes the safety envelope.
     EnvelopeChanged,
+    /// Its code changes the rules, the referee or the fog of the game.
+    RulesChanged,
     /// Its code changes a file a strategy may not change (or a tuner changed code at all).
     OtherFiles,
     /// Its code does not build, or its arena does not run.
@@ -54,6 +56,7 @@ impl Reason {
             Reason::TestsFail => "tests fail",
             Reason::EnvelopeChanged => "envelope changed",
             Reason::OtherFiles => "other files changed",
+            Reason::RulesChanged => "rules changed",
             Reason::BuildFails => "build fails",
             Reason::Invalid => "invalid",
             Reason::NoCandidate => "no candidate",
@@ -76,6 +79,9 @@ pub struct Summary {
     pub intervention_rate: f32,
     /// How often each envelope rule fired, per executor step.
     pub rules: [f32; 6],
+    /// The sums of a game's own numbers (`GameResult::extra`).
+    #[serde(default)]
+    pub extra: std::collections::BTreeMap<String, f32>,
 }
 
 impl Summary {
@@ -99,6 +105,10 @@ impl Summary {
             bad_inputs: games.iter().map(|g| g.bad_inputs).sum(),
             intervention_rate: games.iter().map(|g| g.interventions).sum::<u32>() as f32 / steps,
             rules,
+            extra: games.iter().flat_map(|g| g.extra.iter()).fold(Default::default(), |mut m, (k, v)| {
+                *m.entry(k.clone()).or_default() += v;
+                m
+            }),
         }
     }
 }

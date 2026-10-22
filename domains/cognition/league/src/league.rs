@@ -8,10 +8,11 @@
 //! DIR/work/                  the strategies' scratch folders and worktrees (left for inspection)
 //! ```
 
-use crate::judge::{Judgement, RULES, Reason, Verdict, describe, judge};
+use crate::contest::{Code, Contest};
+use crate::judge::{Judgement, RULES, Reason, Verdict, judge};
 use crate::strategy::{Context, Proposal};
 use crate::{Entry, Strategy};
-use cognition_arena::{GameResult, play_many};
+use cognition_arena::GameResult;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -28,20 +29,6 @@ impl Default for Options {
         Options { seeds: 256 }
     }
 }
-
-/// The files a Claude engineer may change (from the top of the repository).
-pub const MAY_CHANGE: [&str; 3] = [
-    "domains/cognition/executor/src/primitives.rs",
-    "domains/cognition/executor/src/tuning.rs",
-    "domains/cognition/agent/src/scripted.rs",
-];
-
-/// The files that are the safety envelope, or what it rests on.
-pub const ENVELOPE: [&str; 3] =
-    ["domains/cognition/executor/src/lib.rs", "domains/cognition/executor/src/math.rs", "domains/cognition/plan/"];
-
-/// The tests a code change must pass.
-pub const TESTS: [&str; 4] = ["-p", "cognition_executor", "-p", "cognition_agent"];
 
 /// One generation, as written down.
 pub struct Generation {
@@ -87,6 +74,8 @@ pub struct Record {
 }
 
 pub struct League {
+    /// What it improves (the executor, a captain...).
+    pub contest: Box<dyn Contest>,
     pub dir: PathBuf,
     pub repo: PathBuf,
     pub champion: Entry,
@@ -94,23 +83,23 @@ pub struct League {
 }
 
 impl League {
-    /// The league in `dir`, or a new one whose champion is the default executor.
-    pub fn open(dir: &Path, repo: &Path) -> League {
+    /// The league of `contest` in `dir`, or a new one whose champion is the contest's default.
+    pub fn open(contest: Box<dyn Contest>, dir: &Path, repo: &Path) -> League {
         let champion = std::fs::read_to_string(dir.join("champion.json"))
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_else(|| Entry::load("default").unwrap());
+            .unwrap_or_else(|| contest.fixture("default").expect("a default"));
         let state: State = std::fs::read_to_string(dir.join("state.json"))
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
-        League { dir: dir.into(), repo: repo.into(), champion, generation: state.generation }
+        League { contest, dir: dir.into(), repo: repo.into(), champion, generation: state.generation }
     }
 
-    /// A new league in `dir` (what was there is removed), with `champion`.
-    pub fn start(dir: &Path, repo: &Path, champion: Entry) -> League {
+    /// A new league of `contest` in `dir` (what was there is removed), with `champion`.
+    pub fn start(contest: Box<dyn Contest>, dir: &Path, repo: &Path, champion: Entry) -> League {
         let _ = std::fs::remove_dir_all(dir);
-        let league = League { dir: dir.into(), repo: repo.into(), champion, generation: 0 };
+        let league = League { contest, dir: dir.into(), repo: repo.into(), champion, generation: 0 };
         league.save();
         league
     }
@@ -172,6 +161,7 @@ impl League {
                 .iter_mut()
                 .map(|s| {
                     let ctx = Context {
+                        contest: &*self.contest,
                         generation: number,
                         champion: &champion,
                         last_report: report.as_deref(),
@@ -188,6 +178,7 @@ impl League {
 
         let seeds = League::seeds(number, opts.seeds);
         let champion_games = self.play(&self.champion, None, &seeds);
+        let contest = &*self.contest;
         let mut judged: Vec<(Entry, Judgement, Option<Vec<GameResult>>)> = vec![];
         let mut per_strategy: Vec<usize> = vec![];
         for (strategy, props) in proposals {
@@ -218,7 +209,7 @@ impl League {
                     None => Ok(()),
                 };
                 let games = checked
-                    .and_then(|()| entry.candidate().map(|_| ()).map_err(|_| Reason::Invalid))
+                    .and_then(|()| entry.check(contest).map(|_| ()).map_err(|_| Reason::Invalid))
                     .and_then(|()| self.play(&entry, p.worktree.as_deref(), &seeds).map_err(|_| Reason::BuildFails));
                 match games {
                     Ok(g) => judged.push((entry, Judgement::refused(Reason::NoCandidate), Some(g))),
@@ -316,11 +307,12 @@ impl League {
         let _ = git(wt, &["add", "-A", "--", ".", ":!.league"]);
         let changed = git(wt, &["diff", "--cached", "--name-only", &base]).unwrap_or_default();
         let changed: Vec<&str> = changed.lines().filter(|l| !l.is_empty()).collect();
-        if changed.iter().any(|f| ENVELOPE.iter().any(|e| f.starts_with(e))) {
-            return Err(Reason::EnvelopeChanged);
+        let (may, protected) = (self.contest.may_change(), self.contest.protected());
+        if changed.iter().any(|f| !may.contains(f) && protected.iter().any(|p| f.starts_with(p))) {
+            return Err(self.contest.protected_reason());
         }
         let code = changed;
-        if code.iter().any(|f| !MAY_CHANGE.contains(f)) {
+        if code.iter().any(|f| !may.contains(f)) {
             return Err(Reason::OtherFiles);
         }
         if !code.is_empty() {
@@ -332,7 +324,7 @@ impl League {
             .map_err(|_| Reason::BuildFails)?;
             let tests = Command::new("cargo")
                 .args(["test", "--release", "-q"])
-                .args(TESTS)
+                .args(self.contest.tests())
                 .current_dir(wt)
                 .env("CARGO_TARGET_DIR", self.target_dir())
                 .output();
@@ -359,37 +351,26 @@ impl League {
         self.repo.join("target/league")
     }
 
-    /// Plays `entry` on `seeds`: here, if its code is this build's; else with the arena built in
-    /// its worktree (`wt`, or one made at its commit).
-    fn play(&self, entry: &Entry, wt: Option<&Path>, seeds: &[u64]) -> Result<Vec<GameResult>, String> {
-        let candidate = entry.candidate()?;
-        let Some(commit) = &entry.commit else { return Ok(play_many(&candidate, seeds)) };
-        let wt = match wt {
-            Some(w) => w.to_path_buf(),
-            None => {
-                let w = self.dir.join(format!("work/code-{}", &commit[..commit.len().min(12)]));
-                if !w.exists() {
-                    git(&self.repo, &["worktree", "add", "--detach", &w.to_string_lossy(), commit])?;
-                }
-                w
-            }
-        };
-        let file = wt.join(".league/candidate-played.json");
-        std::fs::create_dir_all(file.parent().unwrap()).map_err(|e| e.to_string())?;
-        std::fs::write(&file, serde_json::to_string(entry).unwrap()).map_err(|e| e.to_string())?;
-        let list: Vec<String> = seeds.iter().map(|s| s.to_string()).collect();
-        let out = Command::new("cargo")
-            .args(["run", "--release", "-q", "-p", "cognition_league", "--", "play", "--json", "--candidate"])
-            .arg(&file)
-            .args(["--seed-list", &list.join(",")])
-            .current_dir(&wt)
-            .env("CARGO_TARGET_DIR", self.target_dir())
-            .output()
-            .map_err(|e| e.to_string())?;
-        if !out.status.success() {
-            return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+    /// Where an entry's code is: `wt` if it has one, a worktree made at its commit if it has one,
+    /// or this build.
+    fn code(&self, entry: &Entry, wt: Option<&Path>) -> Result<Code, String> {
+        if let Some(w) = wt {
+            return Ok(Code::At(w.to_path_buf()));
         }
-        serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
+        let Some(commit) = &entry.commit else { return Ok(Code::Here) };
+        let w = self.dir.join(format!("work/code-{}", &commit[..commit.len().min(12)]));
+        if !w.exists() {
+            git(&self.repo, &["worktree", "add", "--detach", &w.to_string_lossy(), commit])?;
+        }
+        Ok(Code::At(w))
+    }
+
+    /// Plays `entry` (its code in `wt`, if it has a worktree) on `seeds`, against the champion
+    /// where the game has an opponent.
+    fn play(&self, entry: &Entry, wt: Option<&Path>, seeds: &[u64]) -> Result<Vec<GameResult>, String> {
+        let code = self.code(entry, wt)?;
+        let champion_code = self.code(&self.champion, None)?;
+        self.contest.play((entry, &code), (&self.champion, &champion_code), seeds, &self.target_dir())
     }
 
     /// The report of a generation, in Markdown.
@@ -413,7 +394,7 @@ impl League {
             seeds.first().unwrap_or(&0),
             seeds.last().unwrap_or(&0)
         );
-        let _ = writeln!(r, "Champion's games: {}.\n", describe(&crate::judge::Summary::of(champion)));
+        let _ = writeln!(r, "Champion's games: {}.\n", self.contest.describe(&crate::judge::Summary::of(champion)));
         let _ = writeln!(
             r,
             "Each challenger plays the same games. It is promoted if the mean difference in score is above 0 with 95 % confidence (shared among the challengers), and it does not crash, give bad input, leave the arena more often, or need the envelope more than {} times as often.\n",
@@ -470,7 +451,7 @@ impl League {
                 let _ = writeln!(r, "Notes from the strategy:\n\n> {}\n", e.notes.trim().replace('\n', "\n> "));
             }
             if games.is_some() {
-                let _ = writeln!(r, "Its games: {}.\n", describe(&j.challenger));
+                let _ = writeln!(r, "Its games: {}.\n", self.contest.describe(&j.challenger));
             }
             for g in games.iter().flat_map(|g| g.iter()) {
                 for c in &g.crash_log {
@@ -484,7 +465,9 @@ impl League {
                 );
             }
         }
-        let _ = writeln!(r, "Envelope rules, per executor step: {}.", RULES.join(", "));
+        if self.contest.name() == "executor" {
+            let _ = writeln!(r, "Envelope rules, per executor step: {}.", RULES.join(", "));
+        }
         r
     }
 }
@@ -492,7 +475,10 @@ impl League {
 /// The numbers `e` changed from `base`, as `name a -> b`.
 pub fn changes(base: &Entry, e: &Entry) -> Vec<String> {
     let mut out = vec![];
-    for (kind, a, b) in [("", &base.tuning, &e.tuning), ("tactics.", &base.tactics, &e.tactics)] {
+    let empty = std::collections::BTreeMap::new();
+    for (group, b) in &e.params {
+        let a = base.params.get(group).unwrap_or(&empty);
+        let kind = if group == "tuning" { String::new() } else { format!("{group}.") };
         for (name, v) in b {
             let was = a.get(name).copied();
             if was.is_none_or(|w| (w - v).abs() > 1e-6) {

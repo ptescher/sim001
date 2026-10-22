@@ -1,9 +1,12 @@
 //! The "Making the executor better" section of the suite (expectations/08-league): the real fast
-//! arena and the real league, each test in a folder of its own. The Claude strategies run a
+//! arenas (tag and Towers) and the real league, each test in a folder of its own. The Claude strategies run a
 //! stand-in for `claude` (`tests/fakes/`), which changes the code in its worktree as an engineer
 //! would; what the league does with the change (the check of the files, the tests) is real.
 
 use cognition_arena::{Candidate, GameResult, play, play_many};
+use cognition_league::contest::captain::CaptainContest;
+use cognition_league::contest::executor::ExecutorContest;
+use cognition_league::contest::{Code, Contest};
 use cognition_league::strategy::{Claude, Es};
 use cognition_league::{Entry, Generation, Judgement, League, Options, Strategy, judge};
 use expectation_harness::{Acceptance, Bindings, Progress, RunOptions};
@@ -30,6 +33,12 @@ struct World {
     last: Option<Generation>,
     /// The champion's mean score less the slow executor's, on the same seeds.
     against_slow: f64,
+    /// Towers: the champion and challenger captains, the last captain game and the default
+    /// captain's score against itself.
+    captain_champion: Entry,
+    captain_challenger: Entry,
+    towers: Option<cognition_towers::TowersResult>,
+    against_itself: f64,
 }
 
 static FOLDERS: AtomicU32 = AtomicU32::new(0);
@@ -52,11 +61,34 @@ impl World {
             judgement: None,
             last: None,
             against_slow: 0.0,
+            captain_champion: CaptainContest.fixture("default").unwrap(),
+            captain_challenger: CaptainContest.fixture("default").unwrap(),
+            towers: None,
+            against_itself: f64::NAN,
         }
     }
 
     fn league(&self) -> League {
-        League::open(&self.dir, &self.repo)
+        League::open(Box::new(ExecutorContest), &self.dir, &self.repo)
+    }
+
+    /// The captains' league, in a folder of its own beside the executor's.
+    fn captain_league(&self) -> League {
+        League::open(Box::new(CaptainContest), &self.dir.join("captain"), &self.repo)
+    }
+
+    /// A Claude engineer for captains, with a stand-in for `claude`.
+    fn claude_captain(&mut self, fake: &str) {
+        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fakes").join(fake);
+        let mut s: Vec<Box<dyn Strategy>> = vec![Box::new(Claude::engineer().with_command(script))];
+        let mut league = self.captain_league();
+        self.last = Some(league.generation(&mut s, &Options::default()));
+    }
+
+    fn captain_games(&self, a: &Entry, b: &Entry) -> Vec<GameResult> {
+        let seeds: Vec<u64> = (0..Options::default().seeds as u64).collect();
+        let target = self.repo.join("target/league");
+        CaptainContest.play((a, &Code::Here), (b, &Code::Here), &seeds, &target).unwrap()
     }
 
     fn generations(&mut self, n: usize, strategies: &mut [Box<dyn Strategy>]) {
@@ -89,6 +121,15 @@ fn entry(v: &expectation_model::Value) -> Entry {
     }
 }
 
+fn captain(v: &expectation_model::Value) -> Entry {
+    let name = if v.as_str() == Some("the timid captain") { "timid" } else { "default" };
+    CaptainContest.fixture(name).unwrap()
+}
+
+fn captain_name(e: &Entry) -> &'static str {
+    if e.name == "timid" { "the timid captain" } else { "the default captain" }
+}
+
 fn bindings() -> Bindings<World> {
     Bindings::new(World::new())
         .arrange("the champion", |w, v| w.champion = entry(v))
@@ -103,7 +144,7 @@ fn bindings() -> Bindings<World> {
         .arrange("the league", |w, v| {
             let _ = std::fs::remove_dir_all(&w.dir);
             if v.as_str() == Some("started from the slow executor") {
-                League::start(&w.dir, &w.repo, Entry::load("slow").unwrap());
+                League::start(Box::new(ExecutorContest), &w.dir, &w.repo, Entry::load("slow").unwrap());
             }
         })
         .observe("the league", |w| {
@@ -153,6 +194,7 @@ fn bindings() -> Bindings<World> {
             Some("crashed") => "it crashed",
             Some("tests fail") => "its tests fail",
             Some("envelope changed") => "it changes the envelope",
+            Some("rules changed") => "it changes the rules",
             Some(other) => other,
             None => "none",
         })
@@ -173,6 +215,40 @@ fn bindings() -> Bindings<World> {
         })
         .observe("the champion file", |w| if w.dir.join("champion.json").exists() { "written" } else { "missing" })
         .observe("the score of the champion against the slow executor", |w| w.against_slow)
+        // Captains for Towers.
+        .arrange("the champion captain", |w, v| w.captain_champion = captain(v))
+        .observe("the champion captain", |w| captain_name(&w.captain_champion))
+        .arrange("the challenger captain", |w, v| w.captain_challenger = captain(v))
+        .observe("the challenger captain", |w| captain_name(&w.captain_challenger))
+        .on("the arena plays a game of Towers between two default captains", |w| {
+            let c = || recreation_towers::Commander::new(recreation_towers::Rules::default());
+            w.towers = Some(cognition_towers::play(&mut c(), &mut c(), 1).unwrap());
+        })
+        .observe("the captain game", |w| match w.towers.as_ref().map(|r| r.outcome) {
+            Some(recreation_towers::Outcome::Won(recreation_towers::Team::Blue)) => "won by Blue",
+            Some(recreation_towers::Outcome::Won(recreation_towers::Team::Red)) => "won by Red",
+            Some(recreation_towers::Outcome::Draw) => "a draw",
+            None => "not over",
+        })
+        .observe("the drones that flew in the captain game", |w| w.towers.as_ref().map_or(0.0, |r| r.flew as f64))
+        .on("the default captain plays itself from both sides", |w| {
+            let d = CaptainContest.fixture("default").unwrap();
+            let games = w.captain_games(&d, &d);
+            w.against_itself = games.iter().map(|g| g.score.abs() as f64).fold(0.0, f64::max);
+        })
+        .observe("the score of the captain against itself", |w| w.against_itself)
+        .on("the league judges the captain challenger", |w| {
+            let champion = w.captain_games(&w.captain_champion, &w.captain_champion);
+            let challenger = w.captain_games(&w.captain_challenger, &w.captain_champion);
+            w.judgement = Some(judge(&champion, &challenger, 1));
+        })
+        .on("a Claude strategy gives a captain whose code sends every drone home", |w| {
+            w.claude_captain("captain-goes-home.sh")
+        })
+        .on("a Claude strategy gives a captain that changes the referee", |w| {
+            w.claude_captain("captain-changes-rules.sh")
+        })
+        .observe("the mean difference of the captain challenger", |w| w.judged().map_or(f64::NAN, |j| j.mean as f64))
         .on_reset(|w| *w = World::new())
         .on_advance(|_| Progress::Static)
 }

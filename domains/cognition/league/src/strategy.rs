@@ -8,10 +8,11 @@
 //!   the tactics (`league::MAY_CHANGE`). It can play the arena itself before it proposes. What it
 //!   says is not trusted: the league checks the files, runs the tests and plays the games.
 
+use crate::Entry;
+pub use crate::contest::Role;
+use crate::contest::{Contest, Group};
 use crate::judge::{Judgement, Reason, Verdict};
 use crate::league::{Record, git};
-use crate::{Entry, league};
-use cognition_arena::{Tactics, Tuning};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -19,6 +20,8 @@ use std::process::Command;
 
 /// What a strategy knows when it proposes.
 pub struct Context<'a> {
+    /// What the league improves.
+    pub contest: &'a dyn Contest,
     pub generation: u32,
     pub champion: &'a Entry,
     /// The report of the last generation (Markdown), if there was one.
@@ -87,8 +90,8 @@ impl Es {
         (-2.0 * u.ln()).sqrt() * (std::f32::consts::TAU * v).cos()
     }
 
-    fn bounds() -> Vec<(f32, f32)> {
-        Tuning::BOUNDS.iter().chain(Tactics::BOUNDS.iter()).copied().collect()
+    fn bounds(groups: &[Group]) -> Vec<(f32, f32)> {
+        groups.iter().flat_map(|g| g.bounds.iter().copied()).collect()
     }
 }
 
@@ -98,24 +101,18 @@ impl Strategy for Es {
     }
 
     fn propose(&mut self, ctx: &Context) -> Vec<Proposal> {
-        let Ok(base) = ctx.champion.candidate() else {
+        let groups = ctx.contest.groups();
+        let Ok(values) = ctx.champion.check(ctx.contest) else {
             return vec![Proposal {
                 entry: Err(Reason::Invalid),
                 worktree: None,
                 notes: "the champion is invalid".into(),
             }];
         };
-        let bounds = Es::bounds();
+        let bounds = Es::bounds(&groups);
         let hash = ctx.champion.hash();
         if self.centre.as_ref().is_none_or(|(h, _)| *h != hash) {
-            let x: Vec<f32> = base
-                .tuning
-                .to_array()
-                .iter()
-                .chain(base.tactics.to_array().iter())
-                .zip(&bounds)
-                .map(|(v, (lo, hi))| (v - lo) / (hi - lo))
-                .collect();
+            let x = values.iter().flatten().zip(&bounds).map(|(v, (lo, hi))| (v - lo) / (hi - lo).max(1e-9)).collect();
             self.centre = Some((hash, x));
         }
         let centre = self.centre.as_ref().unwrap().1.clone();
@@ -130,11 +127,9 @@ impl Strategy for Es {
                     }
                 }
                 self.last.push(x.clone());
-                let v: Vec<f32> = x.iter().zip(&bounds).map(|(x, (lo, hi))| lo + x * (hi - lo)).collect();
-                let mut c = base;
-                c.tuning = Tuning::from_array(&v[..Tuning::LEN].try_into().unwrap()).unwrap_or(base.tuning);
-                c.tactics = Tactics::from_array(&v[Tuning::LEN..].try_into().unwrap()).unwrap_or(base.tactics);
-                let mut e = Entry::new("", &c);
+                let mut v = x.iter().zip(&bounds).map(|(x, (lo, hi))| lo + x * (hi - lo));
+                let split: Vec<Vec<f32>> = groups.iter().map(|g| v.by_ref().take(g.names.len()).collect()).collect();
+                let mut e = Entry::with("", &groups, &split);
                 e.commit = ctx.champion.commit.clone();
                 let notes = format!("A step of {:.3} of each range, round the strategy's centre.", self.sigma);
                 Proposal { entry: Ok(e), worktree: None, notes }
@@ -158,15 +153,6 @@ impl Strategy for Es {
         let gained = best.first().is_some_and(|&i| judged[i].mean > 0.0);
         self.sigma = (self.sigma * if gained { 1.2 } else { 0.85 }).clamp(0.02, 0.4);
     }
-}
-
-/// What Claude does.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Role {
-    /// Proposes numbers.
-    Tuner,
-    /// May change the code of the primitives and the tactics too.
-    Engineer,
 }
 
 /// A headless Claude run.
@@ -199,10 +185,7 @@ impl Claude {
 
     /// The prompt, with the generation's facts filled in.
     fn prompt(&self, ctx: &Context, wt: &Path) -> String {
-        let template = match self.role {
-            Role::Tuner => include_str!("../prompts/tuner.md"),
-            Role::Engineer => include_str!("../prompts/engineer.md"),
-        };
+        let template = ctx.contest.prompt(self.role);
         let tried: Vec<String> = ctx
             .history
             .iter()
@@ -227,7 +210,10 @@ impl Claude {
             .replace("{{champion}}", &serde_json::to_string_pretty(ctx.champion).unwrap())
             .replace("{{report}}", ctx.last_report.unwrap_or("(This is the first generation: there is no report yet.)"))
             .replace("{{history}}", &if tried.is_empty() { "(none yet)".into() } else { tried.join("\n") })
-            .replace("{{may_change}}", &league::MAY_CHANGE.map(|f| format!("- `{f}`")).join("\n"))
+            .replace(
+                "{{may_change}}",
+                &ctx.contest.may_change().iter().map(|f| format!("- `{f}`")).collect::<Vec<_>>().join("\n"),
+            )
     }
 }
 
@@ -235,11 +221,10 @@ impl Claude {
 #[derive(Deserialize)]
 struct Suggested {
     #[serde(default)]
-    tuning: BTreeMap<String, f32>,
-    #[serde(default)]
-    tactics: BTreeMap<String, f32>,
-    #[serde(default)]
     notes: String,
+    /// Each group's numbers (`tuning`, `tactics`, `captain`...).
+    #[serde(flatten)]
+    params: BTreeMap<String, BTreeMap<String, f32>>,
 }
 
 impl Strategy for Claude {
@@ -283,7 +268,17 @@ impl Strategy for Claude {
             .args(["--allowedTools", tools])
             .args(["--max-budget-usd", &self.budget_usd.to_string()])
             .current_dir(&wt)
+            .stdin(std::process::Stdio::null())
             .env("CARGO_TARGET_DIR", ctx.repo.join("target/league"));
+        // Started from inside a Claude session (the desktop app, its terminal, Claude Code), the
+        // environment points at that session's own auth and endpoint; `claude` must use its own
+        // login instead, or it is refused (401).
+        for (name, _) in std::env::vars_os() {
+            let n = name.to_string_lossy();
+            if n.starts_with("CLAUDE") || n == "ANTHROPIC_BASE_URL" {
+                cmd.env_remove(&name);
+            }
+        }
         if let Some(m) = &self.model {
             cmd.args(["--model", m]);
         }
@@ -310,8 +305,9 @@ impl Strategy for Claude {
             .any(|l| !l.get(3..).unwrap_or("").starts_with(".league"));
         let make = |s: &Suggested| {
             let mut e = ctx.champion.clone();
-            e.tuning.extend(s.tuning.clone());
-            e.tactics.extend(s.tactics.clone());
+            for (group, numbers) in &s.params {
+                e.params.entry(group.clone()).or_default().extend(numbers.clone());
+            }
             e.notes = if s.notes.is_empty() { said.clone() } else { s.notes.clone() };
             e
         };
@@ -333,13 +329,59 @@ impl Strategy for Claude {
                 if !changed_code && suggested.is_empty() {
                     return refuse(Reason::NoCandidate, format!("no change and no candidate. It said: {said}"));
                 }
-                let s = suggested.into_iter().next().unwrap_or(Suggested {
-                    tuning: BTreeMap::new(),
-                    tactics: BTreeMap::new(),
-                    notes: String::new(),
-                });
+                let s =
+                    suggested.into_iter().next().unwrap_or(Suggested { notes: String::new(), params: BTreeMap::new() });
                 vec![Proposal { entry: Ok(make(&s)), worktree: Some(wt), notes: said }]
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A git repository with one commit, for a strategy to make worktrees in.
+    fn repo(dir: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        for args in [
+            &["init", "-q"][..],
+            &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "start"],
+        ] {
+            assert!(Command::new("git").args(args).current_dir(dir).status().unwrap().success());
+        }
+    }
+
+    #[test]
+    fn claude_runs_with_its_own_login_not_the_session_it_was_started_from() {
+        // As under the desktop app: a base URL and the session's own Claude variables.
+        // SAFETY: set before any other thread of this test reads the environment.
+        unsafe {
+            std::env::set_var("ANTHROPIC_BASE_URL", "http://localhost:1");
+            std::env::set_var("CLAUDE_CODE_OAUTH_SCOPES", "x");
+            std::env::set_var("CLAUDECODE", "1");
+        }
+        let root = std::env::temp_dir().join(format!("league-env-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (repo_dir, work) = (root.join("repo"), root.join("work"));
+        repo(&repo_dir);
+        let fake = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fakes/records-env.sh");
+        let mut s = Claude::tuner().with_command(fake);
+        let champion = Entry::load("default").unwrap();
+        let ctx = Context {
+            contest: &crate::contest::executor::ExecutorContest,
+            generation: 1,
+            champion: &champion,
+            last_report: None,
+            history: &[],
+            dir: &root,
+            work: &work,
+            repo: &repo_dir,
+        };
+        let _ = s.propose(&ctx);
+        let seen = std::fs::read_to_string(work.join("claude-tuner/.league/env.txt")).unwrap();
+        assert_eq!(seen.trim(), "", "claude was given: {seen}");
+        let _ = Command::new("git").args(["worktree", "prune"]).current_dir(&repo_dir).status();
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

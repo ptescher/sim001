@@ -1,7 +1,8 @@
-//! A candidate as the league keeps it, in JSON: the numbers by name, so that a file stays readable
-//! and survives a tuning that gains or loses a number.
+//! A candidate as the league keeps it, in JSON: its numbers by group and name (the executor's
+//! `tuning` and `tactics`, a captain's `captain`), so that a file stays readable and survives a
+//! tuning that gains or loses a number.
 
-use cognition_arena::{Candidate, Tactics, Tuning};
+use crate::contest::{Contest, Group};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -9,8 +10,6 @@ use std::collections::BTreeMap;
 pub struct Entry {
     /// Unique in the league: `g003-es-2`, `default`...
     pub name: String,
-    pub tuning: BTreeMap<String, f32>,
-    pub tactics: BTreeMap<String, f32>,
     /// The commit of its code. None: the code of the league's own build.
     #[serde(default)]
     pub commit: Option<String>,
@@ -22,114 +21,122 @@ pub struct Entry {
     /// What the strategy said it did, and why.
     #[serde(default)]
     pub notes: String,
+    /// Each group's numbers, by name.
+    #[serde(flatten)]
+    pub params: BTreeMap<String, BTreeMap<String, f32>>,
 }
 
 impl Entry {
-    pub fn new(name: &str, c: &Candidate) -> Entry {
-        let tuning = Tuning::NAMES.iter().zip(c.tuning.to_array()).map(|(n, v)| (n.to_string(), v)).collect();
-        let tactics = Tactics::NAMES.iter().zip(c.tactics.to_array()).map(|(n, v)| (n.to_string(), v)).collect();
-        Entry {
-            name: name.into(),
-            tuning,
-            tactics,
-            commit: None,
-            strategy: String::new(),
-            parent: None,
-            notes: String::new(),
-        }
+    /// An entry with each group's numbers: `(group, values in the group's order)`.
+    pub fn with(name: &str, groups: &[Group], values: &[Vec<f32>]) -> Entry {
+        let params = groups
+            .iter()
+            .zip(values)
+            .map(|(g, v)| (g.name.to_string(), g.names.iter().zip(v).map(|(n, v)| (n.to_string(), *v)).collect()))
+            .collect();
+        Entry { name: name.into(), commit: None, strategy: String::new(), parent: None, notes: String::new(), params }
     }
 
-    /// The candidate, or why not: a name it does not know, a number missing or out of bounds.
-    /// A number it leaves out is the default's.
-    pub fn candidate(&self) -> Result<Candidate, String> {
-        let base = Candidate::default_executor();
-        let mut t = base.tuning.to_array();
-        let mut k = base.tactics.to_array();
-        for (name, v) in &self.tuning {
-            let i = Tuning::NAMES.iter().position(|n| n == name).ok_or(format!("no tuning called {name}"))?;
-            t[i] = *v;
+    /// A group's numbers in the group's order, or why not: a name it does not know, or a number
+    /// out of bounds. A number it leaves out is the group's default.
+    pub fn values(&self, g: &Group) -> Result<Vec<f32>, String> {
+        let mut v = g.defaults.clone();
+        for (name, x) in self.params.get(g.name).into_iter().flatten() {
+            let i = g.names.iter().position(|n| n == name).ok_or(format!("no {} number called {name}", g.name))?;
+            v[i] = *x;
         }
-        for (name, v) in &self.tactics {
-            let i = Tactics::NAMES.iter().position(|n| n == name).ok_or(format!("no tactic called {name}"))?;
-            k[i] = *v;
+        let bad: Vec<String> = g
+            .names
+            .iter()
+            .zip(&v)
+            .zip(&g.bounds)
+            .filter(|((_, x), (lo, hi))| !(x.is_finite() && **x >= *lo && **x <= *hi))
+            .map(|((n, x), (lo, hi))| format!("{n} = {x} is outside {lo}..{hi}"))
+            .collect();
+        if bad.is_empty() { Ok(v) } else { Err(bad.join("; ")) }
+    }
+
+    /// Every group's numbers, checked.
+    pub fn check(&self, contest: &dyn Contest) -> Result<Vec<Vec<f32>>, String> {
+        let groups = contest.groups();
+        if let Some(extra) = self.params.keys().find(|k| !groups.iter().any(|g| g.name == k.as_str())) {
+            return Err(format!("no group called {extra} in the {} league", contest.name()));
         }
-        let out = |names: &[&str], a: &[f32], bounds: &[(f32, f32)]| {
-            names
-                .iter()
-                .zip(a)
-                .zip(bounds)
-                .filter(|((_, v), (lo, hi))| !(v.is_finite() && **v >= *lo && **v <= *hi))
-                .map(|((n, v), (lo, hi))| format!("{n} = {v} is outside {lo}..{hi}"))
-                .collect::<Vec<_>>()
-        };
-        let mut bad = out(&Tuning::NAMES, &t, &Tuning::BOUNDS);
-        bad.extend(out(&Tactics::NAMES, &k, &Tactics::BOUNDS));
-        if !bad.is_empty() {
-            return Err(bad.join("; "));
-        }
-        Ok(Candidate { tuning: Tuning::from_array(&t).unwrap(), tactics: Tactics::from_array(&k).unwrap() })
+        groups.iter().map(|g| self.values(g)).collect()
     }
 
     /// The hash of its numbers and code: what the reports quote.
     pub fn hash(&self) -> String {
-        let c = self.candidate().map(|c| c.tuning.hash()).unwrap_or(0);
-        let mut h: u32 = c;
-        for b in self
-            .tactics
-            .values()
-            .flat_map(|v| v.to_bits().to_le_bytes())
-            .chain(self.commit.iter().flat_map(|s| s.bytes().collect::<Vec<_>>()))
-        {
+        let mut h: u32 = 0x811c_9dc5;
+        let mut mix = |b: u8| {
             h ^= b as u32;
             h = h.wrapping_mul(0x0100_0193);
+        };
+        for (group, numbers) in &self.params {
+            group.bytes().for_each(&mut mix);
+            for (name, v) in numbers {
+                name.bytes().for_each(&mut mix);
+                v.to_bits().to_le_bytes().into_iter().for_each(&mut mix);
+            }
         }
+        self.commit.iter().flat_map(|c| c.bytes()).for_each(&mut mix);
         format!("{h:08x}")
     }
 
-    /// `default`, `slow`, or a JSON file of an entry.
-    pub fn load(name: &str) -> Result<Entry, String> {
-        match name {
-            "default" => Ok(Entry::new("default", &Candidate::default_executor())),
-            "slow" => Ok(Entry::new("slow", &Candidate::slow())),
-            path => {
-                let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-                serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
-            }
+    /// One of the contest's own entries (`default`, ...), or a JSON file of an entry.
+    pub fn load_for(contest: &dyn Contest, name: &str) -> Result<Entry, String> {
+        if let Some(e) = contest.fixture(name) {
+            return Ok(e);
         }
+        let text = std::fs::read_to_string(name).map_err(|e| format!("{name}: {e}"))?;
+        let e: Entry = serde_json::from_str(&text).map_err(|e| format!("{name}: {e}"))?;
+        e.check(contest)?;
+        Ok(e)
+    }
+
+    /// The executor league's: `default`, `slow`, or a JSON file.
+    pub fn load(name: &str) -> Result<Entry, String> {
+        Entry::load_for(&crate::contest::executor::ExecutorContest, name)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contest::executor::ExecutorContest;
+    use cognition_arena::{Candidate, Tuning};
 
     #[test]
     fn an_entry_gives_back_its_candidate() {
-        let e = Entry::new("slow", &Candidate::slow());
+        let e = Entry::load("slow").unwrap();
         assert_eq!(e.candidate(), Ok(Candidate::slow()));
         let json = serde_json::to_string(&e).unwrap();
+        assert!(json.contains(r#""tuning":{"#) && json.contains(r#""tactics":{"#), "{json}");
         assert_eq!(serde_json::from_str::<Entry>(&json).unwrap(), e);
     }
 
     #[test]
     fn a_number_left_out_is_the_default_and_a_wild_one_is_refused() {
-        let mut e = Entry::new("x", &Candidate::default_executor());
-        e.tuning.remove("k_close");
+        let mut e = Entry::load("default").unwrap();
+        e.params.get_mut("tuning").unwrap().remove("k_close");
         assert_eq!(e.candidate().unwrap().tuning.k_close, Tuning::DEFAULT.k_close);
-        e.tuning.insert("k_close".into(), 99.0);
+        e.params.get_mut("tuning").unwrap().insert("k_close".into(), 99.0);
         assert!(e.candidate().unwrap_err().contains("k_close"));
-        e.tuning.insert("warp".into(), 1.0);
+        e.params.get_mut("tuning").unwrap().insert("warp".into(), 1.0);
         assert!(e.candidate().is_err());
+        let mut e = Entry::load("default").unwrap();
+        e.params.insert("captain".into(), BTreeMap::new());
+        assert!(e.check(&ExecutorContest).is_err());
     }
 
     #[test]
     fn the_hash_follows_the_numbers_and_the_code() {
-        let a = Entry::new("a", &Candidate::default_executor());
+        let a = Entry::load("default").unwrap();
         let mut b = a.clone();
         b.name = "b".into();
         assert_eq!(a.hash(), b.hash());
         b.commit = Some("abc".into());
         assert_ne!(a.hash(), b.hash());
-        assert_ne!(a.hash(), Entry::new("s", &Candidate::slow()).hash());
+        assert_ne!(a.hash(), Entry::load("slow").unwrap().hash());
     }
 }

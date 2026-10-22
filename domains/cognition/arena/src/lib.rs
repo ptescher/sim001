@@ -121,6 +121,9 @@ pub struct GameResult {
     /// state (height, airspeed, roll, pitch) before it.
     #[serde(default)]
     pub crash_log: Vec<String>,
+    /// Numbers of a game that is not tag, by name: the league judges every game by this record.
+    #[serde(default)]
+    pub extra: std::collections::BTreeMap<String, f32>,
 }
 
 /// The score of a game for a player: its time as it, its tags, the times it was tagged, its exits

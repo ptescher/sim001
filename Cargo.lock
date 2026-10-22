@@ -2311,10 +2311,12 @@ dependencies = [
  "cognition_agent",
  "cognition_arena",
  "cognition_executor",
+ "cognition_towers",
  "expectation_harness",
  "expectation_model",
  "expectation_story",
  "fastrand",
+ "recreation_towers",
  "serde",
  "serde_json",
 ]
@@ -2337,6 +2339,17 @@ dependencies = [
  "simulation_aircraft",
  "simulation_physics",
  "simulation_sitl",
+]
+
+[[package]]
+name = "cognition_towers"
+version = "0.1.0"
+dependencies = [
+ "fastrand",
+ "glam",
+ "recreation_towers",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

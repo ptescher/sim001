@@ -157,3 +157,38 @@ Each step starts with its expectations (`expectations/07-cognition/05-league.exp
    the SITL check, tracks through `communication_air`, MLP policies as a third kind of
    candidate (the training stack in sim2real-tag.md, Phase 3), head-to-head games between
    candidates with the same code.
+
+## A second contest: captains for Towers
+
+The league is generic over a `Contest` (`domains/cognition/league/src/contest.rs`): what is
+tuned (groups of numbers with bounds), how a candidate plays, which files a Claude engineer may
+change, which ones refuse it, the tests a change must pass, and the prompts. The executor at tag
+is one; a captain at Towers (`recreation_towers::Commander`, with its `CommanderTuning`) is the
+second. Another game is a third `Contest`.
+
+| | Executor | Captain |
+| --- | --- | --- |
+| Numbers | `tuning` (37), `tactics` (7) | `captain` (`CommanderTuning`: give up, stay away, defend range, behind by) |
+| Arena | `cognition_arena`: seat 0 against the computer pilots, ~7 000x real time | `cognition_towers`: drones fly their orders on their own (take-off, a bank-limited turn, the server's 40 m orbits), the real referee and fog, ~200 000x real time |
+| Opponent | None of its own (the computer pilots) | The champion: each seed played twice, as Blue and as Red, so a side's advantage cancels; the champion against itself scores exactly 0 |
+| Score | The plan's reward for tag | +1 a win, -1 a loss, 0 a draw, plus the point margin over 500, averaged over the two sides |
+| Gates | Crashes, bad input, exits, envelope | None beyond the score (no crashes in this arena) |
+| Engineer may change | `primitives.rs`, `tuning.rs`, `scripted.rs` | `commander.rs` |
+| Refused at once | The envelope (`lib.rs`, `math.rs`, the plan crate) | The rules, referee and fog (`recreation_towers`), the server, the arena |
+| Tests | `cognition_executor`, `cognition_agent` | `recreation_towers` and `cognition_towers`, but not the commander's own (they pin today's captain; a promoted captain's spec, `09-towers/04-commander.expect`, is a person's to update) |
+| Folder | `league/` | `league/captain/` |
+
+**Code against code.** In tag the opponents do not depend on the candidate's code, so one
+build plays it. In Towers the opponent is the champion: built together, a patched captain would
+play itself. So a captain with code of its own plays as a process of its own, built from its
+worktree, on the seat's JSON lines (`cognition_league captain-seat`, `cognition_towers::serve`),
+and the champion with its own code.
+
+```bash
+cargo run --release -p cognition_league -- judge --game captain --champion timid --challenger default
+cargo run --release -p cognition_league -- run --game captain --generations 5 --strategies es,claude-tuner,claude-engineer
+```
+
+The Claude strategies run `claude` without the variables of the session they were started from
+(`ANTHROPIC_BASE_URL`, `CLAUDE*`): under the desktop app those point at its own session, and
+`claude` is refused (401). It needs a working `claude` login (`claude auth login`).
