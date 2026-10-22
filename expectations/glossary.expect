@@ -378,3 +378,7 @@ Term: Fog
 Term: Seat
   In [[Towers]], the place of a commander of a team on the game server. A computer commander
   or a person at the commander app sits in it. A seat gets only the map of its team.
+
+Term: Captain
+  The computer in the seat of a team in [[Towers]]: `recreation_towers::Commander`. It reads
+  the map of its team and gives each drone an order. The [[league]] makes better captains.

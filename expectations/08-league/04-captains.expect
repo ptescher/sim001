@@ -1,0 +1,56 @@
+Feature: Captains for Towers
+  The league also makes better [[captain]]s for [[Towers]]. A captain is the computer in the
+  seat of a team: it reads the map of its team, with the [[fog]], and gives each drone an
+  order once a second. Its numbers are its tuning: how long a drone stays in a fight that it
+  loses, how long it then stays away, and how near an enemy must come before a held tower is
+  defended. A Claude engineer can also change its code, in `commander.rs`.
+
+  Use `--game captain` with the commands of the league. The league keeps the captains in the
+  folder `league/captain`.
+
+  In the fast arena, the drones fly their orders on their own: they take off from their base,
+  turn as a T1-S turns, and circle a tower 40 m from it. The wind and the delay of each order
+  change from seed to seed. The real referee of Towers runs the game.
+
+  A challenger captain plays the champion twice on each seed: once as Blue, and once as Red.
+  Thus a side that is better than the other does not help it. Its score in a game is +1 for a
+  win, -1 for a loss and 0 for a draw, plus the points that it scored more than the other
+  team, over 500.
+
+  A captain that the Claude engineer changes in code plays as a process of its own, built from
+  its own code. The champion plays with its own code. A change to the rules, the referee or the
+  fog of Towers is refused.
+
+  Expectation: A captain game in the fast arena is a game of Towers
+    When the arena plays a game of Towers between two default captains
+    Then the drones that flew in the captain game are 6
+    And the captain game is won by Blue or won by Red or a draw
+
+  Expectation: A captain playing itself from both sides scores nothing
+    When the default captain plays itself from both sides
+    Then the score of the captain against itself is 0
+
+  Expectation: A captain that is better from both sides becomes the champion
+    Given the champion captain is the timid captain
+    And the challenger captain is the default captain
+    When the league judges the captain challenger
+    Then the verdict is promoted
+
+  Expectation: A captain that is worse stays out
+    Given the champion captain is the default captain
+    And the challenger captain is the timid captain
+    When the league judges the captain challenger
+    Then the verdict is kept out
+
+  Expectation: A captain changed in code plays with its own code
+    If the challenger played with the code of the champion, the two would be the same captain,
+    and the difference would be exactly 0.
+
+    When a Claude strategy gives a captain whose code sends every drone home
+    Then the mean difference of the captain challenger is below 0
+    And the verdict is kept out
+
+  Expectation: A captain that changes the referee stays out
+    When a Claude strategy gives a captain that changes the referee
+    Then the verdict is refused
+    And the reason is it changes the rules

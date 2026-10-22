@@ -56,10 +56,11 @@ Vocabulary:
     Shows: promoted: the league says `promoted`. The challenger is the new champion
     Shows: kept out: the league says `kept out`: the challenger is not better. The champion stays
     Shows: refused: the league says `refused` and the reason. The champion stays
-  State: the reason is none | it crashed | its tests fail | it changes the envelope
+  State: the reason is none | it crashed | its tests fail | it changes the envelope | it changes the rules
     Shows: it crashed: the reason is `crashed`
     Shows: its tests fail: the reason is `tests fail`
     Shows: it changes the envelope: the reason is `envelope changed`
+    Shows: it changes the rules: the reason is `rules changed`
 
   # The loop.
   State: the challengers in the history are 0..100000
@@ -87,3 +88,32 @@ Vocabulary:
     Say: the Claude engineer changes the code of the executor, and `cargo test -p cognition_executor` fails in its worktree
   Event: a Claude strategy gives a challenger that changes the envelope
     Say: the Claude engineer changes the safety envelope of the executor
+
+  # Captains for Towers.
+  State: the champion captain is the default captain | the timid captain
+    Shows: the default captain: the champion is the computer commander of Towers with its default numbers
+    Shows: the timid captain: the champion is a commander that gives up a contested tower after 1 s, stays away from it for 5 minutes, and does not defend
+  State: the challenger captain is the default captain | the timid captain
+    Shows: the default captain: the challenger is the computer commander with its default numbers
+    Shows: the timid captain: the challenger is the timid captain
+  State: the captain game is won by Blue | won by Red | a draw | not over
+    Shows: won by Blue: the game of Towers ends, and Blue has more points
+    Shows: won by Red: the game of Towers ends, and Red has more points
+    Shows: a draw: the game of Towers ends with equal points
+  State: the drones that flew in the captain game are 0..12
+    Shows: 6: all six drones took off and flew
+  State: the score of the captain against itself is -10..10
+    Shows: 0: on every seed, the score is exactly 0
+  State: the mean difference of the captain challenger is -10..10
+    Shows: below 0: on the same seeds, the challenger scores less than the champion
+
+  Event: the arena plays a game of Towers between two default captains
+    Say: type `cargo run --release -p cognition_league -- play --game captain --seeds 1`
+  Event: the default captain plays itself from both sides
+    Say: type `cargo run --release -p cognition_league -- judge --game captain --champion default --challenger default`
+  Event: the league judges the captain challenger
+    Say: type `cargo run --release -p cognition_league -- judge --game captain --champion CHAMPION --challenger CHALLENGER`
+  Event: a Claude strategy gives a captain whose code sends every drone home
+    Say: the Claude engineer changes `commander.rs` so that every drone goes home, and the league plays it as a process of its own
+  Event: a Claude strategy gives a captain that changes the referee
+    Say: the Claude engineer changes the rules of Towers in `recreation_towers`
