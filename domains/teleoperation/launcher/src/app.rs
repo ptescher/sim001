@@ -318,7 +318,12 @@ impl Launcher {
         match l.program(name) {
             Some(p) => (p, flags, l.data.clone()),
             None => {
-                let mut args: Vec<String> = vec!["run".into(), "--release".into(), "--".into()];
+                let mut args: Vec<String> = vec!["run".into(), "--release".into()];
+                // The root package's default binary is this launcher.
+                if name == "sim001" {
+                    args.extend(["--bin".into(), "sim001".into()]);
+                }
+                args.push("--".into());
                 args.extend(flags);
                 ("cargo".into(), args, l.home.join(crate_dir))
             }

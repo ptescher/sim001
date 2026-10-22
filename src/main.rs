@@ -1,11 +1,11 @@
 //! SIM001 flight simulator.
 //!
-//!   cargo run --release                 rasterized lighting with shadow maps, built-in flight modes
-//!   cargo run --release -- --raytrace   ray-traced lighting (Bevy Solari)
-//!   cargo run --release -- --ardupilot  physics backend for ArduPilot SITL (JSON, UDP 9002)
-//!   cargo run --release -- --selftest   headless flight-model checks
+//!   cargo run --release --bin sim001                 rasterized lighting with shadow maps, built-in flight modes
+//!   cargo run --release --bin sim001 -- --raytrace   ray-traced lighting (Bevy Solari)
+//!   cargo run --release --bin sim001 -- --ardupilot  physics backend for ArduPilot SITL (JSON, UDP 9002)
+//!   cargo run --release --bin sim001 -- --selftest   headless flight-model checks
 //!   cargo run --release -- --export-map domains/teleoperation/console/assets   map + heights for the ground station
-//!   cargo run --release -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
+//!   cargo run --release --bin sim001 -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `sim001_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --test-radio                                a TX15 stand-in that the ground station's tests move

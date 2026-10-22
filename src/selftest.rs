@@ -1,4 +1,4 @@
-//! Headless flight-model checks: `cargo run --release -- --selftest`.
+//! Headless flight-model checks: `cargo run --release --bin sim001 -- --selftest`.
 
 use simulation_physics::{self as physics, Phase};
 use crate::sim::{FlightMode, SimCore};

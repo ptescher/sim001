@@ -1,7 +1,7 @@
 //! Sensor camera: a gimballed camera under the nose, rendered offscreen and streamed to the
 //! ground station over TCP (see `teleoperation_shared::feed`) while a viewer is connected.
 //!
-//!   cargo run --release -- --ardupilot --feed          serve on 127.0.0.1:5600
+//!   cargo run --release --bin sim001 -- --ardupilot --feed          serve on 127.0.0.1:5600
 //!
 //! The viewer steers the gimbal (pan / tilt / zoom); the gimbal slews at a finite rate, like a
 //! real sensor ball. With no viewer the camera renders a tiny frame and nothing is read back.
