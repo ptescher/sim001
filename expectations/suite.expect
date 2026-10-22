@@ -27,10 +27,11 @@ Suite: SIM001
 Vocabulary:
   # The screen of the TX15 (the aviation tests and the station's tests on the serial line)
   State: the TX15 screen mode is MANUAL | FBWA | AUTO | RTL | QHOVER | QLOITER | CRUISE | QRTL
-    Set: let ArduPilot fly this mode
-    Shows: {value}: the first lamp on the screen of the TX15 shows this flight mode
+    Set: switch ArduPilot to {value}
+    Shows: the first lamp on the screen of the TX15 shows {value}
   State: the TX15 screen arming is armed | disarmed
-    Set: arm or disarm the plane
+    Set: armed: arm the plane with the arm switch (SE)
+    Set: disarmed: disarm the plane with the arm switch (SE)
     Shows: armed: the second lamp on the screen of the TX15 shows ARMED, and it is amber
     Shows: disarmed: the second lamp on the screen of the TX15 shows DISARMED, and it is dark
   State: the plane is in hand | being carried back | launching | flying | on the ground | crashed | flying the mission | flying home | loitering

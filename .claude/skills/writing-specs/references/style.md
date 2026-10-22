@@ -93,6 +93,12 @@ actor ("the plane reaches a waypoint") become "Wait until the plane reaches a wa
 - **`Set:` for states the reader changes directly.** Phrase it so `{value}` fits every value:
   "press C until the camera is {value}". With a comparison ("above 55 %"), a "to {value}"
   in the template reads "above 55 %" without the "to".
+- **A `Set:` for each value** when the actions differ: `Set: lost: switch off the TX15` and
+  `Set: up: switch on the TX15`, not one "connect the TX15, or unplug it". A `Set:` with no
+  value in front is for the other values.
+- **A `Set:` is something the reader can do.** "Let the GPS have 9 satellites" is the test
+  rig, not the reader. For what the plane or another person does, write "wait until the GPS
+  of the plane has {value} satellites" or "ask the other pilot to …".
 
 ## Shows
 
@@ -111,7 +117,9 @@ State: the battery is 0..100 %
   Shows: at least 99 %: the HUD's BAT reading is back to about 100 %
 ```
 
-Start a line with the value and a colon for one value, or a number or comparison as steps
+Do not write `Shows: {value}: …`: `{value}` is not a value, so the docs print "18: the AS
+reading is this speed". Put `{value}` in the sentence, with its unit: `Shows: the AS reading is
+{value} m/s`. Start a line with the value and a colon for one value, or a number or comparison as steps
 write it ("80 %", "at least 99 %"). A line with `{value}` and no value in front is for any
 exact value. Say where to look: the HUD, a button, a line on the map.
 

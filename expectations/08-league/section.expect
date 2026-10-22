@@ -7,8 +7,8 @@
 
 Section: Making the executor better
   In this section, the computer makes the [[executor]] better by itself. The [[league]] keeps
-  the best executor that it found: the [[champion]]. Each [[generation]], [[strategy|strategies]]
-  give new executors, the [[challenger]]s. Each challenger plays the same games as the champion
+  the best executor that it found: the [[champion]]. Each [[generation]], each [[strategy]]
+  gives new executors, the [[challenger]]s. Each challenger plays the same games as the champion
   in the [[fast arena]]. A challenger that wins clearly, and that is safe, is the new champion.
 
   An executor is its [[tuning]], the tactics of its [[ground control agent]] and its code. The
@@ -79,7 +79,7 @@ Vocabulary:
   Event: the arena plays 64 games with the default executor
     Say: type `cargo run --release -p cognition_league -- play --seeds 64`
   Event: the league judges the challenger
-    Say: type `cargo run --release -p cognition_league -- judge --champion CHAMPION --challenger CHALLENGER`. Use `default`, `slow` or the name of a JSON file
+    Say: type `cargo run --release -p cognition_league -- judge --champion slow --challenger default`, with the names of your champion and your challenger: `default`, `slow` or a JSON file
   Event: the league runs one generation with the evolution strategy
     Say: type `cargo run --release -p cognition_league -- run --generations 1 --strategies es`
   Event: the league runs 5 generations with the evolution strategy
@@ -91,9 +91,13 @@ Vocabulary:
 
   # Captains for Towers.
   State: the champion captain is the default captain | the timid captain
+    Set: the default captain: use `default` as the champion
+    Set: the timid captain: use `timid` as the champion
     Shows: the default captain: the champion is the computer commander of Towers with its default numbers
     Shows: the timid captain: the champion is a commander that gives up a contested tower after 1 s, stays away from it for 5 minutes, and does not defend
   State: the challenger captain is the default captain | the timid captain
+    Set: the default captain: use `default` as the challenger
+    Set: the timid captain: use `timid` as the challenger
     Shows: the default captain: the challenger is the computer commander with its default numbers
     Shows: the timid captain: the challenger is the timid captain
   State: the captain game is won by Blue | won by Red | a draw | not over
@@ -112,7 +116,7 @@ Vocabulary:
   Event: the default captain plays itself from both sides
     Say: type `cargo run --release -p cognition_league -- judge --game captain --champion default --challenger default`
   Event: the league judges the captain challenger
-    Say: type `cargo run --release -p cognition_league -- judge --game captain --champion CHAMPION --challenger CHALLENGER`
+    Say: type `cargo run --release -p cognition_league -- judge --game captain --champion timid --challenger default`, with the names of your champion and your challenger: `default`, `timid` or a JSON file
   Event: a Claude strategy gives a captain whose code sends every drone home
     Say: the Claude engineer changes `commander.rs` so that every drone goes home, and the league plays it as a process of its own
   Event: a Claude strategy gives a captain that changes the referee

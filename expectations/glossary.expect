@@ -382,3 +382,27 @@ Term: Seat
 Term: Captain
   The computer in the seat of a team in [[Towers]]: `recreation_towers::Commander`. It reads
   the map of its team and gives each drone an order. The [[league]] makes better captains.
+
+Term: PreArm
+  A check that ArduPilot does before it arms. If a check fails, ArduPilot does not arm, and it
+  sends a message that starts with "PreArm:" and says why.
+
+Term: ExpressLRS
+  An open radio link between a transmitter, such as the [[TX15]], and the receiver in a plane.
+  It uses the CRSF protocol, and it carries the telemetry back to the transmitter.
+
+Term: Uplink quality
+  The share of the frames from the [[TX15]] that get to the plane, from 0 % to 100 %. The
+  screen of the TX15 shows it.
+
+Term: Contested
+  In [[Towers]], a [[circle]] with drones of the two teams in it. Its control moves only for
+  the team with more drones. The map makes a contested circle flash.
+
+Term: Scout
+  In [[Towers]], a drone that flies to see the field, not to take a tower. In the rules, the
+  Red scout is the first Red drone.
+
+Term: Seed
+  The number that starts the random parts of a game in the [[fast arena]]. The same seed plays
+  the same game, so the [[league]] plays a champion and a challenger on the same seeds.

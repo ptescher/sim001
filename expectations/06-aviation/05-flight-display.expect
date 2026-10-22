@@ -1,10 +1,10 @@
 Feature: The flight display of the TX15
-  The screen of the TX15 shows the flight in the layout of the ArduPilot telemetry script of
-  Yaapu. On top are the flight mode (big, with ARMED or DISARMED beside it), the satellites,
-  the link and the battery. In the middle is an artificial horizon that banks and pitches with
-  the plane, with the airspeed, the ground speed and the heading on its left, and the height
-  above home, the climb and the distance to home on its right. The battery has a bar. The last
-  messages of ArduPilot are along the bottom: a PreArm check that fails, a new mode, a failsafe.
+  The screen of the TX15 shows the flight in the same parts as the console of the ground
+  station. Along the top is a row of lamps: the flight mode, ARMED or DISARMED, the GPS, the
+  link and the battery. In the middle is an artificial horizon that banks and pitches with the
+  plane. Beside it are monitors for the air data: the airspeed (AS), the climb (VS), the height
+  and the distance to home. The last messages of ArduPilot are along the bottom: a [[PreArm]]
+  check that fails, a new mode, a failsafe.
 
   Expectation: The screen shows the airspeed
     Given the TX15 screen airspeed is 18 m/s

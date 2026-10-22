@@ -336,7 +336,7 @@ fn every_test_of_the_section_passes_with_no_window() {
     }
     println!("{}", report.failures(&a.suite, &a.plans));
     let passed = ran.iter().filter(|(_, r)| r.status == Status::Passed).count();
-    assert!(passed >= 13, "only {passed} tests of the section ran and passed");
+    assert!(passed >= 23, "only {passed} tests of the section ran and passed");
     // The game server's tests are not this driver's: they stay "not supported yet" here.
     let not_passed: Vec<_> = ran
         .iter()
@@ -359,7 +359,7 @@ fn the_section_documents_itself_with_pictures_of_the_map() {
     } else {
         a.docs(Some(&report)).write(&out).unwrap();
     }
-    let shot = out.join("screenshots/towers--winning-a-game--two-towers-then-500-points/02.svg");
+    let shot = out.join("screenshots/towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second/01.svg");
     let svg = std::fs::read_to_string(&shot).unwrap_or_else(|e| panic!("{}: {e}", shot.display()));
     assert!(svg.contains("BLUE 20"), "the score after 10 s with two towers: {svg}");
 }

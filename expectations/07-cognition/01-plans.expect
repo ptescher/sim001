@@ -10,6 +10,10 @@ Feature: Sending plans
   511.75 m, and the radius from 0 m to 1023 m. The encoder clamps a value outside its range. In
   Rust, `cognition_plan::WirePlan::to_command` does this.
 
+  In the console of the [[runner]], type `plan PRIMITIVE NORTH EAST ALT RADIUS TTL [TARGET]`: the
+  primitive, the point in metres north and east of home, the altitude and the radius in metres,
+  the time to live in seconds, and the id of the target aircraft, if the primitive needs one.
+
   The plane answers each plan with a `COMMAND_ACK`. If the plane refuses the plan, the reason
   is in `result_param2`: 1 if the plane is not in [[AGENT mode]], 2 if the plan is malformed,
   3 if the plane has no home yet, and 4 if the plane has no [[executor]].

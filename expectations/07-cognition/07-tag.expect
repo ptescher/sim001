@@ -45,7 +45,7 @@ Feature: Tag by plan
   gets a [[go to]] plan back to the middle.
 
   The [[runner]] plays the game with three ArduPlane SITL planes. Start it with
-  `SIM001_BIN=.ardupilot-agent/build/sitl/bin cargo run --release -p cognition_runner -- --agent --speedup 10`.
+  `SIM001_BIN=.ardupilot-agent/build/sitl/bin cargo run --release -p cognition_runner -- --agent --console --speedup 10`.
   The planes take off in QHOVER and change to FBWA at 15 m. Then the ground switches them to
   AGENT mode and flies the game. Every 2 s, the runner prints the plan of each plane, in a line
   such as `Kestrel  sys 1 AGENT plan Pursue->2 #12 30m`. At ten times real time, the game takes about

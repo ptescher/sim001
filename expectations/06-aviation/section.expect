@@ -24,7 +24,8 @@ Section: The flight computer
 
 Vocabulary:
   State: the TX15 is connected | not connected
-    Set: connect the TX15 to the flight computer, or unplug it
+    Set: connected: plug the TX15 into the flight computer
+    Set: not connected: unplug the TX15
     Shows: connected: the TX15 sends its channels down the serial line 150 times a second
   State: the TX15 roll stick is -100..100 %
     Set: move the roll stick of the TX15 to {value}
@@ -35,49 +36,50 @@ Vocabulary:
   State: the TX15 arm switch is off | on
     Set: put the arm switch of the TX15 {value}
   State: the roll channel is 800..2200 us
-    Shows: {value}: the autopilot reads this pulse width on the roll channel
+    Shows: the autopilot reads {value} us on the roll channel
   State: the pitch channel is 800..2200 us
-    Shows: {value}: the autopilot reads this pulse width on the pitch channel
+    Shows: the autopilot reads {value} us on the pitch channel
   State: the throttle channel is 800..2200 us
-    Shows: {value}: the autopilot reads this pulse width on the throttle channel
+    Shows: the autopilot reads {value} us on the throttle channel
   State: the arm channel is 800..2200 us
-    Shows: {value}: the autopilot reads this pulse width on the channel of the arm switch
+    Shows: the autopilot reads {value} us on the channel of the arm switch
   State: the corrupted frames are 0..100 %
     Set: let this share of the frames on the serial line have a wrong checksum
   State: the TX15 screen battery is 0..30 V
-    Set: let the battery of the plane be at {value}
-    Shows: {value}: the screen of the TX15 shows this battery voltage
+    Set: wait until the battery of the plane is at {value}
+    Shows: the battery lamp on the screen of the TX15 shows {value} V
   State: the TX15 screen bank is -90..90 degrees
-    Set: bank the plane to {value}
-    Shows: {value}: the screen of the TX15 shows this bank
+    Set: bank the plane to {value} with the roll stick
+    Shows: the horizon on the screen of the TX15 banks {value} degrees
   State: the TX15 screen airspeed is 0..60 m/s
-    Set: let the plane fly at {value}
-    Shows: {value}: the AS reading on the screen of the TX15 is this speed
+    Set: fly the plane at {value}
+    Shows: the AS reading on the screen of the TX15 is {value} m/s
   State: the TX15 screen climb is -10..10 m/s
-    Set: let the plane climb at {value}
-    Shows: {value}: the VS reading on the screen of the TX15 is this rate, with a sign
+    Set: fly the plane so that it climbs at {value}
+    Shows: the VS reading on the screen of the TX15 is {value} m/s, with its sign
   State: the TX15 screen satellites is 0..30
-    Set: let the GPS of the plane have {value} satellites
-    Shows: {value}: the GPS reading in the top bar of the screen of the TX15 is this number
+    Set: wait until the GPS of the plane has {value} satellites
+    Shows: the GPS lamp on the screen of the TX15 shows {value} satellites
   State: the TX15 screen message is none | PreArm: Throttle (RC3) is not neutral | Mode QHOVER | Failsafe: radio lost
-    Set: let ArduPilot say {value}
+    Set: wait until ArduPilot says {value}
     Shows: none: the message lines at the bottom of the screen of the TX15 are empty
-    Shows: {value}: the newest message line at the bottom of the screen of the TX15 says this, in the colour of its severity
+    Shows: the newest message line at the bottom of the screen of the TX15 says "{value}", in the colour of its severity
   State: the TX15 uplink quality is 0..100 %
-    Shows: {value}: the screen of the TX15 shows this uplink quality
+    Shows: the link lamp on the screen of the TX15 shows an uplink quality of {value} %
   State: the ground station telemetry is silent | flowing
-    Set: let ArduPilot send, or not send, its MAVLink telemetry
+    Set: flowing: switch on the plane, so that ArduPilot sends its MAVLink telemetry
+    Set: silent: switch off the plane
     Shows: flowing: the ground station hears the HEARTBEAT of the plane
     Shows: silent: the ground station hears nothing from the plane
   State: the ground station map distance is 0..2000 m
-    Set: fly the plane this far north of home
-    Shows: {value}: the plane on the map of the ground station is this far north of home
+    Set: fly the plane {value} north of home
+    Shows: the plane on the map of the ground station is {value} m north of home
   State: the ground station command is not sent | sent
     Set: send a command to the plane from the ground station
   State: the autopilot command is not received | received
     Shows: received: ArduPilot gets the command of the ground station
   State: the ground station telemetry rate is 0..10000 bytes per second
-    Shows: {value}: the telemetry that reaches the ground station in one second
+    Shows: the ground station gets {value} bytes of telemetry each second
 
   # The setup in one line, so the manual can tell the reader what to do.
   Phrase: the TX15 is connected and the plane is at rest

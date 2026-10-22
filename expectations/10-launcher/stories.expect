@@ -33,7 +33,8 @@ Story: Picking what to launch
 
   Scenario: The VTOL at Cypress, then the station without ArduPilot
     When the launch target is SIMULATOR ONLY
-    And the place choice is CYPRESS
+    And the flight controller choice is WITH ARDUPILOT
+    When the place choice is CYPRESS
     And the ray tracing choice is on
     Then the place choice is CYPRESS
     When the pilot launches

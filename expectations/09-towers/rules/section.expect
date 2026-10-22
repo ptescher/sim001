@@ -1,0 +1,14 @@
+# The rules of Towers, run with no window by domains/recreation/towers/tests/acceptance.rs: the
+# real referee (recreation_towers::Game), with drones that the test puts where each step says.
+# The rules do not depend on how a drone flies.
+
+Section: The rules of Towers
+  These are the rules that the game server follows, whoever commands the teams. The numbers
+  are the same in a practice game in the commander app, and in the fast arena of the league.
+
+  [[Taking a tower]] and [[Fighting for a tower]] tell you how a tower changes sides.
+  [[Points and the end of the game]] tells you how to win. [[What a team sees]] tells you what
+  the fog hides. [[The computer commander]] tells you how the computer plays a team.
+
+Background:
+  Given a game of Towers is in play

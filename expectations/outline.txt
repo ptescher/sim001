@@ -7,7 +7,6 @@ Part: Getting started
   Page: installing [desktop]
   Section: The launcher
   Page: controls [desktop]
-  Section: Setting up the radio
 
 Part: Flying in the sim
   Section: The simulator
@@ -19,17 +18,16 @@ Part: Flying the VTOL
 
 Part: The ground station
   Section: Ground control station
+  Section: Setting up the radio
   Section: Other aircraft
   Page: ground-station-screens [desktop]
 
 Part: Games
   Section: Recreation
   Section: Games with ArduPilot
-
-Part: Towers
   Section: Towers
 
-Part: Flying by plan
+Part: For developers
   Section: Flying by plan
   Section: Making the executor better
 
