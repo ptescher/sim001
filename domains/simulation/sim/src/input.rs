@@ -922,7 +922,7 @@ mod switch_tests {
     fn the_example_controls_file_parses() {
         let mut radio = RadioConfig::default();
         let mut pad = GamepadConfig::default();
-        parse_config(include_str!("../controls.cfg.example"), &mut radio, &mut pad);
+        parse_config(include_str!("../../../../controls.cfg.example"), &mut radio, &mut pad);
         assert!(radio.calibrated, "the sticks are there");
         assert_eq!(radio.throttle.low, -1.0);
         assert!(radio.arm.is_some() && radio.mode.is_some(), "SE and the six buttons");

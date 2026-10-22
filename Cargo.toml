@@ -1,63 +1,23 @@
 # The repo is one Cargo workspace laid out as workspace -> domain -> module: each domain is a
 # directory under domains/, and each module in it is a crate (domains/<domain>/<module>).
-# See domains/README.md. The sim (this package) predates the layout. domains/teleoperation/console
+# See domains/README.md. domains/teleoperation/console
 # and domains/visualization/mapbuild keep their own lockfiles and build on their own.
 [workspace]
 members = ["domains/*/*", "tools/tasks", "tools/expectation"]
+default-members = [".", "domains/simulation/sim"]
 exclude = ["domains/teleoperation/console", "domains/teleoperation/command", "domains/teleoperation/launcher", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
 
 [package]
 name = "sim001"
 version = "0.1.0"
 edition = "2024"
-# `cargo run` starts the launcher (src/bin/launcher.rs); the sim is `cargo run --bin sim001`.
+# `cargo run` starts the launcher (src/bin/launcher.rs); the sim is `cargo run --bin sim001`
+# (domains/simulation/sim).
 default-run = "sim001_launch"
-
-[[bin]]
-name = "sim001"
-path = "src/main.rs"
 
 [[bin]]
 name = "sim001_launch"
 path = "src/bin/launcher.rs"
-
-[dependencies]
-teleoperation_shared = { path = "domains/teleoperation/shared" }
-# The flight model and the planes it flies: see domains/simulation.
-simulation_aircraft = { path = "domains/simulation/aircraft" }
-simulation_physics = { path = "domains/simulation/physics" }
-simulation_sitl = { path = "domains/simulation/sitl" }
-# The 3D view and the place it shows: see domains/visualization.
-visualization_engine = { path = "domains/visualization/engine" }
-visualization_world = { path = "domains/visualization/world" }
-# Games against computer pilots: see domains/recreation.
-recreation_games = { path = "domains/recreation/games" }
-# Map packs (real places): aerial photos and land cover. Same version Bevy uses.
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
-# The flight computer between the TX15 and ArduPilot: see domains/aviation.
-aviation_computer = { path = "domains/aviation/computer" }
-aviation_crsf = { path = "domains/aviation/crsf" }
-# What the radios tell the pilot about other aircraft: see domains/communication.
-communication_air = { path = "domains/communication/air" }
-communication_radio = { path = "domains/communication/radio" }
-communication_telemetry = { path = "domains/communication/telemetry" }
-communication_traffic = { path = "domains/communication/traffic" }
-# The shared look: the HUD and overlays use the same theme as the ground station and the docs.
-illustration_theme = { path = "domains/illustration/theme" }
-# Acceptance tests (`--expect`): see github.com/ptescher/expectation and expectations/.
-expectation_harness = { git = "https://github.com/ptescher/expectation" }
-expectation_model = { git = "https://github.com/ptescher/expectation" }
-expectation_story = { git = "https://github.com/ptescher/expectation" }
-expectation_service = { git = "https://github.com/ptescher/expectation" }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-hidapi = "2"
-libc = "0.2"
-objc2 = "0.6"
-objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSResponder", "NSRunningApplication"] }
-objc2-foundation = "0.3"
-objc2-game-controller = { version = "0.3.2", features = ["GCController", "GCExtendedGamepad", "GCControllerAxisInput", "GCControllerButtonInput", "GCControllerDirectionPad", "GCControllerElement", "GCPhysicalInputProfile", "GCDevice"] }
 
 # Keep `cargo run` (debug) playable: optimize dependencies, light opts for our code.
 [profile.dev]

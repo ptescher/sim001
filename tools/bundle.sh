@@ -27,7 +27,7 @@ esac
 
 if [ $build = 1 ]; then
   echo "== building the sim, the viewer, the tag runner, the expectation tool, the map builder, the console and the launcher"
-  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation
+  cargo build --release -p simulation_sim -p visualization_viewer -p cognition_runner -p expectation
   (cd domains/visualization/mapbuild && cargo build --release)
   (cd domains/teleoperation/console && cargo build --release)
   (cd domains/teleoperation/launcher && cargo build --release)

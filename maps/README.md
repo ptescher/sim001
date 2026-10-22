@@ -13,7 +13,7 @@ Besides the procedural Alpine Valley, the sim can fly real places built from fre
 cd domains/teleoperation/console && cargo run --release -- --station --map cypress
 ```
 
-The station builds the map pack the first time, which takes a few minutes to download. It starts ArduPilot SITL with its home at the place's pilot box, then opens the sim, the sensor feed and the console on that map. The sim can also fly a map on its own: `cargo run --release -- --map berkeley`.
+The station builds the map pack the first time, which takes a few minutes to download. It starts ArduPilot SITL with its home at the place's pilot box, then opens the sim, the sensor feed and the console on that map. The sim can also fly a map on its own: `cargo run --release --bin sim001 -- --map berkeley`.
 
 ## Where the data comes from
 

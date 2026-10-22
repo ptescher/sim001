@@ -2,11 +2,11 @@
 # Wraps the release sim in a macOS app bundle that declares itself a game, which is what lets
 # macOS turn on Game Mode for it (it also needs the sim to be full screen: --fullscreen or F11).
 # Game Mode can't be asked for from code. Usage:
-#   cargo build --release && tools/macos-app.sh && open "target/release/SIM001.app" --args --fullscreen
+#   cargo build --release -p simulation_sim && tools/macos-app.sh && open "target/release/SIM001.app" --args --fullscreen
 set -e
 cd "$(dirname "$0")/.."
 bin=target/release/sim001
-[ -x "$bin" ] || { echo "build the sim first: cargo build --release" >&2; exit 1; }
+[ -x "$bin" ] || { echo "build the sim first: cargo build --release -p simulation_sim" >&2; exit 1; }
 app="target/release/SIM001.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"

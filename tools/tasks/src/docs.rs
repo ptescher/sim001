@@ -83,7 +83,7 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     towers.may_fail = true;
     out.push(towers);
 
-    out.push(cargo("build the sim", root, &["build", "--release"], 900));
+    out.push(cargo("build the sim", root, &["build", "--release", "-p", "simulation_sim"], 900));
     let sim_plain = Step { name: "the sim", program: sim.clone(), args: s(&["--expect", "--docs", &docs_arg]), dir: root.to_path_buf(), env: vec![], limit: Duration::from_secs(480), may_fail: true };
     out.push(sim_plain);
     // The VTOL on its own: ArduPilot flies it (the sim asks the harness for ArduPilot).

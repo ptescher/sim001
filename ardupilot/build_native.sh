@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds ArduPlane SITL natively (no Docker), into .ardupilot/ in the repo. The sim starts it
-# itself when you fly a plane with a flight controller: `cargo run --release` (the T1-S VTOL).
+# itself when you fly a plane with a flight controller: `cargo run --release --bin sim001` (the T1-S VTOL).
 # One time, a few minutes: it clones ArduPilot (shallow, with its submodules), applies our patch
 # series (ardupilot/patches/, the AGENT mode) and compiles the simulator. Needs Python 3 and a
 # C++ compiler (Xcode's command line tools on a Mac).
