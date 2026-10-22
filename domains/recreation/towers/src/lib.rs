@@ -11,6 +11,7 @@
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
 
 mod commander;
+pub mod flight;
 pub mod seat;
 mod view;
 

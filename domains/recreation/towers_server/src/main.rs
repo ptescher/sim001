@@ -24,6 +24,7 @@ use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
 use std::net::UdpSocket;
 use std::path::{Path, PathBuf};
 use std::process::Child;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use world::World;
@@ -41,12 +42,16 @@ struct Args {
     seat_port: u16,
     first_instance: u16,
     people: [bool; 2],
+    /// Teams nobody commands.
+    nobody: [bool; 2],
+    stop_with_stdin: bool,
 }
 
 fn args() -> Args {
     let args: Vec<String> = std::env::args().collect();
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     let person = |name: &str| arg(name).is_some_and(|v| v == "person");
+    let nobody = |name: &str| arg(name).is_some_and(|v| v == "nobody");
     Args {
         speedup: arg("--speedup").and_then(|s| s.parse().ok()).unwrap_or(1.0),
         timeout: arg("--timeout").and_then(|s| s.parse().ok()).unwrap_or(3600),
@@ -54,6 +59,8 @@ fn args() -> Args {
         seat_port: arg("--seat-port").and_then(|s| s.parse().ok()).unwrap_or(recreation_towers::seat::PORT),
         first_instance: arg("--first-instance").and_then(|s| s.parse().ok()).unwrap_or(30),
         people: [person("--blue"), person("--red")],
+        nobody: [nobody("--blue"), nobody("--red")],
+        stop_with_stdin: args.iter().any(|a| a == "--stop-with-stdin"),
     }
 }
 
@@ -163,8 +170,20 @@ fn main() {
     let home = cognition_agent::parse_home(launch::HOME).expect("the SITL home");
     let mut ground = ground::Ground::connect(&names, &ports, home);
     let mut commanders: Vec<(Team, Commander)> =
-        Team::BOTH.into_iter().filter(|t| !a.people[t.index()]).map(|t| (t, Commander::new(rules))).collect();
+        Team::BOTH
+        .into_iter()
+        .filter(|t| !a.people[t.index()] && !a.nobody[t.index()])
+        .map(|t| (t, Commander::new(rules)))
+        .collect();
 
+    let stop = Arc::new(AtomicBool::new(false));
+    if a.stop_with_stdin {
+        let stop = stop.clone();
+        std::thread::spawn(move || {
+            let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
+            stop.store(true, Ordering::SeqCst);
+        });
+    }
     let start = Instant::now();
     let (mut last_send, mut last_report) = (Instant::now(), Instant::now());
     let mut next_decision = 0.0;
@@ -239,6 +258,12 @@ fn main() {
             println!("RESULT taken_red={}", w.taken[1]);
             drop(w);
             std::thread::sleep(Duration::from_millis(500));
+            drop(fleet);
+            return;
+        }
+        if stop.load(Ordering::SeqCst) {
+            println!("the input closed: stopping");
+            drop(w);
             drop(fleet);
             return;
         }

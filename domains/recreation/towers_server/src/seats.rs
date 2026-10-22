@@ -47,7 +47,12 @@ impl Seats {
     /// Sends every seat what it may know of the game now; drops the seats that have gone.
     pub fn send(&self, world: &World) {
         let game = &world.game;
-        let views = [game.view(Team::Blue), game.view(Team::Red)].map(|v| seat::encode(&ToSeat::View(v)));
+        let views = [game.view(Team::Blue), game.view(Team::Red)].map(|mut v| {
+            for d in &mut v.drones {
+                d.order = world.orders[game.drone(v.team, d.k)];
+            }
+            seat::encode(&ToSeat::View(v))
+        });
         let truth = seat::encode(&ToSeat::Truth(Truth::of(game)));
         self.clients.lock().unwrap().retain_mut(|c| {
             let line = match c.join {

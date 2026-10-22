@@ -8,14 +8,13 @@
 use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
 use recreation_games::{Preflight, Radio, mode_slot};
+use recreation_towers::flight::{ORBIT_RADIUS, orbit_height};
 use recreation_towers::{Game, Order, Phase as Referee, Rules, Team};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::{Environment, Flat, FlightState, Phase, Start, step};
 
 /// A crashed drone is back at its base this long after the crash (s).
 pub const RESPAWN: f32 = 15.0;
-/// How far out a drone circles what it is sent to (m): inside a tower's circle of 60 m.
-pub const ORBIT_RADIUS: f32 = 40.0;
 /// Each plan is good for this long (s); the ground sends a new one about once a second.
 pub const PLAN_TTL: f32 = 3.0;
 
@@ -46,12 +45,6 @@ pub fn base_start(rules: &Rules, team: Team, k: usize) -> Start {
     Start { pos: to_world(at, 0.0), heading }
 }
 
-/// The height drone `k` of `team` circles at (m): each its own, 4 m apart, so that drones at the
-/// same tower are apart above and below.
-pub fn orbit_height(team: Team, k: usize) -> f32 {
-    40.0 + 8.0 * k as f32 + if team == Team::Red { 4.0 } else { 0.0 }
-}
-
 /// The plan for drone `i` (its index in the game) to carry out `order`, with home at (`lat`,
 /// `lon`).
 pub fn plan_for(game: &Game, i: usize, order: Order, home: (f64, f64), id: u16) -> WirePlan {
@@ -74,7 +67,8 @@ pub struct World {
     pub planes: Vec<FlightState>,
     preflight: Vec<Preflight>,
     down_for: Vec<f32>,
-    /// Each drone's order (by its index in the game).
+    /// Each drone's order (by its index in the game). Until its seat gives it one, a drone circles
+    /// over its base.
     pub orders: Vec<Option<Order>>,
     /// GO: when the drones' own time (drone 0's, s) gets here, the game starts.
     pub go: f64,
@@ -96,7 +90,7 @@ impl World {
             planes,
             preflight: vec![Preflight::default(); n],
             down_for: vec![0.0; n],
-            orders: vec![None; n],
+            orders: vec![Some(Order::Home); n],
             go,
             crashes: 0,
             taken: [0; 2],
@@ -238,12 +232,9 @@ mod tests {
     }
 
     #[test]
-    fn drones_at_the_same_tower_circle_at_different_heights() {
-        let mut heights: Vec<f32> =
-            [Team::Blue, Team::Red].iter().flat_map(|&t| (0..3).map(move |k| orbit_height(t, k))).collect();
-        heights.sort_by(f32::total_cmp);
-        assert!(heights.windows(2).all(|w| w[1] - w[0] >= 4.0), "{heights:?}");
-        assert!(heights[0] >= 30.0 && heights[5] <= 100.0);
+    fn a_drone_with_no_order_from_its_seat_circles_over_its_base() {
+        let w = world();
+        assert!(w.orders.iter().all(|o| *o == Some(Order::Home)), "{:?}", w.orders);
     }
 
     #[test]

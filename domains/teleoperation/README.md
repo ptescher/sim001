@@ -5,6 +5,7 @@ The pilot's end of the link: the TX15 and its EdgeTX settings, and the ground co
 | Path | What it holds |
 | --- | --- |
 | [console/](console/README.md) | `teleoperation_console` (binary `sim001_gcs`): the GPUI console with a PFD, a tactical map, mission planning and the sensor feed. Excluded from the workspace: it keeps its own lockfile |
+| [command/](command/README.md) | `teleoperation_command` (binary `sim001_command`): the commander app of Towers, a person's seat on the game server (`recreation_towers_server`). Excluded from the workspace: it keeps its own lockfile |
 | [shared/](shared) | `teleoperation_shared`: what the sim and the console both use, the sensor feed wire protocol and the window layout planner. No dependencies |
 | [edgetx/](edgetx) | The radio's SD card as files: `MODELS/` (the T1S VTOL model), an empty `RADIO/` (the radio's own settings folder; the SD card has one) and `THEMES/` (SIM001 Night and SIM001 Day, generated from the shared theme by `cargo run -p illustration_theme --example edgetx`) |
 
