@@ -2,7 +2,7 @@
 
 Use this page when you start the programs from a terminal. The launcher ([[The launcher]]) sets these for you.
 
-## The sim (`cargo run --release -- …`)
+## The sim (`cargo run --release --bin sim001 -- …`)
 
 | Option | What it does |
 | --- | --- |

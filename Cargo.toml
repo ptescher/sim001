@@ -10,6 +10,16 @@ exclude = ["domains/teleoperation/console", "domains/teleoperation/command", "do
 name = "sim001"
 version = "0.1.0"
 edition = "2024"
+# `cargo run` starts the launcher (src/bin/launcher.rs); the sim is `cargo run --bin sim001`.
+default-run = "sim001_launch"
+
+[[bin]]
+name = "sim001"
+path = "src/main.rs"
+
+[[bin]]
+name = "sim001_launch"
+path = "src/bin/launcher.rs"
 
 [dependencies]
 teleoperation_shared = { path = "domains/teleoperation/shared" }

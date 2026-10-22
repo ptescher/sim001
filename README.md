@@ -15,7 +15,8 @@ There are two planes (`--aircraft`):
 
   ```bash
   ardupilot/build_native.sh        # once: builds ArduPlane SITL natively into .ardupilot/ (no Docker)
-  cargo run --release              # the VTOL, with its own ArduPilot
+  cargo run --release                           # the launcher (set up controllers, start the sim or the station)
+  cargo run --release --bin sim001              # the VTOL, with its own ArduPilot
   ```
 
   Without a native build the sim uses the Docker image `sim001-ardupilot-sitl` if it is built. For missions and the console, start the whole station, which starts the sim, the ground control console and ArduPilot together:
@@ -27,9 +28,9 @@ There are two planes (`--aircraft`):
 - **`t1s-ranger`:** the plain T1-S. It has only a receiver and two ESCs, no flight controller, so it has no ArduPilot, no console and one flight mode (MANUAL). Fly it from the keyboard or a radio:
 
   ```bash
-  cargo run --release -- --aircraft t1s-ranger              # rasterized, with shadow maps
-  cargo run --release -- --aircraft t1s-ranger --raytrace   # ray traced (Apple Silicon M3/M4 or other hardware RT)
-  cargo run --release -- --selftest                         # headless flight-model numbers
+  cargo run --release --bin sim001 -- --aircraft t1s-ranger              # rasterized, with shadow maps
+  cargo run --release --bin sim001 -- --aircraft t1s-ranger --raytrace   # ray traced (Apple Silicon M3/M4 or other hardware RT)
+  cargo run --release --bin sim001 -- --selftest                         # headless flight-model numbers
   ```
 
 `rust-toolchain.toml` pins Rust 1.99, which Bevy 0.20 needs. rustup installs it automatically.
@@ -46,7 +47,7 @@ Besides the Alpine Valley, the sim flies real places built from USGS lidar eleva
 
 ```bash
 cd domains/teleoperation/console && cargo run --release -- --station --map cypress   # builds the map pack the first time
-cargo run --release -- --map berkeley                     # the sim alone
+cargo run --release --bin sim001 -- --map berkeley                     # the sim alone
 ```
 
 See [maps/README.md](maps/README.md) for the data, licenses and how to add a place.
@@ -140,7 +141,7 @@ ArduPlane SITL ──servo PWM (UDP 9002)──▶ sim001 ──JSON: IMU, attit
 1. Start the sim as the physics backend:
 
    ```bash
-   cargo run --release -- --ardupilot
+   cargo run --release --bin sim001 -- --ardupilot
    ```
 
 2. Start ArduPlane SITL. The script builds a Docker image the first time, which takes about 15 minutes:
@@ -202,13 +203,13 @@ Each feature is written there as Given/When/Then expectations in a shared vocabu
 
 ```bash
 cargo run -p expectation -- check expectations        # conflicts, coverage, story problems (no window)
-cargo run --release -- --expect                           # run the tests in the sim window
-cargo run --release -- --expect --docs docs               # ...and rewrite docs/ from the results
+cargo run --release --bin sim001 -- --expect                           # run the tests in the sim window
+cargo run --release --bin sim001 -- --expect --docs docs               # ...and rewrite docs/ from the results
 (cd domains/teleoperation/console && cargo run --release -- --station --expect --docs ../../../docs)   # the same for the console (needs Docker)
 cargo run -p expectation -- docs expectations docs    # rewrite docs/ from the saved results
 cargo run --release -p sim001_tasks -- docs                # every runner in turn, with a time limit on each, then the docs
 cargo run --release -p sim001_tasks -- pack-docs          # the manual's results and screenshots, packed into site/ for Pages
-cargo run --release -- --aircraft t1s-vtol --direct --expect --docs docs   # the sim's tests for a plane with a flight controller (ArduPilot beside it)
+cargo run --release --bin sim001 -- --aircraft t1s-vtol --direct --expect --docs docs   # the sim's tests for a plane with a flight controller (ArduPilot beside it)
 ```
 
 The domains' own tests (what the radios tell the station, the flight computer and the TX15's screen, the view of a real plane) run with no window, and `SIM001_DOCS=docs cargo test --release -p communication_radio -p aviation_computer -p visualization_telemetry --test acceptance` puts their results and pictures in the docs beside the others. The TX15's screen is drawn as an SVG from the same layout as its widget. Each runner keeps its own results in `docs/results/`, and the docs merge them. Time limits: `SIM001_EXPECT_TIMEOUT` (the sim's, 40 s a test) and `SIM001_EXPECT_SPEED` (how much faster than real time the sim runs for them, 8).
