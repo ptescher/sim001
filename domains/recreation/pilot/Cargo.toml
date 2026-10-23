@@ -7,4 +7,4 @@ description = "Recreation domain: the computer pilot, which flies a T1-S through
 [dependencies]
 simulation_aircraft = { path = "../../simulation/aircraft" }
 simulation_physics = { path = "../../simulation/physics" }
-glam = "0.33"
+glam.workspace = true

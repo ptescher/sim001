@@ -6,5 +6,4 @@ description = "Aviation domain: the TX15's end of the serial line as a driver (s
 
 [dependencies]
 aviation_computer = { path = "../computer" }
-aviation_crsf = { path = "../crsf" }
 simulation_aircraft = { path = "../../simulation/aircraft" }

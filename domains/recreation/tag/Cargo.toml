@@ -5,4 +5,4 @@ edition = "2024"
 description = "Recreation domain: the game of tag and its referee: who is it, tags, no tag-backs, the arena and the scores"
 
 [dependencies]
-glam = "0.33"
+glam.workspace = true

@@ -6,6 +6,10 @@ The pilot's end of the link: the TX15 and its EdgeTX settings, and the ground co
 | --- | --- |
 | [console/](console/README.md) | `teleoperation_console` (binary `sim001_gcs`): the GPUI console with a PFD, a tactical map, mission planning and the sensor feed. Excluded from the workspace: it keeps its own lockfile |
 | [command/](command/README.md) | `teleoperation_command` (binary `sim001_command`): the commander app of Towers, a person's seat on the game server (`recreation_towers_server`). Excluded from the workspace: it keeps its own lockfile |
+| [launcher/](launcher/README.md) | `teleoperation_launcher` (binary `sim001_launcher`, also `cargo run --release` at the root): the GPUI window that sets up controllers and starts the sim, the station, a game of Towers or the manual build. Excluded from the workspace: it keeps its own lockfile |
+| [core/](core) | `teleoperation_core`: the station without a screen (the MAVLink link, the vehicle's state, the map geometry, the debug log), shared by the console, the launcher and the iOS app |
+| [ios/](ios) | `teleoperation_ios`: the station for iOS, a static library and C interface for the SwiftUI app in `ios/App` |
+| [ios_driver/](ios_driver) | `teleoperation_ios_driver` (binary `sim001_ios_expect`): runs the expectation suite against the iOS station in the Simulator |
 | [shared/](shared) | `teleoperation_shared`: what the sim and the console both use, the sensor feed wire protocol and the window layout planner. No dependencies |
 | [edgetx/](edgetx) | The radio's SD card as files: `MODELS/` (the T1S VTOL model), an empty `RADIO/` (the radio's own settings folder; the SD card has one) and `THEMES/` (SIM001 Night and SIM001 Day, generated from the shared theme by `cargo run -p illustration_theme --example edgetx`) |
 

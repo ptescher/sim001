@@ -6,5 +6,5 @@ description = "Cognition domain: the ground control agent. A brain decides a pla
 
 [dependencies]
 cognition_plan = { path = "../plan" }
-glam = "0.33"
-mavlink = { version = "0.19", default-features = false, features = ["std", "transport-tcp", "dialect-ardupilotmega", "dialect-common", "mav2-message-extensions"] }
+glam.workspace = true
+mavlink = { workspace = true, features = ["transport-tcp", "dialect-ardupilotmega"] }

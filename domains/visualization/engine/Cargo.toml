@@ -9,7 +9,7 @@ visualization_world = { path = "../world" }
 simulation_aircraft = { path = "../../simulation/aircraft" }
 simulation_physics = { path = "../../simulation/physics" }
 illustration_theme = { path = "../../illustration/theme" }
-bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+bevy.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"

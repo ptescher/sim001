@@ -19,7 +19,7 @@ ffi-static = ["cognition_plan/ffi-static"]
 # The acceptance tests (tests/acceptance.rs): the section "Flying by plan" with no window, the
 # ground's wire format and its scripted brain.
 cognition_agent = { path = "../agent" }
-expectation_harness = { git = "https://github.com/ptescher/expectation" }
-expectation_model = { git = "https://github.com/ptescher/expectation" }
-expectation_story = { git = "https://github.com/ptescher/expectation" }
-glam = "0.33"
+expectation_harness.workspace = true
+expectation_model.workspace = true
+expectation_story.workspace = true
+glam.workspace = true

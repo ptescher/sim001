@@ -6,10 +6,9 @@ description = "Visualization domain: a real plane's MAVLink telemetry (home, pos
 
 [dependencies]
 communication_telemetry = { path = "../../communication/telemetry" }
-mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }
-glam = "0.33"
+mavlink.workspace = true
+glam.workspace = true
 
 [dev-dependencies]
-expectation_harness = { git = "https://github.com/ptescher/expectation" }
-expectation_model = { git = "https://github.com/ptescher/expectation" }
-expectation_story = { git = "https://github.com/ptescher/expectation" }
+expectation_harness.workspace = true
+expectation_story.workspace = true

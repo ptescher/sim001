@@ -7,5 +7,5 @@ description = "Communication domain: MAVLink messages about other aircraft (posi
 [dependencies]
 communication_remoteid = { path = "../remoteid" }
 communication_traffic = { path = "../traffic" }
-mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }
+mavlink.workspace = true
 num-traits = "0.2"

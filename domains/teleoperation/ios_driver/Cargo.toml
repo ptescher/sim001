@@ -5,9 +5,9 @@ edition = "2024"
 description = "Runs the expectation suite against the iOS ground station in the Simulator: state through the app's control server, touches and screenshots through an XCUITest bridge"
 
 [dependencies]
-expectation_harness = { git = "https://github.com/ptescher/expectation" }
-expectation_model = { git = "https://github.com/ptescher/expectation" }
-expectation_story = { git = "https://github.com/ptescher/expectation" }
+expectation_harness.workspace = true
+expectation_model.workspace = true
+expectation_story.workspace = true
 
 [[bin]]
 name = "sim001_ios_expect"

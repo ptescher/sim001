@@ -10,9 +10,8 @@ cognition_executor = { path = "../executor" }
 cognition_plan = { path = "../plan" }
 recreation_games = { path = "../../recreation/games" }
 recreation_pilot = { path = "../../recreation/pilot" }
-recreation_tag = { path = "../../recreation/tag" }
 simulation_aircraft = { path = "../../simulation/aircraft" }
 simulation_physics = { path = "../../simulation/physics" }
-fastrand = "2"
-glam = "0.33"
-serde = { version = "1", features = ["derive"] }
+fastrand.workspace = true
+glam.workspace = true
+serde.workspace = true

@@ -10,4 +10,4 @@ recreation_racing = { path = "../racing" }
 recreation_tag = { path = "../tag" }
 simulation_aircraft = { path = "../../simulation/aircraft" }
 simulation_physics = { path = "../../simulation/physics" }
-glam = "0.33"
+glam.workspace = true
