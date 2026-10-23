@@ -7,6 +7,7 @@ cd domains/teleoperation/launcher && cargo run --release
 ```
 
 - **Launch:** the simulator alone, or the whole ground station (sim, ArduPilot SITL and the console). *With ArduPilot* flies the T1-S VTOL (the station, or the sim, which starts its own ArduPilot). *Without* flies the plain T1-S Ranger in the sim, and in the station runs `--direct`: your sticks fly the plane through the sim's own modes while ArduPilot only reports. Pick the place, ray tracing, full screen or skipping the rebuild.
+- **Towers:** *Towers* starts the commander app of [Towers](../command/README.md) on a game of your own (`sim001_command --serve`): you command Blue, Red is the computer (or *Red: nobody* for a practice game), and *Drone cameras* turns the 3D view and the pictures from the drones on or off. It needs the AGENT build of ArduPlane. It is not in the app bundle yet, so the button is hidden there.
 - **Controllers:** lists the USB joysticks and gamepads that are plugged in and what `controls.cfg` maps. *Set up controller* starts the sim with `--calibrate`, which opens the radio wizard (F2) as soon as it sees a controller, and the wizard saves `controls.cfg`.
 - **Docs:** renders the manual from the specs and the last saved results (`expectation docs`), opens it, or re-runs the tests first (`cargo run --release -p sim001_tasks -- docs --no-station`).
 - **Log:** the output of the one program running. Stop (or closing the launcher) ends it and everything it started. The SITL Docker container, if the station started one, is left to the station.

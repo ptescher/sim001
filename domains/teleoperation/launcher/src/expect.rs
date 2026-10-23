@@ -16,8 +16,8 @@ use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screen
 use expectation_model::{Event, Value, Variable};
 use expectation_story::Status as TestStatus;
 use gpui::{
-    App, AppContext as _, Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput, Point,
-    Window, WindowHandle,
+    App, AppContext as _, Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
+    PlatformInput, Point, Window, WindowHandle,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -44,6 +44,8 @@ const STATES: &[&str] = &[
     "the flight controller choice",
     "the place choice",
     "the ray tracing choice",
+    "the red team",
+    "the drone cameras choice",
     "the launch button",
     "the program in the log",
     "the program",
@@ -51,12 +53,16 @@ const STATES: &[&str] = &[
     "the sticks of the started station",
     "the place of the started program",
     "the ray tracing of the started program",
+    "the red team of the started game",
+    "the drone cameras of the started game",
     "the controls file",
 ];
 
 /// The states a Given can arrange.
 const ARRANGED: &[&str] = &[
     "the launch target",
+    "the red team",
+    "the drone cameras choice",
     "the flight controller choice",
     "the place choice",
     "the ray tracing choice",
@@ -67,7 +73,14 @@ const ARRANGED: &[&str] = &[
 ];
 
 /// The choices a step can set.
-const SETTABLE: &[&str] = &["the launch target", "the flight controller choice", "the place choice", "the ray tracing choice"];
+const SETTABLE: &[&str] = &[
+    "the launch target",
+    "the flight controller choice",
+    "the place choice",
+    "the ray tracing choice",
+    "the red team",
+    "the drone cameras choice",
+];
 
 const EVENTS: &[&str] = &[
     "the pilot launches",
@@ -109,6 +122,8 @@ struct Seen {
     flight_controller: bool,
     map: Option<String>,
     raytrace: bool,
+    red_computer: bool,
+    cameras: bool,
     busy: bool,
     /// The job's title, command line and whether it still runs.
     job: Option<(String, String, bool)>,
@@ -122,6 +137,8 @@ impl Seen {
             flight_controller: l.choices.flight_controller,
             map: l.choices.map.clone(),
             raytrace: l.choices.raytrace,
+            red_computer: l.choices.red_computer,
+            cameras: l.choices.cameras,
             busy: l.busy(),
             job: l.job.as_ref().map(|j| (j.title.clone(), j.command(), j.running())),
             mapped: l.mapping.exists,
@@ -140,7 +157,13 @@ impl Seen {
     fn read(&self, subject: &str) -> Result<Value, String> {
         let s = |v: &str| Ok(Value::from(v));
         match subject.to_lowercase().as_str() {
-            "the launch target" => s(if self.target == Target::Sim { "SIMULATOR ONLY" } else { "GROUND STATION" }),
+            "the launch target" => s(match self.target {
+                Target::Sim => "SIMULATOR ONLY",
+                Target::Station => "GROUND STATION",
+                Target::Towers => "TOWERS",
+            }),
+            "the red team" => s(if self.red_computer { "COMPUTER" } else { "NOBODY" }),
+            "the drone cameras choice" => s(if self.cameras { "on" } else { "off" }),
             "the flight controller choice" => {
                 s(if self.flight_controller { "WITH ARDUPILOT" } else { "WITHOUT ARDUPILOT" })
             }
@@ -151,6 +174,7 @@ impl Seen {
                 None => "nothing",
                 Some(t) if t.starts_with("Simulator") => "the simulator",
                 Some(t) if t.starts_with("Ground station") => "the ground station",
+                Some(t) if t.starts_with("Towers") => "the Towers game",
                 Some("Controller setup") => "the radio wizard",
                 Some("Render the docs") => "the manual build",
                 Some(t) => return Err(format!("the log names {t}")),
@@ -180,6 +204,13 @@ impl Seen {
             } else {
                 "the Alpine Valley"
             }),
+            "the red team of the started game" => {
+                if !self.has("--serve") {
+                    return Err(format!("the started program is not the Towers app: {}", self.command()));
+                }
+                s(if self.has("nobody") { "nobody" } else { "the computer" })
+            }
+            "the drone cameras of the started game" => s(if self.has("--no-cameras") { "off" } else { "on" }),
             "the ray tracing of the started program" => s(if self.has("--raytrace") { "on" } else { "off" }),
             "the controls file" => s(if self.mapped { "mapped" } else { "missing" }),
             other => Err(format!("can't observe {other}")),
@@ -267,7 +298,19 @@ impl LauncherDriver {
     fn choose(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
         let want = text(value);
         let id = match var.subject.to_lowercase().as_str() {
-            "the launch target" => if want == "SIMULATOR ONLY" { "t-sim" } else { "t-station" }.to_string(),
+            "the launch target" => match want.as_str() {
+                "SIMULATOR ONLY" => "t-sim",
+                "TOWERS" => "t-towers",
+                _ => "t-station",
+            }
+            .to_string(),
+            "the red team" => if want == "COMPUTER" { "red-computer" } else { "red-nobody" }.to_string(),
+            "the drone cameras choice" => {
+                if self.seen()?.cameras == (want == "on") {
+                    return Ok(());
+                }
+                "cams".to_string()
+            }
             "the flight controller choice" => if want == "WITH ARDUPILOT" { "fc-on" } else { "fc-off" }.to_string(),
             "the place choice" if want == "ALPINE VALLEY" => "map-none".to_string(),
             "the place choice" => format!("map-{}", want.to_lowercase()),

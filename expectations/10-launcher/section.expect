@@ -8,7 +8,7 @@
 Section: The launcher
   On: desktop
   The launcher is the window that you start SIM001 from. It starts the sim alone, or the whole
-  ground station. It also sets up your controllers and opens this manual. In the app bundle,
+  ground station, or a game of Towers. It also sets up your controllers and opens this manual. In the app bundle,
   open `SIM001.app`. From source, type `cargo run --release` in the top folder of the repository.
 
   The window has four screens. LAUNCH starts the sim or the station. CONTROLLERS lists the
@@ -26,9 +26,15 @@ Section: The launcher
 
 Vocabulary:
   # The choices on the LAUNCH screen: the lit button of each pair.
-  State: the launch target is SIMULATOR ONLY | GROUND STATION
+  State: the launch target is SIMULATOR ONLY | GROUND STATION | TOWERS
     Set: click {value}
     Shows: the {value} button is lit green
+  State: the Red team is COMPUTER | NOBODY
+    Set: click RED: {value}
+    Shows: the RED: {value} button is lit green
+  State: the drone cameras choice is on | off
+    Set: click DRONE CAMERAS until it is {value}
+    Shows: on: the DRONE CAMERAS button is lit green
   State: the flight controller choice is WITH ARDUPILOT | WITHOUT ARDUPILOT
     Set: click {value}
     Shows: the {value} button is lit green
@@ -44,10 +50,11 @@ Vocabulary:
 
   # The program that the launcher started, as the LOG screen shows it: its name, its state,
   # and its command line in the first line of the log.
-  State: the program in the log is nothing | the simulator | the ground station | the radio wizard | the manual build
+  State: the program in the log is nothing | the simulator | the ground station | the Towers game | the radio wizard | the manual build
     Shows: nothing: the LOG screen says "Nothing running"
     Shows: the simulator: the name of the program on the LOG screen starts with "Simulator"
     Shows: the ground station: the name of the program on the LOG screen starts with "Ground station"
+    Shows: the Towers game: the name of the program on the LOG screen starts with "Towers"
     Shows: the radio wizard: the LOG screen says "Controller setup"
     Shows: the manual build: the LOG screen says "Render the docs"
   State: the program is idle | running | stopped
@@ -60,6 +67,12 @@ Vocabulary:
   State: the sticks of the started station are through ArduPilot | direct
     Shows: through ArduPilot: the command in the first line of the log has `--station`, and not `--direct`
     Shows: direct: the command in the first line of the log has `--station --direct`
+  State: the Red team of the started game is the computer | nobody
+    Shows: the computer: the command in the first line of the log has `--serve`, and not `--red nobody`
+    Shows: nobody: the command in the first line of the log has `--serve --red nobody`
+  State: the drone cameras of the started game are on | off
+    Shows: on: the command in the first line of the log has `--serve`, and not `--no-cameras`
+    Shows: off: the command in the first line of the log has `--no-cameras`
   State: the place of the started program is the Alpine Valley | Cypress | Berkeley
     Shows: the Alpine Valley: the command in the first line of the log has no `--map`
     Shows: Cypress: the command in the first line of the log has `--map cypress`
