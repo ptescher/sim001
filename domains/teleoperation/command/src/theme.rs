@@ -35,6 +35,8 @@ pub const RED: u32 = P.warning.0;
 /// What a team sees, and the fog over the rest.
 pub const FIELD: u32 = 0x1d2a1f;
 pub const FOG: u32 = 0x07090a;
+/// The light over the ground that a team sees, on the picture of the valley.
+pub const SIGHT: u32 = 0xc8ffd0;
 /// The ground: the lanes cut through the forest, and the lake.
 pub const LANE: u32 = 0x33463a;
 pub const LAKE: u32 = 0x1d3b52;

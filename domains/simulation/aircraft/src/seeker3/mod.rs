@@ -16,9 +16,12 @@ use std::f32::consts::PI;
 
 /// Half the width between the motors across the frame (m): 139 mm diagonal.
 const ARM_X: f32 = 0.049;
-/// Where the front and the rear motors are, behind the CG (m, -Z is forward): a deadcat.
-const FRONT_Z: f32 = -0.040;
-const REAR_Z: f32 = 0.058;
+/// Where the front and the rear motors are from the CG (m, -Z is forward). The real front arms are
+/// shorter than the rear ones (a deadcat: the props stay out of the camera), but the CG is under
+/// the middle of the four motors: ArduPilot's mixer takes equal thrust at the four for a level
+/// hover, and with the CG anywhere else the quad has to lean against a steady pitch torque.
+const FRONT_Z: f32 = -0.049;
+const REAR_Z: f32 = 0.049;
 const MOTOR_Y: f32 = 0.012;
 const PROP_RADIUS: f32 = 0.0381;
 
@@ -50,7 +53,7 @@ pub fn params() -> AircraftParams {
     let contacts =
         layout.iter().map(|&(x, z, _, _)| ContactPoint { pos: Vec3::new(x, -0.022, z), prop: None }).collect();
     AircraftParams {
-        // 175 g and an 850 mAh 4S pack.
+        // 175 g and a 4S pack: 2500 mAh, so that it flies a game of Towers (8 min) on one charge.
         mass: 0.28,
         inertia: Vec3::new(0.00040, 0.00070, 0.00045),
         surfaces: vec![],
@@ -62,7 +65,7 @@ pub fn params() -> AircraftParams {
         servo_rate: 600.0 * crate::t1s_ranger::geom::DEG,
         battery_cells: 4.0,
         battery_hv: false,
-        battery_capacity_mah: 850.0,
+        battery_capacity_mah: 2500.0,
         battery_resistance: 0.04,
         start: StartStyle::Ground { rest_height: 0.022 },
         flight_controller: true,

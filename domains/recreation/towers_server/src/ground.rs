@@ -1,8 +1,8 @@
 //! The ground's side of each drone, over MAVLink, as the runner's ground control agent does it:
 //! once a drone has taken off and flies on the wing, switch it to AGENT; then send it the plan for
-//! its order about once a second (a light drone, a quadcopter, has no wing for AGENT to fly: it is
-//! switched to GUIDED and sent to the point of its plan),  and the other drones as traffic twice a second, so that its
-//! executor keeps clear of them.
+//! its order about once a second, and the other drones as traffic twice a second, so that its
+//! executor keeps clear of them. A light drone, a quadcopter, has no wing for AGENT to fly: it is
+//! switched to QLOITER and flown by the server's radio (`world::hover_sticks`).
 
 use crate::world::{World, plan_for};
 use cognition_agent::Craft;
@@ -18,8 +18,8 @@ const PLAN_EVERY: f64 = 1.0;
 const TRAFFIC_EVERY: f64 = 0.5;
 /// Ask for AGENT again if the drone is not in it this long after asking (s, the drones' time).
 const ASK_AGAIN: f64 = 1.0;
-/// ArduPlane's GUIDED, which hovers (QGUIDED) on a quadplane with `Q_GUIDED_MODE`.
-pub const GUIDED_MODE: u32 = 15;
+/// ArduPlane's QLOITER: the hover that the radio's sticks move.
+pub const QLOITER_MODE: u32 = 19;
 /// `MAV_CMD_DO_SET_MODE`.
 const MAV_CMD_DO_SET_MODE: u16 = 176;
 
@@ -33,7 +33,7 @@ const UP_THERE: f32 = 42.0;
 
 struct Drone {
     name: String,
-    /// The mode the ground flies it in: AGENT, or GUIDED for a drone with no wing.
+    /// The mode the ground flies it in: AGENT, or QLOITER for a drone with no wing.
     mode: u32,
     link: Option<Link>,
     /// The floor the drone's envelope has been told.
@@ -59,8 +59,6 @@ pub struct Ground {
 struct Sends {
     modes: Vec<usize>,
     plans: Vec<(usize, WirePlan)>,
-    /// The drones that fly by GUIDED: the point of their plan.
-    gotos: Vec<(usize, WirePlan)>,
     floors: Vec<(usize, f32)>,
     traffic: Vec<(usize, Traffic)>,
 }
@@ -108,15 +106,6 @@ impl Ground {
                 self.drones[i].send_errors += 1;
             }
         }
-        for (i, plan) in sends.gotos {
-            let d = &mut self.drones[i];
-            if let Some(link) = &d.link {
-                if link.goto(plan.lat, plan.lon, plan.alt).is_err() {
-                    d.send_errors += 1;
-                }
-                d.plan = Some(plan);
-            }
-        }
         for (i, floor) in sends.floors {
             let d = &mut self.drones[i];
             if let Some(link) = &d.link {
@@ -162,16 +151,16 @@ impl Ground {
         if now >= self.next_plans {
             self.next_plans = now + PLAN_EVERY;
             for (i, d) in self.drones.iter_mut().enumerate().filter(|(i, _)| wing[*i] && agent[*i]) {
+                // A drone with no wing is flown by the radio, not by plans.
+                if d.mode == QLOITER_MODE {
+                    continue;
+                }
                 let order = w.orders[i].unwrap_or(Order::Home);
                 d.plan_id = d.plan_id.wrapping_add(1).max(1);
                 let plan = plan_for(&w.game, i, order, w.lows[i], (self.home.0, self.home.1), d.plan_id);
                 // A plan under the treetops needs the low floor. One over them the high floor, once the
                 // drone is up there: a drone that is still climbing out has the low one, or its
                 // envelope would fly it straight ahead and up, wherever it points.
-                if d.mode == GUIDED_MODE {
-                    sends.gotos.push((i, plan));
-                    continue;
-                }
                 let floor = if plan.alt < w.game.rules.treetop {
                     LOW_FLOOR
                 } else if w.game.drones[i].alt >= UP_THERE {

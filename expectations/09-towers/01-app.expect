@@ -65,7 +65,7 @@ Feature: Commanding from the app
 
   Expectation: CAMERAS shows the camera of each drone
     When the commander joins the game
-    Then the camera feeds in the app are 3
+    Then the camera feeds in the app are 5
 
   Expectation: A click on a camera selects its drone
     When the commander clicks the camera of the second Blue drone

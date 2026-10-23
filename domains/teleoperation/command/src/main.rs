@@ -9,6 +9,7 @@
 mod cameras;
 mod draw;
 mod expect;
+mod ground;
 mod seat;
 mod server;
 mod snapshot;
@@ -77,6 +78,10 @@ fn main() {
             eprintln!("{e}");
             std::process::exit(2);
         }
+        if cameras_on && let Err(e) = server::ensure_map(&ground::assets_dir()) {
+            // The map still works, on the plain ground.
+            eprintln!("{e}");
+        }
         match server::Server::start(&server_args, cameras_on) {
             Ok(s) => Arc::new(Mutex::new(Some(s))),
             Err(e) => {
@@ -118,6 +123,8 @@ fn main() {
         }
     });
 
+    // The picture of the valley under the map, if it has been exported.
+    let ground = ground::Ground::load(&ground::assets_dir()).map(Arc::new);
     let stop = server.clone();
     Application::new().run(move |cx: &mut App| {
         // The server (and its drones) stop with the app.
@@ -140,9 +147,9 @@ fn main() {
             focus: true,
             ..Default::default()
         };
-        let (seat, cameras) = (seat.clone(), cameras.clone());
+        let (seat, cameras, ground) = (seat.clone(), cameras.clone(), ground.clone());
         let window = cx
-            .open_window(options, |window, cx| cx.new(|cx| ui::CommanderView::new(seat, cameras, window, cx)))
+            .open_window(options, |window, cx| cx.new(|cx| ui::CommanderView::new(seat, cameras, ground, window, cx)))
             .expect("open the window");
         if let Some(config) = expect_config {
             expect::start(cx, window, config);

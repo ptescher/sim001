@@ -160,8 +160,8 @@ Vocabulary:
     Set: select B1, and click LOW until it is {value}
     Shows: low: the list of drones shows LOW beside the order of B1
     Shows: high: the list of drones shows the order of B1 with no LOW
-  State: the camera feeds in the app are 0..3
-    Shows: 3: CAMERAS shows the picture from the camera of each Blue drone, beside its name
+  State: the camera feeds in the app are 0..5
+    Shows: 5: CAMERAS shows the picture from the camera of each Blue drone, beside its name
   Event: the game runs for 2 minutes
     Say: wait until the clock has run for 2 minutes
   Event: the game runs for 3 minutes

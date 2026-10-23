@@ -46,6 +46,13 @@ Q_M_HOVER_LEARN 2
 Q_M_SPIN_ARM 0.05
 Q_M_SPIN_MIN 0.10
 
+# Airspeeds (on top of the T1-S's 11, 15 and 22): the Cruza is heavier on a wing that is not as
+# much bigger, so it stalls at about 12 m/s and the AGENT mode's envelope, which flies between
+# AIRSPEED_MIN + AGENT_ASPD_MRG and AIRSPEED_MAX and cruises at AIRSPEED_CRUISE, has to be told.
+AIRSPEED_MIN 13
+AIRSPEED_CRUISE 17
+AIRSPEED_MAX 26
+
 # Flying. Below Q_ASSIST_SPEED (just under the stall speed) the rotors help in forward flight.
 Q_ASSIST_SPEED 11
 # GUIDED hovers (QGUIDED) instead of flying forward, so VTOL TKOF leaves the plane hovering.

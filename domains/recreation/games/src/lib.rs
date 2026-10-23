@@ -39,6 +39,15 @@ const DOWN_TIME: f32 = 3.0;
 /// With an autopilot, how high a computer pilot climbs in a hover before it flies on the wing
 /// (m above the ground).
 const TAKEOFF_HEIGHT: f32 = 15.0;
+/// A heavy plane (over this mass, kg) sinks further while the wing takes over, so it climbs higher
+/// first (m above the ground).
+const HEAVY_MASS: f32 = 2.0;
+const HEAVY_TAKEOFF_HEIGHT: f32 = 40.0;
+
+/// How high a plane of `params` climbs in a hover before it transitions.
+fn takeoff_height(params: &AircraftParams) -> f32 {
+    if params.mass > HEAVY_MASS { HEAVY_TAKEOFF_HEIGHT } else { TAKEOFF_HEIGHT }
+}
 /// With an autopilot, how long it holds its arm switch on before it decides the plane will not
 /// arm yet, and how long it waits before it tries again (s).
 const ARM_TRY: f32 = 3.0;
@@ -194,7 +203,7 @@ impl Preflight {
     /// What the radio sends for the next `dt` of the preflight, for the plane `state` of `params`
     /// at `agl` above the ground; `None` once it is on the wing, when the pilot flies it in FBWA.
     pub fn radio(&mut self, params: &AircraftParams, state: &FlightState, agl: f32, dt: f32) -> Option<Radio> {
-        let (qhover, fbwa) = (mode_slot(params, "QHOVER"), mode_slot(params, "FBWA"));
+        let (qhover, fbwa) = (mode_slot(params, "QHOVER"), flying_slot(params));
         let props = params.motors.iter().zip(&state.spool).any(|(m, &spool)| m.lift && spool > 0.03);
         let off = Radio { sticks: Controls::default(), arm: false, mode: qhover };
         let on =
@@ -207,8 +216,8 @@ impl Preflight {
             Stage::Resting(t) if t > ARM_REST => Stage::Arming(0.0),
             Stage::Resting(t) => Stage::Resting(t + dt),
             // A plane with no wing (a quadcopter) has nothing to transition to: it is up.
-            Stage::Climbing if agl > TAKEOFF_HEIGHT && params.surfaces.is_empty() => Stage::Flying,
-            Stage::Climbing if agl > TAKEOFF_HEIGHT => Stage::Transition(0.0),
+            Stage::Climbing if agl > takeoff_height(params) && params.surfaces.is_empty() => Stage::Flying,
+            Stage::Climbing if agl > takeoff_height(params) => Stage::Transition(0.0),
             Stage::Transition(t) if t > 3.0 && state.airspeed > 15.0 => Stage::Flying,
             Stage::Transition(t) => Stage::Transition(t + dt),
             stage => stage,
@@ -217,7 +226,9 @@ impl Preflight {
             Stage::Cold | Stage::Resting(_) => Some(off),
             Stage::Arming(_) => Some(on(0.0, qhover)),
             // Above the middle of the stick, QHOVER climbs.
-            Stage::Climbing => Some(on(0.9, qhover)),
+            // (A quadcopter has 6 times its weight in thrust: it climbs gently, or it cannot hold
+            // its attitude.)
+            Stage::Climbing => Some(on(if params.surfaces.is_empty() { 0.6 } else { 0.9 }, qhover)),
             // Wings level and a little nose up while the wing takes over.
             Stage::Transition(_) => Some(Radio {
                 sticks: Controls { elevator: 0.2, throttle: 1.0, ..Default::default() },
@@ -232,6 +243,14 @@ impl Preflight {
 /// The slot of the mode switch that gives `mode` on the plane `params`.
 pub fn mode_slot(params: &AircraftParams, mode: &str) -> usize {
     params.rc_modes.iter().position(|m| *m == mode).unwrap_or(0)
+}
+
+/// The slot of the mode switch that a plane flies in once it is up: FBWA, or for a plane with no
+/// wing (no FBWA) QLOITER. It must not be the slot of QHOVER, or the switch does not move after a
+/// crash and the autopilot stays in the mode the ground put it in.
+pub fn flying_slot(params: &AircraftParams) -> usize {
+    let slot = mode_slot(params, "FBWA");
+    if params.rc_modes.contains(&"FBWA") { slot } else { mode_slot(params, "QLOITER") }
 }
 
 /// The computer pilots' planes and autopilots, when they fly with them.

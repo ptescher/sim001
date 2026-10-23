@@ -34,18 +34,24 @@ Q_M_HOVER_LEARN 2
 Q_M_SPIN_ARM 0.05
 Q_M_SPIN_MIN 0.10
 
-# No wing: the rotors always fly it.
-Q_ASSIST_SPEED 0
+# No wing: the rotors always fly it. ArduPlane will not arm a quadplane with Q_ASSIST_SPEED 0
+# ("Q_ASSIST_SPEED is not set"), so it is 1 m/s: assist only ever helps in a forward flight mode,
+# and this one flies in GUIDED (QGUIDED) and the Q modes.
+Q_ASSIST_SPEED 1
 Q_GUIDED_MODE 1
 Q_ANGLE_MAX 3500
 Q_VELZ_MAX 400
 Q_PILOT_SPD_UP 300
 Q_PILOT_SPD_DN 200
-Q_WP_SPEED 1200
+Q_WP_SPEED 600
+Q_WP_ACCEL 200
+Q_P_POSXY_P 0.6
 
-# A 4S 850 mAh pack. The voltage failsafes are off, as on the VTOL: a hard climb sags the pack.
-BATT_CAPACITY 850
-BATT_LOW_MAH 170
-BATT_CRT_MAH 70
+# A 4S pack, 2500 mAh so that a game's 8 minutes in the air do not drain it (a real 850 mAh one
+# would). The failsafes are off, as on the VTOL (a hard climb sags the pack, and
+# with the capacity ones on a drone that flew a game could not arm again after a crash).
+BATT_CAPACITY 2500
+BATT_LOW_MAH 0
+BATT_CRT_MAH 0
 BATT_LOW_VOLT 0
 BATT_CRT_VOLT 0

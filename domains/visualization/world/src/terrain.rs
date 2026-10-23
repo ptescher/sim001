@@ -75,9 +75,10 @@ pub fn site_title() -> String {
 
 const ALPINE_PILOT_POS: Vec3 = Vec3::new(10.0, 0.0, 20.0);
 
-/// The pilot box (ArduPilot's home).
+/// The pilot box (ArduPilot's home). On a real place and on the Towers field it is the origin: the
+/// field's centre is home, so that the game, its maps and the ground station share one frame.
 pub fn pilot_pos() -> Vec3 {
-    if real().is_some() { Vec3::ZERO } else { ALPINE_PILOT_POS }
+    if real().is_some() || arena().is_some() { Vec3::ZERO } else { ALPINE_PILOT_POS }
 }
 
 /// Launch heading as a rotation about +Y (0 = facing north / -Z).
@@ -189,6 +190,10 @@ pub fn lake_factor(x: f32, z: f32) -> f32 {
         return 9.0;
     }
     let d = Vec2::new(x, z) - lake_center();
+    // The Towers lake is the game's circle: what the referee and the maps say is water is water.
+    if arena().is_some() {
+        return d.length() / lake_radius();
+    }
     let a = d.y.atan2(d.x);
     let wobble = 1.0
         + 0.22 * gradient_noise(a.cos() * 1.6 + 4.0, a.sin() * 1.6 - 2.0)

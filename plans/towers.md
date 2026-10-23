@@ -111,6 +111,15 @@ Settled on the way:
 - The app keeps the server's input open (`--stop-with-stdin`): when the app quits, or dies, or a
   test starts a fresh game, the server stops its six ArduPlanes. Killing the server itself would
   leave them running.
+- The light drone (Seeker 3, B5) has no wing, so no AGENT: the server flies it by the radio's sticks
+  in QLOITER (`world::hover_sticks`). ArduPlane would not arm it with `Q_ASSIST_SPEED 0`, and a
+  GUIDED reposition of a wingless quad flies it like a plane. The heavy drone (T2 Cruza, B4) climbs
+  to 40 m before it transitions and has its own airspeeds (`t2-cruza.parm`); at 15 m it sank under
+  the AGENT floor and flew into the ground.
+- The map under the commander's field is the 3D view's own ground: `towers_view --export-map DIR`
+  (the commander app does it into `domains/teleoperation/command/assets`) writes the sim's
+  `terrain_map.png` format, with the field's centre (SITL's home) as the origin, so the ground
+  station (`--assets` that directory) draws it where the game and the cameras have it.
 - A drone's order echoes back in its team's map, so the app shows what the server has. Until its
   seat orders it, a drone circles over its base (HOME). `--red nobody` makes a practice game.
 - The app copies the console's drawing helpers and look (`draw.rs`, `theme.rs`): the console is

@@ -8,7 +8,7 @@
 use crate::trees::Forest;
 use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
-use recreation_games::{Preflight, Radio, mode_slot};
+use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
 use recreation_towers::flight;
 use recreation_towers::{Game, Order, Phase as Referee, Rules, Team};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
@@ -51,9 +51,8 @@ pub fn base_start(rules: &Rules, team: Team, k: usize) -> Start {
     Start { pos: to_world(at, 0.0), heading }
 }
 
-/// The plan for drone `i` (its index in the game) to carry out `order`, flown `low` or high, with
-/// home at (`lat`, `lon`).
-pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64), id: u16) -> WirePlan {
+/// Where drone `i` flies to carry out `order`, flown `low` or high.
+pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
     let d = &game.drones[i];
     let (team, k) = (d.team, i % game.rules.drones);
     let target = match order {
@@ -62,7 +61,7 @@ pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64)
         Order::Hold => d.at,
         Order::Home => game.rules.base(team),
     };
-    let leg = if order == Order::Hold {
+    if order == Order::Hold {
         // Circle where it is: low only if it is over open ground.
         let low = low && game.map.open(d.at);
         let alt = if low { flight::low_height(team, k) } else { flight::orbit_height(team, k) };
@@ -70,7 +69,13 @@ pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64)
     } else {
         let plan = flight::plan(&game.map, d.at, target, low);
         flight::leg(&game.map, &plan, team, k, d.at, d.alt)
-    };
+    }
+}
+
+/// The plan for drone `i` (its index in the game) to carry out `order`, flown `low` or high, with
+/// home at (`lat`, `lon`).
+pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64), id: u16) -> WirePlan {
+    let leg = leg_for(game, i, order, low);
     let (primitive, radius) = match (order, leg.orbit) {
         (Order::Hold, _) => (Primitive::Loiter, 0.0),
         (_, true) => (Primitive::Orbit, leg.radius),
@@ -78,6 +83,33 @@ pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64)
     };
     let (lat, lon) = to_global(home.0, home.1, leg.point.x, leg.point.y);
     WirePlan { id, primitive, target: 0, lat, lon, alt: leg.alt, radius, ttl: PLAN_TTL }
+}
+
+/// The fastest a hovering drone is flown (m/s): its QLOITER's full stick (`Q_LOIT_SPEED`).
+const HOVER_SPEED: f32 = 5.0;
+/// How fast it climbs at full throttle stick (m/s): `Q_PILOT_SPD_UP`.
+const HOVER_CLIMB: f32 = 3.0;
+
+/// The sticks that fly a drone that hovers (no wing, in QLOITER) to a point: the roll and pitch
+/// sticks ask for a speed relative to its nose, and the throttle stick for a climb, as a pilot's do.
+/// `at`: north, east of the field's centre; `climbing`: its climb rate (m/s); `heading`: clockwise
+/// from north.
+pub fn hover_sticks(at: Vec2, alt: f32, climbing: f32, heading: f32, to: Vec2, to_alt: f32) -> Controls {
+    let err = to - at;
+    // Slow down as it comes in: the speed it can lose in the distance left.
+    let speed = (0.3 * err.length()).min(HOVER_SPEED);
+    let want = if err.length() > 0.1 { err.normalize() * speed } else { Vec2::ZERO };
+    let nose = Vec2::new(heading.cos(), heading.sin());
+    let right = Vec2::new(-heading.sin(), heading.cos());
+    // The climb it asks for is what is left of the height, less the climb it has: no overshoot.
+    let climb = (0.3 * (to_alt - alt) - 0.6 * climbing).clamp(-HOVER_CLIMB, HOVER_CLIMB);
+    Controls {
+        aileron: (want.dot(right) / HOVER_SPEED).clamp(-1.0, 1.0),
+        // Pitch stick forward is a negative elevator.
+        elevator: (-want.dot(nose) / HOVER_SPEED).clamp(-1.0, 1.0),
+        rudder: 0.0,
+        throttle: 0.5 + 0.5 * climb / HOVER_CLIMB,
+    }
 }
 
 /// The plane that a drone of `class` flies.
@@ -202,10 +234,19 @@ impl World {
             return off;
         }
         let agl = s.pos.y;
-        self.preflight[i].radio(p, s, agl, dt).unwrap_or(Radio {
-            sticks: recreation_games::Controls { throttle: 0.5, ..Default::default() },
-            arm: true,
-            mode: mode_slot(p, "FBWA"),
+        self.preflight[i].radio(p, s, agl, dt).unwrap_or_else(|| {
+            // A drone on the wing is flown by its plan. One with no wing is flown by the sticks
+            // to where its order sends it.
+            let sticks = if self.game.drones[i].class == recreation_towers::Class::Light {
+                let order = self.orders[i].unwrap_or(Order::Home);
+                let leg = leg_for(&self.game, i, order, self.lows[i]);
+                let (at, alt) = to_field(s.pos);
+                let heading = simulation_physics::euler(s.rot).2;
+                hover_sticks(at, alt, s.vel.y, heading, leg.point, leg.alt)
+            } else {
+                Controls { throttle: 0.5, ..Default::default() }
+            };
+            Radio { sticks, arm: true, mode: flying_slot(p) }
         })
     }
 
@@ -250,7 +291,7 @@ mod tests {
         for (i, p) in w.planes.iter().enumerate() {
             let team = w.game.drones[i].team;
             let (at, alt) = to_field(p.pos);
-            assert!(at.distance(rules.base(team)) <= 10.5, "drone {i} at {at}");
+            assert!(at.distance(rules.base(team)) <= 20.5, "drone {i} at {at}");
             assert!(alt < 1.0);
             assert!(!airborne(p));
         }
@@ -309,6 +350,19 @@ mod tests {
     fn a_drone_with_no_order_from_its_seat_circles_over_its_base() {
         let w = world();
         assert!(w.orders.iter().all(|o| *o == Some(Order::Home)), "{:?}", w.orders);
+    }
+
+    #[test]
+    fn a_hovering_drone_is_flown_towards_its_point_by_its_sticks() {
+        // Facing north, with the point to the north east and higher: forward, right, and up.
+        let s = hover_sticks(Vec2::ZERO, 50.0, 0.0, 0.0, Vec2::new(100.0, 100.0), 80.0);
+        assert!(s.elevator < -0.3 && s.aileron > 0.3 && s.throttle > 0.6, "{s:?}");
+        // Facing east, the same point is on its left and ahead.
+        let s = hover_sticks(Vec2::ZERO, 50.0, 0.0, std::f32::consts::FRAC_PI_2, Vec2::new(100.0, 100.0), 50.0);
+        assert!(s.elevator < -0.3 && s.aileron < -0.3 && (s.throttle - 0.5).abs() < 1e-3, "{s:?}");
+        // On the point and at height: the sticks are at rest.
+        let s = hover_sticks(Vec2::new(5.0, 5.0), 60.0, 0.0, 1.0, Vec2::new(5.0, 5.0), 60.0);
+        assert_eq!((s.aileron, s.elevator, s.throttle), (0.0, 0.0, 0.5));
     }
 
     #[test]

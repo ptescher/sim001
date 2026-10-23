@@ -191,9 +191,9 @@ fn main() {
     println!("{n} SITL drones starting at {}x; seats on tcp {}", a.speedup, a.seat_port);
     let names: Vec<String> = (0..n).map(|i| name(&rules, i)).collect();
     let ports: Vec<u16> = (0..n as u16).map(|i| launch::MAVLINK_PORT + 10 * (a.first_instance + i)).collect();
-    // Light drones have no wing for AGENT to fly: they are flown by GUIDED.
+    // Light drones have no wing for AGENT to fly: they are flown by the radio, in QLOITER.
     let modes: Vec<u32> = (0..n)
-        .map(|i| if rules.class(i % rules.drones) == Class::Light { ground::GUIDED_MODE } else { ground::AGENT_MODE })
+        .map(|i| if rules.class(i % rules.drones) == Class::Light { ground::QLOITER_MODE } else { ground::AGENT_MODE })
         .collect();
     let home = cognition_agent::parse_home(launch::HOME).expect("the SITL home");
     let mut ground = ground::Ground::connect(&names, &modes, &ports, home);

@@ -34,6 +34,21 @@ pub fn build(cameras: bool) -> Result<(), String> {
     if ok { Ok(()) } else { Err("the game server did not build".into()) }
 }
 
+/// Makes the map's picture of the valley if there is none yet (`towers_view --export-map`: it is
+/// drawn from the 3D view's own world, so that it is the ground of the game). Needs the view built.
+pub fn ensure_map(dir: &Path) -> Result<(), String> {
+    if dir.join("terrain_map.png").exists() && dir.join("terrain_map.txt").exists() {
+        return Ok(());
+    }
+    let ok = Command::new(root().join("target/release/towers_view"))
+        .arg("--export-map")
+        .arg(dir)
+        .status()
+        .map_err(|e| format!("can't export the map: {e}"))?
+        .success();
+    if ok { Ok(()) } else { Err("the map did not export".into()) }
+}
+
 /// The ArduPlane with the AGENT mode: `SIM001_BIN`, else the checkout's AGENT build.
 fn agent_bin() -> PathBuf {
     std::env::var_os("SIM001_BIN").map(PathBuf::from).unwrap_or_else(|| root().join(".ardupilot-agent/build/sitl/bin"))
