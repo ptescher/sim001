@@ -99,7 +99,7 @@ Vocabulary:
     Say: click RENDER DOCS
 
   Phrase: the launcher has just opened
-    Say: start the launcher. In the app bundle, open `SIM001.app`. From source, type `cargo run --release` in the top folder of the repository
+    Say: start the launcher with no `controls.cfg` yet. In the app bundle, open `SIM001.app`. From source, type `cargo run --release` in the top folder of the repository
     Given the launch target is GROUND STATION
     And the flight controller choice is WITH ARDUPILOT
     And the place choice is ALPINE VALLEY
@@ -107,6 +107,7 @@ Vocabulary:
     And the program in the log is nothing
     And the program is idle
     And the launch button is LAUNCH
+    And the controls file is missing
 
 Background:
   Given the launcher has just opened
