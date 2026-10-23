@@ -8,10 +8,10 @@
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+use simulation_sitl::Ports;
 use teleoperation_shared::layout::Rect;
 
 const SITL_IMAGE: &str = "sim001-ardupilot-sitl";
-const SITL_CONTAINER: &str = "sim001-sitl";
 
 pub struct Options {
     pub raytrace: bool,
@@ -42,11 +42,19 @@ pub struct Options {
     pub hosted_radio: Option<std::net::SocketAddr>,
 }
 
-/// Where the sim's TX15 stand-in listens. Below 5760: ArduPlane SITL instance N takes 5760 + 10·N (and the
-/// ports after it for its other UARTs), so a computer pilot's plane would answer on 5770.
-pub const RADIO_PORT: u16 = 5750;
-/// Where the sim's flight computer listens for the TX15 (a virtual UART), with `--flight-computer`.
-pub const UART_PORT: u16 = 5751;
+/// Which station this is: 0, unless the acceptance tests run several at once (`--worker N`). It
+/// decides the ports, the SITL instances, the containers and the log folders (see [`Ports`]).
+static WORKER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+pub fn set_worker(n: usize) {
+    WORKER.store(n, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Where this station's parts talk to each other. The sim's TX15 stand-in and its flight
+/// computer's UART are below 5760, where ArduPlane SITL instance N starts: it takes 5760 + 10·N.
+pub fn ports() -> Ports {
+    Ports::new(WORKER.load(std::sync::atomic::Ordering::SeqCst))
+}
 
 /// The map pack's metadata (home position etc.), if `name` has been built.
 pub fn pack_meta(name: &str) -> Option<visualization_mappack::PackMeta> {
@@ -74,7 +82,7 @@ fn work_dir() -> PathBuf {
 /// Where the logs of a run go: `logs/` under the working directory (the console's own debug log,
 /// each ArduPlane's output and its flight logs).
 pub fn logs_dir() -> PathBuf {
-    work_dir().join("logs")
+    ports().logs(&work_dir())
 }
 
 fn sim_binary() -> PathBuf {
@@ -95,7 +103,7 @@ pub fn native_arduplane() -> Option<PathBuf> {
 
 /// The command line of a native ArduPlane for SITL instance `instance` (0 is yours; 1 to 3 are the
 /// computer pilots', whose physics go to port 9002 + 10·N). As ardupilot/start.sh runs it in Docker.
-fn native_sitl_args(instance: usize, aircraft: &str, home_loc: Option<&str>) -> Vec<String> {
+fn native_sitl_args(ports: Ports, instance: usize, aircraft: &str, home_loc: Option<&str>) -> Vec<String> {
     let root = repo_root();
     let parm = |name: &str| root.join("ardupilot").join(name);
     let mut defaults = vec![root.join(".ardupilot/Tools/autotest/models/plane.parm"), parm("t1s.parm")];
@@ -116,7 +124,7 @@ fn native_sitl_args(instance: usize, aircraft: &str, home_loc: Option<&str>) -> 
     .to_vec();
     a.push(defaults.join(","));
     // Nobody connects to a computer pilot's autopilot, so it does not wait for a ground station.
-    if instance != 0 {
+    if !ports.is_yours(instance) {
         a.extend(["--serial0".into(), "tcp:0".into()]);
     }
     a.push(format!("-I{instance}"));
@@ -131,11 +139,11 @@ static STOPPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 /// Starts SITL instance `instance` as a native process (a fresh one: the ones of an earlier
 /// station are gone, since it stopped them). Its files and flight logs go to its own folder.
 fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
-    let logs = if instance == 0 { work_dir().join("logs/sitl") } else { work_dir().join(format!("logs/sitl/opponent-{instance}")) };
+    let logs = logs_folder(instance);
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
     // An earlier Docker run of the same instance keeps tcp:5760 (and the JSON port) published, so the
     // native one would fail to bind and exit without a word.
-    let container = if instance == 0 { SITL_CONTAINER.to_string() } else { format!("{SITL_CONTAINER}-{instance}") };
+    let container = ports().container(instance);
     let _ = Command::new("docker").args(["rm", "-f", &container]).stdout(Stdio::null()).stderr(Stdio::null()).status();
     // And an ArduPlane of this instance left behind by an earlier station that did not get to stop it.
     let _ = Command::new("pkill")
@@ -146,7 +154,7 @@ fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Optio
     std::thread::sleep(std::time::Duration::from_millis(200));
     let (out, err) = process_log(&logs).map_err(|e| format!("opening the log of ArduPlane {instance}: {e}"))?;
     let mut child = Command::new(program)
-        .args(native_sitl_args(instance, aircraft, home_loc))
+        .args(native_sitl_args(ports(), instance, aircraft, home_loc))
         .current_dir(&logs)
         .stdin(Stdio::null())
         .stdout(out)
@@ -159,8 +167,8 @@ fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Optio
     }
     NATIVE.lock().unwrap().push((instance, child));
     watch_native(program, aircraft, home_loc);
-    Ok(if instance == 0 {
-        format!("started ArduPlane (MAVLink on tcp:5760, flight logs in {})", logs.display())
+    Ok(if ports().is_yours(instance) {
+        format!("started ArduPlane (MAVLink on tcp:{}, flight logs in {})", ports().mavlink(), logs.display())
     } else {
         format!("started a computer pilot's ArduPlane {instance} (flight logs in {})", logs.display())
     })
@@ -186,7 +194,15 @@ fn panic_since_start(log: &Path) -> Option<String> {
 
 /// The folder an instance runs in: its logs, flight logs and what it prints.
 fn logs_folder(instance: usize) -> PathBuf {
-    if instance == 0 { work_dir().join("logs/sitl") } else { work_dir().join(format!("logs/sitl/opponent-{instance}")) }
+    logs_folder_of(ports(), instance)
+}
+
+fn logs_folder_of(ports: Ports, instance: usize) -> PathBuf {
+    let logs = ports.logs(&work_dir());
+    match ports.slot(instance) {
+        0 => logs.join("sitl"),
+        slot => logs.join(format!("sitl/opponent-{slot}")),
+    }
 }
 
 /// Starts again any of `children` that has exited, each in its own folder: the log gets a line that
@@ -296,7 +312,7 @@ fn watch_native(program: &Path, aircraft: &str, home_loc: Option<&str>) {
             let logs = logs_folder(instance);
             let (out, err) = process_log(&logs).map_err(|e| e.to_string())?;
             Command::new(&program)
-                .args(native_sitl_args(instance, &aircraft, home_loc.as_deref()))
+                .args(native_sitl_args(ports(), instance, &aircraft, home_loc.as_deref()))
                 .current_dir(&logs)
                 .stdin(Stdio::null())
                 .stdout(out)
@@ -457,7 +473,8 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         // A leftover from an earlier station would hold the ports.
         stop_native();
     }
-    for instance in 0..=recreation_games::PILOTS.len() {
+    for slot in 0..=recreation_games::PILOTS.len() {
+        let instance = ports().instance() + slot;
         let started = match &native {
             Some(program) => start_native(program, instance, aircraft, home.as_ref().map(|h| h.0.as_str()))?,
             None => start_sitl(
@@ -525,32 +542,30 @@ fn ensure_docker() -> Result<(), String> {
     Err("the Docker daemon isn't running: start it and try again".into())
 }
 
-/// The container of SITL instance `instance`: 0 is yours, 1 to 3 the computer pilots'.
+/// The container of SITL instance `instance`: this station's plane, or one of the computer pilots'.
 fn sitl_container(instance: usize) -> String {
-    if instance == 0 {
-        SITL_CONTAINER.to_string()
-    } else {
-        format!("{SITL_CONTAINER}-{instance}")
-    }
+    ports().container(instance)
 }
 
 /// The `docker run` arguments for SITL instance `instance` (before the image). Yours puts its
-/// MAVLink on tcp:5760 for the console; a computer pilot's has nobody to talk to, so it publishes
+/// MAVLink on tcp:5760 + 10·N for the console; a computer pilot's has nobody to talk to, so it publishes
 /// no port. Each keeps its flight logs apart.
 fn sitl_run_args(
+    ports: Ports,
     instance: usize,
     map: &str,
     aircraft: &str,
     home_loc: Option<&str>,
     logs: &std::path::Path,
 ) -> Vec<String> {
-    let name = sitl_container(instance);
+    let name = ports.container(instance);
     let mut a: Vec<String> = ["run", "-d", "--rm", "--name", &name]
         .iter()
         .map(|s| s.to_string())
         .collect();
-    if instance == 0 {
-        a.extend(["-p".into(), "5760:5760".into()]);
+    if ports.is_yours(instance) {
+        let port = ports.mavlink();
+        a.extend(["-p".into(), format!("{port}:{port}")]);
     }
     a.extend([
         "--label".into(),
@@ -632,21 +647,18 @@ fn start_sitl(
         .stderr(Stdio::null())
         .status();
     // ArduPilot's flight logs (.BIN) land in logs/sitl/ in the repo, so they outlive the container.
-    let logs = if instance == 0 {
-        work_dir().join("logs/sitl")
-    } else {
-        work_dir().join(format!("logs/sitl/opponent-{instance}"))
-    };
+    let logs = logs_folder(instance);
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
     let out = Command::new("docker")
-        .args(sitl_run_args(instance, map, aircraft, home_loc, &logs))
+        .args(sitl_run_args(ports(), instance, map, aircraft, home_loc, &logs))
         .arg(SITL_IMAGE)
         .output()
         .map_err(|e| format!("docker run: {e}"))?;
     if out.status.success() {
-        Ok(if instance == 0 {
+        Ok(if ports().is_yours(instance) {
             format!(
-                "started {name} (MAVLink on tcp:5760, flight logs in {})",
+                "started {name} (MAVLink on tcp:{}, flight logs in {})",
+                ports().mavlink(),
                 logs.display()
             )
         } else {
@@ -671,8 +683,14 @@ pub fn start_sim(
 ) -> Result<Child, String> {
     let bin = sim_binary();
     let mut cmd = Command::new(&bin);
-    cmd.current_dir(work_dir()).args([
+    let ports = ports();
+    // The worker's number tells the sim which autopilot is its own (its MAVLink port).
+    cmd.current_dir(work_dir()).env(simulation_sitl::ports::ENV, ports.worker.to_string()).args([
         "--ardupilot",
+        "--ap-port",
+        &ports.physics().to_string(),
+        "--autopilot",
+        &format!("127.0.0.1:{}", ports.mavlink()),
         "--feed",
         &opts.feed_port.to_string(),
         "--exit-with-parent",
@@ -707,7 +725,7 @@ pub fn start_sim(
             // the radio link it models, and a mission upload must not wait on a thin share.
             cmd.args([
                 "--flight-computer",
-                &format!("tcp:{UART_PORT}"),
+                &format!("tcp:{}", ports.uart()),
                 "--radio-upstream",
                 &relay.to_string(),
                 "--mavlink-rate",
@@ -719,9 +737,9 @@ pub fn start_sim(
             }
             cmd.args([
                 "--flight-computer",
-                &format!("tcp:{UART_PORT}"),
+                &format!("tcp:{}", ports.uart()),
                 "--radio-uart",
-                &format!("tcp:127.0.0.1:{UART_PORT}"),
+                &format!("tcp:127.0.0.1:{}", ports.uart()),
             ]);
         }
     }
@@ -764,11 +782,27 @@ mod tests {
     /// its own (so its physics port is 9002 + 10·N), publishes no port, and logs on its own.
     #[test]
     fn a_native_autopilot_is_an_instance_of_its_own_too() {
-        let yours = native_sitl_args(0, "t1s-vtol", None);
+        let yours = native_sitl_args(Ports::new(0), 0, "t1s-vtol", None);
         assert!(yours.contains(&"-I0".to_string()) && !yours.contains(&"--serial0".to_string()), "yours waits for the console");
-        let kestrel = native_sitl_args(1, "t1s-vtol", Some("1,2,3,4"));
+        let kestrel = native_sitl_args(Ports::new(0), 1, "t1s-vtol", Some("1,2,3,4"));
         assert!(kestrel.windows(2).any(|w| w == ["--serial0", "tcp:0"]) && kestrel.contains(&"-I1".to_string()));
         assert!(kestrel.windows(2).any(|w| w == ["--home", "1,2,3,4"]));
+    }
+
+    /// A second station's autopilot is an instance of its own too, further up: it waits for its
+    /// console, and its computer pilots do not (see `simulation_sitl::Ports`).
+    #[test]
+    fn a_later_worker_has_its_own_autopilots() {
+        let two = Ports::new(1);
+        let yours = native_sitl_args(two, 4, "t1s-vtol", None);
+        assert!(yours.contains(&"-I4".to_string()) && !yours.contains(&"--serial0".to_string()));
+        let pilot = native_sitl_args(two, 5, "t1s-vtol", None);
+        assert!(pilot.windows(2).any(|w| w == ["--serial0", "tcp:0"]) && pilot.contains(&"-I5".to_string()));
+        let args = sitl_run_args(two, 4, "alpine", "t1s-vtol", None, std::path::Path::new("/logs"));
+        assert!(args.windows(2).any(|w| w == ["-p", "5800:5800"]), "{args:?}");
+        assert!(args.windows(2).any(|w| w == ["--name", "sim001-sitl-w1"]), "{args:?}");
+        assert!(args.contains(&"INSTANCE=4".to_string()));
+        assert!(logs_folder_of(two, 5).ends_with("worker-1/sitl/opponent-1"), "{}", logs_folder_of(two, 5).display());
     }
 
     /// What each autopilot prints goes to a file in its own folder (where the launcher and the
@@ -875,11 +909,11 @@ mod tests {
     #[test]
     fn each_autopilot_is_a_container_of_its_own() {
         let logs = std::path::Path::new("/logs");
-        let yours = sitl_run_args(0, "alpine", "t1s-vtol", None, logs);
+        let yours = sitl_run_args(Ports::new(0), 0, "alpine", "t1s-vtol", None, logs);
         assert!(yours.windows(2).any(|w| w == ["--name", "sim001-sitl"]));
         assert!(yours.windows(2).any(|w| w == ["-p", "5760:5760"]));
         assert!(yours.contains(&"INSTANCE=0".to_string()));
-        let kestrel = sitl_run_args(1, "alpine", "t1s-vtol", Some("1,2,3,4"), logs);
+        let kestrel = sitl_run_args(Ports::new(0), 1, "alpine", "t1s-vtol", Some("1,2,3,4"), logs);
         assert!(kestrel.windows(2).any(|w| w == ["--name", "sim001-sitl-1"]));
         assert!(
             !kestrel.contains(&"-p".to_string()),

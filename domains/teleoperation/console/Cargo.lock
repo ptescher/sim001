@@ -5174,6 +5174,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "simulation_sitl"
+version = "0.1.0"
+dependencies = [
+ "expectation_service",
+ "glam",
+ "simulation_aircraft",
+ "simulation_physics",
+]
+
+[[package]]
 name = "siphasher"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5616,6 +5626,7 @@ dependencies = [
  "raw-window-handle",
  "recreation_games",
  "simulation_aircraft",
+ "simulation_sitl",
  "teleoperation_core",
  "teleoperation_shared",
  "visualization_mappack",

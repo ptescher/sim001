@@ -7,10 +7,12 @@
 
 pub mod launch;
 pub mod lockstep;
+pub mod ports;
 pub mod sensors;
 pub mod service;
 
 pub use lockstep::{Lockstep, Step, dt_for};
+pub use ports::Ports;
 pub use sensors::sensor_json;
 
 const MAGIC_16: u16 = 18458;

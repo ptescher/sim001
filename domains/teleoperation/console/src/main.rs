@@ -42,6 +42,8 @@ sim001_gcs [options]
   --raytrace         with --station: run the sim with ray tracing
   --sensor           open the sensor feed window (sim already running with --feed)
   --feed HOST:PORT   sensor feed address (default 127.0.0.1:5600)
+  --worker N         with --station: this is station N (default 0), for tests that run several at once:
+                     its ports, SITL instances, containers and log folders are its own
   --connect ADDR     MAVLink, any rust-mavlink address (default tcpout:127.0.0.1:5760; with
                      --station the sim's TX15 stand-in, tcpout:127.0.0.1:5750)
   --no-radio         with --station: connect to ArduPilot directly, without the TX15 stand-in
@@ -71,12 +73,17 @@ fn main() {
         println!("{HELP}");
         return;
     }
+    // Which station this is, when the tests run several at once: it decides the ports.
+    if let Some(n) = arg("--worker").and_then(|n| n.parse().ok()) {
+        station::set_worker(n);
+    }
+    let ports = station::ports();
     let station_mode = flag("--station");
     // With --station the console's only source of telemetry is the radio, which the sim stands in for.
-    let radio_port = (station_mode && !flag("--no-radio")).then_some(station::RADIO_PORT);
+    let radio_port = (station_mode && !flag("--no-radio")).then_some(ports.radio());
     let address = arg("--connect").unwrap_or_else(|| match radio_port {
         Some(port) => format!("tcpout:127.0.0.1:{port}"),
-        None => "tcpout:127.0.0.1:5760".into(),
+        None => format!("tcpout:127.0.0.1:{}", ports.mavlink()),
     });
     let map = arg("--map");
     let mut origin = arg("--origin")
@@ -96,20 +103,20 @@ fn main() {
     };
     // The tests' TX15 is the console's own, on the flight computer's serial line.
     let hosted = (radio_port.is_some() && flag("--expect") && arg("--tx15-serial").is_none()).then(|| {
-        aviation_line::Hosted::host(&format!("127.0.0.1:{}", station::UART_PORT)).unwrap_or_else(|e| {
+        aviation_line::Hosted::host(&format!("127.0.0.1:{}", ports.uart())).unwrap_or_else(|e| {
             eprintln!("the TX15 for the tests has no line: {e}");
             std::process::exit(1);
         })
     });
     let feed_addr =
-        arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", teleoperation_shared::feed::DEFAULT_PORT));
+        arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", ports.feed()));
     let opts = station::Options {
         raytrace: flag("--raytrace"),
         feed_port: feed_addr
             .rsplit(':')
             .next()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(teleoperation_shared::feed::DEFAULT_PORT),
+            .unwrap_or(ports.feed()),
         no_build: flag("--no-build"),
         direct: flag("--direct"),
         map: map.clone(),

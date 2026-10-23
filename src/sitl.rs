@@ -75,11 +75,17 @@ fn spawn(root: &Path, plan: Plan) -> Result<(Child, bool), String> {
 /// Reads SITL's heartbeat over MAVLink and tells the core whether the plane is armed and in which
 /// mode, as the ground station does when there is one (the throttle stick and the HUD need it).
 pub fn watch_heartbeat(core: Arc<Mutex<SimCore>>) {
+    // The autopilot of this station (see `simulation_sitl::Ports`): 5760 unless it is a later worker's.
+    let mavlink = if std::env::var_os(simulation_sitl::ports::ENV).is_some() {
+        simulation_sitl::Ports::from_env().mavlink()
+    } else {
+        MAVLINK_PORT
+    };
     std::thread::Builder::new()
         .name("sitl-heartbeat".into())
         .spawn(move || {
             loop {
-                let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", MAVLINK_PORT)) else {
+                let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", mavlink)) else {
                     std::thread::sleep(Duration::from_millis(500));
                     continue;
                 };
