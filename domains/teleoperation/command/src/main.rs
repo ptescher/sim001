@@ -139,6 +139,8 @@ fn main() {
         let bounds = Bounds::centered(None, size(px(1400.0), px(900.0)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
+            // Below this the map and the 340 px side column would not fit.
+            window_min_size: Some(size(px(900.0), px(600.0))),
             titlebar: Some(TitlebarOptions {
                 title: Some("SIM001 Towers".into()),
                 appears_transparent: true,

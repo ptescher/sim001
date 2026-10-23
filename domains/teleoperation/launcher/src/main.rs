@@ -62,6 +62,8 @@ fn main() {
             .open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    // Below this the panels would run off the window: the left column is 520 wide.
+                    window_min_size: Some(size(px(900.0), px(560.0))),
                     titlebar: Some(TitlebarOptions {
                         title: Some("SIM001 Launcher".into()),
                         appears_transparent: true,
