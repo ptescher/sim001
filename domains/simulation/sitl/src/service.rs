@@ -4,7 +4,7 @@
 //! when neither a build nor Docker is there those tests are "not supported yet", with how to get one.
 
 use crate::Ports;
-use crate::launch::{DOCKER_IMAGE, DOCKER_NAME, HOME, MAVLINK_PORT, native_binary, native_instance_args};
+use crate::launch::{DOCKER_IMAGE, HOME, native_binary, native_instance_args};
 use expectation_service::{Command, Docker, Fallback, Ready};
 use std::path::Path;
 use std::time::Duration;
