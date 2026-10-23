@@ -5,10 +5,10 @@
 //! missing and (re)starts the SITL container. Then [`start_sim`] starts sim001 as SITL's
 //! physics with the sensor feed on, in its pane. The sim stops when the console closes.
 
+use simulation_sitl::Ports;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
-use simulation_sitl::Ports;
 use teleoperation_shared::layout::Rect;
 
 const SITL_IMAGE: &str = "sim001-ardupilot-sitl";
@@ -67,11 +67,7 @@ pub fn repo_root() -> PathBuf {
     if let Some(home) = std::env::var_os("SIM001_HOME") {
         return PathBuf::from(home);
     }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .map(Path::to_path_buf)
-        .unwrap_or_default()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).ancestors().nth(3).map(Path::to_path_buf).unwrap_or_default()
 }
 
 /// Where the sim's working files go (controls.cfg, flight logs): the checkout, or the user's data folder in an app bundle.
@@ -188,7 +184,8 @@ fn process_log(dir: &Path) -> std::io::Result<(Stdio, Stdio)> {
 /// A panic ArduPlane has printed since its last start (the last `--- started` line), if it has.
 fn panic_since_start(log: &Path) -> Option<String> {
     let lines = teleoperation_core::debug::tail_lines(log, 400);
-    let since = lines.iter().rposition(|l| l.starts_with("--- started") || l.starts_with("--- exited")).map_or(0, |i| i + 1);
+    let since =
+        lines.iter().rposition(|l| l.starts_with("--- started") || l.starts_with("--- exited")).map_or(0, |i| i + 1);
     lines[since..].iter().find(|l| l.starts_with("PANIC")).cloned()
 }
 
@@ -236,7 +233,10 @@ fn restart_dead(
         // One that panics at every start is not started for ever: the run is better failed at once.
         if let Some(panic) = &panicked {
             if tries.panicked(*instance) > MAX_PANIC_RESTARTS {
-                let why = format!("ArduPlane {instance} panicked {} starts in a row ({panic}); giving up on it", MAX_PANIC_RESTARTS + 1);
+                let why = format!(
+                    "ArduPlane {instance} panicked {} starts in a row ({panic}); giving up on it",
+                    MAX_PANIC_RESTARTS + 1
+                );
                 said.push(why.clone());
                 tries.gave_up.push(why);
                 given_up.push(*instance);
@@ -302,30 +302,30 @@ fn watch_native(program: &Path, aircraft: &str, home_loc: Option<&str>) {
     std::thread::spawn(move || {
         let mut tries = Tries::default();
         loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        if STOPPING.load(std::sync::atomic::Ordering::SeqCst) {
-            WATCHING.store(false, std::sync::atomic::Ordering::SeqCst);
-            return;
-        }
-        let mut children = NATIVE.lock().unwrap();
-        let said = restart_dead(&mut children, &mut tries, logs_folder, |instance| {
-            let logs = logs_folder(instance);
-            let (out, err) = process_log(&logs).map_err(|e| e.to_string())?;
-            Command::new(&program)
-                .args(native_sitl_args(ports(), instance, &aircraft, home_loc.as_deref()))
-                .current_dir(&logs)
-                .stdin(Stdio::null())
-                .stdout(out)
-                .stderr(err)
-                .spawn()
-                .map_err(|e| e.to_string())
-        });
-        for line in said {
-            eprintln!("station: {line}");
-        }
-        if let Some(why) = tries.gave_up() {
-            *GAVE_UP.lock().unwrap() = Some(why);
-        }
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            if STOPPING.load(std::sync::atomic::Ordering::SeqCst) {
+                WATCHING.store(false, std::sync::atomic::Ordering::SeqCst);
+                return;
+            }
+            let mut children = NATIVE.lock().unwrap();
+            let said = restart_dead(&mut children, &mut tries, logs_folder, |instance| {
+                let logs = logs_folder(instance);
+                let (out, err) = process_log(&logs).map_err(|e| e.to_string())?;
+                Command::new(&program)
+                    .args(native_sitl_args(ports(), instance, &aircraft, home_loc.as_deref()))
+                    .current_dir(&logs)
+                    .stdin(Stdio::null())
+                    .stdout(out)
+                    .stderr(err)
+                    .spawn()
+                    .map_err(|e| e.to_string())
+            });
+            for line in said {
+                eprintln!("station: {line}");
+            }
+            if let Some(why) = tries.gave_up() {
+                *GAVE_UP.lock().unwrap() = Some(why);
+            }
         }
     });
 }
@@ -344,11 +344,7 @@ fn step(n: usize, total: usize, what: &str) {
 
 fn run(cmd: &mut Command, what: &str) -> Result<(), String> {
     let status = cmd.status().map_err(|e| format!("{what}: {e}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("{what} failed ({status})"))
-    }
+    if status.success() { Ok(()) } else { Err(format!("{what} failed ({status})")) }
 }
 
 /// Everything the station needs before it opens windows. Prints progress; long steps (the sim
@@ -364,18 +360,10 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         // Under `cargo run`, $CARGO is the cargo running us; the repo's rust-toolchain.toml
         // pins the same toolchain for the sim.
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-        run(
-            Command::new(cargo)
-                .args(["build", "--release"])
-                .current_dir(&root),
-            "building the sim",
-        )?;
+        run(Command::new(cargo).args(["build", "--release"]).current_dir(&root), "building the sim")?;
     }
     if !sim_binary().exists() {
-        return Err(format!(
-            "{} missing after the build",
-            sim_binary().display()
-        ));
+        return Err(format!("{} missing after the build", sim_binary().display()));
     }
 
     if let Some(name) = &opts.map {
@@ -408,10 +396,7 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
             println!("  {} (present)", assets.display());
         } else {
             run(
-                Command::new(sim_binary())
-                    .arg("--export-map")
-                    .arg(assets)
-                    .current_dir(&root),
+                Command::new(sim_binary()).arg("--export-map").arg(assets).current_dir(&root),
                 "exporting the terrain map",
             )?;
         }
@@ -440,32 +425,19 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
         )?;
         println!("  {SITL_IMAGE} (up to date)");
     } else {
-        println!(
-            "  building {SITL_IMAGE} from ardupilot/Dockerfile: first time only, about 15 minutes"
-        );
+        println!("  building {SITL_IMAGE} from ardupilot/Dockerfile: first time only, about 15 minutes");
         run(
-            Command::new("docker")
-                .args(["build", "-t", SITL_IMAGE, "ardupilot"])
-                .current_dir(&root),
+            Command::new("docker").args(["build", "-t", SITL_IMAGE, "ardupilot"]).current_dir(&root),
             "building the SITL image",
         )?;
     }
 
-    step(
-        5,
-        total,
-        "ArduPlane SITL: yours, and one for each computer pilot",
-    );
+    step(5, total, "ArduPlane SITL: yours, and one for each computer pilot");
     // ArduPilot's home must be the sim's pilot box: the map's home, else start.sh's default.
-    let home = opts.map.as_deref().and_then(pack_meta).map(|m| {
-        (
-            format!(
-                "{:.7},{:.7},{:.1},{:.0}",
-                m.home_lat, m.home_lon, m.home_alt, m.launch_heading
-            ),
-            m.title,
-        )
-    });
+    let home =
+        opts.map.as_deref().and_then(pack_meta).map(|m| {
+            (format!("{:.7},{:.7},{:.1},{:.0}", m.home_lat, m.home_lon, m.home_alt, m.launch_heading), m.title)
+        });
     // The computer pilots fly planes like yours, each with an autopilot of its own, so that a
     // game is fair: they take as long to get into the air as you do.
     let aircraft = opts.aircraft.as_deref().unwrap_or(simulation_aircraft::default().id);
@@ -493,31 +465,17 @@ pub fn prepare(opts: &Options, assets: &Path) -> Result<(), String> {
 }
 
 fn image_id() -> Option<String> {
-    let out = Command::new("docker")
-        .args(["image", "inspect", "-f", "{{.Id}}", SITL_IMAGE])
-        .output()
-        .ok()?;
+    let out = Command::new("docker").args(["image", "inspect", "-f", "{{.Id}}", SITL_IMAGE]).output().ok()?;
     let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
     (out.status.success() && !id.is_empty()).then_some(id)
 }
 
 fn docker_up() -> bool {
-    Command::new("docker")
-        .arg("info")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
+    Command::new("docker").arg("info").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
 }
 
 fn ensure_docker() -> Result<(), String> {
-    if Command::new("docker")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_err()
-    {
+    if Command::new("docker").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_err() {
         return Err("the docker command isn't installed: install Docker Desktop (https://www.docker.com/products/docker-desktop/)".into());
     }
     if docker_up() {
@@ -559,26 +517,13 @@ fn sitl_run_args(
     logs: &std::path::Path,
 ) -> Vec<String> {
     let name = ports.container(instance);
-    let mut a: Vec<String> = ["run", "-d", "--rm", "--name", &name]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let mut a: Vec<String> = ["run", "-d", "--rm", "--name", &name].iter().map(|s| s.to_string()).collect();
     if ports.is_yours(instance) {
         let port = ports.mavlink();
         a.extend(["-p".into(), format!("{port}:{port}")]);
     }
-    a.extend([
-        "--label".into(),
-        format!("t1s.map={map}"),
-        "--label".into(),
-        format!("t1s.aircraft={aircraft}"),
-    ]);
-    a.extend([
-        "-e".into(),
-        format!("AIRCRAFT={aircraft}"),
-        "-e".into(),
-        format!("INSTANCE={instance}"),
-    ]);
+    a.extend(["--label".into(), format!("t1s.map={map}"), "--label".into(), format!("t1s.aircraft={aircraft}")]);
+    a.extend(["-e".into(), format!("AIRCRAFT={aircraft}"), "-e".into(), format!("INSTANCE={instance}")]);
     if let Some(h) = home_loc {
         a.extend(["-e".into(), format!("HOME_LOC={h}")]);
     }
@@ -589,22 +534,11 @@ fn sitl_run_args(
 /// Starts SITL instance `instance`, or reboots it if it's already running: it was flying a
 /// previous sim's aircraft, and ArduPilot's EKF would see the new one jump back to the pilot box.
 /// A container from an older image is replaced, so parameter changes take effect.
-fn start_sitl(
-    instance: usize,
-    map: &str,
-    aircraft: &str,
-    home_loc: Option<&str>,
-) -> Result<String, String> {
+fn start_sitl(instance: usize, map: &str, aircraft: &str, home_loc: Option<&str>) -> Result<String, String> {
     let name = sitl_container(instance);
     let name = name.as_str();
     let running = Command::new("docker")
-        .args([
-            "ps",
-            "--filter",
-            &format!("name=^{name}$"),
-            "--format",
-            "{{.Image}}",
-        ])
+        .args(["ps", "--filter", &format!("name=^{name}$"), "--format", "{{.Image}}"])
         .output()
         .map_err(|e| format!("docker ps: {e}"))?;
     if !String::from_utf8_lossy(&running.stdout).trim().is_empty() {
@@ -621,12 +555,7 @@ fn start_sitl(
         // Its parameters belong to the plane it was started for.
         let same_aircraft = inspect("{{index .Config.Labels \"t1s.aircraft\"}}") == aircraft;
         if same_image && same_map && same_aircraft {
-            run(
-                Command::new("docker")
-                    .args(["restart", "-t", "1", name])
-                    .stdout(Stdio::null()),
-                "restarting SITL",
-            )?;
+            run(Command::new("docker").args(["restart", "-t", "1", name]).stdout(Stdio::null()), "restarting SITL")?;
             return Ok(format!("restarted {name}"));
         }
         println!(
@@ -641,11 +570,7 @@ fn start_sitl(
         );
     }
     // Gone, stopped, or from an older image.
-    let _ = Command::new("docker")
-        .args(["rm", "-f", name])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    let _ = Command::new("docker").args(["rm", "-f", name]).stdout(Stdio::null()).stderr(Stdio::null()).status();
     // ArduPilot's flight logs (.BIN) land in logs/sitl/ in the repo, so they outlive the container.
     let logs = logs_folder(instance);
     std::fs::create_dir_all(&logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
@@ -656,31 +581,17 @@ fn start_sitl(
         .map_err(|e| format!("docker run: {e}"))?;
     if out.status.success() {
         Ok(if ports().is_yours(instance) {
-            format!(
-                "started {name} (MAVLink on tcp:{}, flight logs in {})",
-                ports().mavlink(),
-                logs.display()
-            )
+            format!("started {name} (MAVLink on tcp:{}, flight logs in {})", ports().mavlink(), logs.display())
         } else {
-            format!(
-                "started {name} (a computer pilot's autopilot, flight logs in {})",
-                logs.display()
-            )
+            format!("started {name} (a computer pilot's autopilot, flight logs in {})", logs.display())
         })
     } else {
-        Err(format!(
-            "docker run failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ))
+        Err(format!("docker run failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
     }
 }
 
 /// Starts the sim (release build) in its pane. Its output goes to the terminal.
-pub fn start_sim(
-    opts: &Options,
-    rect: Option<Rect>,
-    home: (f64, f64, f32),
-) -> Result<Child, String> {
+pub fn start_sim(opts: &Options, rect: Option<Rect>, home: (f64, f64, f32)) -> Result<Child, String> {
     let bin = sim_binary();
     let mut cmd = Command::new(&bin);
     let ports = ports();
@@ -712,12 +623,7 @@ pub fn start_sim(
     }
     // The console's telemetry comes through the sim's TX15 stand-in, which needs to know where on the earth the pilot box is.
     if let Some(port) = opts.radio_port {
-        cmd.args([
-            "--radio",
-            &port.to_string(),
-            "--home",
-            &format!("{},{},{}", home.0, home.1, home.2),
-        ]);
+        cmd.args(["--radio", &port.to_string(), "--home", &format!("{},{},{}", home.0, home.1, home.2)]);
         if let Some(device) = &opts.tx15_serial {
             cmd.args(["--flight-computer", device]);
         } else if let Some(relay) = opts.hosted_radio {
@@ -746,8 +652,7 @@ pub fn start_sim(
     if let Some(r) = rect {
         cmd.args(["--window-rect", &r.to_arg(), "--frameless"]);
     }
-    cmd.spawn()
-        .map_err(|e| format!("starting {}: {e}", bin.display()))
+    cmd.spawn().map_err(|e| format!("starting {}: {e}", bin.display()))
 }
 
 /// The sim this station started, so that every way out of the station stops it.
@@ -783,7 +688,10 @@ mod tests {
     #[test]
     fn a_native_autopilot_is_an_instance_of_its_own_too() {
         let yours = native_sitl_args(Ports::new(0), 0, "t1s-vtol", None);
-        assert!(yours.contains(&"-I0".to_string()) && !yours.contains(&"--serial0".to_string()), "yours waits for the console");
+        assert!(
+            yours.contains(&"-I0".to_string()) && !yours.contains(&"--serial0".to_string()),
+            "yours waits for the console"
+        );
         let kestrel = native_sitl_args(Ports::new(0), 1, "t1s-vtol", Some("1,2,3,4"));
         assert!(kestrel.windows(2).any(|w| w == ["--serial0", "tcp:0"]) && kestrel.contains(&"-I1".to_string()));
         assert!(kestrel.windows(2).any(|w| w == ["--home", "1,2,3,4"]));
@@ -828,17 +736,20 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("sim001-supervise-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let mut children: Vec<(usize, Child)> = vec![
-            (0, Command::new("true").spawn().unwrap()),
-            (1, Command::new("sleep").arg("30").spawn().unwrap()),
-        ];
+        let mut children: Vec<(usize, Child)> =
+            vec![(0, Command::new("true").spawn().unwrap()), (1, Command::new("sleep").arg("30").spawn().unwrap())];
         let running_pid = children[1].1.id();
         std::thread::sleep(std::time::Duration::from_millis(200));
         let mut respawned = vec![];
-        let said = restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |instance| {
-            respawned.push(instance);
-            Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string())
-        });
+        let said = restart_dead(
+            &mut children,
+            &mut Tries::default(),
+            |_| dir.clone(),
+            |instance| {
+                respawned.push(instance);
+                Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string())
+            },
+        );
         assert_eq!(respawned, vec![0]);
         assert_eq!(said.len(), 1);
         assert!(said[0].contains("ArduPlane 0") && said[0].contains("exited") && said[0].contains("again"), "{said:?}");
@@ -848,7 +759,10 @@ mod tests {
         let log = std::fs::read_to_string(dir.join("arduplane.log")).unwrap_or_default();
         assert!(log.contains("--- exited"), "{log}");
         // Nothing dead, nothing done.
-        assert!(restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| panic!("nothing is dead")).is_empty());
+        assert!(
+            restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| panic!("nothing is dead"))
+                .is_empty()
+        );
         for (_, c) in &mut children {
             let _ = c.kill();
         }
@@ -866,15 +780,26 @@ mod tests {
         let hung = Command::new("sleep").arg("30").spawn().unwrap();
         let hung_pid = hung.id();
         let mut children = vec![(0, hung)];
-        let said = restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string()));
+        let said = restart_dead(
+            &mut children,
+            &mut Tries::default(),
+            |_| dir.clone(),
+            |_| Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string()),
+        );
         assert_eq!(said.len(), 1);
         assert!(said[0].contains("panicked") && said[0].contains("again"), "{said:?}");
         assert_ne!(children[0].1.id(), hung_pid);
         let log = std::fs::read_to_string(dir.join("arduplane.log")).unwrap();
         assert!(log.contains("--- exited (panicked"), "{log}");
         // A panic of an earlier start, with a start since, is history.
-        std::fs::write(dir.join("arduplane.log"), "--- started 1 ---\nPANIC: old\n--- exited (killed) ---\n--- started 2 ---\nStarting SITL\n").unwrap();
-        assert!(restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| panic!("it is fine")).is_empty());
+        std::fs::write(
+            dir.join("arduplane.log"),
+            "--- started 1 ---\nPANIC: old\n--- exited (killed) ---\n--- started 2 ---\nStarting SITL\n",
+        )
+        .unwrap();
+        assert!(
+            restart_dead(&mut children, &mut Tries::default(), |_| dir.clone(), |_| panic!("it is fine")).is_empty()
+        );
         for (_, c) in &mut children {
             let _ = c.kill();
         }
@@ -893,17 +818,25 @@ mod tests {
         let mut tries = Tries::default();
         let mut starts = 0;
         for _ in 0..10 {
-            restart_dead(&mut children, &mut tries, |_| dir.clone(), |_| {
-                starts += 1;
-                // The new start panics at once, as the last did.
-                std::fs::write(dir.join("arduplane.log"), panics).unwrap();
-                Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string())
-            });
+            restart_dead(
+                &mut children,
+                &mut tries,
+                |_| dir.clone(),
+                |_| {
+                    starts += 1;
+                    // The new start panics at once, as the last did.
+                    std::fs::write(dir.join("arduplane.log"), panics).unwrap();
+                    Command::new("sleep").arg("30").spawn().map_err(|e| e.to_string())
+                },
+            );
         }
         assert_eq!(starts, MAX_PANIC_RESTARTS, "started again only so many times");
         assert!(children.is_empty(), "and then left alone");
         let why = tries.gave_up();
-        assert!(why.as_deref().is_some_and(|w| w.contains("ArduPlane 0") && w.contains("PANIC") && w.contains("giving up")), "{why:?}");
+        assert!(
+            why.as_deref().is_some_and(|w| w.contains("ArduPlane 0") && w.contains("PANIC") && w.contains("giving up")),
+            "{why:?}"
+        );
     }
 
     #[test]
@@ -915,17 +848,8 @@ mod tests {
         assert!(yours.contains(&"INSTANCE=0".to_string()));
         let kestrel = sitl_run_args(Ports::new(0), 1, "alpine", "t1s-vtol", Some("1,2,3,4"), logs);
         assert!(kestrel.windows(2).any(|w| w == ["--name", "sim001-sitl-1"]));
-        assert!(
-            !kestrel.contains(&"-p".to_string()),
-            "nobody connects to it"
-        );
-        assert!(
-            kestrel.contains(&"INSTANCE=1".to_string())
-                && kestrel.contains(&"HOME_LOC=1,2,3,4".to_string())
-        );
-        assert!(
-            kestrel.contains(&"AIRCRAFT=t1s-vtol".to_string()),
-            "a plane like yours"
-        );
+        assert!(!kestrel.contains(&"-p".to_string()), "nobody connects to it");
+        assert!(kestrel.contains(&"INSTANCE=1".to_string()) && kestrel.contains(&"HOME_LOC=1,2,3,4".to_string()));
+        assert!(kestrel.contains(&"AIRCRAFT=t1s-vtol".to_string()), "a plane like yours");
     }
 }

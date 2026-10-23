@@ -169,7 +169,9 @@ pub fn paint(
     window: &mut Window,
     cx: &mut App,
 ) {
-    window.with_content_mask(Some(ContentMask { bounds }), |window| paint_inner(bounds, st, d, terrain, image, window, cx));
+    window.with_content_mask(Some(ContentMask { bounds }), |window| {
+        paint_inner(bounds, st, d, terrain, image, window, cx)
+    });
 }
 
 fn paint_inner(
@@ -238,7 +240,16 @@ fn paint_inner(
             continue;
         }
         dashed_circle(window, hx, hy, rp, 1.0, 5.0, ca(GREEN, 0.45));
-        text(window, cx, &format!("{r:.0}"), hx + rp * 0.7071 + 4.0, hy - rp * 0.7071 - 6.0, fs * 0.85, ca(GREEN, 0.75), Align::Left);
+        text(
+            window,
+            cx,
+            &format!("{r:.0}"),
+            hx + rp * 0.7071 + 4.0,
+            hy - rp * 0.7071 - 6.0,
+            fs * 0.85,
+            ca(GREEN, 0.75),
+            Align::Left,
+        );
     }
 
     // Ground track.
@@ -246,13 +257,8 @@ fn paint_inner(
     polyline(window, &trail, 2.0, ca(0xffffff, 0.55));
 
     // Vehicle mission. Item 0 is home on ArduPilot.
-    let pts: Vec<(usize, (f32, f32))> = d
-        .mission
-        .iter()
-        .enumerate()
-        .skip(1)
-        .filter_map(|(i, m)| m.1.map(|p| (i, to_s(p.0, p.1))))
-        .collect();
+    let pts: Vec<(usize, (f32, f32))> =
+        d.mission.iter().enumerate().skip(1).filter_map(|(i, m)| m.1.map(|p| (i, to_s(p.0, p.1)))).collect();
     let path: Vec<_> = pts.iter().map(|p| p.1).collect();
     polyline(window, &path, 2.0, c(CYAN));
     for (i, (sx, sy)) in &pts {
@@ -265,7 +271,16 @@ fn paint_inner(
         fill_circle(window, *sx, *sy, 9.0, c(0x000000));
         circle(window, *sx, *sy, 9.0, 2.0, c(col));
         text(window, cx, &format!("{i}"), *sx, *sy, fs * 0.9, c(col), Align::Center);
-        text(window, cx, &format!("{} {:.0}m", kind.label(), alt), *sx + 13.0, *sy + 11.0, fs * 0.8, ca(col, 0.9), Align::Left);
+        text(
+            window,
+            cx,
+            &format!("{} {:.0}m", kind.label(), alt),
+            *sx + 13.0,
+            *sy + 11.0,
+            fs * 0.8,
+            ca(col, 0.9),
+            Align::Left,
+        );
     }
 
     // Flight plan being edited.
@@ -276,7 +291,16 @@ fn paint_inner(
         stroke_rect(window, sx - 9.0, sy - 9.0, 18.0, 18.0, 2.0, c(AMBER));
         text(window, cx, &format!("{}", i + 1), *sx, *sy, fs * 0.9, c(AMBER), Align::Center);
         let wp = &st.plan[i];
-        text(window, cx, &format!("{} {:.0}m", wp.kind.label(), wp.alt), sx + 13.0, sy + 11.0, fs * 0.8, c(AMBER), Align::Left);
+        text(
+            window,
+            cx,
+            &format!("{} {:.0}m", wp.kind.label(), wp.alt),
+            sx + 13.0,
+            sy + 11.0,
+            fs * 0.8,
+            c(AMBER),
+            Align::Left,
+        );
     }
 
     // Home.
@@ -307,7 +331,24 @@ fn paint_inner(
             dashed(window, &[(mx, my), lead], 1.2, 4.0, ca(CYAN, 0.8));
         }
         let hd = m.heading.to_radians();
-        let shape = [(0.0, -11.0), (2.0, -4.0), (10.0, 1.0), (10.0, 3.0), (2.0, 1.5), (1.5, 7.0), (4.0, 9.5), (4.0, 11.0), (0.0, 9.5), (-4.0, 11.0), (-4.0, 9.5), (-1.5, 7.0), (-2.0, 1.5), (-10.0, 3.0), (-10.0, 1.0), (-2.0, -4.0)];
+        let shape = [
+            (0.0, -11.0),
+            (2.0, -4.0),
+            (10.0, 1.0),
+            (10.0, 3.0),
+            (2.0, 1.5),
+            (1.5, 7.0),
+            (4.0, 9.5),
+            (4.0, 11.0),
+            (0.0, 9.5),
+            (-4.0, 11.0),
+            (-4.0, 9.5),
+            (-1.5, 7.0),
+            (-2.0, 1.5),
+            (-10.0, 3.0),
+            (-10.0, 1.0),
+            (-2.0, -4.0),
+        ];
         let pts: Vec<_> = shape
             .iter()
             .map(|&(px, py)| {
@@ -346,7 +387,24 @@ fn paint_inner(
             dashed(window, &[(ax, ay), (tx, ty)], 1.0, 4.0, ca(MAGENTA, 0.7));
         }
         let hd = d.heading.to_radians();
-        let shape = [(0.0, -16.0), (3.0, -6.0), (15.0, 1.0), (15.0, 4.0), (3.0, 2.0), (2.0, 10.0), (6.0, 14.0), (6.0, 16.0), (0.0, 14.0), (-6.0, 16.0), (-6.0, 14.0), (-2.0, 10.0), (-3.0, 2.0), (-15.0, 4.0), (-15.0, 1.0), (-3.0, -6.0)];
+        let shape = [
+            (0.0, -16.0),
+            (3.0, -6.0),
+            (15.0, 1.0),
+            (15.0, 4.0),
+            (3.0, 2.0),
+            (2.0, 10.0),
+            (6.0, 14.0),
+            (6.0, 16.0),
+            (0.0, 14.0),
+            (-6.0, 16.0),
+            (-6.0, 14.0),
+            (-2.0, 10.0),
+            (-3.0, 2.0),
+            (-15.0, 4.0),
+            (-15.0, 1.0),
+            (-3.0, -6.0),
+        ];
         let pts: Vec<_> = shape
             .iter()
             .map(|&(px, py)| {
@@ -410,7 +468,9 @@ fn paint_inner(
     let hint = match st.tool {
         Tool::Pan => None,
         Tool::Goto => Some(("GOTO: click to fly there (GUIDED)".to_string(), MAGENTA)),
-        Tool::Plan => Some((format!("PLAN: click adds waypoint at {:.0} m, right-click removes last", st.plan_alt), AMBER)),
+        Tool::Plan => {
+            Some((format!("PLAN: click adds waypoint at {:.0} m, right-click removes last", st.plan_alt), AMBER))
+        }
         Tool::Look => Some(("LOOK: click a point to keep the camera on it".to_string(), SPI)),
     };
     if let Some((s, col)) = hint {
