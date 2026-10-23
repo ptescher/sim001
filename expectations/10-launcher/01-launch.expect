@@ -36,7 +36,7 @@ Feature: Launching
     Then the flight controller choice is WITHOUT ARDUPILOT
 
   Expectation: LAUNCH starts the station with ArduPilot
-    Hands over to: the console is connected to a plane on the ground
+    Hands over to: the console is connected to a VTOL on the ground
     Given the launch target is GROUND STATION
     And the flight controller choice is WITH ARDUPILOT
     When the pilot launches
@@ -47,6 +47,7 @@ Feature: Launching
     The sim flies the plane through its own modes. ArduPilot still runs, for the telemetry,
     but the sim does not use its outputs.
 
+    Hands over to: the console is connected to a plane on the ground
     Given the launch target is GROUND STATION
     And the flight controller choice is WITHOUT ARDUPILOT
     When the pilot launches
@@ -95,6 +96,7 @@ Feature: Launching
   Expectation: RED: NOBODY makes a practice game
     Overrides: TOWERS starts a game of Towers against the computer
 
+    Hands over to: a game of Towers is in play
     Given the launch target is TOWERS
     And the Red team is NOBODY
     When the pilot launches
@@ -104,6 +106,7 @@ Feature: Launching
   Expectation: DRONE CAMERAS off starts the game with no 3D view
     Overrides: TOWERS starts a game of Towers against the computer
 
+    Hands over to: a game of Towers is in play
     Given the launch target is TOWERS
     And the drone cameras choice is off
     When the pilot launches
