@@ -6,6 +6,24 @@
 members = ["domains/*/*", "tools/tasks", "tools/expectation"]
 exclude = ["domains/teleoperation/console", "domains/teleoperation/command", "domains/teleoperation/launcher", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
 
+# The third-party crates more than one module uses, at one version (`name.workspace = true` in a
+# module; a module may add features). The excluded workspaces above keep their own versions.
+[workspace.dependencies]
+bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+fastrand = "2"
+glam = "0.33"
+# Map packs (real places): aerial photos and land cover. Same version Bevy uses.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Acceptance tests (`--expect`): see github.com/ptescher/expectation and expectations/.
+expectation_cli = { git = "https://github.com/ptescher/expectation" }
+expectation_harness = { git = "https://github.com/ptescher/expectation" }
+expectation_model = { git = "https://github.com/ptescher/expectation" }
+expectation_service = { git = "https://github.com/ptescher/expectation" }
+expectation_story = { git = "https://github.com/ptescher/expectation" }
+
 [package]
 name = "sim001"
 version = "0.1.0"
@@ -29,12 +47,11 @@ simulation_physics = { path = "domains/simulation/physics" }
 simulation_sitl = { path = "domains/simulation/sitl" }
 # The 3D view and the place it shows: see domains/visualization.
 visualization_engine = { path = "domains/visualization/engine" }
-visualization_world = { path = "domains/visualization/world" }
 # Games against computer pilots: see domains/recreation.
 recreation_games = { path = "domains/recreation/games" }
-# Map packs (real places): aerial photos and land cover. Same version Bevy uses.
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+# Map packs (real places): aerial photos and land cover.
+image.workspace = true
+bevy.workspace = true
 # The flight computer between the TX15 and ArduPilot: see domains/aviation.
 aviation_computer = { path = "domains/aviation/computer" }
 aviation_crsf = { path = "domains/aviation/crsf" }
@@ -43,13 +60,10 @@ communication_air = { path = "domains/communication/air" }
 communication_radio = { path = "domains/communication/radio" }
 communication_telemetry = { path = "domains/communication/telemetry" }
 communication_traffic = { path = "domains/communication/traffic" }
-# The shared look: the HUD and overlays use the same theme as the ground station and the docs.
-illustration_theme = { path = "domains/illustration/theme" }
 # Acceptance tests (`--expect`): see github.com/ptescher/expectation and expectations/.
-expectation_harness = { git = "https://github.com/ptescher/expectation" }
-expectation_model = { git = "https://github.com/ptescher/expectation" }
-expectation_story = { git = "https://github.com/ptescher/expectation" }
-expectation_service = { git = "https://github.com/ptescher/expectation" }
+expectation_harness.workspace = true
+expectation_model.workspace = true
+expectation_story.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 hidapi = "2"

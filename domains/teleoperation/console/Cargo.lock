@@ -478,7 +478,6 @@ name = "aviation_line"
 version = "0.1.0"
 dependencies = [
  "aviation_computer",
- "aviation_crsf",
  "simulation_aircraft",
 ]
 
@@ -3720,8 +3719,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.13.2",
- "block2",
- "libc",
  "objc2",
  "objc2-core-foundation",
 ]
@@ -5606,7 +5603,6 @@ name = "teleoperation_console"
 version = "0.1.0"
 dependencies = [
  "aviation_line",
- "communication_telemetry",
  "communication_traffic",
  "expectation_harness",
  "expectation_model",
@@ -5617,7 +5613,6 @@ dependencies = [
  "mavlink",
  "objc2",
  "objc2-app-kit",
- "objc2-foundation",
  "raw-window-handle",
  "recreation_games",
  "simulation_aircraft",

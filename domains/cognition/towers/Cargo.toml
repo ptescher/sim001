@@ -6,7 +6,7 @@ description = "Cognition domain: the fast Towers arena. Two captains (recreation
 
 [dependencies]
 recreation_towers = { path = "../../recreation/towers" }
-fastrand = "2"
-glam = { version = "0.33", features = ["serde"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+fastrand.workspace = true
+glam = { workspace = true, features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true

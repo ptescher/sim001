@@ -8,4 +8,3 @@ description = "Communication domain: the air between aircraft, which carries Rem
 communication_remoteid = { path = "../remoteid" }
 communication_telemetry = { path = "../telemetry" }
 communication_traffic = { path = "../traffic" }
-mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }

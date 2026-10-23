@@ -5,7 +5,7 @@ edition = "2024"
 description = "The expectation command (check, graph, plan, docs), from github.com/ptescher/expectation"
 
 [dependencies]
-expectation_cli = { git = "https://github.com/ptescher/expectation" }
+expectation_cli.workspace = true
 
 [[bin]]
 name = "expectation"

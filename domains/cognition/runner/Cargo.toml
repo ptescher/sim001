@@ -9,13 +9,13 @@ simulation_aircraft = { path = "../../simulation/aircraft" }
 simulation_physics = { path = "../../simulation/physics" }
 simulation_sitl = { path = "../../simulation/sitl" }
 recreation_games = { path = "../../recreation/games" }
-glam = "0.33"
+glam.workspace = true
 # --agent: the ground control agent flies the planes with plans, over MAVLink.
 cognition_agent = { path = "../agent" }
 cognition_plan = { path = "../plan" }
 
 [dev-dependencies]
 # The acceptance tests (tests/acceptance.rs): the section "Flying by plan" in real ArduPlane SITL.
-expectation_harness = { git = "https://github.com/ptescher/expectation" }
-expectation_model = { git = "https://github.com/ptescher/expectation" }
-expectation_story = { git = "https://github.com/ptescher/expectation" }
+expectation_harness.workspace = true
+expectation_model.workspace = true
+expectation_story.workspace = true

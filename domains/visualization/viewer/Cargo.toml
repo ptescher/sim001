@@ -11,5 +11,4 @@ path = "src/main.rs"
 [dependencies]
 visualization_engine = { path = "../engine" }
 visualization_telemetry = { path = "../telemetry" }
-visualization_world = { path = "../world" }
-bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
+bevy.workspace = true

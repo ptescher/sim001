@@ -434,7 +434,6 @@ dependencies = [
  "aviation_crsf",
  "communication_telemetry",
  "expectation_harness",
- "expectation_model",
  "expectation_story",
  "illustration_theme",
  "mavlink",
@@ -449,7 +448,6 @@ name = "aviation_line"
 version = "0.1.0"
 dependencies = [
  "aviation_computer",
- "aviation_crsf",
  "simulation_aircraft",
 ]
 
@@ -2286,7 +2284,6 @@ dependencies = [
  "glam",
  "recreation_games",
  "recreation_pilot",
- "recreation_tag",
  "serde",
  "simulation_aircraft",
  "simulation_physics",
@@ -2375,7 +2372,6 @@ dependencies = [
  "communication_remoteid",
  "communication_telemetry",
  "communication_traffic",
- "mavlink",
 ]
 
 [[package]]
@@ -5434,10 +5430,8 @@ dependencies = [
  "communication_traffic",
  "expectation_harness",
  "expectation_model",
- "expectation_service",
  "expectation_story",
  "hidapi",
- "illustration_theme",
  "image",
  "libc",
  "objc2 0.6.5",
@@ -5450,7 +5444,6 @@ dependencies = [
  "simulation_sitl",
  "teleoperation_shared",
  "visualization_engine",
- "visualization_world",
 ]
 
 [[package]]
@@ -6110,7 +6103,6 @@ version = "0.1.0"
 dependencies = [
  "communication_telemetry",
  "expectation_harness",
- "expectation_model",
  "expectation_story",
  "glam",
  "mavlink",
@@ -6123,7 +6115,6 @@ dependencies = [
  "bevy",
  "visualization_engine",
  "visualization_telemetry",
- "visualization_world",
 ]
 
 [[package]]

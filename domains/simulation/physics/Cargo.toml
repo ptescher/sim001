@@ -6,4 +6,4 @@ description = "Simulation domain: the 6-DOF flight model (aerodynamics, propulsi
 
 [dependencies]
 simulation_aircraft = { path = "../aircraft" }
-glam = "0.33"
+glam.workspace = true

@@ -20,7 +20,6 @@ simulation_aircraft = { path = "../../simulation/aircraft" }
 recreation_games = { path = "../../recreation/games" }
 # Other aircraft: what the radio tells the station, joined into one picture (domains/communication).
 communication_traffic = { path = "../../communication/traffic" }
-communication_telemetry = { path = "../../communication/telemetry" }
 # The shared look (the docs and the sim's HUD use it too).
 illustration_theme = { path = "../../illustration/theme" }
 raw-window-handle = "0.6"
@@ -32,7 +31,6 @@ expectation_story = { git = "https://github.com/ptescher/expectation" }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.2", features = ["NSScreen", "NSWindow", "NSResponder", "NSGraphics", "NSView", "NSButton", "NSControl"] }
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSGeometry"] }
 
 # Keep `cargo run` (debug) usable: optimize dependencies.
 [profile.dev.package."*"]

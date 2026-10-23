@@ -7,5 +7,5 @@ description = "Visualization domain: the place being flown (ground heights, wate
 [dependencies]
 simulation_physics = { path = "../../simulation/physics" }
 visualization_mappack = { path = "../mappack" }
-glam = "0.33"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+glam.workspace = true
+image.workspace = true

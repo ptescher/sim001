@@ -5,4 +5,4 @@ edition = "2024"
 description = "Simulation domain: aircraft descriptions (surfaces, motors, contacts, mass) and the registry of planes the sim can fly"
 
 [dependencies]
-glam = "0.33"
+glam.workspace = true

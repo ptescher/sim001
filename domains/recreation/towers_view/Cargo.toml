@@ -14,5 +14,5 @@ visualization_engine = { path = "../../visualization/engine" }
 visualization_world = { path = "../../visualization/world" }
 # The sensor feed protocol: the camera of each drone is sent the way the sim's sensor camera is.
 teleoperation_shared = { path = "../../teleoperation/shared" }
-bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
-glam = "0.33"
+bevy.workspace = true
+glam.workspace = true

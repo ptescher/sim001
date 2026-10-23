@@ -9,9 +9,9 @@ communication_air = { path = "../air" }
 communication_remoteid = { path = "../remoteid" }
 communication_telemetry = { path = "../telemetry" }
 communication_traffic = { path = "../traffic" }
-mavlink = { version = "0.19", default-features = false, features = ["std", "dialect-common", "mav2-message-extensions"] }
+mavlink.workspace = true
 
 [dev-dependencies]
-expectation_harness = { git = "https://github.com/ptescher/expectation" }
-expectation_model = { git = "https://github.com/ptescher/expectation" }
-expectation_story = { git = "https://github.com/ptescher/expectation" }
+expectation_harness.workspace = true
+expectation_model.workspace = true
+expectation_story.workspace = true
