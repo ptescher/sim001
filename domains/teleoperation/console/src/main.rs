@@ -265,7 +265,7 @@ fn main() {
             .unwrap_or_else(|| Bounds::centered(None, size(px(1840.0), px(1080.0)), cx));
         let console = cx
             .open_window(
-                window_options("SIM001 Ground Control", console_bounds),
+                window_options("SIM001 Ground Control", console_bounds, (800.0, 540.0)),
                 |window, cx| {
                     screens::hide_window_buttons(window);
                     cx.new(|cx| {
@@ -288,7 +288,7 @@ fn main() {
                 .map(gpui_bounds)
                 .unwrap_or_else(|| Bounds::centered(None, size(px(1280.0), px(760.0)), cx));
             let v = vehicle.clone();
-            cx.open_window(window_options("SIM001 Sensor", b), |window, cx| {
+            cx.open_window(window_options("SIM001 Sensor", b, (320.0, 240.0)), |window, cx| {
                 screens::hide_window_buttons(window);
                 cx.new(|cx| ui::sensor::SensorView::new(sensor, v, origin, cx))
             })
@@ -322,9 +322,10 @@ fn main() {
     std::process::exit(expect::EXIT.load(std::sync::atomic::Ordering::SeqCst));
 }
 
-fn window_options(title: &'static str, bounds: Bounds<gpui::Pixels>) -> WindowOptions {
+fn window_options(title: &'static str, bounds: Bounds<gpui::Pixels>, min: (f32, f32)) -> WindowOptions {
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_min_size: Some(size(px(min.0), px(min.1))),
         // Content runs under a transparent title bar; our own header strips take its place.
         titlebar: Some(TitlebarOptions {
             title: Some(title.into()),
