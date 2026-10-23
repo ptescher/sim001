@@ -72,8 +72,8 @@ pub fn params() -> AircraftParams {
         battery_resistance: 0.04,
         start: StartStyle::Ground { rest_height: 0.022 },
         flight_controller: true,
-        // The mode channel: stabilised hover, position hold, guided, auto, the way home, land.
-        rc_modes: vec!["QSTABILIZE", "QLOITER", "GUIDED", "AUTO", "QRTL", "QLAND"],
+        // The mode channel: climb-rate hover, position hold, guided, auto, the way home, land.
+        rc_modes: vec!["QHOVER", "QLOITER", "GUIDED", "AUTO", "QRTL", "QLAND"],
     }
 }
 

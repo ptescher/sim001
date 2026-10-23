@@ -16,8 +16,8 @@ SERVO3_REVERSED 0
 SERVO4_REVERSED 0
 
 # The radio's mode channel (channel 8), from the lowest PWM to the highest. The same list is in
-# the aircraft description (rc_modes): QSTABILIZE, QLOITER, GUIDED, AUTO, QRTL and QLAND.
-FLTMODE1 17
+# the aircraft description (rc_modes): QHOVER, QLOITER, GUIDED, AUTO, QRTL and QLAND.
+FLTMODE1 18
 FLTMODE2 19
 FLTMODE3 15
 FLTMODE4 10
@@ -55,3 +55,14 @@ BATT_LOW_MAH 0
 BATT_CRT_MAH 0
 BATT_LOW_VOLT 0
 BATT_CRT_VOLT 0
+
+# A 280 g quad has far more thrust for its inertia than a quadplane's defaults expect, so the
+# default rate gains oscillate: a third of them, with a lower filter on the derivative.
+Q_A_RAT_RLL_P 0.045
+Q_A_RAT_RLL_I 0.045
+Q_A_RAT_RLL_D 0.0012
+Q_A_RAT_PIT_P 0.045
+Q_A_RAT_PIT_I 0.045
+Q_A_RAT_PIT_D 0.0012
+Q_A_RAT_YAW_P 0.12
+Q_A_RAT_YAW_I 0.012
