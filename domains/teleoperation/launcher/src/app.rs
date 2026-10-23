@@ -8,7 +8,7 @@ use gpui::{
     prelude::*, px,
 };
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use teleoperation_core::debug::{self, Level, LogFile};
 
@@ -16,7 +16,12 @@ thread_local! {
     /// Where each button was last painted, by id, so `--expect` can click it the way a person
     /// would. Written while painting, read between frames; both on the UI thread.
     static BUTTONS: RefCell<HashMap<SharedString, Bounds<Pixels>>> = RefCell::new(HashMap::new());
+    /// How tall each row of buttons wants to be at its current width, by id (see [`Launcher::fit`]).
+    static ROWS: RefCell<HashMap<&'static str, f32>> = RefCell::new(HashMap::new());
 }
+
+/// The height of one line of buttons: a row that wants more than this is cut to it, behind MORE.
+const ROW_H: f32 = 34.0;
 
 /// Where the button with this id is on screen now, if it is.
 pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
@@ -179,6 +184,8 @@ pub struct Launcher {
     /// The log files there are, and the last lines of the one that is shown, read as they grow.
     logs: Vec<LogFile>,
     file_lines: Vec<String>,
+    /// The rows of buttons (by id) that MORE has opened out to every line.
+    expanded: HashSet<&'static str>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -234,18 +241,20 @@ fn screen(title: &'static str, body: impl IntoElement) -> Div {
         .child(div().px_1().text_size(px(11.0)).text_color(c(GREY)).child(title))
         .child(
             div()
+                .id(title)
                 .flex()
                 .flex_col()
                 .flex_1()
                 .min_h(px(0.0))
-                .overflow_hidden()
+                // What does not fit scrolls, text above all.
+                .overflow_scroll()
                 .gap_2()
                 .p_3()
                 .bg(c(SCREEN))
                 .border_2()
                 .border_color(c(0x000000))
                 .rounded(px(SCREEN_RADIUS))
-                .child(body),
+                .child(div().flex().flex_col().flex_none().child(body)),
         )
 }
 
@@ -255,11 +264,6 @@ fn note(text: impl Into<SharedString>) -> Div {
 
 fn row() -> Div {
     div().flex().flex_wrap().items_center().gap_2()
-}
-
-/// A row of a few buttons that does not wrap.
-fn line() -> Div {
-    div().flex().items_center().gap_2()
 }
 
 impl Launcher {
@@ -292,6 +296,7 @@ impl Launcher {
             log_tab: None,
             logs: vec![],
             file_lines: vec![],
+            expanded: HashSet::new(),
         }
     }
 
@@ -308,6 +313,8 @@ impl Launcher {
             }
             cx.notify();
         }
+        // Repaint for the rows that read last frame's measure (see `fit`).
+        cx.notify();
         if let Some(j) = &mut self.job {
             let was = j.running();
             j.poll();
@@ -427,6 +434,33 @@ impl Launcher {
         }))
     }
 
+    /// A row of buttons that shows one line and a MORE button when the rest does not fit; MORE
+    /// opens it out (and LESS closes it). Whether it fits is read from the last frame.
+    fn fit(&self, id: &'static str, content: Div, cx: &mut Context<Self>) -> Div {
+        let open = self.expanded.contains(id);
+        let natural = ROWS.with(|r| r.borrow().get(id).copied()).unwrap_or(0.0);
+        let measure =
+            canvas(move |b, _, _| ROWS.with(|r| r.borrow_mut().insert(id, f32::from(b.size.height))), |_, _, _, _| {})
+                .absolute()
+                .inset_0();
+        let mut clip = div().flex_1().min_w(px(0.0)).overflow_hidden();
+        if !open {
+            clip = clip.max_h(px(ROW_H));
+        }
+        div().flex().items_start().gap_2().child(clip.child(content.relative().child(measure))).children(
+            (natural > ROW_H + 2.0).then(|| {
+                button(format!("more-{id}"), if open { "LESS ▴" } else { "MORE ▾" }, Style::Normal).on_click(
+                    cx.listener(move |this, _, _, cx| {
+                        if !this.expanded.remove(id) {
+                            this.expanded.insert(id);
+                        }
+                        cx.notify();
+                    }),
+                )
+            }),
+        )
+    }
+
     fn controllers_panel(&self, cx: &mut Context<Self>) -> Div {
         let mut body = div().flex().flex_col().gap_1();
         if self.devices.is_empty() && self.choices.serial.is_empty() {
@@ -481,7 +515,7 @@ impl Launcher {
                 .child(mapped)
                 .child(note("Setup opens the sim on the plain T1-S and starts the radio wizard: move each stick and switch when asked. F3 there shows the raw axes."))
                 .child(
-                    row()
+                    self.fit("r-ctrl", row()
                         .child(button("calibrate", "SET UP CONTROLLER", Style::Caution).on_click(cx.listener(|this, _, _, cx| {
                             if this.devices.is_empty() {
                                 this.devices = controllers::connected();
@@ -498,7 +532,7 @@ impl Launcher {
                         .child(button("cfg", "OPEN CONTROLS.CFG", Style::Normal).on_click(cx.listener(|this, _, _, cx| {
                             this.open(layout().data.join("controls.cfg"));
                             cx.notify();
-                        }))),
+                        }))), cx),
                 ),
         )
     }
@@ -516,7 +550,7 @@ impl Launcher {
                     "Renders the manual (docs/ and the HTML site) from the specs in expectations/ and the last saved test results. `tasks docs` also re-runs every test first."
                 }))
                 .child(
-                    row()
+                    self.fit("r-docs", row()
                         .children((!layout().bundled()).then(|| {
                             button("render", "RENDER DOCS", Style::Normal).on_click(cx.listener(|this, _, _, cx| {
                                 this.render_docs();
@@ -537,7 +571,7 @@ impl Launcher {
                                 );
                                 cx.notify();
                             }))
-                        })),
+                        })), cx),
                 ),
         )
     }
@@ -578,6 +612,7 @@ impl Launcher {
                 })),
             );
         }
+        let maps = self.fit("r-maps", maps, cx);
         let go = if busy {
             button("stop", "STOP", Style::Danger).on_click(cx.listener(|this, _, _, cx| {
                 if let Some(j) = &mut this.job {
@@ -598,7 +633,7 @@ impl Launcher {
                 .flex_col()
                 .gap_2()
                 .child(
-                    line()
+                    self.fit("r-target", row()
                         .child(
                             self.choice("t-sim", "SIMULATOR ONLY", target == Target::Sim, cx, |t| {
                                 t.choices.target = Target::Sim
@@ -612,23 +647,24 @@ impl Launcher {
                             self.choice("t-towers", "TOWERS", target == Target::Towers, cx, |t| {
                                 t.choices.target = Target::Towers
                             })
-                        })),
+                        })), cx)
                 )
                 .when(target != Target::Towers, |d| {
-                    d.child(line()
+                    d.child(self.fit("r-fc", row()
                         .child(self.choice("fc-on", "WITH ARDUPILOT", fc, cx, |t| t.choices.flight_controller = true))
-                        .child(self.choice("fc-off", "WITHOUT ARDUPILOT", !fc, cx, |t| t.choices.flight_controller = false)))
+                        .child(self.choice("fc-off", "WITHOUT ARDUPILOT", !fc, cx, |t| t.choices.flight_controller = false)), cx))
                 })
                 .when(target != Target::Towers && fc, |d| {
-                    d.child(PLANES.iter().fold(line(), |l, &(id, name, button)| {
+                    let planes = PLANES.iter().fold(row(), |l, &(id, name, button)| {
                         l.child(self.choice(button, name, self.choices.plane == id, cx, move |t| {
                             t.choices.plane = id
                         }))
-                    }))
+                    });
+                    d.child(self.fit("r-plane", planes, cx))
                 })
                 .child(note(explain))
                 .when(target == Target::Towers, |d| {
-                    d.child(line()
+                    d.child(self.fit("r-towers", row()
                         .child(self.choice("red-computer", "RED: COMPUTER", self.choices.red_computer, cx, |t| {
                             t.choices.red_computer = true
                         }))
@@ -637,7 +673,7 @@ impl Launcher {
                         }))
                         .child(self.choice("cams", "DRONE CAMERAS", self.choices.cameras, cx, |t| {
                             t.choices.cameras = !t.choices.cameras
-                        })))
+                        })), cx))
                     .child(note("RED: NOBODY is a practice game: Red's drones circle over their base. DRONE CAMERAS starts the 3D view of the game, which sends the camera of each of your drones (the first start takes a while to build it)."))
                 })
                 .children(
@@ -646,7 +682,7 @@ impl Launcher {
                     }),
                 )
                 .when(target != Target::Towers, |d| {
-                    d.child(note("Place")).child(maps).child(row()
+                    d.child(note("Place")).child(maps).child(self.fit("r-opts", row()
                         .child(self.choice("rt", "RAY TRACING", self.choices.raytrace, cx, |t| t.choices.raytrace = !t.choices.raytrace))
                         .children((target == Target::Sim).then(|| {
                             self.choice("fs", "FULL SCREEN", self.choices.fullscreen, cx, |t| t.choices.fullscreen = !t.choices.fullscreen)
@@ -658,7 +694,7 @@ impl Launcher {
                         }))
                         .children((target == Target::Station).then(|| {
                             self.choice("nb", "SKIP SIM REBUILD", self.choices.no_build, cx, |t| t.choices.no_build = !t.choices.no_build)
-                        })))
+                        })), cx))
                 })
                 .child(row().child(go)),
         )
@@ -690,6 +726,7 @@ impl Launcher {
                 })),
             );
         }
+        let tabs = self.fit("r-tabs", tabs, cx);
         let Some(tab) = &self.log_tab else { return self.output_panel(tabs) };
         let colour = |line: &str| match debug::parse_line(line).map(|e| e.level) {
             Some(Level::Error) => RED,

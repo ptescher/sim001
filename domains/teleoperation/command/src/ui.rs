@@ -108,8 +108,8 @@ impl CommanderView {
             drag: None,
             map_bounds: Rc::new(Cell::new(Bounds::default())),
             valley: None,
-            cameras,
             shown: vec![None; cameras.len()],
+            cameras,
             focus,
         }
     }
@@ -347,9 +347,22 @@ fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, active: bo
 
 /// A titled screen in a bezel, as on the console.
 fn screen(title: &'static str, body: impl IntoElement) -> Div {
+    screen_with(title, body, false)
+}
+
+/// A screen whose body scrolls, for text and buttons that may not fit the window (not the map,
+/// which fits itself to the room and takes the mouse).
+fn scrolling(title: &'static str, body: impl IntoElement) -> Div {
+    screen_with(title, body, true)
+}
+
+fn screen_with(title: &'static str, body: impl IntoElement, scroll: bool) -> Div {
+    let area = div().id(title).flex_1().min_h(px(0.0)).bg(c(SCREEN)).rounded(px(SCREEN_RADIUS));
+    let area = if scroll { area.overflow_scroll() } else { area.overflow_hidden() };
     div()
         .flex()
         .flex_col()
+        .min_h(px(0.0))
         .bg(c(BEZEL))
         .border_1()
         .border_color(c(BEZEL_EDGE))
@@ -357,7 +370,7 @@ fn screen(title: &'static str, body: impl IntoElement) -> Div {
         .p(px(BEZEL_PAD))
         .gap(px(4.0))
         .child(div().px_2().bg(c(TITLE_BG)).text_color(c(GREY)).text_xs().child(title))
-        .child(div().flex_1().bg(c(SCREEN)).rounded(px(SCREEN_RADIUS)).overflow_hidden().child(body))
+        .child(area.child(body))
 }
 
 impl CommanderView {
@@ -543,6 +556,7 @@ impl Render for CommanderView {
         }
         let actions = div()
             .flex()
+            .flex_wrap()
             .gap(px(6.0))
             .p_2()
             .child(button("hold", "HOLD", false).on_click(cx.listener(|this, _, _, cx| {
@@ -592,9 +606,9 @@ impl Render for CommanderView {
             .gap(px(GAP))
             .w(px(340.0))
             .flex_none()
-            .child(screen("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)))
-            .child(screen("TOWERS", towers))
-            .child(screen("CAMERAS", cameras));
+            .child(scrolling("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)))
+            .child(scrolling("TOWERS", towers))
+            .child(scrolling("CAMERAS", cameras));
 
         div()
             .track_focus(&self.focus)
