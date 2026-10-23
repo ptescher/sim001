@@ -67,6 +67,14 @@ pub struct Pose {
     pub crashed: bool,
 }
 
+impl Pose {
+    /// A quadcopter (the Seeker 3): four lift motors and no lifting surface. The view draws it
+    /// instead of the T1-S.
+    pub fn is_quad(&self) -> bool {
+        self.deflection.is_empty() && self.spool.len() == 4
+    }
+}
+
 /// The wind, for the windsock and the clouds.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Wind {
