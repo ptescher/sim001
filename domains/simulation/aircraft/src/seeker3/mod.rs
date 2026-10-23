@@ -47,7 +47,8 @@ pub fn params() -> AircraftParams {
             forward: false,
             tilt: None,
             lift: true,
-            reaction: if ccw { 0.008 } else { -0.008 },
+            // A counter-clockwise prop (right-hand about up) pushes the airframe round clockwise.
+            reaction: if ccw { -0.008 } else { 0.008 },
             tip_speed: 180.0,
         })
         .collect();
@@ -73,5 +74,21 @@ pub fn params() -> AircraftParams {
         flight_controller: true,
         // The mode channel: stabilised hover, position hold, guided, auto, the way home, land.
         rc_modes: vec!["QSTABILIZE", "QLOITER", "GUIDED", "AUTO", "QRTL", "QLAND"],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ArduPilot's quad X yaws the nose right by speeding up the counter-clockwise motors (1 and 2),
+    /// whose reaction turns the airframe clockwise from above: about -Y.
+    #[test]
+    fn the_counter_clockwise_motors_turn_the_airframe_clockwise() {
+        let p = params();
+        let yaw = |channel: usize| p.motors.iter().find(|m| m.channel == channel).unwrap().reaction;
+        assert!(yaw(0) < 0.0 && yaw(1) < 0.0, "motors 1 and 2 turn counter-clockwise");
+        assert!(yaw(2) > 0.0 && yaw(3) > 0.0, "motors 3 and 4 turn clockwise");
+        assert_eq!(yaw(0) + yaw(2), 0.0, "level thrust leaves no steady yaw torque");
     }
 }
