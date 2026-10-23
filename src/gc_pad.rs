@@ -22,9 +22,11 @@ pub struct PadSnapshot {
 #[derive(Resource, Default)]
 pub struct GcPads {
     pub pad: Option<PadSnapshot>,
+    #[cfg(target_os = "macos")]
     prev: Vec<GamepadButton>,
     /// `--debug-input`: log every change to the terminal.
     pub debug: bool,
+    #[cfg(target_os = "macos")]
     last_logged: Option<(Vec2, Vec2, usize)>,
     /// Raw-HID Switch Pro reader (preferred over GameController on macOS).
     #[cfg(target_os = "macos")]
