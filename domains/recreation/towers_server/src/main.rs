@@ -1,8 +1,8 @@
 //! The game server of Towers (see plans/towers.md): `cargo run --release -p
 //! recreation_towers_server -- [--speedup N] [--blue computer|person] [--red computer|person]`.
 //!
-//! Each drone is a T1-S VTOL with an ArduPlane SITL of its own (MAVLink system ids 1 to 6), with
-//! the AGENT mode and `ardupilot/towers.parm`. The SITL instances are 30 to 35
+//! Each drone has an ArduPlane SITL of its own, flying the plane of its class (`recreation_towers::Class`: standard T1-S VTOLs, a heavy T2 Cruza and a light Seeker 3) (MAVLink system ids 1 to 10), with
+//! the AGENT mode and `ardupilot/towers.parm`. The SITL instances are 30 to 39
 //! (`--first-instance`): clear of the station's (0 to 3), the runner's (1 to 3), and of TCP 5900
 //! (macOS screen sharing). The server is their host: it answers each SITL's servo packets with
 //! the drone's physics, and its radio takes the drone off at GO. Once a drone flies on the wing, the ground switches it to AGENT and flies its order by
@@ -20,7 +20,7 @@ mod world;
 
 use glam::Vec3;
 use recreation_games::Radio;
-use recreation_towers::{Commander, Outcome, Rules, Team};
+use recreation_towers::{Class, Commander, Outcome, Rules, Team};
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
 use std::net::UdpSocket;
 use std::path::{Path, PathBuf};
@@ -95,9 +95,14 @@ fn start_fleet(root: &Path, dir: &Path, rules: &Rules, first: u16, n: u16, speed
     let towers = root.join("ardupilot/towers.parm").display().to_string();
     let mut fleet = Fleet(vec![]);
     for k in 1..=n {
-        let mut args = launch::native_instance_args(root, "t1s-vtol", first + k - 1, launch::HOME, speedup);
-        // Drone `k - 1` starts at its team's base; the field's middle is that far from its home.
-        let team = if usize::from(k - 1) < rules.drones { Team::Blue } else { Team::Red };
+        // Drone `k - 1` flies the plane of its class, starts at its team's base, and the field's
+        // middle is that far from its home.
+        let (team, class) = if usize::from(k - 1) < rules.drones {
+            (Team::Blue, rules.class(usize::from(k - 1)))
+        } else {
+            (Team::Red, rules.class(usize::from(k - 1) - rules.drones))
+        };
+        let mut args = launch::native_instance_args(root, class.aircraft(), first + k - 1, launch::HOME, speedup);
         let middle = -rules.base(team);
         let instance = dir.join(format!("instance{k}"));
         std::fs::create_dir_all(&instance).map_err(|e| format!("{}: {e}", instance.display()))?;
@@ -140,8 +145,7 @@ fn main() {
     let a = args();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root");
     let rules = Rules::default();
-    let params = (simulation_aircraft::find("t1s-vtol").unwrap().params)();
-    let world = Arc::new(Mutex::new(World::new(rules, params, a.warmup)));
+    let world = Arc::new(Mutex::new(World::new(rules, a.warmup)));
     let n = 2 * rules.drones;
 
     for i in 0..n {
@@ -184,11 +188,15 @@ fn main() {
             std::process::exit(2);
         }
     };
-    println!("six SITL drones starting at {}x; seats on tcp {}", a.speedup, a.seat_port);
+    println!("{n} SITL drones starting at {}x; seats on tcp {}", a.speedup, a.seat_port);
     let names: Vec<String> = (0..n).map(|i| name(&rules, i)).collect();
     let ports: Vec<u16> = (0..n as u16).map(|i| launch::MAVLINK_PORT + 10 * (a.first_instance + i)).collect();
+    // Light drones have no wing for AGENT to fly: they are flown by GUIDED.
+    let modes: Vec<u32> = (0..n)
+        .map(|i| if rules.class(i % rules.drones) == Class::Light { ground::GUIDED_MODE } else { ground::AGENT_MODE })
+        .collect();
     let home = cognition_agent::parse_home(launch::HOME).expect("the SITL home");
-    let mut ground = ground::Ground::connect(&names, &ports, home);
+    let mut ground = ground::Ground::connect(&names, &modes, &ports, home);
     let mut commanders: Vec<(Team, Commander)> = Team::BOTH
         .into_iter()
         .filter(|t| !a.people[t.index()] && !a.nobody[t.index()])

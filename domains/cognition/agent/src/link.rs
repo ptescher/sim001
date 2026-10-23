@@ -4,7 +4,7 @@
 //!
 //! | Sent | Fields |
 //! | --- | --- |
-//! | plan | `COMMAND_INT`, command 31010 (`MAV_CMD_USER_1`), frame `MAV_FRAME_GLOBAL_RELATIVE_ALT_INT`, `param1..4` primitive, target, plan id, ttl; `x`/`y` lat/lon 1e7; `z` altitude and radius packed (`cognition_plan::WirePlan::to_command`) |
+//! | plan | `COMMAND_INT`, command 31010 (`MAV_CMD_USER_1`), frame `MAV_FRAME_GLOBAL_RELATIVE_ALT`, `param1..4` primitive, target, plan id, ttl; `x`/`y` lat/lon 1e7; `z` altitude and radius packed (`cognition_plan::WirePlan::to_command`) |
 //! | game | `COMMAND_INT`, command 31011 (`MAV_CMD_USER_2`), frame `MAV_FRAME_MISSION`, `param1..3` role, time left, no-tag-back id |
 //! | AGENT | `COMMAND_LONG` `MAV_CMD_DO_SET_MODE`, `param1` 1 (custom mode), `param2` the custom mode (50) |
 //! | traffic | `ADSB_VEHICLE`: ICAO [`ICAO_BASE`] + the plane's id in the low byte, lat/lon 1e7, altitude AMSL (mm, geometric), heading (cdeg), horizontal and vertical speed (cm/s, up positive), emitter UAV, callsign, flags valid |
@@ -41,7 +41,7 @@ fn header() -> MavHeader {
 #[allow(deprecated)] // `_INT` is what the plan protocol names; ArduPilot takes it as `GLOBAL_RELATIVE_ALT`
 pub fn command_int(c: &CommandInt, target: (u8, u8)) -> Option<MavMessage> {
     let (command, frame) = match c.command {
-        CMD_PLAN => (MavCmd::MAV_CMD_USER_1, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT_INT),
+        CMD_PLAN => (MavCmd::MAV_CMD_USER_1, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT),
         CMD_GAME => (MavCmd::MAV_CMD_USER_2, MavFrame::MAV_FRAME_MISSION),
         _ => return None,
     };
@@ -352,6 +352,31 @@ impl Link {
         self.send(&set_mode_message(custom_mode, self.target()))
     }
 
+    /// Flies a drone that has no AGENT mode to a point, in GUIDED (`SET_POSITION_TARGET_GLOBAL_INT`):
+    /// `alt` is the height above home (m). A quadcopter hovers there.
+    pub fn goto(&self, lat: f64, lon: f64, alt: f32) -> io::Result<()> {
+        let (system, component) = self.target();
+        self.send(&MavMessage::SET_POSITION_TARGET_GLOBAL_INT(SET_POSITION_TARGET_GLOBAL_INT_DATA {
+            time_boot_ms: 0,
+            lat_int: (lat * 1e7).round() as i32,
+            lon_int: (lon * 1e7).round() as i32,
+            alt,
+            vx: 0.0,
+            vy: 0.0,
+            vz: 0.0,
+            afx: 0.0,
+            afy: 0.0,
+            afz: 0.0,
+            yaw: 0.0,
+            yaw_rate: 0.0,
+            // Only the position is set.
+            type_mask: PositionTargetTypemask::from_bits_truncate(0b0000_1101_1111_1000),
+            target_system: system,
+            target_component: component,
+            coordinate_frame: MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT,
+        }))
+    }
+
     pub fn send_traffic(&self, t: &Traffic) -> io::Result<()> {
         self.send(&adsb_vehicle(t))
     }
@@ -433,7 +458,7 @@ mod tests {
         let msg = command_int(&plan.to_command(), (1, 1)).unwrap();
         let MavMessage::COMMAND_INT(d) = &msg else { panic!() };
         assert_eq!(d.command as u32, 31010);
-        assert_eq!(d.frame, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT_INT);
+        assert_eq!(d.frame, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT);
         assert_eq!((d.target_system, d.target_component), (1, 1));
         // Through the bytes of a real MAVLink 2 frame.
         let mut bytes = vec![];

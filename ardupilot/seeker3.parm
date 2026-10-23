@@ -1,0 +1,51 @@
+# DeepSpace Seeker 3 (sim001 --aircraft seeker3), layered over t1s.parm: a 3 inch quadcopter, flown
+# as a quadplane with a quad frame and no wing. Motor 1 front right, 2 rear left, 3 front left, 4
+# rear right (ArduPilot's quad X) on SERVO1 to SERVO4. In the Towers game the ground flies it in
+# GUIDED, which hovers (Q_GUIDED_MODE), so there is no forward flight and no AGENT mode.
+Q_ENABLE 1
+Q_FRAME_CLASS 1
+Q_FRAME_TYPE 1
+SERVO1_FUNCTION 33
+SERVO2_FUNCTION 34
+SERVO3_FUNCTION 35
+SERVO4_FUNCTION 36
+SERVO5_FUNCTION 0
+SERVO1_REVERSED 0
+SERVO2_REVERSED 0
+SERVO3_REVERSED 0
+SERVO4_REVERSED 0
+
+# The radio's mode channel (channel 8), from the lowest PWM to the highest. The same list is in
+# the aircraft description (rc_modes): QSTABILIZE, QLOITER, GUIDED, AUTO, QRTL and QLAND.
+FLTMODE1 17
+FLTMODE2 19
+FLTMODE3 15
+FLTMODE4 10
+FLTMODE5 21
+FLTMODE6 20
+RC5_OPTION 153
+RC7_OPTION 0
+
+Q_M_PWM_MIN 1000
+Q_M_PWM_MAX 2000
+Q_M_THST_EXPO 1.0
+Q_M_THST_HOVER 0.30
+Q_M_HOVER_LEARN 2
+Q_M_SPIN_ARM 0.05
+Q_M_SPIN_MIN 0.10
+
+# No wing: the rotors always fly it.
+Q_ASSIST_SPEED 0
+Q_GUIDED_MODE 1
+Q_ANGLE_MAX 3500
+Q_VELZ_MAX 400
+Q_PILOT_SPD_UP 300
+Q_PILOT_SPD_DN 200
+Q_WP_SPEED 1200
+
+# A 4S 850 mAh pack. The voltage failsafes are off, as on the VTOL: a hard climb sags the pack.
+BATT_CAPACITY 850
+BATT_LOW_MAH 170
+BATT_CRT_MAH 70
+BATT_LOW_VOLT 0
+BATT_CRT_VOLT 0

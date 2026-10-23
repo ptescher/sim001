@@ -55,6 +55,46 @@ impl Team {
     }
 }
 
+/// What a drone is: its weight in a tower's circle, and the plane it flies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Class {
+    /// The DeepSpace Seeker 3 quadcopter.
+    Light,
+    /// The HEEWING T1-S VTOL.
+    Standard,
+    /// The HEEWING T2 Cruza VTOL.
+    Heavy,
+}
+
+impl Class {
+    /// How many drones one of this class counts for, taking a tower.
+    pub fn weight(self) -> f32 {
+        match self {
+            Class::Light => 0.5,
+            Class::Standard => 1.0,
+            Class::Heavy => 2.0,
+        }
+    }
+
+    /// The plane (`simulation_aircraft`) a drone of this class flies.
+    pub fn aircraft(self) -> &'static str {
+        match self {
+            Class::Light => "seeker3",
+            Class::Standard => "t1s-vtol",
+            Class::Heavy => "t2-cruza",
+        }
+    }
+
+    /// A word for the commander's map.
+    pub fn name(self) -> &'static str {
+        match self {
+            Class::Light => "light",
+            Class::Standard => "standard",
+            Class::Heavy => "heavy",
+        }
+    }
+}
+
 /// The numbers of the game. To tune, not measurements.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Rules {
@@ -73,6 +113,8 @@ pub struct Rules {
     pub look_down: f32,
     /// Drones in each team.
     pub drones: usize,
+    /// The class of each team's drone `k`: three standard drones, a heavy one and a light one.
+    pub squad: [Class; 5],
     /// A tower's circle: a drone counts within this distance across (m)...
     pub circle_radius: f32,
     /// ...and at most this high (m).
@@ -98,7 +140,8 @@ impl Default for Rules {
             tower_distance: 360.0,
             treetop: map::TREE_MIN,
             look_down: 75.0,
-            drones: 3,
+            drones: 5,
+            squad: [Class::Standard, Class::Standard, Class::Standard, Class::Heavy, Class::Light],
             circle_radius: 60.0,
             circle_ceiling: 120.0,
             capture_time: 20.0,
@@ -112,6 +155,11 @@ impl Default for Rules {
 }
 
 impl Rules {
+    /// The class of a team's drone `k`.
+    pub fn class(&self, k: usize) -> Class {
+        self.squad[k]
+    }
+
     /// Where a team's base is (north, east of the centre).
     pub fn base(&self, team: Team) -> Vec2 {
         Vec2::new(-team.sign() * self.base_distance, 0.0)
@@ -132,6 +180,7 @@ pub enum Phase {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Drone {
     pub team: Team,
+    pub class: Class,
     /// North, east of the centre (m).
     pub at: Vec2,
     /// Height above the field (m).
@@ -233,7 +282,8 @@ impl Game {
             .flat_map(|team| {
                 (0..rules.drones).map(move |k| Drone {
                     team,
-                    at: rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 1.0)),
+                    class: rules.class(k),
+                    at: rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0)),
                     alt: 0.0,
                     vel: Vec2::ZERO,
                     phase: Phase::Ground,
@@ -293,14 +343,17 @@ impl Game {
     fn capture(&mut self, dt: f32) {
         for i in 0..self.towers.len() {
             let at = self.towers[i].at;
-            let mut count = [0i32; 2];
+            // Drones in the circle, each by its weight.
+            let mut count = [0.0f32; 2];
+            let mut present = [0usize; 2];
             for d in self.drones.iter().filter(|d| self.in_circle(d, at)) {
-                count[d.team.index()] += 1;
+                count[d.team.index()] += d.class.weight();
+                present[d.team.index()] += 1;
             }
             let t = &mut self.towers[i];
-            t.contested = count[0] > 0 && count[1] > 0;
+            t.contested = present[0] > 0 && present[1] > 0;
             let before = t.control;
-            t.control = (t.control + (count[0] - count[1]) as f32 * dt / self.rules.capture_time).clamp(-1.0, 1.0);
+            t.control = (t.control + (count[0] - count[1]) * dt / self.rules.capture_time).clamp(-1.0, 1.0);
             // The control is summed in floats: an end or the middle within a hair is reached.
             if (1.0 - t.control.abs()) < ENDS {
                 t.control = t.control.signum();

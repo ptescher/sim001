@@ -39,6 +39,8 @@ pub struct Choices {
     pub target: Target,
     /// With the ArduPilot flight controller (the T1-S VTOL) or without (the plain Ranger / sticks direct).
     pub flight_controller: bool,
+    /// The plane flown with ArduPilot (one of [`PLANES`]).
+    pub plane: &'static str,
     pub raytrace: bool,
     pub fullscreen: bool,
     /// Skip rebuilding before the start.
@@ -54,12 +56,20 @@ pub struct Choices {
     pub cameras: bool,
 }
 
+/// The planes with a flight controller that the sim can fly, by `--aircraft` id and name.
+pub const PLANES: [(&str, &str, &str); 3] = [
+    ("t1s-vtol", "T1-S VTOL", "plane-t1s-vtol"),
+    ("t2-cruza", "T2 CRUZA (HEAVY)", "plane-t2-cruza"),
+    ("seeker3", "SEEKER 3 (LIGHT QUAD)", "plane-seeker3"),
+];
+
 impl Default for Choices {
     /// What the launcher opens on: the station with ArduPilot, in the Alpine Valley.
     fn default() -> Choices {
         Choices {
             target: Target::Station,
             flight_controller: true,
+            plane: PLANES[0].0,
             raytrace: false,
             fullscreen: false,
             no_build: false,
@@ -77,7 +87,7 @@ impl Choices {
     pub fn sim_args(&self) -> Vec<String> {
         let mut a: Vec<String> = vec![];
         a.push("--aircraft".into());
-        a.push(if self.flight_controller { "t1s-vtol" } else { "t1s-ranger" }.into());
+        a.push(if self.flight_controller { self.plane } else { "t1s-ranger" }.into());
         if let Some(m) = &self.map {
             a.extend(["--map".into(), m.clone()]);
         }
@@ -108,6 +118,8 @@ impl Choices {
         }
         if !self.flight_controller {
             a.push("--direct".into());
+        } else if self.plane != PLANES[0].0 {
+            a.extend(["--aircraft".into(), self.plane.into()]);
         }
         if let Some(r) = self.serial_radio() {
             a.extend(["--tx15-serial".into(), r.path.clone()]);
@@ -142,7 +154,11 @@ impl Choices {
     pub fn title(&self) -> &'static str {
         match (self.target, self.flight_controller) {
             (Target::Towers, _) => "Towers, you command Blue",
-            (Target::Sim, true) => "Simulator, T1-S VTOL with ArduPilot",
+            (Target::Sim, true) => match self.plane {
+                "t2-cruza" => "Simulator, T2 Cruza with ArduPilot",
+                "seeker3" => "Simulator, Seeker 3 with ArduPilot",
+                _ => "Simulator, T1-S VTOL with ArduPilot",
+            },
             (Target::Sim, false) => "Simulator, T1-S Ranger",
             (Target::Station, true) => "Ground station with ArduPilot",
             (Target::Station, false) => "Ground station, sticks direct",
@@ -603,6 +619,13 @@ impl Launcher {
                         .child(self.choice("fc-on", "WITH ARDUPILOT", fc, cx, |t| t.choices.flight_controller = true))
                         .child(self.choice("fc-off", "WITHOUT ARDUPILOT", !fc, cx, |t| t.choices.flight_controller = false)))
                 })
+                .when(target != Target::Towers && fc, |d| {
+                    d.child(PLANES.iter().fold(line(), |l, &(id, name, button)| {
+                        l.child(self.choice(button, name, self.choices.plane == id, cx, move |t| {
+                            t.choices.plane = id
+                        }))
+                    }))
+                })
                 .child(note(explain))
                 .when(target == Target::Towers, |d| {
                     d.child(line()
@@ -792,6 +815,18 @@ mod tests {
         c.flight_controller = false;
         assert_eq!(c.sim_args(), ["--aircraft", "t1s-ranger"]);
         assert_eq!(c.title(), "Simulator, T1-S Ranger");
+    }
+
+    #[test]
+    fn the_heavy_and_the_light_plane_are_flown_with_ardupilot_in_the_sim_and_the_station() {
+        let mut c = Choices { target: Target::Sim, plane: "t2-cruza", ..Choices::default() };
+        assert_eq!(c.sim_args(), ["--aircraft", "t2-cruza"]);
+        assert_eq!(c.title(), "Simulator, T2 Cruza with ArduPilot");
+        assert_eq!(c.station_args(false), ["--station", "--aircraft", "t2-cruza"]);
+        c.plane = "seeker3";
+        assert_eq!(c.sim_args(), ["--aircraft", "seeker3"]);
+        c.flight_controller = false;
+        assert_eq!(c.sim_args(), ["--aircraft", "t1s-ranger"], "without ArduPilot it is the Ranger");
     }
 
     #[test]

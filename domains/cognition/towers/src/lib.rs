@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn a_game_between_two_captains_ends_with_every_drone_flown() {
         let r = play(&mut default(), &mut default(), 1).unwrap();
-        assert_eq!(r.flew, 6);
+        assert_eq!(r.flew, 2 * Rules::default().drones);
         assert!(r.length <= 480.0 + DT && r.length > 60.0, "{r:?}");
         assert!(r.score.iter().any(|s| *s > 0.0), "{r:?}");
     }
