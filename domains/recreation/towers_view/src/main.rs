@@ -21,8 +21,8 @@ mod valley;
 
 use bevy::prelude::*;
 use bevy::window::{PresentMode, WindowResolution};
-use recreation_towers::Phase;
 use recreation_towers::seat::{self, Join, ToSeat, ToServer, Truth};
+use recreation_towers::{Class, Phase};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
@@ -130,11 +130,16 @@ pub fn pose_of(t: &Truth, i: usize) -> Option<Pose> {
     let up = d.phase != Phase::Flying || d.vel.length() < 8.0;
     let tilt = if up { std::f32::consts::FRAC_PI_2 } else { 0.0 };
     let spool = if d.phase == Phase::Flying { 0.6 } else { 0.0 };
+    // The light drone is a quadcopter: four motors that always point up.
+    let (spool, tilt) = match d.class {
+        Class::Light => (vec![spool; 4], vec![]),
+        _ => (vec![spool; 3], vec![tilt, tilt, 0.0]),
+    };
     Some(Pose {
         pos: Vec3::new(d.at.y, d.alt, -d.at.x),
         rot,
-        spool: vec![spool; 3],
-        tilt: vec![tilt, tilt, 0.0],
+        spool,
+        tilt,
         crashed: d.phase == Phase::Down,
         ..default()
     })

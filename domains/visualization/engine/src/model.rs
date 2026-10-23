@@ -1,8 +1,8 @@
 //! Procedural 3D model of the HEEWING T1-S Ranger, with moving control surfaces and props.
 
-use crate::Scene;
 use crate::foam::{GRAIN_MEAN, foam_normal, foam_texture, world_uv};
 use crate::mesh_util::{GeoBuilder, PanelSpec, airfoil_panel, cuboid, loft};
+use crate::{Pose, Scene};
 use bevy::prelude::*;
 use bevy::solari::prelude::RaytracingMesh3d;
 use simulation_aircraft::t1s_ranger::geom::*;
@@ -35,6 +35,11 @@ pub struct TiltVis(pub usize, pub usize);
 /// The VTOL's rear rotor and its mast, which a plane without one doesn't show.
 #[derive(Component)]
 pub struct RearRotor(pub usize);
+
+/// One look of a plane: the T1-S (`false`) or the Seeker 3 quadcopter (`true`). Only the one that
+/// the pose calls for is shown.
+#[derive(Component)]
+pub struct Variant(pub usize, pub bool);
 
 /// A propeller: the plane and the motor.
 #[derive(Component)]
@@ -331,6 +336,7 @@ pub fn spawn_plane(
             motor_index,
             Vec3::new(0.0, 0.0, reach),
             side < 0.0,
+            ROTOR_RADIUS,
         ));
         commands.entity(tilt_pivot).add_children(&on_arm);
         children.push(tilt_pivot);
@@ -460,12 +466,113 @@ pub fn spawn_plane(
                 .spawn(rt(mast, m.carbon.clone(), Transform::from_xyz(0.0, 0.0, 0.5 * (REAR_ROTOR_Y - 0.026) + 0.026)))
                 .id(),
         );
-        parts.extend(spawn_rotor(commands, meshes, materials, &m, plane, 2, Vec3::ZERO, true));
+        parts.extend(spawn_rotor(commands, meshes, materials, &m, plane, 2, Vec3::ZERO, true, ROTOR_RADIUS));
         commands.entity(rotor).add_children(&parts);
         children.push(rotor);
     }
 
-    commands.entity(root).add_children(&children);
+    // The T1-S is one variant of the plane, hidden for a quadcopter, which has its own.
+    let wing = commands.spawn((Variant(plane, false), Transform::IDENTITY, Visibility::default())).id();
+    commands.entity(wing).add_children(&children);
+    let quad = spawn_quad(commands, meshes, materials, &m, plane);
+    commands.entity(root).add_children(&[wing, quad]);
+}
+
+/// The DeepSpace Seeker 3: a deadcat quad, from `simulation_aircraft::seeker3`'s layout.
+fn spawn_quad(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    m: &Mats,
+    plane: usize,
+) -> Entity {
+    use simulation_aircraft::seeker3::{LAYOUT, MOTOR_Y, PROP_RADIUS};
+    let root = commands.spawn((Variant(plane, true), Transform::IDENTITY, Visibility::default())).id();
+    let mut parts: Vec<Entity> = Vec::new();
+    fn add(
+        parts: &mut Vec<Entity>,
+        commands: &mut Commands,
+        meshes: &mut Assets<Mesh>,
+        mesh: Mesh,
+        mat: &Handle<StandardMaterial>,
+        t: Transform,
+    ) {
+        parts.push(commands.spawn(rt(meshes.add(mesh), mat.clone(), t)).id());
+    }
+    // Two carbon plates with the stack between them, and the pack strapped on top.
+    add(
+        &mut parts,
+        commands,
+        meshes,
+        cuboid(Vec3::new(0.042, 0.003, 0.100)),
+        &m.carbon,
+        Transform::from_xyz(0.0, -0.010, 0.0),
+    );
+    add(
+        &mut parts,
+        commands,
+        meshes,
+        cuboid(Vec3::new(0.042, 0.003, 0.100)),
+        &m.carbon,
+        Transform::from_xyz(0.0, 0.014, 0.0),
+    );
+    add(
+        &mut parts,
+        commands,
+        meshes,
+        cuboid(Vec3::new(0.030, 0.020, 0.036)),
+        &m.black,
+        Transform::from_xyz(0.0, 0.002, 0.006),
+    );
+    add(
+        &mut parts,
+        commands,
+        meshes,
+        cuboid(Vec3::new(0.032, 0.020, 0.074)),
+        &m.black,
+        Transform::from_xyz(0.0, 0.026, 0.008),
+    );
+    add(
+        &mut parts,
+        commands,
+        meshes,
+        cuboid(Vec3::new(0.034, 0.004, 0.010)),
+        &m.accent,
+        Transform::from_xyz(0.0, 0.026, 0.008),
+    );
+    // The camera on the nose (-Z), tilted up, with its glass.
+    let tilt = Transform::from_xyz(0.0, 0.004, -0.058).with_rotation(Quat::from_rotation_x(-0.35));
+    add(&mut parts, commands, meshes, cuboid(Vec3::new(0.026, 0.026, 0.024)), &m.black, tilt);
+    add(
+        &mut parts,
+        commands,
+        meshes,
+        cuboid(Vec3::new(0.016, 0.016, 0.002)),
+        &m.glass,
+        tilt * Transform::from_xyz(0.0, 0.0, -0.0125),
+    );
+    // An arm to each motor, a motor bell on it, and the prop on that.
+    for (i, &(x, z, _, ccw)) in LAYOUT.iter().enumerate() {
+        let len = (x * x + z * z).sqrt();
+        let arm = Transform::from_xyz(0.5 * x, 0.002, 0.5 * z)
+            .with_rotation(Quat::from_rotation_y((-x).atan2(z) + std::f32::consts::FRAC_PI_2));
+        add(&mut parts, commands, meshes, cuboid(Vec3::new(len, 0.004, 0.012)), &m.carbon, arm);
+        let at = Vec3::new(x, MOTOR_Y - 0.004, z);
+        // Rotated so that the rotor's axis (local Z) is up: the bell, then the prop on its top.
+        let motor = commands
+            .spawn((
+                Transform::from_translation(at).with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                Visibility::default(),
+            ))
+            .id();
+        let bell = meshes.add(loft(&[(-0.014, 0.0095, 0.0095, 0.0), (0.004, 0.0095, 0.0095, 0.0)], 0.0, 18, true));
+        let mut on_motor = vec![commands.spawn(rt(bell, m.metal.clone(), Transform::IDENTITY)).id()];
+        on_motor.extend(spawn_rotor(commands, meshes, materials, m, plane, i, Vec3::ZERO, ccw, PROP_RADIUS));
+        commands.entity(motor).add_children(&on_motor);
+        parts.push(motor);
+    }
+    commands.entity(root).add_children(&parts);
+    root
 }
 
 /// A propeller with its spinner and blurred disc, spinning on `at`, to be a child of the motor.
@@ -478,10 +585,11 @@ fn spawn_rotor(
     motor: usize,
     at: Vec3,
     clockwise: bool,
+    radius: f32,
 ) -> Vec<Entity> {
     let prop_pivot =
         commands.spawn((PropVis(plane, motor), Transform::from_translation(at), Visibility::default())).id();
-    let blade = meshes.add(prop_blades(ROTOR_RADIUS, if clockwise { 1.0 } else { -1.0 }));
+    let blade = meshes.add(prop_blades(radius, if clockwise { 1.0 } else { -1.0 }));
     let spinner = meshes.add(loft(
         &[(-0.016, 0.001, 0.001, 0.0), (-0.009, 0.0075, 0.0075, 0.0), (0.0, 0.0105, 0.0105, 0.0)],
         0.0,
@@ -489,7 +597,8 @@ fn spawn_rotor(
         false,
     ));
     let bl = commands.spawn(rt(blade, m.prop.clone(), Transform::from_xyz(0.0, 0.0, -0.002))).id();
-    let sp = commands.spawn(rt(spinner, m.accent.clone(), Transform::IDENTITY)).id();
+    let sp =
+        commands.spawn(rt(spinner, m.accent.clone(), Transform::from_scale(Vec3::splat(radius / ROTOR_RADIUS)))).id();
     commands.entity(prop_pivot).add_children(&[bl, sp]);
     // Blurred prop disc (raster only, translucent).
     let disc_mat = materials.add(StandardMaterial {
@@ -501,7 +610,7 @@ fn spawn_rotor(
         unlit: false,
         ..default()
     });
-    let disc_mesh = meshes.add(Circle::new(ROTOR_RADIUS).mesh().build());
+    let disc_mesh = meshes.add(Circle::new(radius).mesh().build());
     let disc = commands
         .spawn((
             PropDisc(plane, motor, disc_mat.clone()),
@@ -523,10 +632,14 @@ pub fn sync_plane(
         (&PropVis, &mut Transform),
         (Without<PlaneRoot>, Without<ControlSurfaceVis>, Without<TiltVis>, Without<RearRotor>),
     >,
+    mut variants: Query<
+        (&Variant, &mut Transform),
+        (Without<PlaneRoot>, Without<ControlSurfaceVis>, Without<TiltVis>, Without<RearRotor>, Without<PropVis>),
+    >,
     discs: Query<&PropDisc>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     time: Res<Time>,
-    mut angles: Local<[[f32; 3]; PLANES]>,
+    mut angles: Local<[[f32; 4]; PLANES]>,
 ) {
     // Plane 0 is yours; the others are other aircraft (the computer pilots', in a game).
     let state = |plane: usize| scene.vehicles.get(plane).and_then(Option::as_ref);
@@ -538,6 +651,10 @@ pub fn sync_plane(
             }
             None => t.translation = PARKED,
         }
+    }
+    for (v, mut t) in &mut variants {
+        let quad = state(v.0).is_some_and(Pose::is_quad);
+        t.scale = Vec3::splat(if quad == v.1 { 1.0 } else { 1e-4 });
     }
     for (cs, mut t) in &mut surfaces {
         // Surfaces are modelled "trailing edge down = positive"; rotating about an axis
@@ -568,7 +685,8 @@ pub fn sync_plane(
         let Some(s) = state(p.0) else { continue };
         // Real rpm would alias at display rate; show a slowed-down spin and let the
         // translucent disc carry the "fast" look.
-        let dir = if p.1 == 1 { -1.0 } else { 1.0 };
+        let quad = s.is_quad();
+        let dir = if (quad && p.1 >= 2) || (!quad && p.1 == 1) { -1.0 } else { 1.0 };
         let a = &mut angles[p.0][p.1];
         *a = (*a + dir * s.spool.get(p.1).copied().unwrap_or(0.0).sqrt() * 21.0 * time.delta_secs())
             % std::f32::consts::TAU;

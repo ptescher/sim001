@@ -10,7 +10,8 @@
 //!   --raytrace          ray-traced lighting (Bevy Solari) instead of rasterized
 //!   --capture DIR       save pictures of the scenery and exit; each view is one
 //!   --at NAME=x,agl,z,tx,tagl,tz[,fov]   (repeat it). Heights are above the ground.
-//!   --plane x,agl,z,heading,roll,tilt   hold a VTOL still there (degrees; tilt 0 forward, 90 up)
+//!   --plane x,agl,z,heading,roll,tilt[,quad]   hold a VTOL (or the Seeker 3 quadcopter) still there
+//!                       (degrees; tilt 0 forward, 90 up)
 //!
 //! C cycles the view (line of sight, chase, nose camera); Z switches the auto-zoom.
 
@@ -171,6 +172,7 @@ fn pilot_box() -> Vec3 {
 /// `x,agl,z,heading,roll`: east, height above the ground, south, degrees clockwise from north,
 /// degrees of right bank.
 fn parked_pose(s: &str) -> Pose {
+    let (s, quad) = s.strip_suffix(",quad").map_or((s, false), |s| (s, true));
     let n: Vec<f32> = s.split(',').filter_map(|v| v.trim().parse().ok()).collect();
     assert!(n.len() >= 3, "--plane {s}: expected x,agl,z[,heading,roll,tilt]");
     let (heading, roll) =
@@ -180,8 +182,8 @@ fn parked_pose(s: &str) -> Pose {
     Pose {
         pos: Vec3::new(n[0], ground + n[1], n[2]),
         rot: Quat::from_rotation_y(-heading) * Quat::from_rotation_z(-roll),
-        spool: vec![0.6, 0.6, 0.6],
-        tilt: vec![tilt, tilt, 0.0],
+        spool: vec![0.6; if quad { 4 } else { 3 }],
+        tilt: if quad { vec![] } else { vec![tilt, tilt, 0.0] },
         ..default()
     }
 }

@@ -15,20 +15,22 @@ use glam::Vec3;
 use std::f32::consts::PI;
 
 /// Half the width between the motors across the frame (m): 139 mm diagonal.
-const ARM_X: f32 = 0.049;
+pub const ARM_X: f32 = 0.049;
 /// Where the front and the rear motors are from the CG (m, -Z is forward). The real front arms are
 /// shorter than the rear ones (a deadcat: the props stay out of the camera), but the CG is under
 /// the middle of the four motors: ArduPilot's mixer takes equal thrust at the four for a level
 /// hover, and with the CG anywhere else the quad has to lean against a steady pitch torque.
-const FRONT_Z: f32 = -0.049;
-const REAR_Z: f32 = 0.049;
-const MOTOR_Y: f32 = 0.012;
-const PROP_RADIUS: f32 = 0.0381;
+pub const FRONT_Z: f32 = -0.049;
+pub const REAR_Z: f32 = 0.049;
+pub const MOTOR_Y: f32 = 0.012;
+pub const PROP_RADIUS: f32 = 0.0381;
+
+/// (x, z, channel, the prop turns counter-clockwise from above, as ArduPilot's quad X has it)
+pub const LAYOUT: [(f32, f32, usize, bool); 4] =
+    [(ARM_X, FRONT_Z, 0, true), (-ARM_X, REAR_Z, 1, true), (-ARM_X, FRONT_Z, 2, false), (ARM_X, REAR_Z, 3, false)];
 
 pub fn params() -> AircraftParams {
-    // (x, z, channel, the prop turns counter-clockwise from above, as ArduPilot's quad X has it)
-    let layout =
-        [(ARM_X, FRONT_Z, 0, true), (-ARM_X, REAR_Z, 1, true), (-ARM_X, FRONT_Z, 2, false), (ARM_X, REAR_Z, 3, false)];
+    let layout = LAYOUT;
     let motors = layout
         .iter()
         .map(|&(x, z, channel, ccw)| MotorSpec {
