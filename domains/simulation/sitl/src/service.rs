@@ -3,7 +3,8 @@
 //! flight controller declare it; the harness starts it once for the run and stops it after, and
 //! when neither a build nor Docker is there those tests are "not supported yet", with how to get one.
 
-use crate::launch::{DOCKER_IMAGE, DOCKER_NAME, MAVLINK_PORT, native_args, native_binary};
+use crate::Ports;
+use crate::launch::{DOCKER_IMAGE, DOCKER_NAME, HOME, MAVLINK_PORT, native_binary, native_instance_args};
 use expectation_service::{Command, Docker, Fallback, Ready};
 use std::path::Path;
 use std::time::Duration;
@@ -13,24 +14,36 @@ pub const NAME: &str = "ardupilot";
 
 /// A native ArduPlane for `aircraft`, run in `work` (SITL keeps its files where it runs).
 pub fn native(root: &Path, aircraft: &str, work: &Path) -> Command {
+    native_for(root, aircraft, work, Ports::from_env())
+}
+
+/// The same for the plane of `ports`' worker: its instance, so its own MAVLink and physics ports.
+pub fn native_for(root: &Path, aircraft: &str, work: &Path, ports: Ports) -> Command {
     Command::new(NAME, &native_binary(root).display().to_string())
-        .args(native_args(root, aircraft))
+        .args(native_instance_args(root, aircraft, ports.instance() as u16, HOME, 1.0))
         .dir(work)
-        .ready(Ready::Tcp(MAVLINK_PORT))
+        .ready(Ready::Tcp(ports.mavlink()))
         .patience(Duration::from_secs(60))
         .hint("build ArduPilot once with `ardupilot/build_native.sh`")
 }
 
 /// The same in Docker: the image is built from `ardupilot/` if it is not there.
 pub fn docker(root: &Path, aircraft: &str) -> Docker {
-    Docker::new(NAME, DOCKER_IMAGE)
-        .container(DOCKER_NAME)
+    docker_for(root, aircraft, Ports::from_env())
+}
+
+pub fn docker_for(root: &Path, aircraft: &str, ports: Ports) -> Docker {
+    let port = ports.mavlink();
+    let mut d = Docker::new(NAME, DOCKER_IMAGE)
+        .container(&ports.container(ports.instance()))
         .build_from(&root.join("ardupilot").display().to_string())
-        .port(MAVLINK_PORT, MAVLINK_PORT)
+        .port(port, port)
         .env("AIRCRAFT", aircraft)
-        .env("NOWAIT", "1")
-        .ready(Ready::Tcp(MAVLINK_PORT))
-        .patience(Duration::from_secs(120))
+        .env("NOWAIT", "1");
+    if ports.instance() != 0 {
+        d = d.env("INSTANCE", &ports.instance().to_string());
+    }
+    d.ready(Ready::Tcp(port)).patience(Duration::from_secs(120))
 }
 
 /// Native if it is built, else Docker.
@@ -72,6 +85,21 @@ mod tests {
         assert!(args.contains("-e AIRCRAFT=t1s-vtol") && args.contains("-e NOWAIT=1"), "{args}");
         assert!(args.ends_with(DOCKER_IMAGE), "{args}");
         assert!(d.build_args().unwrap().last().unwrap().ends_with("ardupilot"));
+    }
+
+    /// A test run that is not the first worker flies the instance, port and container of its own,
+    /// so that runs side by side share none of them.
+    #[test]
+    fn a_workers_service_shares_nothing_with_the_first() {
+        let w = Ports::new(1);
+        let n = native_for(&root(), "t1s-vtol", Path::new("/tmp/x"), w);
+        let a = n.argv().join(" ");
+        assert!(a.ends_with("-I4"), "{a}");
+        assert!(!a.contains("-I0"), "{a}");
+        let d = docker_for(&root(), "t1s-vtol", w).run_args().join(" ");
+        assert!(d.contains(&format!("--name {DOCKER_NAME}-w1")), "{d}");
+        assert!(d.contains("-p 5800:5800") && d.contains("-e INSTANCE=4"), "{d}");
+        assert!(!d.contains("5760"), "{d}");
     }
 
     /// With neither a build nor Docker, both ways are named in what it says.

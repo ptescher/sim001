@@ -145,9 +145,9 @@ fn start_native(program: &Path, instance: usize, aircraft: &str, home_loc: Optio
     // native one would fail to bind and exit without a word.
     let container = ports().container(instance);
     let _ = Command::new("docker").args(["rm", "-f", &container]).stdout(Stdio::null()).stderr(Stdio::null()).status();
-    // And an ArduPlane of this instance left behind by an earlier station that did not get to stop it.
+    // And an ArduPlane of this instance and this checkout left behind by an earlier station that did not get to stop it.
     let _ = Command::new("pkill")
-        .args(["-f", &format!("arduplane --model JSON:.* -I{instance}$")])
+        .args(["-f", &simulation_sitl::launch::stale_pattern(&repo_root(), instance)])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();

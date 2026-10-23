@@ -67,6 +67,19 @@ pub fn native_instance_args(root: &Path, aircraft: &str, n: u16, home: &str, spe
     ]
 }
 
+/// A `pkill -f` pattern for a leftover native ArduPlane of instance `n` started from the checkout
+/// `root` (its `--defaults` name files under `root`): another checkout's planes are not matched.
+pub fn stale_pattern(root: &Path, n: usize) -> String {
+    let mut esc = String::new();
+    for c in root.display().to_string().chars() {
+        if !c.is_ascii_alphanumeric() && !matches!(c, '/' | '_' | '-') {
+            esc.push('\\');
+        }
+        esc.push(c);
+    }
+    format!("arduplane --model JSON:.* --defaults {esc}/.ardupilot/.* -I{n}$")
+}
+
 /// The `docker run` arguments of the station's image for `aircraft`.
 pub fn docker_args(aircraft: &str) -> Vec<String> {
     let a = |s: &str| s.to_string();
@@ -306,5 +319,19 @@ mod tests {
         assert_eq!(plane_mode_name(21), "QRTL");
         assert_eq!(plane_mode_name(AGENT_MODE), "AGENT");
         assert_eq!(plane_mode_name(99), "MODE 99");
+    }
+
+    /// A leftover ArduPlane is looked for by the checkout it came from: another checkout's (or
+    /// worktree's) plane of the same instance number is not ours to stop.
+    #[test]
+    fn leftovers_are_matched_by_checkout_and_instance() {
+        let pat = stale_pattern(Path::new("/work/a.b"), 2);
+        assert!(pat.contains(r"/work/a\.b/.ardupilot/") && pat.ends_with(" -I2$"), "{pat}");
+        assert_ne!(pat, stale_pattern(Path::new("/work/other"), 2));
+        // What native_instance_args starts is what the pattern finds.
+        let line =
+            format!("arduplane {}", native_instance_args(Path::new("/work/a.b"), "t1s-vtol", 2, HOME, 1.0).join(" "));
+        let re_ok = line.contains("/work/a.b/.ardupilot/") && line.ends_with("-I2");
+        assert!(re_ok, "{line}");
     }
 }
