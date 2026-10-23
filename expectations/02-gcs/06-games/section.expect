@@ -21,5 +21,6 @@ Vocabulary:
     Shows: flying: the markers of the computer pilots' planes climb above 5 m and fly away
 
 Background:
+  Follows: the console is connected to a VTOL on the ground
   Given the console is connected to a VTOL on the ground
   And the TX15 is ready

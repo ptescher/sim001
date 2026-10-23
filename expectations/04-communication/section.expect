@@ -68,4 +68,5 @@ Vocabulary:
     And the map has 0 other planes
 
 Background:
+  Follows: the launcher has just opened
   Given the station is connected to the TX15

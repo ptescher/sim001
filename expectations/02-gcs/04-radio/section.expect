@@ -11,6 +11,7 @@ Section: Flying with a radio
   After that, plug the radio in and start the station.
 
 Background:
+  Follows: the console is connected to a VTOL on the ground
   Given the console is connected to a VTOL on the ground
   And the TX15 is ready
 

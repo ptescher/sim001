@@ -187,4 +187,5 @@ Vocabulary:
     And the reported primitive is none
 
 Background:
+  Follows: the launcher has just opened
   Given the agent plane flies in AGENT with no plan

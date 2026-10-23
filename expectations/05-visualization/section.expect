@@ -51,4 +51,5 @@ Vocabulary:
     And the reported heading is north
 
 Background:
+  Follows: the launcher has just opened
   Given the view is listening
