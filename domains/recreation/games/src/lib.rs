@@ -173,7 +173,8 @@ pub struct Radio {
 
 /// A pilot's preflight with an autopilot, done on its radio as a pilot does it: at GO it arms
 /// with the throttle down, and tries again if the props don't turn. Once they turn it climbs in
-/// QHOVER, pushes FBWA at height, and once the wing has taken over the plane is on the wing.
+/// QHOVER, pushes FBWA at height, and once the wing has taken over the plane is on the wing (a
+/// plane with no wing is on the wing, so to say, once it is up).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Preflight {
     stage: Stage,
@@ -205,6 +206,8 @@ impl Preflight {
             Stage::Arming(t) => Stage::Arming(t + dt),
             Stage::Resting(t) if t > ARM_REST => Stage::Arming(0.0),
             Stage::Resting(t) => Stage::Resting(t + dt),
+            // A plane with no wing (a quadcopter) has nothing to transition to: it is up.
+            Stage::Climbing if agl > TAKEOFF_HEIGHT && params.surfaces.is_empty() => Stage::Flying,
             Stage::Climbing if agl > TAKEOFF_HEIGHT => Stage::Transition(0.0),
             Stage::Transition(t) if t > 3.0 && state.airspeed > 15.0 => Stage::Flying,
             Stage::Transition(t) => Stage::Transition(t + dt),

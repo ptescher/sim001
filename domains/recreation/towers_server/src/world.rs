@@ -46,7 +46,7 @@ pub fn airborne(s: &FlightState) -> bool {
 /// the centre, and the take-off transition carries it out over the lane and the home tower's
 /// clearing and not into the forest behind the base.
 pub fn base_start(rules: &Rules, team: Team, k: usize) -> Start {
-    let at = rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 1.0));
+    let at = rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0));
     let heading = if team == Team::Blue { std::f32::consts::PI } else { 0.0 };
     Start { pos: to_world(at, 0.0), heading }
 }
@@ -80,10 +80,16 @@ pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64)
     WirePlan { id, primitive, target: 0, lat, lon, alt: leg.alt, radius, ttl: PLAN_TTL }
 }
 
+/// The plane that a drone of `class` flies.
+pub fn aircraft(class: recreation_towers::Class) -> AircraftParams {
+    (simulation_aircraft::find(class.aircraft()).expect("a plane for every class").params)()
+}
+
 /// The game and the drones' planes.
 pub struct World {
     pub game: Game,
-    pub params: AircraftParams,
+    /// Each drone's plane, by its index in the game.
+    pub params: Vec<AircraftParams>,
     pub planes: Vec<FlightState>,
     preflight: Vec<Preflight>,
     down_for: Vec<f32>,
@@ -105,11 +111,12 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(rules: Rules, params: AircraftParams, go: f64) -> World {
+    pub fn new(rules: Rules, go: f64) -> World {
         let game = Game::new(rules);
         let n = game.drones.len();
         let forest = Forest::new(&game.map.trees());
-        let planes = (0..n).map(|i| FlightState::new(&params, &World::start_of(&game, i))).collect();
+        let params: Vec<AircraftParams> = game.drones.iter().map(|d| aircraft(d.class)).collect();
+        let planes = (0..n).map(|i| FlightState::new(&params[i], &World::start_of(&game, i))).collect();
         World {
             game,
             params,
@@ -149,9 +156,9 @@ impl World {
     /// Returns what its radio sends.
     pub fn step_drone(&mut self, i: usize, pwm: &[u16; 16], dt: f32) -> Radio {
         self.packets[i] += 1;
-        let cmd = ActuatorCommands::from_pwm(&self.params, pwm);
+        let cmd = ActuatorCommands::from_pwm(&self.params[i], pwm);
         self.forest.near(self.planes[i].pos, &mut self.near);
-        step(&self.params, &mut self.planes[i], &cmd, &Environment { wind: Vec3::ZERO }, &Flat, &self.near, dt);
+        step(&self.params[i], &mut self.planes[i], &cmd, &Environment { wind: Vec3::ZERO }, &Flat, &self.near, dt);
         let radio = self.radio(i, dt);
         self.sync(i);
         if i == 0 && self.started() {
@@ -172,7 +179,7 @@ impl World {
     /// centred, for the AGENT mode to take over. A crashed drone is back at its base after
     /// [`RESPAWN`] s and takes off again.
     fn radio(&mut self, i: usize, dt: f32) -> Radio {
-        let p = &self.params;
+        let p = &self.params[i];
         let off = Radio { arm: false, mode: mode_slot(p, "QHOVER"), ..Default::default() };
         if self.planes[i].phase == Phase::Crashed {
             if self.down_for[i] == 0.0 {
@@ -225,8 +232,7 @@ mod tests {
     use super::*;
 
     fn world() -> World {
-        let params = (simulation_aircraft::find("t1s-vtol").unwrap().params)();
-        World::new(Rules::default(), params, 0.0)
+        World::new(Rules::default(), 0.0)
     }
 
     #[test]

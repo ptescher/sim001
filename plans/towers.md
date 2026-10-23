@@ -18,10 +18,10 @@ Numbers to tune, not measurements; they live in `recreation_towers::Rules`.
 | --- | --- |
 | Field | A valley with a forest, flat ground in a circle 600 m round the centre (the AGENT fence is 620 m). North is up |
 | Teams | Blue (south base, 520 m south of the centre) and Red (north base, 520 m north) |
-| Drones | 3 a team, taking off from their base |
+| Drones | 5 a team, taking off from their base: three standard (T1-S VTOL), a heavy (HEEWING T2 Cruza) and a light (DeepSpace Seeker 3 quad). In a circle a light drone counts 0.5, a standard 1 and a heavy 2 |
 | Towers | Five: each team's home tower (430 m from the centre, towards its base, held by that team at the start), the centre, and the west and east flanks (about 360 m out, not mirror images: the lake and the lanes are not), neutral at the start |
 | In a tower's circle | Flying, within 60 m of the tower across, and at most 120 m up |
-| Capture | A tower's control goes from −1 (Red) to +1 (Blue). Each second it moves towards the team with more drones in the circle, by 1/20 for one drone more and 1/20 more for each drone after that. With the same number of each team's drones in the circle (and at least one), it is contested and does not move. With none, it stays |
+| Capture | A tower's control goes from −1 (Red) to +1 (Blue). Each second it moves towards the team with more weight in the circle, by 1/20 for one drone's weight more. With the same weight of each team's drones in the circle (and at least one drone of each), it is contested and does not move. With none, it stays |
 | Holding | A team holds a tower when its control reaches its end (±1). It loses it when the control crosses 0. A tower between is neutral |
 | Score | One point a second for each tower a team holds |
 | End | 500 points, or the clock (8 min): the most points wins; equal points is a draw |

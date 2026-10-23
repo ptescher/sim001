@@ -1,6 +1,7 @@
 //! The ground's side of each drone, over MAVLink, as the runner's ground control agent does it:
 //! once a drone has taken off and flies on the wing, switch it to AGENT; then send it the plan for
-//! its order about once a second, and the other drones as traffic twice a second, so that its
+//! its order about once a second (a light drone, a quadcopter, has no wing for AGENT to fly: it is
+//! switched to GUIDED and sent to the point of its plan),  and the other drones as traffic twice a second, so that its
 //! executor keeps clear of them.
 
 use crate::world::{World, plan_for};
@@ -9,7 +10,7 @@ use cognition_agent::link::{Link, LinkState, Traffic};
 use cognition_plan::{CMD_PLAN, WirePlan};
 use glam::Vec3;
 use recreation_towers::{Order, Phase};
-use simulation_sitl::launch::AGENT_MODE;
+pub use simulation_sitl::launch::AGENT_MODE;
 use std::time::Duration;
 
 /// Plans about once a second, traffic twice (the drones' time, s).
@@ -17,6 +18,8 @@ const PLAN_EVERY: f64 = 1.0;
 const TRAFFIC_EVERY: f64 = 0.5;
 /// Ask for AGENT again if the drone is not in it this long after asking (s, the drones' time).
 const ASK_AGAIN: f64 = 1.0;
+/// ArduPlane's GUIDED, which hovers (QGUIDED) on a quadplane with `Q_GUIDED_MODE`.
+pub const GUIDED_MODE: u32 = 15;
 /// `MAV_CMD_DO_SET_MODE`.
 const MAV_CMD_DO_SET_MODE: u16 = 176;
 
@@ -30,6 +33,8 @@ const UP_THERE: f32 = 42.0;
 
 struct Drone {
     name: String,
+    /// The mode the ground flies it in: AGENT, or GUIDED for a drone with no wing.
+    mode: u32,
     link: Option<Link>,
     /// The floor the drone's envelope has been told.
     floor: Option<f32>,
@@ -54,17 +59,19 @@ pub struct Ground {
 struct Sends {
     modes: Vec<usize>,
     plans: Vec<(usize, WirePlan)>,
+    /// The drones that fly by GUIDED: the point of their plan.
+    gotos: Vec<(usize, WirePlan)>,
     floors: Vec<(usize, f32)>,
     traffic: Vec<(usize, Traffic)>,
 }
 
 impl Ground {
     /// Connects to each drone's MAVLink port (`ports[i]` for drone `i`).
-    pub fn connect(names: &[String], ports: &[u16], home: (f64, f64, f32)) -> Ground {
+    pub fn connect(names: &[String], modes: &[u32], ports: &[u16], home: (f64, f64, f32)) -> Ground {
         let drones = names
             .iter()
-            .zip(ports)
-            .map(|(name, &port)| {
+            .zip(ports.iter().zip(modes))
+            .map(|(name, (&port, &mode))| {
                 let link = match Link::connect_patiently(&format!("127.0.0.1:{port}"), Duration::from_secs(30)) {
                     Ok(l) => Some(l),
                     Err(e) => {
@@ -74,6 +81,7 @@ impl Ground {
                 };
                 Drone {
                     name: name.clone(),
+                    mode,
                     link,
                     floor: None,
                     asked: None,
@@ -95,9 +103,18 @@ impl Ground {
         };
         for i in sends.modes {
             if let Some(link) = &self.drones[i].link
-                && link.set_mode(AGENT_MODE).is_err()
+                && link.set_mode(self.drones[i].mode).is_err()
             {
                 self.drones[i].send_errors += 1;
+            }
+        }
+        for (i, plan) in sends.gotos {
+            let d = &mut self.drones[i];
+            if let Some(link) = &d.link {
+                if link.goto(plan.lat, plan.lon, plan.alt).is_err() {
+                    d.send_errors += 1;
+                }
+                d.plan = Some(plan);
             }
         }
         for (i, floor) in sends.floors {
@@ -132,7 +149,7 @@ impl Ground {
         let mut sends = Sends::default();
         let wing: Vec<bool> = (0..self.drones.len()).map(|i| w.on_the_wing(i)).collect();
         let agent: Vec<bool> =
-            self.drones.iter().map(|d| d.link.as_ref().is_some_and(|l| l.mode() == Some(AGENT_MODE))).collect();
+            self.drones.iter().map(|d| d.link.as_ref().is_some_and(|l| l.mode() == Some(d.mode))).collect();
         for (i, d) in self.drones.iter_mut().enumerate() {
             d.in_agent |= agent[i];
             if !wing[i] {
@@ -151,6 +168,10 @@ impl Ground {
                 // A plan under the treetops needs the low floor. One over them the high floor, once the
                 // drone is up there: a drone that is still climbing out has the low one, or its
                 // envelope would fly it straight ahead and up, wherever it points.
+                if d.mode == GUIDED_MODE {
+                    sends.gotos.push((i, plan));
+                    continue;
+                }
                 let floor = if plan.alt < w.game.rules.treetop {
                     LOW_FLOOR
                 } else if w.game.drones[i].alt >= UP_THERE {

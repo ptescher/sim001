@@ -7,8 +7,10 @@
 
 use glam::Vec3;
 
+pub mod seeker3;
 pub mod t1s_ranger;
 pub mod t1s_vtol;
+pub mod t2_cruza;
 
 /// The PWM in the middle of slot `i` of the radio's mode switch (ArduPilot's FLTMODE1 to FLTMODE6).
 pub fn rc_mode_pwm(i: usize) -> u16 {
@@ -40,6 +42,8 @@ pub struct Aircraft {
 pub const AIRCRAFT: &[Aircraft] = &[
     Aircraft { id: "t1s-vtol", title: "HEEWING T1-S VTOL", params: t1s_vtol::params },
     Aircraft { id: "t1s-ranger", title: "HEEWING T1-S Ranger", params: t1s_ranger::params },
+    Aircraft { id: "t2-cruza", title: "HEEWING T2 Cruza VTOL", params: t2_cruza::params },
+    Aircraft { id: "seeker3", title: "DeepSpace Seeker 3", params: seeker3::params },
 ];
 
 /// The plane to fly when none is asked for.
@@ -239,6 +243,25 @@ pub struct AircraftParams {
     /// The ArduPilot modes on the radio's mode switch, in the order of FLTMODE1 to FLTMODE6 (and
     /// so the PWMs 1165, 1295, 1425, 1555, 1685 and 1815 µs). Empty without a flight controller.
     pub rc_modes: Vec<&'static str>,
+}
+
+impl AircraftParams {
+    /// The same plane `k` times the size: lengths go with `k`, areas with its square. The mass,
+    /// the moments of inertia and the motors' power are not changed.
+    pub fn scale(&mut self, k: f32) {
+        for s in &mut self.surfaces {
+            s.pos *= k;
+            s.area *= k * k;
+            s.chord *= k;
+        }
+        for m in &mut self.motors {
+            m.pos *= k;
+            m.disk_area *= k * k;
+        }
+        for c in &mut self.contacts {
+            c.pos *= k;
+        }
+    }
 }
 
 #[cfg(test)]
