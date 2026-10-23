@@ -4,9 +4,10 @@ Feature: Commanding from the app
   saw. The rest of the field is dark: that is the fog. The top bar shows the clock and the
   score of each team.
 
-  To give an order, click a drone in the list of drones, or press its number. Then click a tower
-  on the map, and the drone goes to take it. Click anywhere else on the field, and the drone goes
-  there and circles. HOLD makes the drone circle where it is. HOME sends it back over its base.
+  To give an order, click a drone in the list of drones or on the map, or press its number; drag a
+  box on the map to select several drones, and hold Shift to add to the selection. Then right-click
+  a tower on the map, and the drones go to take it. Right-click anywhere else on the field, and the
+  drones go there and circle. HOLD makes the drone circle where it is. HOME sends it back over its base.
   The list of drones shows the order that the server has for each drone. Until you give a drone
   an order, it circles over its base: HOME.
 
@@ -24,7 +25,7 @@ Feature: Commanding from the app
     When the commander selects the first Blue drone
     Then the selected drone is the first Blue drone
 
-  Expectation: A click on a tower sends the selected drone to take it
+  Expectation: A right-click on a tower sends the selected drone to take it
     Given the selected drone is the first Blue drone
     When the commander sends the selected drone to the west tower
     Then the order of the first Blue drone is take the west tower

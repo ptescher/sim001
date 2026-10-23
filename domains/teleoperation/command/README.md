@@ -41,8 +41,9 @@ clearings round the towers and the bases.
 
 ## Orders
 
-Select a drone: click it in DRONES or on the map, or press 1, 2 or 3. Then click a tower to take
-it (the drone circles it 40 m out), or anywhere else on the field to fly there and circle.
+Select drones: click one in DRONES or on the map, drag a box round several on the map, or press 1,
+2 or 3 (Shift adds, Ctrl/Cmd+A selects all, Esc lets go). Then right-click a tower to take it (the
+drones circle it 40 m out), or anywhere else on the field to fly there and circle.
 HOLD (H) circles where it is, HOME (B) over your base. LOW (L) makes the drone fly low, along the
 lanes and below the treetops, where the trees hide it from the enemy (and a drone that leaves the
 lane hits a tree); LOW again makes it fly high. The drone's orders after that keep the setting.

@@ -147,7 +147,7 @@ Vocabulary:
   Event: the commander selects the first Blue drone
     Say: click B1 in the list of drones, or press 1
   Event: the commander sends the selected drone to the west tower
-    Say: click the west tower on the map
+    Say: right-click the west tower on the map
   Event: the commander holds the selected drone
     Say: click HOLD
   Event: the commander sends the selected drone home

@@ -1,9 +1,11 @@
 //! The commander's window: the top bar (the seat, the clock, the scores), the map of the team
 //! (the field, its fog, the towers, the drones) and the list of drones with their orders.
 //!
-//! To give an order: select a drone (click it in the list or on the map, or press 1, 2 or 3),
-//! then click a tower (take it) or anywhere else on the field (go there and circle). HOLD and
-//! HOME (or H and B) act on the selected drone; Esc lets it go. LOW (L) makes the selected drone
+//! The controls are those of a real-time strategy game. Left-click a drone (on the map or in the
+//! list) to select it, or drag a box round several; Shift adds to the selection (and takes a
+//! drone out of it again), Ctrl/Cmd+A selects all, 1, 2 and 3 select one drone, Esc lets go.
+//! Right-click a tower (take it) or anywhere else on the field (go there and circle) to order
+//! the selected drones. HOLD and HOME (or H and B) act on the selected drones; LOW (L) makes them
 //! fly along the lanes, below the treetops; CAMERAS shows the camera of each drone.
 
 use crate::cameras::Cameras;
@@ -12,8 +14,9 @@ use crate::seat::{Seat, Status};
 use crate::theme::*;
 use glam::Vec2;
 use gpui::{
-    App, Bounds, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, Pixels,
-    Render, RenderImage, SharedString, Stateful, Window, canvas, div, prelude::*, px,
+    App, Bounds, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, SharedString, Stateful, Window, canvas, div, prelude::*,
+    px,
 };
 use recreation_towers::map::{LANE_HALF_WIDTH, Map};
 use recreation_towers::seat::Join;
@@ -37,6 +40,13 @@ pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
 
 /// A drone on the map is clicked when the click is this near it (screen pixels).
 const PICK: f32 = 14.0;
+
+/// A box being dragged on the map: where the button went down, where the mouse is now (screen
+/// pixels), and whether Shift was held.
+type Drag = ((f32, f32), (f32, f32), bool);
+
+/// A left button press that moves less than this (screen pixels) is a click, not a box.
+const DRAG: f32 = 4.0;
 
 /// The field on the map: the whole field fits, north up.
 #[derive(Clone, Copy)]
@@ -64,8 +74,11 @@ impl MapView {
 
 pub struct CommanderView {
     pub seat: Arc<Seat>,
-    /// The selected drone (its number in the team).
-    pub selected: Option<usize>,
+    /// The selected drones (their numbers in the team), in order.
+    pub selected: Vec<usize>,
+    /// A box being dragged on the map: where the button went down, where the mouse is now
+    /// (screen pixels), and whether Shift was held.
+    drag: Option<Drag>,
     pub map_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The valley (lanes, lake, clearings), worked out from the game's rules once they arrive.
     valley: Option<Map>,
@@ -91,7 +104,8 @@ impl CommanderView {
         window.focus(&focus);
         CommanderView {
             seat,
-            selected: None,
+            selected: vec![],
+            drag: None,
             map_bounds: Rc::new(Cell::new(Bounds::default())),
             valley: None,
             cameras,
@@ -105,8 +119,23 @@ impl CommanderView {
         matches!(self.seat.state().status, Status::Seated(Join::Command(_)))
     }
 
+    /// Selects drone `k` alone, or none.
     pub fn select(&mut self, k: Option<usize>) {
-        self.selected = k;
+        self.selected = k.into_iter().collect();
+    }
+
+    /// Selects `ks`: instead of the selection, or (with `add`) added to it, or (with `add` and
+    /// all of them in it already) taken out of it.
+    pub fn select_many(&mut self, ks: &[usize], add: bool) {
+        if !add {
+            self.selected = ks.to_vec();
+        } else if !ks.is_empty() && ks.iter().all(|k| self.selected.contains(k)) {
+            self.selected.retain(|k| !ks.contains(k));
+        } else {
+            let fresh: Vec<usize> = ks.iter().copied().filter(|k| !self.selected.contains(k)).collect();
+            self.selected.extend(fresh);
+        }
+        self.selected.sort_unstable();
     }
 
     /// Whether drone `k`'s order is flown low now, as the server has it.
@@ -114,74 +143,145 @@ impl CommanderView {
         self.seat.state().view.as_ref().and_then(|v| v.drones.get(k)).is_some_and(|d| d.low)
     }
 
-    /// Gives the selected drone `order`, flown as the drone flies now (low or high).
+    /// Gives each selected drone `order`, flown as that drone flies now (low or high).
     pub fn give(&mut self, order: Order) {
-        if let Some(k) = self.selected
-            && self.commands()
-        {
+        if !self.commands() {
+            return;
+        }
+        for &k in &self.selected {
             let low = self.low_of(k);
             self.seat.order(k, order, low);
         }
     }
 
-    /// LOW: the selected drone flies its order low, along the lanes, or (again) high.
+    /// LOW: the selected drones fly their orders low, along the lanes, or (when all do) high.
     pub fn toggle_low(&mut self) {
-        let Some(k) = self.selected else { return };
-        if !self.commands() {
+        if !self.commands() || self.selected.is_empty() {
             return;
         }
-        let (order, low) = {
-            let s = self.seat.state();
-            let d = s.view.as_ref().and_then(|v| v.drones.get(k));
-            (d.and_then(|d| d.order).unwrap_or(Order::Home), d.is_some_and(|d| d.low))
-        };
-        self.seat.order(k, order, !low);
+        let all_low = self.selected.iter().all(|&k| self.low_of(k));
+        for &k in &self.selected {
+            let order = {
+                let s = self.seat.state();
+                s.view.as_ref().and_then(|v| v.drones.get(k)).and_then(|d| d.order).unwrap_or(Order::Home)
+            };
+            self.seat.order(k, order, !all_low);
+        }
     }
 
-    /// A click on the field at `at`: with a drone selected, take the tower there or go there;
-    /// else select the drone there.
-    pub fn click_field(&mut self, at: Vec2, pick: f32) {
+    /// The drones near `at` (field metres, within `pick`), nearest first.
+    fn drones_at(&self, at: Vec2, pick: f32) -> Vec<usize> {
+        let s = self.seat.state();
+        let Some(view) = &s.view else { return vec![] };
+        let mut near: Vec<_> = view.drones.iter().filter(|d| d.at.distance(at) <= pick).collect();
+        near.sort_by(|a, b| a.at.distance(at).total_cmp(&b.at.distance(at)));
+        near.iter().map(|d| d.k).collect()
+    }
+
+    /// A left click on the field at `at`: selects the drone there (the nearest), or with nothing
+    /// there lets go of the selection. `add` (Shift) keeps the selection and toggles the drone.
+    pub fn click_field(&mut self, at: Vec2, pick: f32, add: bool) {
+        match self.drones_at(at, pick).first() {
+            Some(&k) => self.select_many(&[k], add),
+            None if !add => self.selected.clear(),
+            None => {}
+        }
+    }
+
+    /// A box on the field with corners `a` and `b`: selects the drones inside it.
+    pub fn box_select(&mut self, a: Vec2, b: Vec2, add: bool) {
+        let (lo, hi) = (a.min(b), a.max(b));
+        let inside: Vec<usize> = {
+            let s = self.seat.state();
+            let Some(view) = &s.view else { return };
+            view.drones.iter().filter(|d| d.at.cmpge(lo).all() && d.at.cmple(hi).all()).map(|d| d.k).collect()
+        };
+        if inside.is_empty() && !add {
+            self.selected.clear();
+        } else if add {
+            let fresh: Vec<usize> = inside.into_iter().filter(|k| !self.selected.contains(k)).collect();
+            self.select_many(&fresh, true);
+        } else {
+            self.select_many(&inside, false);
+        }
+    }
+
+    /// A right click on the field at `at`: the selected drones take the tower there or go there.
+    pub fn order_field(&mut self, at: Vec2) {
         let (view, rules) = {
             let s = self.seat.state();
             (s.view.clone(), s.rules)
         };
         let (Some(view), Some(rules)) = (view, rules) else { return };
-        let drone = view
-            .drones
-            .iter()
-            .filter(|d| d.at.distance(at) <= pick)
-            .min_by(|a, b| a.at.distance(at).total_cmp(&b.at.distance(at)));
-        match (self.selected, drone) {
-            (None, Some(d)) => self.selected = Some(d.k),
-            (None, None) => {}
-            (Some(_), _) => {
-                let tower = view.towers.iter().position(|t| t.at.distance(at) <= rules.circle_radius);
-                let order = match tower {
-                    Some(t) => Order::Take(t),
-                    None => Order::Goto(at.clamp_length_max(rules.field_radius - 40.0)),
-                };
-                self.give(order);
-            }
-        }
+        let tower = view.towers.iter().position(|t| t.at.distance(at) <= rules.circle_radius);
+        let order = match tower {
+            Some(t) => Order::Take(t),
+            None => Order::Goto(at.clamp_length_max(rules.field_radius - 40.0)),
+        };
+        self.give(order);
     }
 
     fn key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
         match ev.keystroke.key.as_str() {
-            k @ ("1" | "2" | "3") => self.select(k.parse::<usize>().ok().map(|n| n - 1)),
+            k @ ("1" | "2" | "3") => {
+                let n = k.parse::<usize>().map_or(0, |n| n - 1);
+                self.select_many(&[n], ev.keystroke.modifiers.shift)
+            }
+            "a" if ev.keystroke.modifiers.secondary() || ev.keystroke.modifiers.control => {
+                let all: Vec<usize> = (0..3).collect();
+                self.select_many(&all, false)
+            }
             "h" => self.give(Order::Hold),
             "b" => self.give(Order::Home),
             "l" => self.toggle_low(),
-            "escape" => self.select(None),
+            "escape" => self.selected.clear(),
             _ => return,
         }
         cx.notify();
     }
 
-    fn map_down(&mut self, ev: &MouseDownEvent, cx: &mut Context<Self>) {
-        let Some(rules) = self.seat.state().rules else { return };
+    fn map_field(&self, p: gpui::Point<Pixels>) -> Option<(MapView, Vec2)> {
+        let rules = self.seat.state().rules?;
         let map = MapView::new(self.map_bounds.get(), &rules);
-        let at = map.to_field(f(ev.position.x), f(ev.position.y));
-        self.click_field(at, PICK / map.scale);
+        Some((map, map.to_field(f(p.x), f(p.y))))
+    }
+
+    fn map_down(&mut self, ev: &MouseDownEvent, cx: &mut Context<Self>) {
+        let p = (f(ev.position.x), f(ev.position.y));
+        match ev.button {
+            MouseButton::Left => self.drag = Some((p, p, ev.modifiers.shift)),
+            MouseButton::Right => {
+                if let Some((_, at)) = self.map_field(ev.position) {
+                    self.order_field(at);
+                }
+            }
+            _ => {}
+        }
+        cx.notify();
+    }
+
+    fn map_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
+        if let Some((_, to, _)) = &mut self.drag {
+            if ev.dragging() {
+                *to = (f(ev.position.x), f(ev.position.y));
+            } else {
+                self.drag = None;
+            }
+            cx.notify();
+        }
+    }
+
+    /// The button went up: a click selects the drone under it; a drag selects the drones in its box.
+    fn map_up(&mut self, ev: &MouseUpEvent, cx: &mut Context<Self>) {
+        let Some((from, _, add)) = self.drag.take() else { return };
+        let to = (f(ev.position.x), f(ev.position.y));
+        if let Some((map, at)) = self.map_field(ev.position) {
+            if (to.0 - from.0).hypot(to.1 - from.1) < DRAG {
+                self.click_field(at, PICK / map.scale, add);
+            } else {
+                self.box_select(map.to_field(from.0, from.1), at, add);
+            }
+        }
         cx.notify();
     }
 }
@@ -273,14 +373,14 @@ impl CommanderView {
         for (k, img) in images.iter().enumerate() {
             let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
             row = row.child(
-                camera_tile(format!("camera-{k}"), &label, img.clone(), 100.0, 75.0, self.selected == Some(k))
+                camera_tile(format!("camera-{k}"), &label, img.clone(), 100.0, 75.0, self.selected.contains(&k))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select(Some(k));
                         cx.notify();
                     })),
             );
         }
-        let k = self.selected.unwrap_or(0);
+        let k = self.selected.first().copied().unwrap_or(0);
         let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
         div().flex().flex_col().child(row).child(div().px_2().pb_2().child(camera_tile(
             "camera-selected".to_string(),
@@ -386,14 +486,16 @@ impl Render for CommanderView {
         }
         let valley = self.valley.clone();
         let bounds = self.map_bounds.clone();
-        let selected = self.selected;
+        let selected = self.selected.clone();
+        let painted = selected.clone();
+        let drag = self.drag;
         let (v2, r2) = (view.clone(), rules);
         let map_canvas = canvas(
             |_, _, _| {},
             move |b, _, window, cx| {
                 bounds.set(b);
                 if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
-                    paint_map(b, v, r, m, selected, window, cx);
+                    paint_map(b, v, r, m, &painted, drag, window, cx);
                 }
                 round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
             },
@@ -403,7 +505,11 @@ impl Render for CommanderView {
             .id("map")
             .size_full()
             .child(map_canvas)
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)));
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
+            .on_mouse_down(MouseButton::Right, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
+            .on_mouse_move(cx.listener(|this, ev, _, cx| this.map_move(ev, cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)));
 
         let mut drones = div().flex().flex_col().gap(px(4.0)).p_2().text_sm();
         if let Some(v) = &view {
@@ -419,10 +525,10 @@ impl Render for CommanderView {
                 let label =
                     format!("{}{}  {:<7} {}{low}", &team_name(v.team)[..1], k + 1, phase, order_text(d.order, v));
                 drones = drones.child(
-                    button(format!("drone-{k}"), label, selected == Some(k))
-                        .border_color(c(if selected == Some(k) { tint } else { BEZEL_EDGE }))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.select(Some(k));
+                    button(format!("drone-{k}"), label, selected.contains(&k))
+                        .border_color(c(if selected.contains(&k) { tint } else { BEZEL_EDGE }))
+                        .on_click(cx.listener(move |this, ev: &gpui::ClickEvent, _, cx| {
+                            this.select_many(&[k], ev.modifiers().shift);
                             cx.notify();
                         })),
                 );
@@ -440,18 +546,20 @@ impl Render for CommanderView {
                 this.give(Order::Home);
                 cx.notify();
             })))
-            .child(button("low", "LOW", selected.is_some_and(|k| self.low_of(k))).on_click(cx.listener(
-                |this, _, _, cx| {
+            .child(button("low", "LOW", !selected.is_empty() && selected.iter().all(|&k| self.low_of(k))).on_click(
+                cx.listener(|this, _, _, cx| {
                     this.toggle_low();
                     cx.notify();
-                },
-            )));
-        let help = div().p_2().text_xs().text_color(c(GREY)).child(match selected {
-            Some(k) => format!(
-                "Click a tower to take it, or a point to fly there with drone {}. LOW: along the lanes. Esc: none.",
-                k + 1
-            ),
-            None => "Select a drone: click it, or press 1, 2 or 3.".to_string(),
+                }),
+            ));
+        let help = div().p_2().text_xs().text_color(c(GREY)).child(if selected.is_empty() {
+            "Click a drone, or drag a box round several (Shift adds, Ctrl+A all). Then right-click to order them."
+                .to_string()
+        } else {
+            format!(
+                "{} selected. Right-click a tower to take it, or a point to fly there. LOW: along the lanes. Esc: none.",
+                selected.len()
+            )
         });
         let mut towers = div().flex().flex_col().gap(px(2.0)).p_2().text_sm();
         if let Some(v) = &view {
@@ -507,7 +615,8 @@ fn paint_map(
     v: &TeamView,
     rules: &Rules,
     valley: &Map,
-    selected: Option<usize>,
+    selected: &[usize],
+    drag: Option<Drag>,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -574,14 +683,14 @@ fn paint_map(
         };
         if let Some(to) = to {
             let (a, b2) = (map.to_screen(d.at), map.to_screen(to));
-            dashed(window, &[a, b2], 1.0, 5.0, ca(tint, if selected == Some(d.k) { 0.9 } else { 0.4 }));
+            dashed(window, &[a, b2], 1.0, 5.0, ca(tint, if selected.contains(&d.k) { 0.9 } else { 0.4 }));
         }
     }
     for d in &v.drones {
         let (dx, dy) = map.to_screen(d.at);
         let colour = if d.phase == Phase::Down { ca(GREY, 0.6) } else { c(tint) };
         drone_mark(window, dx, dy, d.vel, colour, true);
-        if selected == Some(d.k) {
+        if selected.contains(&d.k) {
             circle(window, dx, dy, 12.0, 1.5, c(WHITE));
         }
         text(
@@ -616,6 +725,11 @@ fn paint_map(
                 Align::Left,
             );
         }
+    }
+    if let Some(((x0, y0), (x1, y1), _)) = drag {
+        let (bx, by, bw, bh) = (x0.min(x1), y0.min(y1), (x1 - x0).abs(), (y1 - y0).abs());
+        fill_rect(window, bx, by, bw, bh, ca(WHITE, 0.1));
+        stroke_rect(window, bx, by, bw, bh, 1.0, ca(WHITE, 0.8));
     }
     if let Some(outcome) = v.outcome {
         let banner = match outcome {
