@@ -51,6 +51,35 @@ Story: Picking what to launch
     Then the program in the log is the ground station
     And the sticks of the started station are direct
 
+Story: Starting a game of Towers
+  As a commander
+  I want to start a game of Towers from the launcher
+  So that I play it without a terminal
+
+  TOWERS starts the commander app of [[Towers]]. It starts the game server, with six ArduPlane
+  drones, and the 3D view that sends the picture from each drone. You command Blue. First you
+  start a practice game, where nobody commands Red and there is no 3D view. Then you start a
+  game against the computer, with the cameras on. The first line of the LOG screen shows what
+  the launcher started.
+
+  Scenario: A practice game, then a game against the computer
+    When the launch target is TOWERS
+    And the Red team is NOBODY
+    And the drone cameras choice is off
+    Then the Red team is NOBODY
+    When the pilot launches
+    Then the program in the log is the Towers game
+    And the Red team of the started game is nobody
+    And the drone cameras of the started game are off
+    When the pilot stops the program
+    Then the program is stopped
+    When the Red team is COMPUTER
+    And the drone cameras choice is on
+    Then the Red team is COMPUTER
+    When the pilot launches
+    Then the Red team of the started game is the computer
+    And the drone cameras of the started game are on
+
 Story: Setting up your radio
   As a pilot with a radio
   I want the sim to learn my sticks and switches

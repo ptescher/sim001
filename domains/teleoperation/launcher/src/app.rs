@@ -3,7 +3,6 @@
 use crate::controllers::{self, Device, Mapping, SerialRadio};
 use crate::job::{Job, layout};
 use crate::theme::*;
-use teleoperation_core::debug::{self, Level, LogFile};
 use gpui::{
     AnyElement, Bounds, Context, Div, IntoElement, Pixels, Render, SharedString, Stateful, Window, canvas, div,
     prelude::*, px,
@@ -11,6 +10,7 @@ use gpui::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Duration;
+use teleoperation_core::debug::{self, Level, LogFile};
 
 thread_local! {
     /// Where each button was last painted, by id, so `--expect` can click it the way a person
@@ -29,6 +29,8 @@ pub enum Target {
     Sim,
     /// The sim, ArduPilot and the ground control console together.
     Station,
+    /// A game of Towers: the commander app, which starts the game server and its drones.
+    Towers,
 }
 
 /// What the LAUNCH screen is set to, and the command lines that follow from it.
@@ -46,6 +48,10 @@ pub struct Choices {
     /// Station only: the TX15 on its serial line carries the sticks, telemetry and MAVLink.
     pub use_serial: bool,
     pub serial: Vec<SerialRadio>,
+    /// Towers: the computer commands Red (else nobody does: a practice game).
+    pub red_computer: bool,
+    /// Towers: the 3D view of the game, and the pictures from the drones' cameras.
+    pub cameras: bool,
 }
 
 impl Default for Choices {
@@ -60,6 +66,8 @@ impl Default for Choices {
             map: None,
             use_serial: true,
             serial: vec![],
+            red_computer: true,
+            cameras: true,
         }
     }
 }
@@ -110,6 +118,18 @@ impl Choices {
         a
     }
 
+    /// The commander app's: a game of your own, with Blue yours.
+    pub fn towers_args(&self) -> Vec<String> {
+        let mut a: Vec<String> = vec!["--serve".into()];
+        if !self.red_computer {
+            a.extend(["--red".into(), "nobody".into()]);
+        }
+        if !self.cameras {
+            a.push("--no-cameras".into());
+        }
+        a
+    }
+
     /// The TX15 the station will use on its serial line, if one is plugged in and chosen.
     pub fn serial_radio(&self) -> Option<&SerialRadio> {
         if !self.use_serial || !self.flight_controller {
@@ -121,6 +141,7 @@ impl Choices {
     /// The title of what LAUNCH starts, for the log.
     pub fn title(&self) -> &'static str {
         match (self.target, self.flight_controller) {
+            (Target::Towers, _) => "Towers, you command Blue",
             (Target::Sim, true) => "Simulator, T1-S VTOL with ArduPilot",
             (Target::Sim, false) => "Simulator, T1-S Ranger",
             (Target::Station, true) => "Ground station with ArduPilot",
@@ -218,6 +239,11 @@ fn note(text: impl Into<SharedString>) -> Div {
 
 fn row() -> Div {
     div().flex().flex_wrap().items_center().gap_2()
+}
+
+/// A row of a few buttons that does not wrap.
+fn line() -> Div {
+    div().flex().items_center().gap_2()
 }
 
 impl Launcher {
@@ -339,6 +365,9 @@ impl Launcher {
                 "domains/teleoperation/console",
                 self.choices.station_args(layout().bundled()),
             ),
+            Target::Towers => {
+                self.program("sim001_command", "domains/teleoperation/command", self.choices.towers_args())
+            }
         };
         self.run(title, &program, args, dir);
     }
@@ -351,8 +380,7 @@ impl Launcher {
 
     /// Writes the manual from the saved test results (`expectation docs`).
     fn render_docs(&mut self) {
-        let args =
-            ["run", "-q", "-p", "expectation", "--", "docs", "expectations", "docs"].map(String::from).to_vec();
+        let args = ["run", "-q", "-p", "expectation", "--", "docs", "expectations", "docs"].map(String::from).to_vec();
         self.run("Render the docs", "cargo", args, layout().home.clone());
     }
 
@@ -503,6 +531,9 @@ impl Launcher {
         let fc = self.choices.flight_controller;
         let target = self.choices.target;
         let explain = match (target, fc) {
+            (Target::Towers, _) => {
+                "Two teams of three drones fight for five radio towers in a valley with a forest. You command Blue from the map: click a drone, then a tower, and LOW sends it along the lanes under the trees. Starts a game server with six ArduPlane drones, and needs the AGENT build of ArduPlane."
+            }
             (Target::Sim, true) => {
                 "The T1-S VTOL. The sim starts its own ArduPilot (native build or Docker); fly it with your radio."
             }
@@ -514,16 +545,21 @@ impl Launcher {
                 "The station with the sticks flying the plane through the sim's own modes. ArduPilot still runs for telemetry, but its outputs are ignored."
             }
         };
-        let mut maps = row().child(self.choice("map-none", "ALPINE VALLEY", self.choices.map.is_none(), cx, |t| t.choices.map = None));
+        let mut maps = row()
+            .child(self.choice("map-none", "ALPINE VALLEY", self.choices.map.is_none(), cx, |t| t.choices.map = None));
         for m in &self.maps {
             let name = m.clone();
             let id: SharedString = format!("map-{m}").into();
             maps = maps.child(
-                button(id, m.to_uppercase(), if self.choices.map.as_ref() == Some(m) { Style::Active } else { Style::Normal })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.choices.map = Some(name.clone());
-                        cx.notify();
-                    })),
+                button(
+                    id,
+                    m.to_uppercase(),
+                    if self.choices.map.as_ref() == Some(m) { Style::Active } else { Style::Normal },
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.choices.map = Some(name.clone());
+                    cx.notify();
+                })),
             );
         }
         let go = if busy {
@@ -546,7 +582,7 @@ impl Launcher {
                 .flex_col()
                 .gap_2()
                 .child(
-                    row()
+                    line()
                         .child(
                             self.choice("t-sim", "SIMULATOR ONLY", target == Target::Sim, cx, |t| {
                                 t.choices.target = Target::Sim
@@ -554,23 +590,40 @@ impl Launcher {
                         )
                         .child(self.choice("t-station", "GROUND STATION", target == Target::Station, cx, |t| {
                             t.choices.target = Target::Station
+                        }))
+                        // The bundle has no commander app (nor the game server) yet.
+                        .children((!layout().bundled()).then(|| {
+                            self.choice("t-towers", "TOWERS", target == Target::Towers, cx, |t| {
+                                t.choices.target = Target::Towers
+                            })
                         })),
                 )
-                .child(
-                    row()
+                .when(target != Target::Towers, |d| {
+                    d.child(line()
                         .child(self.choice("fc-on", "WITH ARDUPILOT", fc, cx, |t| t.choices.flight_controller = true))
-                        .child(self.choice("fc-off", "WITHOUT ARDUPILOT", !fc, cx, |t| t.choices.flight_controller = false)),
-                )
+                        .child(self.choice("fc-off", "WITHOUT ARDUPILOT", !fc, cx, |t| t.choices.flight_controller = false)))
+                })
                 .child(note(explain))
+                .when(target == Target::Towers, |d| {
+                    d.child(line()
+                        .child(self.choice("red-computer", "RED: COMPUTER", self.choices.red_computer, cx, |t| {
+                            t.choices.red_computer = true
+                        }))
+                        .child(self.choice("red-nobody", "RED: NOBODY", !self.choices.red_computer, cx, |t| {
+                            t.choices.red_computer = false
+                        }))
+                        .child(self.choice("cams", "DRONE CAMERAS", self.choices.cameras, cx, |t| {
+                            t.choices.cameras = !t.choices.cameras
+                        })))
+                    .child(note("RED: NOBODY is a practice game: Red's drones circle over their base. DRONE CAMERAS starts the 3D view of the game, which sends the camera of each of your drones (the first start takes a while to build it)."))
+                })
                 .children(
-                    self.choices.serial_radio().map(|r| {
+                    self.choices.serial_radio().filter(|_| target != Target::Towers).map(|r| {
                         note(format!("The {} on {} carries the sticks, telemetry and MAVLink.", r.name, r.path))
                     }),
                 )
-                .child(note("Place"))
-                .child(maps)
-                .child(
-                    row()
+                .when(target != Target::Towers, |d| {
+                    d.child(note("Place")).child(maps).child(row()
                         .child(self.choice("rt", "RAY TRACING", self.choices.raytrace, cx, |t| t.choices.raytrace = !t.choices.raytrace))
                         .children((target == Target::Sim).then(|| {
                             self.choice("fs", "FULL SCREEN", self.choices.fullscreen, cx, |t| t.choices.fullscreen = !t.choices.fullscreen)
@@ -582,8 +635,8 @@ impl Launcher {
                         }))
                         .children((target == Target::Station).then(|| {
                             self.choice("nb", "SKIP SIM REBUILD", self.choices.no_build, cx, |t| t.choices.no_build = !t.choices.no_build)
-                        })),
-                )
+                        })))
+                })
                 .child(row().child(go)),
         )
     }
@@ -591,18 +644,28 @@ impl Launcher {
     /// The log pane: the program's output, or a log file of the run (the console's debug log,
     /// ArduPlane's own output), chosen by the tabs along its top.
     fn log_panel(&self, cx: &mut Context<Self>) -> Div {
-        let mut tabs = row().child(button("log-output", "OUTPUT", if self.log_tab.is_none() { Style::Active } else { Style::Normal }).on_click(cx.listener(|this, _, _, cx| {
-            this.log_tab = None;
-            cx.notify();
-        })));
+        let mut tabs = row().child(
+            button("log-output", "OUTPUT", if self.log_tab.is_none() { Style::Active } else { Style::Normal })
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.log_tab = None;
+                    cx.notify();
+                })),
+        );
         for l in &self.logs {
             let name = l.name.clone();
             let id: SharedString = format!("log-{}", l.name).into();
-            tabs = tabs.child(button(id, l.name.to_uppercase(), if self.log_tab.as_deref() == Some(l.name.as_str()) { Style::Active } else { Style::Normal }).on_click(cx.listener(move |this, _, _, cx| {
-                this.log_tab = Some(name.clone());
-                this.file_lines.clear();
-                cx.notify();
-            })));
+            tabs = tabs.child(
+                button(
+                    id,
+                    l.name.to_uppercase(),
+                    if self.log_tab.as_deref() == Some(l.name.as_str()) { Style::Active } else { Style::Normal },
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.log_tab = Some(name.clone());
+                    this.file_lines.clear();
+                    cx.notify();
+                })),
+            );
         }
         let Some(tab) = &self.log_tab else { return self.output_panel(tabs) };
         let colour = |line: &str| match debug::parse_line(line).map(|e| e.level) {
@@ -683,8 +746,25 @@ impl Render for Launcher {
                     .flex_1()
                     .gap(px(GAP))
                     .min_h(px(0.0))
-                    .child(div().flex().flex_col().gap(px(GAP)).w(px(520.0)).child(div().flex().flex_col().flex_none().child(launch)).child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(ctrl)))
-                    .child(div().flex().flex_col().gap(px(GAP)).flex_1().min_w(px(0.0)).child(div().flex().flex_col().flex_none().child(docs)).child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(log))),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(GAP))
+                            .w(px(520.0))
+                            .child(div().flex().flex_col().flex_none().child(launch))
+                            .child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(ctrl)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(GAP))
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .child(div().flex().flex_col().flex_none().child(docs))
+                            .child(div().flex().flex_col().flex_1().min_h(px(0.0)).child(log)),
+                    ),
             )
     }
 }
@@ -718,7 +798,11 @@ mod tests {
     fn the_place_ray_tracing_and_full_screen_go_to_the_sim() {
         let c = Choices { map: Some("cypress".into()), raytrace: true, fullscreen: true, ..Choices::default() };
         assert_eq!(c.sim_args(), ["--aircraft", "t1s-vtol", "--map", "cypress", "--raytrace", "--fullscreen"]);
-        assert_eq!(c.station_args(false), ["--station", "--map", "cypress", "--raytrace"], "the station has no full screen");
+        assert_eq!(
+            c.station_args(false),
+            ["--station", "--map", "cypress", "--raytrace"],
+            "the station has no full screen"
+        );
     }
 
     #[test]

@@ -3,7 +3,10 @@ Feature: Launching
   ArduPilot SITL and the console together. SIMULATOR ONLY starts the sim alone. WITH ARDUPILOT
   flies the T1-S VTOL. WITHOUT ARDUPILOT flies the plain T1-S Ranger in the sim. In the
   station, WITHOUT ARDUPILOT gives the sticks to the sim's own modes, and ArduPilot only
-  reports. The launcher opens on the station with ArduPilot, in the Alpine Valley.
+  reports. TOWERS starts the commander app of [[Towers]] on a game of your own, in the valley
+  of the game: you command Blue, and Red is the computer, or nobody for a practice game.
+  DRONE CAMERAS turns the 3D view of the game, and the pictures from the drones, on or off.
+  The launcher opens on the station with ArduPilot, in the Alpine Valley.
 
   [[Running and stopping a program]] tells you what LAUNCH does next.
 
@@ -49,3 +52,31 @@ Feature: Launching
     Given the ray tracing choice is on
     When the pilot launches
     Then the ray tracing of the started program is on
+
+  Expectation: TOWERS starts a game of Towers against the computer
+    The commander app starts the game server with six ArduPlane drones and takes the Blue seat.
+    It needs the AGENT build of ArduPlane.
+
+    Given the launch target is TOWERS
+    When the pilot launches
+    Then the program in the log is the Towers game
+    And the Red team of the started game is the computer
+    And the drone cameras of the started game are on
+
+  Expectation: RED: NOBODY makes a practice game
+    Overrides: TOWERS starts a game of Towers against the computer
+
+    Given the launch target is TOWERS
+    And the Red team is NOBODY
+    When the pilot launches
+    Then the program in the log is the Towers game
+    And the Red team of the started game is nobody
+
+  Expectation: DRONE CAMERAS off starts the game with no 3D view
+    Overrides: TOWERS starts a game of Towers against the computer
+
+    Given the launch target is TOWERS
+    And the drone cameras choice is off
+    When the pilot launches
+    Then the program in the log is the Towers game
+    And the drone cameras of the started game are off

@@ -57,7 +57,7 @@ fn main() {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.set_menus(vec![Menu { name: "SIM001 Launcher".into(), items: vec![MenuItem::action("Quit", Quit)] }]);
-        let bounds = Bounds::centered(None, size(px(1100.0), px(760.0)), cx);
+        let bounds = Bounds::centered(None, size(px(1100.0), px(840.0)), cx);
         let window = cx
             .open_window(
                 WindowOptions {
