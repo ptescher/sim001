@@ -10,13 +10,14 @@
 
 use crate::cameras::Cameras;
 use crate::draw::*;
+use crate::ground::Ground;
 use crate::seat::{Seat, Status};
 use crate::theme::*;
 use glam::Vec2;
 use gpui::{
-    App, Bounds, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, SharedString, Stateful, Window, canvas, div, prelude::*,
-    px,
+    App, Bounds, ContentMask, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, SharedString, Stateful, Window, canvas,
+    div, prelude::*, px,
 };
 use recreation_towers::map::{LANE_HALF_WIDTH, Map};
 use recreation_towers::seat::Join;
@@ -82,6 +83,8 @@ pub struct CommanderView {
     pub map_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The valley (lanes, lake, clearings), worked out from the game's rules once they arrive.
     valley: Option<Map>,
+    /// The picture of the valley under the map, if it has been exported.
+    ground: Option<Arc<Ground>>,
     /// The pictures from the team's drones, and the one of each that the window has on its atlas.
     pub cameras: Arc<Cameras>,
     shown: Vec<Option<Arc<RenderImage>>>,
@@ -89,7 +92,13 @@ pub struct CommanderView {
 }
 
 impl CommanderView {
-    pub fn new(seat: Arc<Seat>, cameras: Arc<Cameras>, window: &mut Window, cx: &mut Context<Self>) -> CommanderView {
+    pub fn new(
+        seat: Arc<Seat>,
+        cameras: Arc<Cameras>,
+        ground: Option<Arc<Ground>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> CommanderView {
         // The game arrives on another thread; repaint at about 30 Hz.
         cx.spawn(async move |this, cx| {
             loop {
@@ -108,6 +117,7 @@ impl CommanderView {
             drag: None,
             map_bounds: Rc::new(Cell::new(Bounds::default())),
             valley: None,
+            ground,
             shown: vec![None; cameras.len()],
             cameras,
             focus,
@@ -505,6 +515,7 @@ impl Render for CommanderView {
             self.valley = Some(Map::new(r));
         }
         let valley = self.valley.clone();
+        let ground = self.ground.clone();
         let bounds = self.map_bounds.clone();
         let selected = self.selected.clone();
         let painted = selected.clone();
@@ -515,7 +526,7 @@ impl Render for CommanderView {
             move |b, _, window, cx| {
                 bounds.set(b);
                 if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
-                    paint_map(b, v, r, m, &painted, drag, window, cx);
+                    paint_map(b, v, r, m, ground.as_deref(), &painted, drag, window, cx);
                 }
                 round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
             },
@@ -636,6 +647,7 @@ fn paint_map(
     v: &TeamView,
     rules: &Rules,
     valley: &Map,
+    ground: Option<&Ground>,
     selected: &[usize],
     drag: Option<Drag>,
     window: &mut Window,
@@ -645,15 +657,27 @@ fn paint_map(
     let map = MapView::new(b, rules);
     let s = map.scale;
     fill_rect(window, x, y, w, h, c(FOG));
+    // The ground: the picture of the valley, dim; what the team sees is lit over it. Without the
+    // picture, the plain ground of the vector map.
+    if let Some(g) = ground {
+        paint_ground(window, b, map, g);
+    }
     // What the team sees, as the server would work it out from this map.
     let mut eyes: Vec<(Vec2, f32)> = vec![(rules.base(v.team), rules.base_vision)];
     eyes.extend(v.drones.iter().filter(|d| d.phase != Phase::Down).map(|d| (d.at, rules.drone_vision)));
     eyes.extend(v.towers.iter().filter(|t| t.holder == Some(v.team)).map(|t| (t.at, rules.tower_vision)));
     for (at, range) in &eyes {
         let (sx, sy) = map.to_screen(*at);
-        fill_circle(window, sx, sy, range * s, c(FIELD));
+        if ground.is_some() {
+            fill_circle(window, sx, sy, range * s, ca(SIGHT, 0.07));
+            circle(window, sx, sy, range * s, 1.0, ca(SIGHT, 0.25));
+        } else {
+            fill_circle(window, sx, sy, range * s, c(FIELD));
+        }
     }
-    paint_valley(window, map, valley);
+    if ground.is_none() {
+        paint_valley(window, map, valley);
+    }
     let (cx0, cy0) = map.to_screen(Vec2::ZERO);
     dashed_circle(window, cx0, cy0, rules.field_radius * s, 1.0, 6.0, ca(GREY, 0.6));
     for team in Team::BOTH {
@@ -760,6 +784,19 @@ fn paint_map(
         fill_rect(window, x + w * 0.5 - 140.0, y + h * 0.5 - 30.0, 280.0, 60.0, ca(0x000000, 0.8));
         text(window, cx, &banner, x + w * 0.5, y + h * 0.5, 28.0, c(AMBER), Align::Center);
     }
+}
+
+/// The picture of the valley, where the game has it, under a veil of fog.
+fn paint_ground(window: &mut Window, b: Bounds<Pixels>, map: MapView, g: &Ground) {
+    let half = g.size_m * 0.5;
+    let (left, top) = map.to_screen(g.centre + Vec2::new(half, -half));
+    let side = g.size_m * map.scale;
+    let at = gpui::Bounds { origin: pt(left, top), size: gpui::size(px(side), px(side)) };
+    window.with_content_mask(Some(ContentMask { bounds: b }), |window| {
+        let _ = window.paint_image(at, Corners::default(), g.image.clone(), 0, false);
+        let (x, y, w, h) = rect(b);
+        fill_rect(window, x, y, w, h, ca(FOG, 0.62));
+    });
 }
 
 /// The ground a team knows: the lake, the lanes cut through the forest and the clearings. It is

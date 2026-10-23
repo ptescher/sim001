@@ -181,15 +181,23 @@ pub fn export(dir: &str) {
     let meta = format!(
         "# sim001 map export. Map centre is given in metres north/east of home (the pilot box).\n\
 size_m={size}\nmap_px={n}\ncentre_north={cn}\ncentre_east={ce}\nheight_n={hn}\n\
-runway_north={rn}\nrunway_east={re}\nrunway_length={rl}\nrunway_width={rw}\nrunway_heading=0\n",
+{runway}",
         size = 2.0 * HALF,
         cn = -centre.z,
         ce = centre.x,
         hn = HEIGHT_N,
-        rn = -(terrain::RUNWAY_CENTER.y - terrain::pilot_pos().z),
-        re = terrain::RUNWAY_CENTER.x - terrain::pilot_pos().x,
-        rl = 2.0 * terrain::RUNWAY_HALF_LENGTH,
-        rw = 2.0 * terrain::RUNWAY_HALF_WIDTH,
+        // The Towers valley has no runway.
+        runway = if terrain::alpine() {
+            format!(
+                "runway_north={}\nrunway_east={}\nrunway_length={}\nrunway_width={}\nrunway_heading=0\n",
+                -(terrain::RUNWAY_CENTER.y - terrain::pilot_pos().z),
+                terrain::RUNWAY_CENTER.x - terrain::pilot_pos().x,
+                2.0 * terrain::RUNWAY_HALF_LENGTH,
+                2.0 * terrain::RUNWAY_HALF_WIDTH,
+            )
+        } else {
+            String::new()
+        },
     );
     std::fs::write(dir.join("terrain_map.txt"), meta).expect("write terrain_map.txt");
     println!("map exported to {} in {:.1} s", dir.display(), t0.elapsed().as_secs_f32());

@@ -352,28 +352,25 @@ impl Link {
         self.send(&set_mode_message(custom_mode, self.target()))
     }
 
-    /// Flies a drone that has no AGENT mode to a point, in GUIDED (`SET_POSITION_TARGET_GLOBAL_INT`):
-    /// `alt` is the height above home (m). A quadcopter hovers there.
+    /// Flies a drone that has no AGENT mode to a point, in GUIDED (`MAV_CMD_DO_REPOSITION`; ArduPlane
+    /// takes only the height from a `SET_POSITION_TARGET_GLOBAL_INT`): `alt` is the height above
+    /// home (m). A quadcopter flies there and hovers.
     pub fn goto(&self, lat: f64, lon: f64, alt: f32) -> io::Result<()> {
         let (system, component) = self.target();
-        self.send(&MavMessage::SET_POSITION_TARGET_GLOBAL_INT(SET_POSITION_TARGET_GLOBAL_INT_DATA {
-            time_boot_ms: 0,
-            lat_int: (lat * 1e7).round() as i32,
-            lon_int: (lon * 1e7).round() as i32,
-            alt,
-            vx: 0.0,
-            vy: 0.0,
-            vz: 0.0,
-            afx: 0.0,
-            afy: 0.0,
-            afz: 0.0,
-            yaw: 0.0,
-            yaw_rate: 0.0,
-            // Only the position is set.
-            type_mask: PositionTargetTypemask::from_bits_truncate(0b0000_1101_1111_1000),
+        self.send(&MavMessage::COMMAND_INT(COMMAND_INT_DATA {
+            param1: -1.0, // the default speed
+            param2: 0.0,
+            param3: 0.0,
+            param4: 0.0, // circle clockwise, if it loiters
+            x: (lat * 1e7).round() as i32,
+            y: (lon * 1e7).round() as i32,
+            z: alt,
+            command: MavCmd::MAV_CMD_DO_REPOSITION,
             target_system: system,
             target_component: component,
-            coordinate_frame: MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT,
+            frame: MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT,
+            current: 0,
+            autocontinue: 0,
         }))
     }
 

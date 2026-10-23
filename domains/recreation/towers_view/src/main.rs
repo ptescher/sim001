@@ -2,6 +2,7 @@
 //!
 //!   cargo run --release -p recreation_towers_view -- [--server ADDR] [--feed-port N] [--feed-size WxH]
 //!                                                    [--stop-with-stdin]
+//!   cargo run --release -p recreation_towers_view -- --export-map DIR
 //!
 //! The view takes the seat of a spectator on the game server (default 127.0.0.1:5955), draws the
 //! valley (forest, lanes, lake) with the six drones where the game has them, and sends the picture
@@ -9,6 +10,11 @@
 //! (Blue's three, then Red's) on TCP port `--feed-port + i` (default 5601). A camera renders only
 //! while someone watches its feed. With `--stop-with-stdin` the view quits when its input closes
 //! (the commander app starts it so, and it stops with the app).
+//!
+//! `--export-map DIR` writes the top-down map of the valley (`terrain_map.png`, `terrain_height.bin`
+//! and `terrain_map.txt`, as `sim001 --export-map` writes the sim's) and exits. It is the ground of
+//! this view, drawn from the same trees and lake, in metres north and east of the field's centre
+//! (SITL's home), so the commander app and the ground station draw it where the game has it.
 
 mod feeds;
 mod valley;
@@ -52,6 +58,10 @@ fn main() {
     if let Err(e) = valley::set(&recreation_towers::Rules::default()) {
         eprintln!("{e}");
         std::process::exit(1);
+    }
+    if let Some(dir) = arg("--export-map") {
+        visualization_engine::mapgen::export(&dir);
+        return;
     }
     if args.iter().any(|a| a == "--stop-with-stdin") {
         std::thread::spawn(|| {
