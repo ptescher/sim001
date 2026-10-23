@@ -17,6 +17,7 @@ Section: The TX15 on the serial line
   the real radio. These tutorials show the radio the way you use it at the field.
 
 Background:
+  Follows: the console is connected to a VTOL on the ground
   Given the console is connected to a VTOL on the ground
   And the TX15 is on the serial line
 

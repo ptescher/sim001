@@ -103,4 +103,5 @@ Vocabulary:
     And the ground station map distance is 0 m
 
 Background:
+  Follows: the launcher has just opened
   Given the TX15 is connected and the plane is at rest

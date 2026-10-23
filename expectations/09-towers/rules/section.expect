@@ -12,4 +12,5 @@ Section: The rules of Towers
   [[The computer commander]] tells you how the computer plays a team.
 
 Background:
+  Follows: the launcher has just opened
   Given a game of Towers is in play

@@ -6,4 +6,5 @@ Section: Setting up the radio
   section uses the RadioMaster TX15 with EdgeTX. Another EdgeTX radio works the same way.
 
 Background:
+  Follows: the console is connected to a plane on the ground
   Given the radio is not calibrated
