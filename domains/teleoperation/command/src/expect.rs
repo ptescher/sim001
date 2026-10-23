@@ -35,6 +35,8 @@ pub struct Config {
     pub docs: Option<PathBuf>,
     pub server: Arc<Mutex<Option<Server>>>,
     pub server_args: Vec<String>,
+    /// The games have the 3D view, with the cameras of the drones.
+    pub cameras: bool,
 }
 
 type Job = Box<dyn FnOnce(&mut App, WindowHandle<CommanderView>) + Send>;
@@ -74,7 +76,10 @@ const EVENTS: &[&str] = &[
     "the commander sends the selected drone to the west tower",
     "the commander holds the selected drone",
     "the commander sends the selected drone home",
+    "the commander flies the selected drone low",
+    "the commander clicks the camera of the second Blue drone",
     "the game runs for 2 minutes",
+    "the game runs for 3 minutes",
 ];
 
 const OBSERVED: &[&str] = &[
@@ -85,7 +90,12 @@ const OBSERVED: &[&str] = &[
     "the order of the first Blue drone",
     "the order of the second Blue drone",
     "the order of the third Blue drone",
+    "the flight of the first Blue drone",
+    "the camera feeds in the app",
 ];
+
+/// The cameras need the 3D view to load the valley first.
+const FEEDS: Duration = Duration::from_secs(180);
 
 fn is(v: &str, subject: &str) -> bool {
     v.eq_ignore_ascii_case(subject)
@@ -135,6 +145,7 @@ struct AppDriver {
     tx: Sender<Job>,
     server: Arc<Mutex<Option<Server>>>,
     server_args: Vec<String>,
+    cameras: bool,
     /// The game has been used: the next test needs a fresh one.
     used: bool,
 }
@@ -250,7 +261,7 @@ impl Driver for AppDriver {
             self.call(|v, _, _| v.seat.hang_up())?;
             let mut s = self.server.lock().unwrap();
             s.take();
-            *s = Some(Server::start(&self.server_args)?);
+            *s = Some(Server::start(&self.server_args, self.cameras)?);
             drop(s);
             self.call(|v, _, _| {
                 v.seat.reconnect();
@@ -277,10 +288,19 @@ impl Driver for AppDriver {
             self.call(|v, _, _| {
                 let west = v.seat.state().view.as_ref().and_then(|m| m.towers.iter().position(|t| t.name == "west"));
                 if let Some(t) = west {
-                    v.seat.order(0, Order::Take(t));
+                    v.seat.order(0, Order::Take(t), false);
                 }
             })?;
             return self.echoed(0, "take the west tower");
+        }
+        if is(subject, "the flight of the first Blue drone") {
+            // A fresh game flies high. For low: select B1 and click LOW, as a commander does.
+            if text(value) == "high" {
+                return Ok(());
+            }
+            self.click_button("drone-0")?;
+            self.click_button("low")?;
+            return self.until(ANSWER, "the server's answer to LOW", |v| v.drones.first().is_some_and(|d| d.low));
         }
         Err(format!("the app can't arrange {subject}"))
     }
@@ -290,6 +310,7 @@ impl Driver for AppDriver {
         START.iter().any(|(s, v)| is(subject, s) && text(value) == v.to_lowercase())
             || is(subject, "the selected drone")
             || (is(subject, "the order of the first Blue drone") && text(value) == "take the west tower")
+            || is(subject, "the flight of the first Blue drone")
     }
 
     fn set(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
@@ -310,16 +331,22 @@ impl Driver for AppDriver {
             "the commander sends the selected drone to the west tower" => self.click_tower("west"),
             "the commander holds the selected drone" => self.click_button("hold"),
             "the commander sends the selected drone home" => self.click_button("home"),
-            "the game runs for 2 minutes" => {
+            "the commander flies the selected drone low" => {
+                self.click_button("low")?;
+                self.until(ANSWER, "the server's answer to LOW", |v| v.drones.first().is_some_and(|d| d.low))
+            }
+            "the commander clicks the camera of the second blue drone" => self.click_button("camera-1"),
+            e @ ("the game runs for 2 minutes" | "the game runs for 3 minutes") => {
+                let minutes: f32 = if e.ends_with("2 minutes") { 2.0 } else { 3.0 };
                 let from = self.view()?.map_or(0.0, |v| v.time);
                 let end = Instant::now() + GAME;
                 loop {
                     let v = self.view()?;
-                    if v.as_ref().is_some_and(|v| v.time >= from + 120.0 || v.outcome.is_some()) {
+                    if v.as_ref().is_some_and(|v| v.time >= from + 60.0 * minutes || v.outcome.is_some()) {
                         return Ok(());
                     }
                     if Instant::now() > end {
-                        return Err("the game's clock did not run for 2 minutes".into());
+                        return Err(format!("the game's clock did not run for {minutes} minutes"));
                     }
                     std::thread::sleep(Duration::from_millis(200));
                 }
@@ -334,11 +361,22 @@ impl Driver for AppDriver {
             // Each test starts on a fresh game.
             return Ok(v.parse::<f64>().map_or_else(|_| Value::from(*v), Value::from));
         }
+        let lower = subject.to_lowercase();
+        if lower == "the camera feeds in the app" {
+            // The 3D view loads the valley first, which takes a while.
+            let end = Instant::now() + FEEDS;
+            loop {
+                let live = self.call(|v, _, _| v.cameras.live())?;
+                if live >= 3 || Instant::now() > end {
+                    return Ok(Value::from(live as f64));
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+        }
         let (status, view, selected) = self.call(|v, _, _| {
             let s = v.seat.state();
             (s.status.clone(), s.view.clone(), v.selected)
         })?;
-        let lower = subject.to_lowercase();
         if lower == "the seat of the app" {
             return Ok(Value::from(match status {
                 Status::Seated(Join::Command(Team::Blue)) => "Blue",
@@ -356,6 +394,9 @@ impl Driver for AppDriver {
         if lower == "the west tower on the blue map" {
             let west = view.towers.iter().find(|t| t.name == "west").ok_or("no west tower")?;
             return Ok(Value::from(holder_name(west.holder)));
+        }
+        if lower == "the flight of the first blue drone" {
+            return Ok(Value::from(if view.drones[0].low { "low" } else { "high" }));
         }
         if let Some(k) = ORDERS.iter().position(|o| o.to_lowercase() == lower) {
             return Ok(Value::from(order_name(view.drones[k].order, &view)));
@@ -383,6 +424,7 @@ impl Driver for AppDriver {
                 START.iter().any(|(s, _)| is(&v.subject, s))
                     || is(&v.subject, "the selected drone")
                     || is(&v.subject, "the order of the first Blue drone")
+                    || is(&v.subject, "the flight of the first Blue drone")
             }
             Need::Set(v) => is(&v.subject, "the selected drone"),
             Need::Perform(e) => EVENTS.iter().any(|s| is(&e.text, s)),
@@ -395,7 +437,7 @@ impl Driver for AppDriver {
 
 /// Loads the suite, then runs the section's tests on a thread of their own and quits.
 pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
-    let Config { suite, only, docs, server, server_args } = config;
+    let Config { suite, only, docs, server, server_args, cameras } = config;
     let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
         Ok(a) => a.with_coverage(),
         Err(e) => {
@@ -421,7 +463,7 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     })
     .detach();
     std::thread::spawn(move || {
-        let mut driver = AppDriver { tx, server: server.clone(), server_args, used: false };
+        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false };
         // The section's tests of the rules (with no window) and of the server are not the app's.
         let all = acceptance.plans.len();
         let plans: Vec<_> =

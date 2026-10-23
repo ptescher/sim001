@@ -10,9 +10,11 @@ cargo run --release -- --serve                  # you command Blue; the computer
 cargo run --release -- --serve --red nobody     # a game to practise in: nobody commands Red
 cargo run --release -- --connect HOST:5955      # the Blue seat of a game someone else runs
 cargo run --release -- --team red --watch       # Red's map, with no orders
+cargo run --release -- --serve --no-cameras     # no 3D view and no pictures from the drones
 ```
 
-`--serve` builds the game server (`towers_server`, in the workspace) and starts it with six
+`--serve` builds the game server (`towers_server`, in the workspace) and the 3D view of the game
+(`towers_view`, which sends the drones' cameras), and starts them with six
 ArduPlane SITL drones; it needs the AGENT build of ArduPlane (`SIM001_BIN`, else
 `.ardupilot-agent/build/sitl/bin`). The server writes to `logs/towers/server.log`, and stops its
 drones when the app quits. The game starts (GO) once your seat is taken and ArduPilot is ready,
@@ -30,12 +32,21 @@ about a minute and ten seconds of the drones' time; `--speedup N` runs it faster
   dim where you last saw them.
 - **DRONES:** each drone, its height (or GROUND, DOWN) and the order the server has for it.
 - **TOWERS:** each tower as your team last saw it.
+- **CAMERAS:** the picture from the camera of each of your drones (the sensor feed of the sim, from
+  the 3D view of the game, ports 5601 and up), small, and the selected drone's larger. Click a
+  picture to select its drone. `NO SIGNAL` shows until the 3D view has loaded the valley.
+
+The field shows the valley under the fog: the lake, the three lanes cut through the forest, and the
+clearings round the towers and the bases.
 
 ## Orders
 
 Select a drone: click it in DRONES or on the map, or press 1, 2 or 3. Then click a tower to take
 it (the drone circles it 40 m out), or anywhere else on the field to fly there and circle.
-HOLD (H) circles where it is, HOME (B) over your base. Esc lets the drone go. Until you give a
+HOLD (H) circles where it is, HOME (B) over your base. LOW (L) makes the drone fly low, along the
+lanes and below the treetops, where the trees hide it from the enemy (and a drone that leaves the
+lane hits a tree); LOW again makes it fly high. The drone's orders after that keep the setting.
+Esc lets the drone go. Until you give a
 drone an order, it circles over your base (HOME).
 
 ## Tests
@@ -47,7 +58,8 @@ server at ten times real time, clicking the real buttons and the map.
 ## Code
 
 - `src/seat.rs`: the seat on the server (TCP, `recreation_towers::seat`), on threads of its own.
-- `src/server.rs`: `--serve`, the game server as a child that stops with the app.
+- `src/server.rs`: `--serve`, the game server and the 3D view as children that stop with the app.
+- `src/cameras.rs`: the pictures from the drones (the sensor feed, one connection for each drone).
 - `src/ui.rs`: the window. `src/draw.rs` and `src/theme.rs` are the console's drawing helpers and
   look (copied: the console is not a library).
 - `src/expect.rs`: the driver for the acceptance tests.

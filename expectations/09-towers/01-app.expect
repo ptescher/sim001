@@ -10,6 +10,11 @@ Feature: Commanding from the app
   The list of drones shows the order that the server has for each drone. Until you give a drone
   an order, it circles over its base: HOME.
 
+  LOW makes the selected drone fly [[low]], along the lanes and below the treetops. Click LOW
+  again, and the drone flies high. CAMERAS shows the picture from the camera of each of your
+  drones, the same [[sensor feed]] that the ground station shows. Click a picture to select
+  its drone.
+
   Expectation: The app takes the Blue seat
     When the commander joins the game
     Then the seat of the app is Blue
@@ -36,8 +41,31 @@ Feature: Commanding from the app
 
   Expectation: A drone sent to a tower that nobody fights for takes it
     One drone takes a neutral tower in 20 s, but it must take off and fly there first. From the
-    Blue base to the west tower is about 370 m.
+    Blue base to the west tower is about 690 m.
 
     Given the order of the first Blue drone is take the west tower
     When the game runs for 2 minutes
     Then the west tower on the Blue map is held by Blue
+
+  Expectation: LOW makes the selected drone fly low
+    Given the selected drone is the first Blue drone
+    And the flight of the first Blue drone is high
+    When the commander flies the selected drone low
+    Then the flight of the first Blue drone is low
+
+  Expectation: A drone that flies low along the lanes takes a tower
+    The way along the lanes is longer than the straight line, and the drone flies below the
+    treetops all the way. It does not hit a tree.
+
+    Given the order of the first Blue drone is take the west tower
+    And the flight of the first Blue drone is low
+    When the game runs for 3 minutes
+    Then the west tower on the Blue map is held by Blue
+
+  Expectation: CAMERAS shows the camera of each drone
+    When the commander joins the game
+    Then the camera feeds in the app are 3
+
+  Expectation: A click on a camera selects its drone
+    When the commander clicks the camera of the second Blue drone
+    Then the selected drone is the second Blue drone

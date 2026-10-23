@@ -15,8 +15,8 @@ Feature: The computer commander
   team. Thus it does not know about an enemy drone in the fog.
 
   Expectation: At the start, the commander sends a drone to each neutral tower
-    The centre tower is the nearest to the base, so it goes to the drone in the middle. The
-    flank towers go to the drones at each end.
+    Each tower goes to the drone that is nearest to it. The centre tower goes to the drone in the
+    middle. The flank towers go to the drones at each end.
 
     When the computer commander of Blue decides
     Then the order of the first Blue drone is take the west tower

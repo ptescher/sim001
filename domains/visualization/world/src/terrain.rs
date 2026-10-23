@@ -8,6 +8,50 @@ use simulation_physics::Obstacle;
 use std::sync::OnceLock;
 
 static SITE: OnceLock<Option<RealSite>> = OnceLock::new();
+static ARENA: OnceLock<Arena> = OnceLock::new();
+
+/// The valley of Towers: flat ground inside a circle, a lake, and a forest that is cut open by
+/// lanes and clearings. The game owns the layout (`recreation_towers::map`); the world is told
+/// about it once, in world coordinates (x east, z south), before anything asks about the ground.
+pub struct Arena {
+    /// The ground is flat within this distance of the origin (m).
+    pub radius: f32,
+    pub lake_centre: Vec2,
+    pub lake_radius: f32,
+    /// The forest: every tree on the field.
+    pub trees: Vec<Tree>,
+    /// How far a point is from the nearest open ground (a lane, a clearing, the lake): below 0 on
+    /// it, above 0 in the forest (m).
+    pub open_distance: Box<dyn Fn(f32, f32) -> f32 + Send + Sync>,
+}
+
+/// Fills in the valley of Towers in place of the Alpine Valley. Call once, before anything asks
+/// about the ground.
+pub fn set_arena(arena: Arena) -> Result<(), String> {
+    if real().is_some() {
+        return Err("a real place is loaded".to_string());
+    }
+    ARENA.set(arena).map_err(|_| "an arena is already set".to_string())
+}
+
+/// The valley of Towers, if that is what is flown.
+pub fn arena() -> Option<&'static Arena> {
+    ARENA.get()
+}
+
+/// Where the lake is (x, z), and how big (m): the Alpine Valley's, or the arena's.
+pub fn lake_center() -> Vec2 {
+    arena().map_or(LAKE_CENTER, |a| a.lake_centre)
+}
+
+pub fn lake_radius() -> f32 {
+    arena().map_or(LAKE_RADIUS, |a| a.lake_radius)
+}
+
+/// Is this the Alpine Valley, with its runway, hangar and outcrops?
+pub fn alpine() -> bool {
+    real().is_none() && arena().is_none()
+}
 
 /// Loads a real place from `maps/<name>/build`. Call once, before anything asks about the
 /// ground; without it the sim flies the Alpine Valley.
@@ -23,6 +67,9 @@ pub fn real() -> Option<&'static RealSite> {
 
 /// Display name of the place.
 pub fn site_title() -> String {
+    if arena().is_some() {
+        return "Towers Valley".to_string();
+    }
     real().map_or_else(|| "Alpine Valley".to_string(), |r| r.meta.title.clone())
 }
 
@@ -141,12 +188,12 @@ pub fn lake_factor(x: f32, z: f32) -> f32 {
     if real().is_some() {
         return 9.0;
     }
-    let d = Vec2::new(x, z) - LAKE_CENTER;
+    let d = Vec2::new(x, z) - lake_center();
     let a = d.y.atan2(d.x);
     let wobble = 1.0
         + 0.22 * gradient_noise(a.cos() * 1.6 + 4.0, a.sin() * 1.6 - 2.0)
         + 0.08 * gradient_noise(a.cos() * 4.0 - 1.0, a.sin() * 4.0 + 6.0);
-    d.length() / (LAKE_RADIUS * wobble)
+    d.length() / (lake_radius() * wobble)
 }
 
 pub fn ground_height(x: f32, z: f32) -> f32 {
@@ -160,12 +207,17 @@ pub fn ground_height(x: f32, z: f32) -> f32 {
     let wx = x + 350.0 * gradient_noise(x / 900.0 + 5.2, z / 900.0 - 1.3);
     let wz = z + 350.0 * gradient_noise(x / 900.0 - 7.7, z / 900.0 + 3.1);
     let mountains = smoothstep(1300.0, 2400.0, r) * ridged(wx / 1150.0, wz / 1150.0, 6).powf(1.4) * 520.0;
-    let flat = 1.0 - smoothstep(200.0, 520.0, r);
+    // The Alpine Valley is flat to 200 m and the hills grow to 520 m; the Towers field is flat all
+    // across (the game flies over a flat ground) and the hills start past its edge.
+    let flat = match arena() {
+        Some(a) => 1.0 - smoothstep(a.radius + 60.0, a.radius + 420.0, r),
+        None => 1.0 - smoothstep(200.0, 520.0, r),
+    };
     // Gentle bumps in the grass, none on the runway (the runway mesh sits at y = 0).
     let rw = (x - RUNWAY_CENTER.x).abs().max(0.0) - RUNWAY_HALF_WIDTH;
     let rl = (z - RUNWAY_CENTER.y).abs() - RUNWAY_HALF_LENGTH;
     let runway_mask = smoothstep(0.0, 4.0, rw.max(rl));
-    let micro = (fbm(x / 25.0, z / 25.0, 2) - 0.5) * 0.25 * runway_mask;
+    let micro = if arena().is_some() { 0.0 } else { (fbm(x / 25.0, z / 25.0, 2) - 0.5) * 0.25 * runway_mask };
     let mut h = (hills.max(-4.0) + mountains) * (1.0 - flat) + micro;
 
     let lf = lake_factor(x, z);
@@ -192,6 +244,9 @@ pub fn is_water(x: f32, z: f32) -> bool {
 pub fn is_runway(x: f32, z: f32) -> bool {
     if let Some(r) = real() {
         return r.on_runway(x, z);
+    }
+    if arena().is_some() {
+        return false;
     }
     (x - RUNWAY_CENTER.x).abs() < RUNWAY_HALF_WIDTH && (z - RUNWAY_CENTER.y).abs() < RUNWAY_HALF_LENGTH
 }
@@ -229,6 +284,10 @@ pub fn forest_density(x: f32, z: f32) -> f32 {
     if real().is_some() {
         return -1.0;
     }
+    if let Some(a) = arena() {
+        // Forest right up to the open ground, and a little past the field's edge.
+        return if (a.open_distance)(x, z) > 0.0 { 1.0 } else { -1.0 };
+    }
     let r = (x * x + z * z).sqrt();
     let density = fbm(x / 160.0 + 40.0, z / 160.0 - 20.0, 3);
     let ring = (-(r - 230.0).powi(2) / 900.0).exp() * 0.5;
@@ -238,6 +297,14 @@ pub fn forest_density(x: f32, z: f32) -> f32 {
 pub fn trees() -> Vec<Tree> {
     if let Some(r) = real() {
         return r.trees.clone();
+    }
+    if let Some(a) = arena() {
+        // The forest goes on over the hills past the field: each tree stands on the ground.
+        return a
+            .trees
+            .iter()
+            .map(|t| Tree { pos: Vec3::new(t.pos.x, ground_height(t.pos.x, t.pos.z), t.pos.z), ..*t })
+            .collect();
     }
     let mut out = Vec::new();
     let spacing = 13.0;
@@ -301,7 +368,7 @@ pub fn trees() -> Vec<Tree> {
 /// Young conifers and shrubs: among the trees and along the edges of the woods, thickets by the
 /// lake, and a few in the open. Deterministic, like the trees.
 pub fn undergrowth() -> Vec<Plant> {
-    if real().is_some() {
+    if real().is_some() || arena().is_some() {
         return Vec::new();
     }
     let mut out = Vec::new();
@@ -374,6 +441,9 @@ pub struct Building {
 pub fn buildings() -> Vec<Building> {
     if let Some(r) = real() {
         return r.buildings.clone();
+    }
+    if arena().is_some() {
+        return Vec::new();
     }
     let b = |x: f32, z: f32, sx: f32, sy: f32, sz: f32| {
         let h = ground_height(x, z);

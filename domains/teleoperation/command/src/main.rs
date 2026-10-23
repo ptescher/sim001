@@ -4,7 +4,9 @@
 //!   cargo run --release -- --serve --red nobody      a game to practise in: nobody commands Red
 //!   cargo run --release -- --connect HOST:5955       take the Blue seat of a game someone else runs
 //!   cargo run --release -- --team red --watch        watch Red's map, with no orders
+//!   cargo run --release -- --serve --no-cameras      the same, with no 3D view and no pictures from the drones
 
+mod cameras;
 mod draw;
 mod expect;
 mod seat;
@@ -31,6 +33,8 @@ sim001_command [options]
   --watch            watch the team's map, with no orders
   --red X, --blue X  with --serve: who commands the other team: computer (default) or nobody
   --speedup N        with --serve: how fast the drones' time runs (default 1)
+  --no-cameras       no pictures from the drones' cameras (and with --serve, no 3D view of the game)
+  --cameras PORT     the port of the first drone's camera on the 3D view (default 5601)
   --connect ADDR     the game server (default 127.0.0.1:5955)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../../../expectations) against this app,
                      each on a fresh game of its own server (needs the AGENT build of ArduPlane), and exit
@@ -50,6 +54,7 @@ fn main() {
     let expect = flag("--expect");
     let serve = flag("--serve") || expect;
     let addr = arg("--connect").unwrap_or_else(|| format!("127.0.0.1:{PORT}"));
+    let cameras_on = !flag("--no-cameras");
 
     // The server's arguments: this app's team is a person's; the other team's is the computer's,
     // or nobody's.
@@ -68,11 +73,11 @@ fn main() {
         server_args[3] = "nobody".into();
     }
     let server = serve.then(|| {
-        if let Err(e) = server::build() {
+        if let Err(e) = server::build(cameras_on) {
             eprintln!("{e}");
             std::process::exit(2);
         }
-        match server::Server::start(&server_args) {
+        match server::Server::start(&server_args, cameras_on) {
             Ok(s) => Arc::new(Mutex::new(Some(s))),
             Err(e) => {
                 eprintln!("{e}");
@@ -84,6 +89,16 @@ fn main() {
         println!("game server started ({}); its log is logs/towers/server.log", server_args.join(" "));
     }
     let seat = seat::Seat::connect(&addr, join);
+    // The pictures from the team's drones: the 3D view of the game is on the server's machine.
+    let cameras = match join {
+        Join::Command(t) | Join::Watch(t) if cameras_on => cameras::Cameras::connect(
+            addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h),
+            arg("--cameras").and_then(|p| p.parse().ok()).unwrap_or(cameras::FIRST_PORT),
+            t,
+            recreation_towers::Rules::default().drones,
+        ),
+        _ => cameras::Cameras::none(),
+    };
 
     let expect_config = expect.then(|| {
         let suite = args
@@ -99,6 +114,7 @@ fn main() {
             docs: arg("--docs").map(PathBuf::from),
             server: server.clone().unwrap(),
             server_args: server_args.clone(),
+            cameras: cameras_on,
         }
     });
 
@@ -124,9 +140,9 @@ fn main() {
             focus: true,
             ..Default::default()
         };
-        let seat = seat.clone();
+        let (seat, cameras) = (seat.clone(), cameras.clone());
         let window = cx
-            .open_window(options, |window, cx| cx.new(|cx| ui::CommanderView::new(seat, window, cx)))
+            .open_window(options, |window, cx| cx.new(|cx| ui::CommanderView::new(seat, cameras, window, cx)))
             .expect("open the window");
         if let Some(config) = expect_config {
             expect::start(cx, window, config);

@@ -354,10 +354,11 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
             }
         }
     };
-    // Lake shore boulders, some standing in the water (the Alpine Valley only).
-    let alpine = terrain::real().is_none();
-    let lc = terrain::LAKE_CENTER;
-    for k in 0..if alpine { 70u32 } else { 0 } {
+    // Lake shore boulders, some standing in the water (the Alpine Valley and the Towers valley).
+    let alpine = terrain::alpine();
+    let lakeside = terrain::real().is_none();
+    let lc = terrain::lake_center();
+    for k in 0..if lakeside { 70u32 } else { 0 } {
         let a = rnd(k, 20) * TAU;
         // Walk out from the centre to the shoreline, then scatter around it.
         let dir = Vec2::new(a.cos(), a.sin());
@@ -370,7 +371,7 @@ pub fn build_vegetation(mut step: impl FnMut(&str)) -> VegetationBuild {
         place(lc.x + dir.x * d, lc.y + dir.y * d, size, 0.15, k);
     }
     // Cobbles along the waterline, some under the water, as a stream or a lake leaves them.
-    for k in 0..if alpine { 900u32 } else { 0 } {
+    for k in 0..if lakeside { 900u32 } else { 0 } {
         let a = rnd(k, 40) * TAU;
         let dir = Vec2::new(a.cos(), a.sin());
         let mut d = 0.0;

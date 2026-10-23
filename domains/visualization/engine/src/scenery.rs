@@ -157,8 +157,8 @@ fn pebble_texture() -> Image {
 /// The Alpine Valley's lake: a flat grid at the water level (the shore hides its edges), with
 /// the colour under the surface in its vertices.
 fn lake_mesh() -> Mesh {
-    let half = terrain::LAKE_RADIUS * 2.0;
-    let c = terrain::LAKE_CENTER;
+    let half = terrain::lake_radius() * 2.0;
+    let c = terrain::lake_center();
     let n = 160u32;
     let mut b = crate::mesh_util::GeoBuilder::default();
     let mut colours = Vec::new();

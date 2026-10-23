@@ -5,12 +5,14 @@
 //! Frames: the referee's field is north and east of its centre, and the centre is SITL's home.
 //! The flight model's world is x east, y up, z south (`cognition_agent::world_to_ned`).
 
+use crate::trees::Forest;
 use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
 use recreation_games::{Preflight, Radio, mode_slot};
-use recreation_towers::flight::{ORBIT_RADIUS, orbit_height};
+use recreation_towers::flight;
 use recreation_towers::{Game, Order, Phase as Referee, Rules, Team};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
+use simulation_physics::Obstacle;
 use simulation_physics::{Environment, Flat, FlightState, Phase, Start, step};
 
 /// A crashed drone is back at its base this long after the crash (s).
@@ -38,26 +40,44 @@ pub fn airborne(s: &FlightState) -> bool {
     matches!(s.phase, Phase::Launching | Phase::Flying) && s.carry.is_none() && !s.on_ground
 }
 
-/// Where drone `k` of `team` stands at its base: in a line across the field, facing the centre.
+/// Where drone `k` of `team` stands at its base: in a line across the field, facing *away* from
+/// the centre. The autopilot turns a drone about half way round while it climbs in QHOVER (its
+/// yaw estimate jumps as it leaves the ground: six drones in six, measured), so it ends up facing
+/// the centre, and the take-off transition carries it out over the lane and the home tower's
+/// clearing and not into the forest behind the base.
 pub fn base_start(rules: &Rules, team: Team, k: usize) -> Start {
     let at = rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 1.0));
-    let heading = if team == Team::Blue { 0.0 } else { std::f32::consts::PI };
+    let heading = if team == Team::Blue { std::f32::consts::PI } else { 0.0 };
     Start { pos: to_world(at, 0.0), heading }
 }
 
-/// The plan for drone `i` (its index in the game) to carry out `order`, with home at (`lat`,
-/// `lon`).
-pub fn plan_for(game: &Game, i: usize, order: Order, home: (f64, f64), id: u16) -> WirePlan {
+/// The plan for drone `i` (its index in the game) to carry out `order`, flown `low` or high, with
+/// home at (`lat`, `lon`).
+pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64), id: u16) -> WirePlan {
     let d = &game.drones[i];
     let (team, k) = (d.team, i % game.rules.drones);
-    let (primitive, point, radius) = match order {
-        Order::Take(t) => (Primitive::Orbit, game.towers[t].at, ORBIT_RADIUS),
-        Order::Goto(p) => (Primitive::Orbit, p, ORBIT_RADIUS),
-        Order::Hold => (Primitive::Loiter, d.at, 0.0),
-        Order::Home => (Primitive::Orbit, game.rules.base(team), ORBIT_RADIUS),
+    let target = match order {
+        Order::Take(t) => game.towers[t].at,
+        Order::Goto(p) => p,
+        Order::Hold => d.at,
+        Order::Home => game.rules.base(team),
     };
-    let (lat, lon) = to_global(home.0, home.1, point.x, point.y);
-    WirePlan { id, primitive, target: 0, lat, lon, alt: orbit_height(team, k), radius, ttl: PLAN_TTL }
+    let leg = if order == Order::Hold {
+        // Circle where it is: low only if it is over open ground.
+        let low = low && game.map.open(d.at);
+        let alt = if low { flight::low_height(team, k) } else { flight::orbit_height(team, k) };
+        flight::Leg { orbit: false, point: d.at, alt, radius: 0.0 }
+    } else {
+        let plan = flight::plan(&game.map, d.at, target, low);
+        flight::leg(&game.map, &plan, team, k, d.at, d.alt)
+    };
+    let (primitive, radius) = match (order, leg.orbit) {
+        (Order::Hold, _) => (Primitive::Loiter, 0.0),
+        (_, true) => (Primitive::Orbit, leg.radius),
+        (_, false) => (Primitive::Goto, 0.0),
+    };
+    let (lat, lon) = to_global(home.0, home.1, leg.point.x, leg.point.y);
+    WirePlan { id, primitive, target: 0, lat, lon, alt: leg.alt, radius, ttl: PLAN_TTL }
 }
 
 /// The game and the drones' planes.
@@ -70,6 +90,11 @@ pub struct World {
     /// Each drone's order (by its index in the game). Until its seat gives it one, a drone circles
     /// over its base.
     pub orders: Vec<Option<Order>>,
+    /// Each drone's order is flown low, along the lanes (by its index in the game).
+    pub lows: Vec<bool>,
+    /// The trees, for the flight model, and the ones near the plane being stepped.
+    forest: Forest,
+    near: Vec<Obstacle>,
     /// GO: when the drones' own time (drone 0's, s) gets here, the game starts.
     pub go: f64,
     pub crashes: u32,
@@ -83,6 +108,7 @@ impl World {
     pub fn new(rules: Rules, params: AircraftParams, go: f64) -> World {
         let game = Game::new(rules);
         let n = game.drones.len();
+        let forest = Forest::new(&game.map.trees());
         let planes = (0..n).map(|i| FlightState::new(&params, &World::start_of(&game, i))).collect();
         World {
             game,
@@ -91,6 +117,9 @@ impl World {
             preflight: vec![Preflight::default(); n],
             down_for: vec![0.0; n],
             orders: vec![Some(Order::Home); n],
+            lows: vec![false; n],
+            forest,
+            near: vec![],
             go,
             crashes: 0,
             taken: [0; 2],
@@ -121,7 +150,8 @@ impl World {
     pub fn step_drone(&mut self, i: usize, pwm: &[u16; 16], dt: f32) -> Radio {
         self.packets[i] += 1;
         let cmd = ActuatorCommands::from_pwm(&self.params, pwm);
-        step(&self.params, &mut self.planes[i], &cmd, &Environment { wind: Vec3::ZERO }, &Flat, &[], dt);
+        self.forest.near(self.planes[i].pos, &mut self.near);
+        step(&self.params, &mut self.planes[i], &cmd, &Environment { wind: Vec3::ZERO }, &Flat, &self.near, dt);
         let radio = self.radio(i, dt);
         self.sync(i);
         if i == 0 && self.started() {
@@ -147,6 +177,8 @@ impl World {
         if self.planes[i].phase == Phase::Crashed {
             if self.down_for[i] == 0.0 {
                 self.crashes += 1;
+                let (at, alt) = to_field(self.planes[i].pos);
+                println!("crash: drone {i}: {} at {at} (north, east), {alt:.1} m", self.planes[i].crash_reason);
             }
             self.down_for[i] += dt;
             if self.down_for[i] > RESPAWN {
@@ -220,15 +252,51 @@ mod tests {
 
     #[test]
     fn a_take_order_circles_the_tower_inside_its_circle_at_the_drones_own_height() {
-        let w = world();
+        let mut w = world();
         let rules = w.game.rules;
         let home = (-35.363261, 149.165230);
         let west = w.game.tower("west");
-        let plan = plan_for(&w.game, w.game.drone(Team::Red, 1), Order::Take(west), home, 7);
-        assert_eq!((plan.primitive, plan.radius, plan.id, plan.alt), (Primitive::Orbit, ORBIT_RADIUS, 7, 52.0));
+        // A drone that is up (a drone on the ground climbs over its base first).
+        let red = w.game.drone(Team::Red, 1);
+        w.game.drones[red].alt = 60.0;
+        w.game.drones[red].phase = Referee::Flying;
+        let plan = plan_for(&w.game, red, Order::Take(west), false, home, 7);
+        assert_eq!((plan.primitive, plan.radius, plan.id, plan.alt), (Primitive::Orbit, flight::ORBIT_RADIUS, 7, 67.0));
         assert!(plan.radius < rules.circle_radius && plan.alt < rules.circle_ceiling);
         let (n, e) = cognition_plan::to_local(home.0, home.1, plan.lat, plan.lon);
-        assert!((n - 0.0).abs() < 0.1 && (e + 220.0).abs() < 0.1, "{n} {e}");
+        let at = w.game.towers[west].at;
+        assert!((n - at.x).abs() < 0.1 && (e - at.y).abs() < 0.1, "{n} {e}");
+    }
+
+    #[test]
+    fn a_drone_on_the_ground_climbs_over_its_base_before_it_goes_to_its_order() {
+        let w = world();
+        let home = (-35.363261, 149.165230);
+        let red = w.game.drone(Team::Red, 1);
+        let plan = plan_for(&w.game, red, Order::Take(w.game.tower("west")), false, home, 1);
+        assert_eq!((plan.primitive, plan.alt), (Primitive::Orbit, 67.0));
+        let (n, e) = cognition_plan::to_local(home.0, home.1, plan.lat, plan.lon);
+        let base = w.game.rules.base(Team::Red);
+        assert!((n - base.x).abs() < 0.1 && (e - base.y).abs() < 0.1, "it circles the base, at {n} {e}");
+    }
+
+    #[test]
+    fn a_low_order_is_flown_along_the_lane_below_the_treetops_and_a_high_one_straight() {
+        let mut w = world();
+        let home = (-35.363261, 149.165230);
+        let blue = w.game.drone(Team::Blue, 1);
+        // The drone is flying over the Blue home tower.
+        w.game.drones[blue].at = w.game.towers[0].at;
+        w.game.drones[blue].alt = 15.0;
+        w.game.drones[blue].phase = Referee::Flying;
+        let west = w.game.tower("west");
+        let low = plan_for(&w.game, blue, Order::Take(west), true, home, 1);
+        assert_eq!((low.primitive, low.alt), (Primitive::Goto, 17.5));
+        let (n, e) = cognition_plan::to_local(home.0, home.1, low.lat, low.lon);
+        assert!(w.game.map.open(Vec2::new(n, e)), "it aims along the lane");
+        let high = plan_for(&w.game, blue, Order::Take(west), false, home, 2);
+        assert_eq!((high.primitive, high.alt), (Primitive::Orbit, 63.0));
+        assert!(low.alt < w.game.rules.treetop);
     }
 
     #[test]

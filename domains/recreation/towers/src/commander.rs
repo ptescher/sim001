@@ -332,14 +332,15 @@ mod tests {
     }
 
     #[test]
-    fn an_enemy_circling_the_next_tower_is_no_threat() {
+    fn an_enemy_past_the_defence_range_is_no_threat() {
         let mut g = Game::new(Rules::default());
         let west = g.tower("west");
         g.towers[west].holder = Some(Team::Blue);
         g.towers[west].control = 1.0;
-        // A Red drone on its circle round the centre, 180 m from the west tower: in its sight.
+        // A Red drone 150 m from the west tower: in its sight (200 m), out of the defence range.
         let red = g.drone(Team::Red, 1);
-        g.drones[red] = crate::Drone { at: Vec2::new(0.0, -40.0), alt: 50.0, phase: Phase::Flying, ..g.drones[red] };
+        let at = g.towers[west].at + Vec2::new(0.0, 150.0);
+        g.drones[red] = crate::Drone { at, alt: 50.0, phase: Phase::Flying, ..g.drones[red] };
         g.step(0.1);
         assert!(g.view(Team::Blue).enemies.iter().any(|e| e.seen));
         let orders = decide(&mut Commander::new(g.rules), &g);
@@ -354,10 +355,10 @@ mod tests {
         let home = g.tower("Blue home");
         // The drone for the west tower is nearest the home tower now.
         let i = g.drone(Team::Blue, 0);
-        g.drones[i] = crate::Drone { at: Vec2::new(-200.0, -60.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        g.drones[i] = crate::Drone { at: Vec2::new(-400.0, -30.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
         let scout = g.drone(Team::Red, 0);
         g.drones[scout] =
-            crate::Drone { at: Vec2::new(-100.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[scout] };
+            crate::Drone { at: Vec2::new(-330.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[scout] };
         g.step(0.1);
         let orders = decide(&mut c, &g);
         assert_eq!(orders[0], Some(Order::Take(home)));

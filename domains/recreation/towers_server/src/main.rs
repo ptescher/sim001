@@ -15,6 +15,7 @@
 
 mod ground;
 mod seats;
+mod trees;
 mod world;
 
 use glam::Vec3;
@@ -78,7 +79,12 @@ impl Drop for Fleet {
 
 /// Starts SITL instances `first..first + n`, with system ids 1 to `n` and the Towers parameters
 /// on top of the T1-S VTOL's.
-fn start_fleet(root: &Path, dir: &Path, first: u16, n: u16, speedup: f32) -> Result<Fleet, String> {
+///
+/// ArduPilot takes the place where it starts as its home, and the AGENT fence is round its home:
+/// each drone starts at its team's base, so its fence is round the base. A parameter file for each
+/// drone moves the fence's centre (`AGENT_FENCE_N`, `_E`, metres from home) to the middle of the
+/// field.
+fn start_fleet(root: &Path, dir: &Path, rules: &Rules, first: u16, n: u16, speedup: f32) -> Result<Fleet, String> {
     let program = launch::native_binary(root);
     if !program.exists() {
         return Err(format!(
@@ -90,8 +96,16 @@ fn start_fleet(root: &Path, dir: &Path, first: u16, n: u16, speedup: f32) -> Res
     let mut fleet = Fleet(vec![]);
     for k in 1..=n {
         let mut args = launch::native_instance_args(root, "t1s-vtol", first + k - 1, launch::HOME, speedup);
+        // Drone `k - 1` starts at its team's base; the field's middle is that far from its home.
+        let team = if usize::from(k - 1) < rules.drones { Team::Blue } else { Team::Red };
+        let middle = -rules.base(team);
+        let instance = dir.join(format!("instance{k}"));
+        std::fs::create_dir_all(&instance).map_err(|e| format!("{}: {e}", instance.display()))?;
+        let fence = instance.join("fence.parm");
+        std::fs::write(&fence, format!("AGENT_FENCE_N {:.0}\nAGENT_FENCE_E {:.0}\n", middle.x, middle.y))
+            .map_err(|e| format!("{}: {e}", fence.display()))?;
         if let Some(i) = args.iter().position(|a| a == "--defaults") {
-            args[i + 1] = format!("{},{towers}", args[i + 1]);
+            args[i + 1] = format!("{},{towers},{}", args[i + 1], fence.display());
         }
         args.extend(["--sysid".to_string(), k.to_string()]);
         let (child, _) =
@@ -156,14 +170,20 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let fleet =
-        match start_fleet(&root, &std::env::temp_dir().join("sim001-towers"), a.first_instance, n as u16, a.speedup) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(2);
-            }
-        };
+    let fleet = match start_fleet(
+        &root,
+        &std::env::temp_dir().join("sim001-towers"),
+        &rules,
+        a.first_instance,
+        n as u16,
+        a.speedup,
+    ) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
     println!("six SITL drones starting at {}x; seats on tcp {}", a.speedup, a.seat_port);
     let names: Vec<String> = (0..n).map(|i| name(&rules, i)).collect();
     let ports: Vec<u16> = (0..n as u16).map(|i| launch::MAVLINK_PORT + 10 * (a.first_instance + i)).collect();
@@ -184,6 +204,9 @@ fn main() {
         });
     }
     let start = Instant::now();
+    // The report: every 2 s, or `TOWERS_REPORT` (s) if that is set.
+    let report_every =
+        Duration::from_secs_f32(std::env::var("TOWERS_REPORT").ok().and_then(|s| s.parse().ok()).unwrap_or(2.0f32));
     let (mut last_send, mut last_report) = (Instant::now(), Instant::now());
     let mut next_decision = 0.0;
     loop {
@@ -201,6 +224,7 @@ fn main() {
                     for (k, order) in c.decide(&view) {
                         let i = w.game.drone(*team, k);
                         w.orders[i] = Some(order);
+                        w.lows[i] = false;
                     }
                 }
             }
@@ -215,7 +239,7 @@ fn main() {
             seats.send(&w);
         }
         let mut w = world.lock().unwrap();
-        if last_report.elapsed() >= Duration::from_secs(2) || w.game.outcome.is_some() {
+        if last_report.elapsed() >= report_every || w.game.outcome.is_some() {
             last_report = Instant::now();
             let g = &w.game;
             let towers: Vec<String> = g
@@ -234,7 +258,22 @@ fn main() {
                 w.packets
             );
             for i in 0..n {
-                println!("        {} {:?} {:?}", ground.describe(i), g.drones[i].phase, w.orders[i]);
+                let d = &g.drones[i];
+                println!(
+                    "        {} {:?} {:?}{} | at {:.0}, {:.0} {:.0} m, {:.0}, {:.0} m/s, heading {:.0}, roll {:.0}, airspeed {:.1}",
+                    ground.describe(i),
+                    d.phase,
+                    w.orders[i],
+                    if w.lows[i] { " LOW" } else { "" },
+                    d.at.x,
+                    d.at.y,
+                    d.alt,
+                    d.vel.x,
+                    d.vel.y,
+                    simulation_physics::euler(w.planes[i].rot).2.to_degrees(),
+                    simulation_physics::euler(w.planes[i].rot).0.to_degrees(),
+                    w.planes[i].airspeed
+                );
             }
         }
         if let Some(outcome) = w.game.outcome {

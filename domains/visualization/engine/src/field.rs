@@ -44,7 +44,7 @@ pub fn spawn_world(
         ..default()
     });
 
-    let alpine = terrain::real().is_none();
+    let alpine = terrain::alpine();
     // ---- runway (the Alpine Valley's; a real place's runway is in its aerial photo) ----
     let rc = terrain::RUNWAY_CENTER;
     let mut rw = GeoBuilder::default();
@@ -169,8 +169,11 @@ pub fn spawn_world(
     });
     let body = meshes.add(finish(Capsule3d::new(0.22, 1.0).mesh().build()));
     let head = meshes.add(finish(Sphere::new(0.12).mesh().ico(2).unwrap()));
-    commands.spawn(rt(body, shirt, Transform::from_xyz(p.x + 0.3, ph + 0.72, p.z + 0.3)));
-    commands.spawn(rt(head, skin, Transform::from_xyz(p.x + 0.3, ph + 1.58, p.z + 0.3)));
+    // The pilot stands by the pilot box (not in the middle of the Towers field).
+    if terrain::arena().is_none() {
+        commands.spawn(rt(body, shirt, Transform::from_xyz(p.x + 0.3, ph + 0.72, p.z + 0.3)));
+        commands.spawn(rt(head, skin, Transform::from_xyz(p.x + 0.3, ph + 1.58, p.z + 0.3)));
+    }
 
     let pole_mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.7, 0.7, 0.72),
@@ -182,7 +185,12 @@ pub fn spawn_world(
     // Beside the pilot box.
     let (wx, wz) = (p.x + 8.0, p.z - 14.0);
     let wh = terrain::ground_height(wx, wz);
-    commands.spawn(rt(pole, pole_mat, Transform::from_xyz(wx, wh + 2.5, wz)));
+    if terrain::arena().is_none() {
+        commands.spawn(rt(pole, pole_mat, Transform::from_xyz(wx, wh + 2.5, wz)));
+    }
+    if terrain::arena().is_some() {
+        return;
+    }
     let sock = meshes.add(finish(ConicalFrustum { radius_top: 0.1, radius_bottom: 0.25, height: 1.6 }.mesh().build()));
     let sock_root = commands.spawn((Windsock, Transform::from_xyz(wx, wh + 4.85, wz), Visibility::default())).id();
     let sock_mesh = commands

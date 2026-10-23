@@ -7,6 +7,8 @@ use expectation_harness::{Acceptance, Bindings, RunOptions, Screenshot};
 use expectation_model::Value;
 use expectation_story::Status;
 use glam::Vec2;
+use recreation_towers::flight::{self, Plan};
+use recreation_towers::map::LaneName;
 use recreation_towers::{Commander, Game, Order, Outcome, Phase, Rules, Team};
 use std::path::Path;
 
@@ -16,17 +18,25 @@ const DT: f32 = 0.1;
 const ALT: f32 = 50.0;
 /// The Red scout: Red's first drone.
 const SCOUT: usize = 0;
+/// A drone that flies low, and one above the trees (m).
+const LOW: f32 = 17.0;
 
 struct World {
     game: Game,
     /// Blue's computer commander.
     blue: Commander,
+    /// Where the steps put the first Blue drone and the Red scout, by the spec's words, and the
+    /// place they put each at.
+    blue_place: Option<(&'static str, Vec2)>,
+    scout_place: Option<(&'static str, Vec2)>,
+    /// The plan that the first Blue drone was given by its last order.
+    plan: Option<Plan>,
 }
 
 impl World {
     fn new() -> World {
         let rules = Rules::default();
-        World { game: Game::new(rules), blue: Commander::new(rules) }
+        World { game: Game::new(rules), blue: Commander::new(rules), blue_place: None, scout_place: None, plan: None }
     }
 
     /// Blue drone `k`'s order, as the spec words it.
@@ -135,9 +145,63 @@ impl World {
         self.game.drone(Team::Red, SCOUT)
     }
 
+    fn mid_lane(&self) -> Vec2 {
+        Vec2::new(-220.0, 0.0)
+    }
+
+    /// A point on the east lane, as far out from the Blue home tower as `mid_lane` is on the mid
+    /// lane (210 m, past the sight of the home tower): about 143 m from it, with the forest between.
+    fn east_lane(&self) -> Vec2 {
+        let lane = self.game.map.lanes.iter().find(|l| l.name == LaneName::East).unwrap();
+        lane.points[0] + (lane.points[1] - lane.points[0]).normalize() * 210.0
+    }
+
+    /// Where the west lane is nearest the lake.
+    fn shore(&self) -> Vec2 {
+        let m = &self.game.map;
+        (m.towers[0] + m.towers[1]) * 0.5
+    }
+
+    fn place_blue(&mut self, v: &Value) {
+        let i = self.game.drone(Team::Blue, 0);
+        let m = &self.game.map;
+        let (name, at, alt) = match v.as_str().unwrap_or_default() {
+            "at the Blue home tower" => ("at the Blue home tower", m.towers[0], Some(15.0)),
+            "low in the mid lane" => ("low in the mid lane", self.mid_lane(), Some(LOW)),
+            "low in the west lane, on the shore of the lake" => {
+                ("low in the west lane, on the shore of the lake", self.shore(), Some(LOW))
+            }
+            _ => ("at its base", m.bases[0], None),
+        };
+        self.put(i, at, alt);
+        self.blue_place = Some((name, at));
+    }
+
     fn place_scout(&mut self, v: &Value) {
         let i = self.scout();
         let blue = self.game.drone(Team::Blue, 0);
+        let new = |name: &'static str| Some((name, Vec2::ZERO));
+        let (name, at, alt) = match v.as_str().unwrap_or_default() {
+            "low in the east lane, near the first Blue drone" => {
+                (new("low in the east lane, near the first Blue drone"), self.east_lane(), Some(LOW))
+            }
+            "high over the east lane, near the first Blue drone" => {
+                (new("high over the east lane, near the first Blue drone"), self.east_lane(), Some(ALT))
+            }
+            "low in the mid lane, ahead of the first Blue drone" => (
+                new("low in the mid lane, ahead of the first Blue drone"),
+                self.mid_lane() + Vec2::new(120.0, 0.0),
+                Some(LOW),
+            ),
+            "low over the lake" => (new("low over the lake"), self.game.map.lake.at, Some(LOW)),
+            _ => (None, Vec2::ZERO, None),
+        };
+        if let Some((name, _)) = name {
+            self.put(i, at, alt);
+            self.scout_place = Some((name, at));
+            return;
+        }
+        self.scout_place = None;
         match v.as_str().unwrap_or_default() {
             "near a Blue drone" => {
                 self.put(blue, Vec2::ZERO, Some(ALT));
@@ -153,6 +217,22 @@ impl World {
             }
             _ => self.home(i),
         }
+    }
+
+    /// What the Blue drone's last plan is, in the spec's words.
+    fn way(&self) -> &'static str {
+        match self.plan.as_ref().map(|p| (p.path.is_empty(), p.lane)) {
+            Some((false, Some(LaneName::West))) => "along the west lane",
+            Some((false, Some(LaneName::Mid))) => "along the mid lane",
+            Some((false, Some(LaneName::East))) => "along the east lane",
+            _ => "straight over the forest",
+        }
+    }
+
+    /// The first Blue drone is sent to `target`, `low` or high.
+    fn send_blue(&mut self, target: Vec2, low: bool) {
+        let d = self.game.drones[self.game.drone(Team::Blue, 0)];
+        self.plan = Some(flight::plan(&self.game.map, d.at, target, low));
     }
 
     fn scout_seen(&self) -> &'static str {
@@ -239,7 +319,12 @@ fn bindings() -> Bindings<World> {
         // What Blue knows.
         .observe("the Red scout", |w| {
             let d = w.game.drones[w.scout()];
-            if d.phase != Phase::Flying {
+            if let Some((name, at)) = w.scout_place
+                && d.phase == Phase::Flying
+                && d.at == at
+            {
+                name
+            } else if d.phase != Phase::Flying {
                 "at its base"
             } else if (d.at - w.tower("east").at).length() < 150.0 {
                 "far from anything Blue"
@@ -302,6 +387,30 @@ fn bindings() -> Bindings<World> {
             let view = w.game.view(Team::Blue);
             w.blue.decide(&view);
         })
+        // The lanes: where the first Blue drone is, and the way it is sent.
+        .observe("the first Blue drone", |w| {
+            let d = w.game.drones[w.game.drone(Team::Blue, 0)];
+            match w.blue_place {
+                Some((name, at)) if d.phase == Phase::Flying && d.at == at => name,
+                _ => "at its base",
+            }
+        })
+        .arrange("the first Blue drone", |w, v| w.place_blue(v))
+        .on("the first Blue drone is sent high to the west tower", |w| {
+            let west = w.tower("west").at;
+            w.send_blue(west, false)
+        })
+        .on("the first Blue drone is sent low to the west tower", |w| {
+            let west = w.tower("west").at;
+            w.send_blue(west, true)
+        })
+        .on("the first Blue drone is sent low to a point in the forest", |w| {
+            w.send_blue(Vec2::new(-100.0, 100.0), true)
+        })
+        .observe("the way of the first Blue drone", |w| w.way())
+        .observe("the orbit of the first Blue drone", |w| {
+            if w.plan.as_ref().is_some_and(|p| p.circle_low) { "low" } else { "high" }
+        })
         .on_reset(|w| *w = World::new())
         // Blue's map, as the commander app draws it, with the computer commander's orders.
         .on_screenshot(|w| {
@@ -336,7 +445,7 @@ fn every_test_of_the_section_passes_with_no_window() {
     }
     println!("{}", report.failures(&a.suite, &a.plans));
     let passed = ran.iter().filter(|(_, r)| r.status == Status::Passed).count();
-    assert!(passed >= 23, "only {passed} tests of the section ran and passed");
+    assert!(passed >= 30, "only {passed} tests of the section ran and passed");
     // The game server's tests are not this driver's: they stay "not supported yet" here.
     let not_passed: Vec<_> = ran
         .iter()

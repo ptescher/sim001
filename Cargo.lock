@@ -5139,6 +5139,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "recreation_towers_view"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "glam",
+ "recreation_towers",
+ "teleoperation_shared",
+ "visualization_engine",
+ "visualization_world",
+]
+
+[[package]]
 name = "rectangle-pack"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -49,11 +49,15 @@ impl Seats {
         let game = &world.game;
         let views = [game.view(Team::Blue), game.view(Team::Red)].map(|mut v| {
             for d in &mut v.drones {
-                d.order = world.orders[game.drone(v.team, d.k)];
+                let i = game.drone(v.team, d.k);
+                d.order = world.orders[i];
+                d.low = world.lows[i];
             }
             seat::encode(&ToSeat::View(v))
         });
-        let truth = seat::encode(&ToSeat::Truth(Truth::of(game)));
+        let mut truth = Truth::of(game);
+        truth.attitudes = world.planes.iter().map(|p| p.rot.to_array()).collect();
+        let truth = seat::encode(&ToSeat::Truth(truth));
         self.clients.lock().unwrap().retain_mut(|c| {
             let line = match c.join {
                 Join::Command(t) | Join::Watch(t) => &views[t.index()],
@@ -93,12 +97,13 @@ fn seat(stream: TcpStream, clients: Arc<Mutex<Vec<Client>>>, world: Arc<Mutex<Wo
     }
     let Join::Command(team) = join else { return };
     for line in lines {
-        if let Ok(ToServer::Order { drone, order }) = seat::decode::<ToServer>(&line)
+        if let Ok(ToServer::Order { drone, order, low }) = seat::decode::<ToServer>(&line)
             && drone < rules.drones
         {
             let mut w = world.lock().unwrap();
             let i = w.game.drone(team, drone);
             w.orders[i] = Some(order);
+            w.lows[i] = low;
         }
     }
     // The commander has gone: its seat is free again.

@@ -1,0 +1,60 @@
+Feature: The forest and the lanes
+  The field of Towers is a valley with a forest. The forest covers all the field, except for
+  the [[lane]]s, the [[clearing]]s and the lake. The trees are 20 m to 30 m tall. Three lanes go
+  from each home tower to the home tower of the other team: the west lane through the west
+  tower, the mid lane through the centre tower, and the east lane through the east tower. The
+  lake is between the Blue home tower and the west tower. The west lane goes along its shore.
+
+  The trees hide a drone that flies [[low]], below the treetops. A team sees a low drone only
+  along a line that has no trees on it: along a lane, across a clearing or across the lake. A
+  drone above the trees is seen over the forest, as far as the team sees. A tower, or a drone
+  above the trees, also looks down on a low drone that is within 75 m. Thus a drone that flies
+  low can get near the enemy and not be seen.
+
+  Expectation: The trees hide a drone that flies low
+    Given the first Blue drone is low in the mid lane
+    And the Red scout is low in the east lane, near the first Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is unknown
+
+  Expectation: A drone above the trees is seen over the forest
+    Given the first Blue drone is low in the mid lane
+    And the Red scout is high over the east lane, near the first Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+  Expectation: A team sees a low drone along the lane
+    Given the first Blue drone is low in the mid lane
+    And the Red scout is low in the mid lane, ahead of the first Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+  Expectation: A team sees a low drone across the lake
+    Given the first Blue drone is low in the west lane, on the shore of the lake
+    And the Red scout is low over the lake
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+Feature: Flying low
+  Each order is flown high or [[low]]. A drone that flies high goes straight to where it is
+  sent, over the forest. A drone that flies low goes along the lanes, below the treetops. At
+  the end it circles low if it is in a [[clearing]]. In a lane or over the forest there is no
+  space to circle, so there it climbs above the trees and circles high.
+
+  Expectation: A drone that flies high goes straight over the forest
+    Given the first Blue drone is at the Blue home tower
+    When the first Blue drone is sent high to the west tower
+    Then the way of the first Blue drone is straight over the forest
+    And the orbit of the first Blue drone is high
+
+  Expectation: A drone that flies low goes along the lanes
+    Given the first Blue drone is at the Blue home tower
+    When the first Blue drone is sent low to the west tower
+    Then the way of the first Blue drone is along the west lane
+    And the orbit of the first Blue drone is low
+
+  Expectation: A drone that flies low to the forest climbs to circle
+    Given the first Blue drone is at the Blue home tower
+    When the first Blue drone is sent low to a point in the forest
+    Then the way of the first Blue drone is along the mid lane
+    And the orbit of the first Blue drone is high

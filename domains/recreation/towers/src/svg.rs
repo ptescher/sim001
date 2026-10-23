@@ -2,6 +2,7 @@
 //! sees, the towers with their circles and control bars, the drones and their orders, and the
 //! clock and the scores along the top. The tests with no window put it in the docs.
 
+use crate::map::{LANE_HALF_WIDTH, Map};
 use crate::{Order, Outcome, Phase, Rules, Team, TeamView};
 use glam::Vec2;
 use illustration_theme::NIGHT as P;
@@ -33,8 +34,46 @@ fn team_name(t: Team) -> &'static str {
     }
 }
 
+const LANE: &str = "#33463a";
+const LAKE: &str = "#1d3b52";
+
+/// The valley under the fog: the lake, the lanes and the clearings. A team knows the ground, so the
+/// map shows it everywhere, dim in the fog.
+fn valley_svg(map: &Map, scale: f32, at: &dyn Fn(Vec2) -> (f32, f32)) -> String {
+    let mut s = String::new();
+    let (lx, ly) = at(map.lake.at);
+    let _ = write!(
+        s,
+        r##"<circle cx="{lx:.1}" cy="{ly:.1}" r="{:.1}" fill="{LAKE}" fill-opacity="0.8"/>"##,
+        map.lake.radius * scale
+    );
+    for lane in &map.lanes {
+        let pts =
+            lane.points.iter().map(|&p| at(p)).map(|(x, y)| format!("{x:.1},{y:.1}")).collect::<Vec<_>>().join(" ");
+        let _ = write!(
+            s,
+            r##"<polyline points="{pts}" fill="none" stroke="{LANE}" stroke-opacity="0.75" stroke-width="{:.1}" stroke-linejoin="round" stroke-linecap="round"/>"##,
+            2.0 * LANE_HALF_WIDTH * scale
+        );
+    }
+    for c in &map.clearings {
+        let (x, y) = at(c.at);
+        let _ = write!(
+            s,
+            r##"<circle cx="{x:.1}" cy="{y:.1}" r="{:.1}" fill="{LANE}" fill-opacity="0.75"/>"##,
+            c.radius * scale
+        );
+    }
+    s
+}
+
 /// `view` as `view.team` sees it, the whole field fitted under the top bar, north up.
 pub fn map_svg(view: &TeamView, rules: &Rules) -> String {
+    map_with_valley_svg(view, rules, &Map::new(rules))
+}
+
+/// The same, over `map`.
+pub fn map_with_valley_svg(view: &TeamView, rules: &Rules, map: &Map) -> String {
     let scale = 0.5 * (H - BAR) / (rules.field_radius * 1.08);
     let (cx, cy) = (W * 0.5, BAR + (H - BAR) * 0.5);
     let at = |p: Vec2| (cx + p.y * scale, cy - p.x * scale);
@@ -52,6 +91,7 @@ pub fn map_svg(view: &TeamView, rules: &Rules) -> String {
         let (x, y) = at(p);
         let _ = write!(s, r##"<circle cx="{x:.1}" cy="{y:.1}" r="{:.1}" fill="{FIELD}"/>"##, range * scale);
     }
+    s += &valley_svg(map, scale, &at);
     let (fx, fy) = at(Vec2::ZERO);
     let _ = write!(
         s,
@@ -147,7 +187,7 @@ pub fn map_svg(view: &TeamView, rules: &Rules) -> String {
             x + 12.0,
             y - 8.0 + 11.0 * below as f32,
             letter(view.team),
-            d.k + 1
+            if d.low { format!("{} LOW", d.k + 1) } else { (d.k + 1).to_string() }
         );
     }
     // The enemy drones the team sees, and where it last saw the others.
@@ -236,6 +276,16 @@ mod tests {
             assert!(svg.contains(name), "no {name}");
         }
         assert_eq!(svg.matches("<polygon").count(), 3, "Blue's three drones, and no Red drone it hasn't seen");
+    }
+
+    #[test]
+    fn the_map_shows_the_lake_the_lanes_and_a_drone_that_flies_low() {
+        let g = Game::new(Rules::default());
+        let mut v = g.view(Team::Blue);
+        let svg = map_svg(&v, &g.rules);
+        assert!(svg.contains(LAKE) && svg.matches("<polyline").count() == 5, "{svg}");
+        v.drones[1].low = true;
+        assert!(map_svg(&v, &g.rules).contains(">B2 LOW<"));
     }
 
     #[test]
