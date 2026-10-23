@@ -49,6 +49,11 @@ impl Cameras {
         slot.as_ref().filter(|l| l.at.elapsed().as_secs_f32() < STALE).map(|l| l.image.clone())
     }
 
+    /// How many drones the feeds are for (none with `none()`).
+    pub fn len(&self) -> usize {
+        self.drones.len()
+    }
+
     /// How many drones have a fresh picture.
     pub fn live(&self) -> usize {
         (0..self.drones.len()).filter(|&k| self.image(k).is_some()).count()

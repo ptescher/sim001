@@ -3,7 +3,7 @@
 //!
 //! The controls are those of a real-time strategy game. Left-click a drone (on the map or in the
 //! list) to select it, or drag a box round several; Shift adds to the selection (and takes a
-//! drone out of it again), Ctrl/Cmd+A selects all, 1, 2 and 3 select one drone, Esc lets go.
+//! drone out of it again), Ctrl/Cmd+A selects all, the number keys select one drone, Esc lets go.
 //! Right-click a tower (take it) or anywhere else on the field (go there and circle) to order
 //! the selected drones. HOLD and HOME (or H and B) act on the selected drones; LOW (L) makes them
 //! fly along the lanes, below the treetops; CAMERAS shows the camera of each drone.
@@ -109,9 +109,14 @@ impl CommanderView {
             map_bounds: Rc::new(Cell::new(Bounds::default())),
             valley: None,
             cameras,
-            shown: vec![None; 3],
+            shown: vec![None; cameras.len()],
             focus,
         }
+    }
+
+    /// How many drones the team has.
+    fn drone_count(&self) -> usize {
+        self.seat.state().rules.map_or(0, |r| r.drones)
     }
 
     /// The seat commands its team (it does not only watch).
@@ -223,12 +228,14 @@ impl CommanderView {
 
     fn key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
         match ev.keystroke.key.as_str() {
-            k @ ("1" | "2" | "3") => {
+            k @ ("1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") => {
                 let n = k.parse::<usize>().map_or(0, |n| n - 1);
-                self.select_many(&[n], ev.keystroke.modifiers.shift)
+                if n < self.drone_count() {
+                    self.select_many(&[n], ev.keystroke.modifiers.shift)
+                }
             }
             "a" if ev.keystroke.modifiers.secondary() || ev.keystroke.modifiers.control => {
-                let all: Vec<usize> = (0..3).collect();
+                let all: Vec<usize> = (0..self.drone_count()).collect();
                 self.select_many(&all, false)
             }
             "h" => self.give(Order::Hold),
@@ -357,7 +364,7 @@ impl CommanderView {
     /// The camera of each drone beside its name, and the selected drone's (else the first's) larger.
     fn cameras_panel(&mut self, window: &mut Window, view: &Option<TeamView>, cx: &mut Context<Self>) -> Div {
         // The newest pictures; the ones the window had are freed from its atlas.
-        let images: Vec<Option<Arc<RenderImage>>> = (0..3).map(|k| self.cameras.image(k)).collect();
+        let images: Vec<Option<Arc<RenderImage>>> = (0..self.cameras.len()).map(|k| self.cameras.image(k)).collect();
         for (k, img) in images.iter().enumerate() {
             let same = match (&self.shown[k], img) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
@@ -385,7 +392,7 @@ impl CommanderView {
         div().flex().flex_col().child(row).child(div().px_2().pb_2().child(camera_tile(
             "camera-selected".to_string(),
             &label,
-            images[k].clone(),
+            images.get(k).cloned().flatten(),
             252.0,
             189.0,
             false,
