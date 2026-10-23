@@ -85,6 +85,15 @@ impl Class {
         }
     }
 
+    /// What the aircraft weighs (kg), as the simulation flies it.
+    pub fn mass_kg(self) -> f32 {
+        match self {
+            Class::Light => 0.28,
+            Class::Standard => 1.10,
+            Class::Heavy => 3.0,
+        }
+    }
+
     /// A word for the commander's map.
     pub fn name(self) -> &'static str {
         match self {
