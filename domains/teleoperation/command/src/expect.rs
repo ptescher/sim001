@@ -126,19 +126,24 @@ fn holder_name(h: Option<Team>) -> &'static str {
 
 /// A left click at `at`, as the platform would deliver it.
 fn click(window: &mut Window, cx: &mut App, at: Point<Pixels>) {
+    press(window, cx, at, MouseButton::Left);
+}
+
+/// A click with `button`.
+fn press(window: &mut Window, cx: &mut App, at: Point<Pixels>, button: MouseButton) {
     let modifiers = Modifiers::default();
     let mut send = |e: PlatformInput| {
         let _ = window.dispatch_event(e, cx);
     };
     send(PlatformInput::MouseMove(MouseMoveEvent { position: at, pressed_button: None, modifiers }));
     send(PlatformInput::MouseDown(MouseDownEvent {
-        button: MouseButton::Left,
+        button,
         position: at,
         modifiers,
         click_count: 1,
         first_mouse: false,
     }));
-    send(PlatformInput::MouseUp(MouseUpEvent { button: MouseButton::Left, position: at, modifiers, click_count: 1 }));
+    send(PlatformInput::MouseUp(MouseUpEvent { button, position: at, modifiers, click_count: 1 }));
 }
 
 struct AppDriver {
@@ -227,7 +232,7 @@ impl AppDriver {
         })?
     }
 
-    /// Clicks the tower `name` on the map.
+    /// Right-clicks the tower `name` on the map: an order for the selected drones.
     fn click_tower(&self, name: &'static str) -> Result<(), String> {
         let (x, y) = self.call(move |v, _, _| {
             let (view, rules) = {
@@ -240,7 +245,7 @@ impl AppDriver {
         })??;
         self.with_window(move |w, cx| {
             w.draw(cx).clear();
-            click(w, cx, point(px(x), px(y)))
+            press(w, cx, point(px(x), px(y)), MouseButton::Right)
         })
     }
 
@@ -375,7 +380,7 @@ impl Driver for AppDriver {
         }
         let (status, view, selected) = self.call(|v, _, _| {
             let s = v.seat.state();
-            (s.status.clone(), s.view.clone(), v.selected)
+            (s.status.clone(), s.view.clone(), v.selected.first().copied())
         })?;
         if lower == "the seat of the app" {
             return Ok(Value::from(match status {
