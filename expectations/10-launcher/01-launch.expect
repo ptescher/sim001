@@ -10,7 +10,33 @@ Feature: Launching
 
   [[Running and stopping a program]] tells you what LAUNCH does next.
 
+  Expectation: SIMULATOR ONLY picks the sim alone
+    Given the launch target is not SIMULATOR ONLY
+    When the launch target is SIMULATOR ONLY
+    Then the launch target is SIMULATOR ONLY
+
+  Expectation: GROUND STATION picks the station
+    Given the launch target is not GROUND STATION
+    When the launch target is GROUND STATION
+    Then the launch target is GROUND STATION
+
+  Expectation: TOWERS picks the commander app
+    Given the launch target is not TOWERS
+    When the launch target is TOWERS
+    Then the launch target is TOWERS
+
+  Expectation: WITH ARDUPILOT picks the flight controller
+    Given the flight controller choice is WITHOUT ARDUPILOT
+    When the flight controller choice is WITH ARDUPILOT
+    Then the flight controller choice is WITH ARDUPILOT
+
+  Expectation: WITHOUT ARDUPILOT picks the plain plane
+    Given the flight controller choice is WITH ARDUPILOT
+    When the flight controller choice is WITHOUT ARDUPILOT
+    Then the flight controller choice is WITHOUT ARDUPILOT
+
   Expectation: LAUNCH starts the station with ArduPilot
+    Hands over to: the console is connected to a plane on the ground
     Given the launch target is GROUND STATION
     And the flight controller choice is WITH ARDUPILOT
     When the pilot launches
@@ -30,6 +56,7 @@ Feature: Launching
   Expectation: The sim alone with ArduPilot flies the T1-S VTOL
     The sim starts its own ArduPilot: the native build, or the Docker image.
 
+    Hands over to: the sim has just started with a flight controller
     Given the launch target is SIMULATOR ONLY
     And the flight controller choice is WITH ARDUPILOT
     When the pilot launches
@@ -37,6 +64,7 @@ Feature: Launching
     And the plane of the started sim is the T1-S VTOL
 
   Expectation: The sim alone without ArduPilot flies the T1-S Ranger
+    Hands over to: the sim has just started
     Given the launch target is SIMULATOR ONLY
     And the flight controller choice is WITHOUT ARDUPILOT
     When the pilot launches
@@ -57,6 +85,7 @@ Feature: Launching
     The commander app starts the game server with six ArduPlane drones and takes the Blue seat.
     It needs the AGENT build of ArduPlane.
 
+    Hands over to: a game of Towers is in play
     Given the launch target is TOWERS
     When the pilot launches
     Then the program in the log is the Towers game
