@@ -54,6 +54,7 @@ pub fn ardupilot(root: &Path, aircraft: &str, work: &Path) -> Fallback {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::launch::{DOCKER_NAME, MAVLINK_PORT};
     use expectation_service::Service;
     use std::path::PathBuf;
 
