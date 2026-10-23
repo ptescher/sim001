@@ -14,7 +14,7 @@ use gpui::{
     Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful, Window, canvas, div, prelude::*, px,
 };
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
@@ -24,6 +24,46 @@ thread_local! {
     /// Where each button was last painted, by id, so `--expect` can click it the way a
     /// person would. Written while painting, read between frames; both on the UI thread.
     static BUTTONS: RefCell<HashMap<SharedString, Bounds<Pixels>>> = RefCell::new(HashMap::new());
+    /// How tall each row of buttons wants to be at its current width, by id (see [`fit`]).
+    static ROWS: RefCell<HashMap<&'static str, f32>> = RefCell::new(HashMap::new());
+    /// The rows of buttons that MORE has opened out to every line.
+    static EXPANDED: RefCell<HashSet<&'static str>> = RefCell::new(HashSet::new());
+}
+
+/// The height of one line of buttons: a row that wants more than this is cut to it, behind MORE.
+const ROW_H: f32 = 28.0;
+
+/// A wrapping row of buttons that shows one line and a MORE button when the rest does not fit;
+/// MORE opens it out (and LESS closes it). Whether it fits is read from the last frame.
+fn fit(id: &'static str, content: Div) -> Div {
+    let open = EXPANDED.with(|e| e.borrow().contains(id));
+    let natural = ROWS.with(|r| r.borrow().get(id).copied()).unwrap_or(0.0);
+    let measure = canvas(
+        move |b, _, _| ROWS.with(|r| r.borrow_mut().insert(id, f32::from(b.size.height))),
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0();
+    let mut clip = div().flex_1().min_w(px(0.0)).overflow_hidden();
+    if !open {
+        clip = clip.max_h(px(ROW_H));
+    }
+    div()
+        .flex()
+        .items_start()
+        .gap_1()
+        .child(clip.child(content.relative().child(measure)))
+        .children((natural > ROW_H + 2.0).then(move || {
+            button(format!("more-{id}"), if open { "LESS ▴" } else { "MORE ▾" }, Style::Normal).on_click(move |_, window, _| {
+                EXPANDED.with(|e| {
+                    let mut e = e.borrow_mut();
+                    if !e.remove(id) {
+                        e.insert(id);
+                    }
+                });
+                window.refresh();
+            })
+        }))
 }
 
 /// Where the button with this id is on screen now, if it is.
@@ -338,21 +378,17 @@ impl Gcs {
             .gap_2()
             .p_2()
             .size_full()
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .items_center()
-                    .child(label("VEHICLE"))
-                    .child(arm)
-                    .child(reboot)
-                    .children(takeoff),
-            )
+            .child(fit(
+                "r-vehicle",
+                div().flex().flex_wrap().gap_2().items_center().child(label("VEHICLE")).child(arm).child(reboot).children(takeoff),
+            ))
             // The reason the vehicle isn't ready (or a confirmation) has a line of its own, so
             // the buttons keep their places.
             .child(hint)
-            .child(div().flex().flex_wrap().gap_1().items_center().child(label("MODE")).children(modes))
-            .children((!q_modes.is_empty()).then(|| div().flex().flex_wrap().gap_1().items_center().child(label("VTOL")).children(q_modes)))
+            .child(fit("r-modes", div().flex().flex_wrap().gap_1().items_center().child(label("MODE")).children(modes)))
+            .children((!q_modes.is_empty()).then(|| {
+                fit("r-qmodes", div().flex().flex_wrap().gap_1().items_center().child(label("VTOL")).children(q_modes))
+            }))
             .children(direct.then(|| {
                 div()
                     .text_color(c(CYAN))
@@ -367,9 +403,10 @@ impl Gcs {
                 .on_click(cx.listener(move |this, _, _, _| this.map.tool = if this.map.tool == tool { Tool::Pan } else { tool }))
         };
         let plan_len = st.plan.len();
-        div()
+        let bar = div()
             .flex()
             .flex_wrap()
+            .justify_end()
             .gap_1()
             .items_center()
             .child(
@@ -400,7 +437,8 @@ impl Gcs {
             )
             .child(button("download", "DOWNLOAD", Style::Normal).on_click(cx.listener(|this, _, _, _| this.send(Cmd::Download))))
             .child(button("edit", "EDIT", Style::Normal).on_click(cx.listener(|this, _, _, _| this.edit_vehicle_mission())))
-            .child(button("restart", "WP1", Style::Normal).on_click(cx.listener(|this, _, _, _| this.send(Cmd::SetCurrentWp(1)))))
+            .child(button("restart", "WP1", Style::Normal).on_click(cx.listener(|this, _, _, _| this.send(Cmd::SetCurrentWp(1)))));
+        fit("r-map", bar).flex_1().min_w(px(0.0))
     }
 
     pub(crate) fn add_takeoff(&mut self) {
@@ -573,7 +611,6 @@ impl Gcs {
             .flex_col()
             .p_2()
             .gap(px(1.0))
-            .overflow_hidden()
             .children(state)
             .child(heading("ARDUPLANE OUTPUT"))
             .children(process)
@@ -592,7 +629,7 @@ impl Gcs {
                 // Long messages (e.g. ArduPilot's pre-arm reasons) wrap rather than clip.
                 .child(div().flex_1().min_w(px(0.0)).text_color(c(severity(l.severity))).child(l.text.clone()))
         });
-        div().flex().flex_col().p_2().gap(px(1.0)).overflow_hidden().children(lines)
+        div().flex().flex_col().p_2().gap(px(1.0)).children(lines)
     }
 }
 
@@ -673,9 +710,9 @@ impl Render for Gcs {
 
         let map_screen = screen("TACTICAL SITUATION", Some(toolbar.into_any_element()), map_area.into_any_element()).flex_1();
         let pfd = screen("PRIMARY FLIGHT DISPLAY", None, hud_canvas.into_any_element());
-        let command = screen("VEHICLE COMMAND", None, command.into_any_element());
+        let command = scrolling("VEHICLE COMMAND", None, command.into_any_element());
         let trends = screen("TELEMETRY TRENDS", None, charts_canvas.into_any_element());
-        let messages_screen = screen(if self.debug_view { "DEBUG" } else { "MESSAGES" }, Some(debug_toggle.into_any_element()), msgs.into_any_element()).flex_1();
+        let messages_screen = scrolling(if self.debug_view { "DEBUG" } else { "MESSAGES" }, Some(debug_toggle.into_any_element()), msgs.into_any_element()).flex_1();
         // The debug view takes the whole right column: the autopilot's state, its output and the
         // events on the link need the room, and the state it shows covers what SYSTEMS does.
         let right = if self.debug_view {
@@ -687,8 +724,8 @@ impl Render for Gcs {
                 .gap(px(6.0))
                 .w(px(right_w))
                 .flex_none()
-                .child(screen("CAUTION / WARNING", None, ann.into_any_element()))
-                .child(screen("SYSTEMS", None, systems.into_any_element()))
+                .child(scrolling("CAUTION / WARNING", None, ann.into_any_element()))
+                .child(scrolling("SYSTEMS", None, systems.into_any_element()))
                 .child(messages_screen)
         };
 
@@ -831,6 +868,25 @@ impl MapStateSnapshot {
 
 /// A bezelled monitor with a title strip.
 fn screen(title: &'static str, tools: Option<AnyElement>, body: AnyElement) -> Div {
+    screen_with(title, tools, body, false)
+}
+
+/// A screen whose body scrolls, for text and buttons that may not fit (not for the drawn
+/// instruments, which fit themselves to the room and take the mouse wheel).
+fn scrolling(title: &'static str, tools: Option<AnyElement>, body: AnyElement) -> Div {
+    screen_with(title, tools, body, true)
+}
+
+fn screen_with(title: &'static str, tools: Option<AnyElement>, body: AnyElement, scroll: bool) -> Div {
+    let area = div()
+        .id(title)
+        .flex_1()
+        .min_h(px(0.0))
+        .bg(c(SCREEN))
+        .border_2()
+        .border_color(c(0x000000))
+        .rounded(px(SCREEN_RADIUS));
+    let area = if scroll { area.overflow_scroll() } else { area.overflow_hidden() };
     div()
         .flex()
         .flex_col()
@@ -848,20 +904,10 @@ fn screen(title: &'static str, tools: Option<AnyElement>, body: AnyElement) -> D
                 .justify_between()
                 .gap_2()
                 .px_1()
-                .child(div().text_size(px(11.0)).text_color(c(GREY)).child(title))
+                .child(div().flex_none().text_size(px(11.0)).text_color(c(GREY)).child(title))
                 .children(tools),
         )
-        .child(
-            div()
-                .flex_1()
-                .min_h(px(0.0))
-                .bg(c(SCREEN))
-                .border_2()
-                .border_color(c(0x000000))
-                .rounded(px(SCREEN_RADIUS))
-                .overflow_hidden()
-                .child(body),
-        )
+        .child(area.child(body))
 }
 
 fn label(s: &'static str) -> Div {
