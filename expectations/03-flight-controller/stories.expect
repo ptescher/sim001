@@ -1,11 +1,12 @@
 Story: Your first hover
-  As a new pilot with a VTOL
+  As a new pilot with a VTOL or a quadcopter
   I want to lift off, hold a hover and bring the plane home to land
-  So that I can fly the T1-S VTOL from the sim alone, with no ground station
+  So that I can fly the T1-S VTOL or the Seeker 3 from the sim alone, with no ground station
 
   This is the VTOL's [[Your first throw]]. The sim starts ArduPilot for itself, so start the
-  sim with the T1-S VTOL (it is the default plane) and nothing else. The VTOL does not need a
-  throw. You arm it, and it takes off straight up in QHOVER, the first mode of the radio. In
+  sim with the T1-S VTOL (it is the default plane) or the Seeker 3 (`--aircraft seeker3`) and
+  nothing else. Neither needs a throw. You arm it, and it takes off straight up in QHOVER,
+  the first mode of the radio of both planes. In
   this tutorial you lift off, hold the hover, and then you send the plane home. It flies back
   to the pilot box and lands by itself.
 

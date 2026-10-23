@@ -123,6 +123,16 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
         limit: Duration::from_secs(1500),
         may_fail: true,
     });
+    // The same on the Seeker 3, a quadcopter: the hover tests run on either.
+    out.push(Step {
+        name: "the Seeker 3 on its own",
+        program: sim.clone(),
+        args: s(&["--aircraft", "seeker3", "--expect", "--docs", &docs_arg]),
+        dir: root.to_path_buf(),
+        env: vec![("SIM001_EXPECT_TIMEOUT".into(), "400".into())],
+        limit: Duration::from_secs(1500),
+        may_fail: true,
+    });
     // The sim with a flight controller: it flies from its sticks while ArduPilot steps the physics beside it.
     out.push(Step {
         name: "the sim with a flight controller",
@@ -254,6 +264,7 @@ mod tests {
                 "build the sim",
                 "the sim",
                 "the VTOL on its own",
+                "the Seeker 3 on its own",
                 "the sim with a flight controller",
                 "the launcher",
                 "the Towers commander app",
@@ -291,6 +302,8 @@ mod tests {
         let alone = find("the VTOL on its own");
         assert!(alone.args.contains(&"t1s-vtol".to_string()) && !alone.args.contains(&"--direct".to_string()));
         assert!(alone.limit >= Duration::from_secs(1200), "ArduPilot flies in real time");
+        let quad = find("the Seeker 3 on its own");
+        assert!(quad.args.contains(&"seeker3".to_string()) && !quad.args.contains(&"--direct".to_string()));
         let beside = find("the sim with a flight controller");
         assert!(beside.args.contains(&"--direct".to_string()));
     }

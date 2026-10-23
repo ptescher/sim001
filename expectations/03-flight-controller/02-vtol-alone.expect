@@ -1,8 +1,8 @@
-Feature: The VTOL on its own
-  The T1-S VTOL needs no ground station. The sim starts ArduPilot for itself, and the keyboard
+Feature: A hovering plane on its own
+  The T1-S VTOL and the Seeker 3 quadcopter need no ground station. The sim starts ArduPilot for itself, and the keyboard
   or a radio flies the plane through it: the sticks go to ArduPilot as the radio signals of a
-  real receiver. B is the arm switch and N picks the next mode of the radio, and QHOVER is the
-  first. [[Your first hover]] shows each step.
+  real receiver. B is the arm switch and N picks the next mode of the radio, and the first is QHOVER on both
+  planes. [[Your first hover]] shows each step.
 
   Expectation: Arming lets ArduPilot run the motors
     ArduPilot arms the plane when the arm switch is on and the throttle is closed. The top
@@ -11,7 +11,7 @@ Feature: The VTOL on its own
     When the pilot arms the plane
     Then the autopilot is armed
 
-  Expectation: Opening the throttle lifts the VTOL straight up
+  Expectation: Opening the throttle lifts the plane straight up
     In QHOVER the plane takes off vertically. There is no throw.
     Given the autopilot is armed
     When the pilot opens the throttle to climb
@@ -27,7 +27,7 @@ Feature: The VTOL on its own
     Then the plane is flying
 
   Expectation: Sending the plane home lands it
-    In QRTL the plane flies back to the pilot box and lands by itself.
+    In QRTL (a button of the radio on both planes) the plane flies back to the pilot box and lands by itself.
     Given the autopilot is armed
     And the plane is flying
     When the pilot sends the plane home

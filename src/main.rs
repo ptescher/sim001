@@ -349,6 +349,7 @@ fn main() {
             docs,
             params.flight_controller,
             ap_enabled && !direct,
+            aircraft.id,
             services.into_inner().unwrap(),
         );
     }

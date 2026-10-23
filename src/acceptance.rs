@@ -164,6 +164,7 @@ pub fn plugin(
     docs: Option<PathBuf>,
     flight_controller: bool,
     ardupilot_flying: bool,
+    aircraft: &'static str,
     services: expectation_harness::service::Services,
 ) {
     // ArduPilot steps the physics in real time, so what the tests wait for can't run any faster.
@@ -257,12 +258,13 @@ pub fn plugin(
             // station's, one day) before the docs are written.
             match acceptance.publish(
                 dir,
-                if ardupilot_flying {
-                    "sim-vtol"
+                // Each plane ArduPilot flies has results of its own.
+                &if ardupilot_flying {
+                    if aircraft == "t1s-vtol" { "sim-vtol".to_string() } else { format!("sim-{aircraft}") }
                 } else if flight_controller {
-                    "sim-flight-controller"
+                    "sim-flight-controller".to_string()
                 } else {
-                    "sim"
+                    "sim".to_string()
                 },
                 &report,
             ) {
@@ -811,11 +813,13 @@ impl Driver for SimDriver {
             return self.arm();
         }
         if event.key == "pilot sends the plane home" {
-            // N picks the next mode of the radio, and the last one is QRTL.
-            let last = self.sim(|c| c.params.rc_modes.len().saturating_sub(1))?;
+            // The radio has a button for QRTL (the last on the VTOL, the fifth on the Seeker 3).
+            let home = self
+                .sim(|c| c.params.rc_modes.iter().position(|m| *m == "QRTL"))?
+                .ok_or("this plane's radio has no QRTL")?;
             // (Press N through the modes and the plane would pass FBWA and CRUISE in the hover:
-            // a real pilot presses button 6.)
-            self.sim(move |c| c.ap.mode_index = last)?;
+            // a real pilot presses the button.)
+            self.sim(move |c| c.ap.mode_index = home)?;
             return Ok(());
         }
         if FLOWN.contains(&event.key.as_str()) {
