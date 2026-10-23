@@ -16,6 +16,7 @@ teleoperation_core = { path = "../core" }
 visualization_mappack = { path = "../../visualization/mappack" }
 # Which planes there are, and whether one is a VTOL (the console then shows the Q modes).
 simulation_aircraft = { path = "../../simulation/aircraft" }
+simulation_sitl = { path = "../../simulation/sitl" }
 # The computer pilots, each of whose planes has an autopilot of its own (domains/recreation).
 recreation_games = { path = "../../recreation/games" }
 # Other aircraft: what the radio tells the station, joined into one picture (domains/communication).
