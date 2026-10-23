@@ -9,7 +9,7 @@ use expectation_story::Status;
 use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
-use recreation_towers::{Commander, Game, Order, Outcome, Phase, Rules, Team};
+use recreation_towers::{Commander, Game, Link, Order, Outcome, Phase, Rules, Team};
 use std::path::Path;
 
 /// The referee's step (s): the host steps it with the physics, faster than this.
@@ -122,6 +122,8 @@ impl World {
         let t = self.tower_mut(tower);
         t.holder = holder;
         t.control = holder.map_or(0.0, Team::sign);
+        // In a game the teams look all the time: the radio shadows move with the towers.
+        self.game.look();
     }
 
     /// Blue holds `n` towers: its home tower, then the centre, the west, the east and Red's home
@@ -162,6 +164,11 @@ impl World {
         (m.towers[0] + m.towers[1]) * 0.5
     }
 
+    /// A point 100 m from the Red home tower, towards the middle of the field.
+    fn shadow(&self) -> Vec2 {
+        self.game.map.towers[4] - Vec2::new(100.0, 0.0)
+    }
+
     fn place_blue(&mut self, v: &Value) {
         let i = self.game.drone(Team::Blue, 0);
         let m = &self.game.map;
@@ -171,6 +178,7 @@ impl World {
             "low in the west lane, on the shore of the lake" => {
                 ("low in the west lane, on the shore of the lake", self.shore(), Some(LOW))
             }
+            "near the Red home tower" => ("near the Red home tower", self.shadow(), Some(ALT)),
             _ => ("at its base", m.bases[0], None),
         };
         self.put(i, at, alt);
@@ -194,6 +202,9 @@ impl World {
                 Some(LOW),
             ),
             "low over the lake" => (new("low over the lake"), self.game.map.lake.at, Some(LOW)),
+            "50 m from the first Blue drone" => {
+                (new("50 m from the first Blue drone"), self.shadow() + Vec2::new(0.0, 50.0), Some(ALT))
+            }
             _ => (None, Vec2::ZERO, None),
         };
         if let Some((name, _)) = name {
@@ -233,6 +244,23 @@ impl World {
     fn send_blue(&mut self, target: Vec2, low: bool) {
         let d = self.game.drones[self.game.drone(Team::Blue, 0)];
         self.plan = Some(flight::plan(&self.game.map, d.at, target, low));
+    }
+
+    fn blue_link(&self) -> &'static str {
+        match self.game.link(self.game.drone(Team::Blue, 0)) {
+            Link::Up => "in contact",
+            Link::Cut => "cut",
+            Link::Lost => "lost",
+        }
+    }
+
+    /// The tallest mountain on the map at `at`, near the point, to the metre.
+    fn mountains_at(&self, at: Vec2) -> f64 {
+        self.game.map.mountain_height(at).round() as f64
+    }
+
+    fn sent_point_clear(&self) -> bool {
+        self.plan.as_ref().is_some_and(|p| self.game.map.mountain_height(p.target) < 1.0)
     }
 
     fn scout_seen(&self) -> &'static str {
@@ -362,7 +390,7 @@ fn bindings() -> Bindings<World> {
         .on("a Blue drone flies near the east tower", |w| {
             let i = w.game.drone(Team::Blue, 0);
             let east = w.tower("east").at;
-            w.put(i, east + Vec2::new(-50.0, -50.0), Some(ALT));
+            w.put(i, east + Vec2::new(-100.0, -100.0), Some(ALT));
         })
         // Blue's computer commander.
         .observe("the order of the first Blue drone", |w| w.order_of(0))
@@ -410,6 +438,41 @@ fn bindings() -> Bindings<World> {
         .observe("the way of the first Blue drone", |w| w.way())
         .observe("the orbit of the first Blue drone", |w| {
             if w.plan.as_ref().is_some_and(|p| p.circle_low) { "low" } else { "high" }
+        })
+        // The radio shadows.
+        .observe("the Red home tower", |w| holder_name(w.tower("Red home").holder))
+        .arrange("the Red home tower", |w, v| w.hold("Red home", v))
+        .observe("the link of the first Blue drone", |w| w.blue_link())
+        .on("the first Blue drone flies out of the radio shadow", |w| {
+            w.place_blue(&Value::from("at the Blue home tower"))
+        })
+        .on("the first Blue drone flies into the radio shadow for 10 seconds", |w| {
+            w.place_blue(&Value::from("near the Red home tower"));
+            w.run(10.0);
+        })
+        .observe("the first Blue drone on the Blue map", |w| {
+            match w.game.maps[Team::Blue.index()].drones[w.game.drone(Team::Blue, 0)] {
+                Some(s) if s.seen => "live",
+                _ => "last in contact",
+            }
+        })
+        .observe("the age of the first Blue drone on the Blue map", |w| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.maps[Team::Blue.index()].drones[i].map_or(0.0, |s| tenth(w.game.time - s.time))
+        })
+        // The mountains.
+        .observe("the mountains at the east edge of the field", |w| w.mountains_at(Vec2::new(0.0, 600.0)))
+        .observe("the mountains at the west edge of the field", |w| w.mountains_at(Vec2::new(0.0, -600.0)))
+        .observe("the mountains at the bases, the towers and the lake", |w| {
+            let m = &w.game.map;
+            m.bases.iter().chain(&m.towers).chain([&m.lake.at]).map(|&p| w.mountains_at(p)).fold(0.0, f64::max)
+        })
+        .observe("the way round the edge of the field from base to base", |w| {
+            if w.game.map.edge_open(w.game.rules.ceiling) { "open" } else { "closed" }
+        })
+        .on("the first Blue drone is sent to a point in the mountains", |w| w.send_blue(Vec2::new(0.0, 580.0), false))
+        .observe("the point that the first Blue drone flies to", |w| {
+            if w.sent_point_clear() { "clear of the mountains" } else { "in the mountains" }
         })
         .on_reset(|w| *w = World::new())
         // Blue's map, as the commander app draws it, with the computer commander's orders.

@@ -5,15 +5,16 @@
 //! Frames: the referee's field is north and east of its centre, and the centre is SITL's home.
 //! The flight model's world is x east, y up, z south (`cognition_agent::world_to_ned`).
 
+use crate::terrain::Valley;
 use crate::trees::Forest;
 use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
 use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
 use recreation_towers::flight;
-use recreation_towers::{Game, Order, Phase as Referee, Rules, Team};
+use recreation_towers::{Game, Link, Order, Phase as Referee, Rules, Team};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
-use simulation_physics::{Environment, Flat, FlightState, Phase, Start, step};
+use simulation_physics::{Environment, FlightState, Phase, Start, step};
 
 /// A crashed drone is back at its base this long after the crash (s).
 pub const RESPAWN: f32 = 15.0;
@@ -130,6 +131,12 @@ pub struct World {
     pub orders: Vec<Option<Order>>,
     /// Each drone's order is flown low, along the lanes (by its index in the game).
     pub lows: Vec<bool>,
+    /// The order each team last knew of for each drone, and whether it is low: what the drone
+    /// was told while it was in contact. A drone out of contact flies on, and its team is not told
+    /// what it flies now (the order is the team's, and the drone's own failsafe is not).
+    pub told: Vec<(Option<Order>, bool)>,
+    /// The ground: flat, with the mountains.
+    terrain: Valley,
     /// The trees, for the flight model, and the ones near the plane being stepped.
     forest: Forest,
     near: Vec<Obstacle>,
@@ -147,6 +154,7 @@ impl World {
         let game = Game::new(rules);
         let n = game.drones.len();
         let forest = Forest::new(&game.map.trees());
+        let terrain = Valley(game.map.clone());
         let params: Vec<AircraftParams> = game.drones.iter().map(|d| aircraft(d.class)).collect();
         let planes = (0..n).map(|i| FlightState::new(&params[i], &World::start_of(&game, i))).collect();
         World {
@@ -157,6 +165,8 @@ impl World {
             down_for: vec![0.0; n],
             orders: vec![Some(Order::Home); n],
             lows: vec![false; n],
+            told: vec![(Some(Order::Home), false); n],
+            terrain,
             forest,
             near: vec![],
             go,
@@ -190,12 +200,21 @@ impl World {
         self.packets[i] += 1;
         let cmd = ActuatorCommands::from_pwm(&self.params[i], pwm);
         self.forest.near(self.planes[i].pos, &mut self.near);
-        step(&self.params[i], &mut self.planes[i], &cmd, &Environment { wind: Vec3::ZERO }, &Flat, &self.near, dt);
+        step(
+            &self.params[i],
+            &mut self.planes[i],
+            &cmd,
+            &Environment { wind: Vec3::ZERO },
+            &self.terrain,
+            &self.near,
+            dt,
+        );
         let radio = self.radio(i, dt);
         self.sync(i);
         if i == 0 && self.started() {
             let before: Vec<_> = self.game.towers.iter().map(|t| t.holder).collect();
             self.game.step(dt);
+            self.link_up();
             for (t, was) in self.game.towers.iter().zip(before) {
                 if let Some(team) = t.holder
                     && was != Some(team)
@@ -205,6 +224,40 @@ impl World {
             }
         }
         radio
+    }
+
+    /// The seats may give drone `i` an order: it is in contact.
+    pub fn can_command(&self, i: usize) -> bool {
+        !self.game.jammed[i]
+    }
+
+    /// Gives drone `i` an order, if it is in contact. Whether it was heard.
+    pub fn command(&mut self, i: usize, order: Order, low: bool) -> bool {
+        if !self.can_command(i) {
+            return false;
+        }
+        self.orders[i] = Some(order);
+        self.lows[i] = low;
+        true
+    }
+
+    /// What the drones' radios do after a step of the referee: a drone in contact tells its team
+    /// its order; one that has lost its link flies home by itself (the failsafe), and stays on
+    /// that order until the team can give it another.
+    fn link_up(&mut self) {
+        for i in 0..self.orders.len() {
+            match self.game.link(i) {
+                Link::Up => self.told[i] = (self.orders[i], self.lows[i]),
+                Link::Cut => {}
+                Link::Lost => {
+                    if self.orders[i] != Some(Order::Home) {
+                        println!("failsafe: drone {i} lost its link, and flies home");
+                        self.orders[i] = Some(Order::Home);
+                        self.lows[i] = false;
+                    }
+                }
+            }
+        }
     }
 
     /// What drone `i`'s radio sends: off before GO; the take-off; then FBWA with the sticks
@@ -363,6 +416,72 @@ mod tests {
         // On the point and at height: the sticks are at rest.
         let s = hover_sticks(Vec2::new(5.0, 5.0), 60.0, 0.0, 1.0, Vec2::new(5.0, 5.0), 60.0);
         assert_eq!((s.aileron, s.elevator, s.throttle), (0.0, 0.0, 0.5));
+    }
+
+    /// Blue's drone 1 flies in the radio shadow of the Red home tower.
+    fn shadowed() -> (World, usize) {
+        let mut w = world();
+        let i = w.game.drone(Team::Blue, 1);
+        w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
+        w.game.drones[i].alt = 50.0;
+        w.game.drones[i].phase = Referee::Flying;
+        w.game.look();
+        (w, i)
+    }
+
+    #[test]
+    fn a_drone_in_the_radio_shadow_does_not_hear_an_order_and_one_in_contact_does() {
+        let (mut w, i) = shadowed();
+        let west = w.game.tower("west");
+        assert!(!w.command(i, Order::Take(west), true));
+        assert_eq!((w.orders[i], w.lows[i]), (Some(Order::Home), false));
+        let j = w.game.drone(Team::Blue, 0);
+        assert!(w.command(j, Order::Take(west), true));
+        assert_eq!((w.orders[j], w.lows[j]), (Some(Order::Take(west)), true));
+    }
+
+    #[test]
+    fn a_drone_that_lost_its_link_flies_home_and_its_team_still_sees_its_old_order() {
+        let (mut w, i) = shadowed();
+        let west = w.game.tower("west");
+        // Told while it was in contact...
+        w.game.drones[i].at = Vec2::new(-300.0, 0.0);
+        w.game.look();
+        assert!(w.command(i, Order::Take(west), false));
+        w.link_up();
+        assert_eq!(w.told[i], (Some(Order::Take(west)), false));
+        // ...then the shadow: it flies on for the timeout, and then the failsafe takes it home.
+        w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
+        for _ in 0..199 {
+            w.game.step(0.1);
+            w.link_up();
+        }
+        assert_eq!(w.orders[i], Some(Order::Take(west)), "19.9 s");
+        w.game.step(0.1);
+        w.link_up();
+        assert_eq!(w.orders[i], Some(Order::Home));
+        assert!(!w.lows[i]);
+        assert_eq!(w.told[i], (Some(Order::Take(west)), false), "its team is not told");
+        // Out of the shadow, it hears the team again and gets its order back.
+        w.game.drones[i].at = Vec2::new(-300.0, 0.0);
+        w.game.step(0.1);
+        assert!(w.command(i, Order::Take(west), false));
+    }
+
+    #[test]
+    fn a_drone_that_flies_into_the_mountains_crashes() {
+        let mut w = world();
+        let edge = Vec2::new(0.0, 600.0);
+        let height = w.game.map.mountain_height(edge);
+        assert!(height > 100.0);
+        // Flying at 50 m, below the ridge, at the foot of it, with its motors at hover.
+        w.planes[0].pos = to_world(edge, 50.0);
+        w.planes[0].phase = Phase::Flying;
+        let pwm = [1500u16; 16];
+        for _ in 0..400 {
+            w.step_drone(0, &pwm, 0.0025);
+        }
+        assert_eq!(w.planes[0].phase, Phase::Crashed, "{:?}", w.planes[0].crash_reason);
     }
 
     #[test]

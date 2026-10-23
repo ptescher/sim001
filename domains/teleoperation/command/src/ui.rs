@@ -399,11 +399,14 @@ impl CommanderView {
             }
         }
         let team = view.as_ref().map(|v| v.team);
+        // A drone in the radio shadow of an enemy tower sends no picture.
+        let linked = |k: usize| view.as_ref().and_then(|v| v.drones.get(k)).is_none_or(|d| d.linked);
         let mut row = div().flex().gap(px(4.0)).p_2();
         for (k, img) in images.iter().enumerate() {
             let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
+            let img = if linked(k) { img.clone() } else { None };
             row = row.child(
-                camera_tile(format!("camera-{k}"), &label, img.clone(), 100.0, 75.0, self.selected.contains(&k))
+                camera_tile(format!("camera-{k}"), &label, img, !linked(k), 100.0, 75.0, self.selected.contains(&k))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select(Some(k));
                         cx.notify();
@@ -415,7 +418,8 @@ impl CommanderView {
         div().flex().flex_col().child(row).child(div().px_2().pb_2().child(camera_tile(
             "camera-selected".to_string(),
             &label,
-            images.get(k).cloned().flatten(),
+            images.get(k).cloned().flatten().filter(|_| linked(k)),
+            !linked(k),
             252.0,
             189.0,
             false,
@@ -428,6 +432,7 @@ fn camera_tile(
     id: String,
     label: &str,
     image: Option<Arc<RenderImage>>,
+    no_link: bool,
     w: f32,
     h: f32,
     selected: bool,
@@ -453,7 +458,10 @@ fn camera_tile(
                         Some(img) => {
                             let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
                         }
-                        None => text(window, cx, "NO SIGNAL", x + w * 0.5, y + h * 0.5, 10.0, c(GREY), Align::Center),
+                        None => {
+                            let message = if no_link { "NO LINK" } else { "NO SIGNAL" };
+                            text(window, cx, message, x + w * 0.5, y + h * 0.5, 10.0, c(GREY), Align::Center)
+                        }
                     }
                     text(window, cx, &label, x + 6.0, y + 9.0, 10.0, c(WHITE), Align::Left);
                 },
@@ -548,6 +556,8 @@ impl Render for CommanderView {
             for d in &v.drones {
                 let k = d.k;
                 let phase = match d.phase {
+                    // No telemetry: the last the drone sent, and how long ago.
+                    _ if !d.linked => format!("NO LINK {:.0} s", d.silent),
                     Phase::Flying => format!("{:.0} m", d.alt),
                     Phase::Ground => "GROUND".into(),
                     Phase::Down => "DOWN".into(),

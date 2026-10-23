@@ -15,6 +15,7 @@
 
 mod ground;
 mod seats;
+mod terrain;
 mod trees;
 mod world;
 
@@ -231,8 +232,7 @@ fn main() {
                     let view = w.game.view(*team);
                     for (k, order) in c.decide(&view) {
                         let i = w.game.drone(*team, k);
-                        w.orders[i] = Some(order);
-                        w.lows[i] = false;
+                        w.command(i, order, false);
                     }
                 }
             }

@@ -6,7 +6,9 @@
 //! holds the tower when the control gets to its end, and loses it when the control gets back to 0.
 //! A held tower scores a point a second. Each team sees round its drones, its base and its towers,
 //! and keeps a map of what it last saw: the rest of the field is in fog. The field is a forest with
-//! lanes ([`map`]): the trees hide a drone that flies below them.
+//! lanes ([`map`]): the trees hide a drone that flies below them. A tower that a team holds blocks
+//! the radio of the enemy within [`Rules::jam_radius`]: a drone there is out of contact. Tall mountains
+//! stand round the edge of the field.
 //!
 //! The referee only needs where each drone is and whether it flies; the host moves the drones.
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
@@ -125,6 +127,13 @@ pub struct Rules {
     pub win_score: f32,
     /// How long a game lasts (s).
     pub duration: f32,
+    /// A tower that a team holds blocks the radio of the enemy this far round it (m, across), at
+    /// all heights.
+    pub jam_radius: f32,
+    /// A drone out of contact this long has lost its link (s): it flies home by itself.
+    pub link_timeout: f32,
+    /// The highest a drone flies (m): the AGENT ceiling. The mountains are higher.
+    pub ceiling: f32,
     /// How far a team sees round a tower it holds, a drone and its base (m, across).
     pub tower_vision: f32,
     pub drone_vision: f32,
@@ -147,6 +156,9 @@ impl Default for Rules {
             capture_time: 20.0,
             win_score: 500.0,
             duration: 480.0,
+            jam_radius: 140.0,
+            link_timeout: 20.0,
+            ceiling: 100.0,
             tower_vision: 200.0,
             drone_vision: 150.0,
             base_vision: 150.0,
@@ -226,10 +238,22 @@ pub struct DroneSighting {
     pub at: Vec2,
     pub alt: f32,
     pub vel: Vec2,
+    pub phase: Phase,
     /// The game time it was seen (s).
     pub time: f32,
     /// The team sees it now.
     pub seen: bool,
+}
+
+/// How a drone is linked to its team.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Link {
+    /// The team hears from it and can give it orders.
+    Up,
+    /// It is in the radio shadow of an enemy tower.
+    Cut,
+    /// It has been out of contact for [`Rules::link_timeout`]: it flies home by itself.
+    Lost,
 }
 
 /// What a team knows of the field: each tower and each drone of the game (by index), as it last
@@ -256,6 +280,10 @@ pub struct Game {
     pub outcome: Option<Outcome>,
     /// Blue's, Red's.
     pub maps: [TeamMap; 2],
+    /// Each drone is in the radio shadow of an enemy tower now.
+    pub jammed: Vec<bool>,
+    /// How long each drone has been out of contact (s); 0 while it is in contact.
+    pub silent: Vec<f32>,
 }
 
 impl Game {
@@ -297,6 +325,7 @@ impl Game {
                 .collect(),
             drones: vec![None; drones.len()],
         };
+        let n = drones.len();
         Game {
             rules,
             map,
@@ -306,6 +335,8 @@ impl Game {
             time: 0.0,
             outcome: None,
             maps: [team_map.clone(), team_map],
+            jammed: vec![false; n],
+            silent: vec![0.0; n],
         }
     }
 
@@ -331,8 +362,34 @@ impl Game {
         let dt = dt.min(self.time_left());
         self.time += dt;
         self.capture(dt);
+        self.jam(dt);
         self.score(dt);
         self.look();
+    }
+
+    /// How drone `i` is linked to its team.
+    pub fn link(&self, i: usize) -> Link {
+        if !self.jammed[i] {
+            Link::Up
+        } else if self.silent[i] >= self.rules.link_timeout - ENDS {
+            Link::Lost
+        } else {
+            Link::Cut
+        }
+    }
+
+    /// Which drones are in the radio shadow of a tower of the enemy, and for how long. A drone
+    /// that is down is not.
+    fn jam(&mut self, dt: f32) {
+        for (i, d) in self.drones.iter().enumerate() {
+            let jammed = d.phase != Phase::Down
+                && self
+                    .towers
+                    .iter()
+                    .any(|t| t.holder == Some(d.team.other()) && t.at.distance(d.at) <= self.rules.jam_radius);
+            self.jammed[i] = jammed;
+            self.silent[i] = if jammed { self.silent[i] + dt } else { 0.0 };
+        }
     }
 
     /// Is drone `d` in the circle of the tower at `at`?
@@ -395,11 +452,17 @@ impl Game {
     /// holds, with how far each sees (m, across) and whether it looks from above the trees.
     fn eyes(&self, team: Team) -> Vec<Eye> {
         let r = &self.rules;
-        let drones = self.drones.iter().filter(|d| d.team == team && d.phase != Phase::Down).map(|d| Eye {
-            at: d.at,
-            range: r.drone_vision,
-            high: d.phase == Phase::Flying && d.alt >= r.treetop,
-        });
+        // A drone out of contact sends no picture: it sees nothing for its team.
+        let drones = self
+            .drones
+            .iter()
+            .enumerate()
+            .filter(|(i, d)| d.team == team && d.phase != Phase::Down && !self.jammed[*i])
+            .map(|(_, d)| Eye {
+                at: d.at,
+                range: r.drone_vision,
+                high: d.phase == Phase::Flying && d.alt >= r.treetop,
+            });
         let towers = self.towers.iter().filter(|t| t.holder == Some(team)).map(|t| Eye {
             at: t.at,
             range: r.tower_vision,
@@ -421,6 +484,7 @@ impl Game {
 
     /// Each team looks round and updates its map.
     pub fn look(&mut self) {
+        self.jam(0.0);
         for team in Team::BOTH {
             let eyes = self.eyes(team);
             let sees_tower = |at: Vec2| eyes.iter().any(|e| e.at.distance(at) <= e.range);
@@ -428,15 +492,20 @@ impl Game {
             let seen: Vec<bool> = self
                 .drones
                 .iter()
-                .map(|d| {
-                    d.team == team
-                        || (d.phase != Phase::Down && self.sees_drone(&eyes, d.at, d.alt, d.phase == Phase::Flying))
+                .enumerate()
+                .map(|(i, d)| {
+                    if d.team == team {
+                        // A team hears from its own drones while they are in contact.
+                        !self.jammed[i]
+                    } else {
+                        d.phase != Phase::Down && self.sees_drone(&eyes, d.at, d.alt, d.phase == Phase::Flying)
+                    }
                 })
                 .collect();
             let map = &mut self.maps[team.index()];
             for ((d, s), seen) in self.drones.iter().zip(map.drones.iter_mut()).zip(seen) {
                 if seen {
-                    *s = Some(DroneSighting { at: d.at, alt: d.alt, vel: d.vel, time, seen: true });
+                    *s = Some(DroneSighting { at: d.at, alt: d.alt, vel: d.vel, phase: d.phase, time, seen: true });
                 } else if let Some(s) = s {
                     s.seen = false;
                 }
@@ -660,6 +729,74 @@ mod tests {
         assert!(!sees(&g));
     }
 
+    fn link_of(g: &Game, team: Team, k: usize) -> Link {
+        g.link(g.drone(team, k))
+    }
+
+    #[test]
+    fn a_drone_near_a_tower_of_the_enemy_is_cut_and_after_the_timeout_lost() {
+        let mut g = Game::new(Rules::default());
+        let red_home = g.towers[4].at;
+        fly(&mut g, Team::Blue, 0, red_home + Vec2::new(-139.0, 0.0));
+        g.look();
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
+        run(&mut g, 19.9);
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
+        run(&mut g, 0.1);
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Lost);
+        // Out of the shadow, in contact at once, and the clock starts again.
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i].at = red_home + Vec2::new(-141.0, 0.0);
+        run(&mut g, 0.1);
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Up);
+        assert_eq!(g.silent[i], 0.0);
+    }
+
+    #[test]
+    fn only_a_tower_the_enemy_holds_blocks_the_radio_at_any_height() {
+        let mut g = Game::new(Rules::default());
+        let red_home = g.towers[4].at;
+        fly(&mut g, Team::Blue, 0, red_home + Vec2::new(-100.0, 0.0));
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i].alt = 100.0;
+        g.look();
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut, "the shadow is as tall as the sky");
+        g.towers[4].holder = None;
+        g.look();
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Up, "a tower that nobody holds");
+        g.towers[4].holder = Some(Team::Blue);
+        g.look();
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Up, "a tower of its own team");
+        g.towers[4].holder = Some(Team::Red);
+        g.drones[i].phase = Phase::Down;
+        g.look();
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Up, "a crashed drone sends what it can");
+    }
+
+    #[test]
+    fn a_drone_out_of_contact_sends_no_telemetry_and_sees_nothing_for_its_team() {
+        let mut g = Game::new(Rules::default());
+        let red_home = g.towers[4].at;
+        let scout = g.drone(Team::Red, 0);
+        // In contact first, high over the middle: the map has it there.
+        fly(&mut g, Team::Blue, 0, Vec2::new(-300.0, 0.0));
+        g.look();
+        let blue = g.drone(Team::Blue, 0);
+        assert!(g.view(Team::Blue).drones[0].linked);
+        // Then into the shadow, with a scout beside it.
+        fly(&mut g, Team::Blue, 0, red_home + Vec2::new(-100.0, 0.0));
+        fly(&mut g, Team::Red, 0, red_home + Vec2::new(-100.0, 50.0));
+        run(&mut g, 5.0);
+        let view = g.view(Team::Blue);
+        let d = view.drones[0];
+        assert!(!d.linked && (d.silent - 5.0).abs() < 1e-3, "{d:?}");
+        assert_eq!(d.at, Vec2::new(-300.0, 0.0), "the telemetry is from when it was last heard");
+        assert!(!g.maps[Team::Blue.index()].drones[scout].is_some_and(|s| s.seen), "no picture, no sight");
+        assert!(g.maps[Team::Blue.index()].drones[blue].is_some_and(|s| !s.seen));
+        // The enemy's map is not affected: Red's tower sees the drone.
+        assert!(g.maps[Team::Red.index()].drones[blue].is_some_and(|s| s.seen));
+    }
+
     #[test]
     fn a_drone_out_of_sight_stays_where_it_was_last_seen() {
         let mut g = Game::new(Rules::default());
@@ -695,7 +832,7 @@ mod tests {
         assert_eq!(g.towers[east].holder, Some(Team::Red));
         assert_eq!(g.maps[Team::Blue.index()].towers[east].holder, None);
         assert_eq!(g.maps[Team::Red.index()].towers[east].holder, Some(Team::Red));
-        fly(&mut g, Team::Blue, 0, at + Vec2::new(-100.0, 0.0));
+        fly(&mut g, Team::Blue, 0, at + Vec2::new(-145.0, 0.0));
         g.look();
         let s = g.maps[Team::Blue.index()].towers[east];
         assert_eq!((s.holder, s.seen), (Some(Team::Red), true));

@@ -57,6 +57,8 @@ pub struct Plan {
 
 /// The plan for a drone at `from` to fly to `target`, `low` or high.
 pub fn plan(map: &Map, from: Vec2, target: Vec2, low: bool) -> Plan {
+    // A drone is never sent into the mountains: it goes to the foot of them.
+    let target = map.keep_clear(target);
     let straight = Plan { target, low, path: vec![], lane: None, circle_low: false, climb_at: target };
     if !low {
         return straight;

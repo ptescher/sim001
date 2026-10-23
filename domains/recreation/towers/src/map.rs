@@ -6,6 +6,11 @@
 //! round the towers and the bases, and the lake. The trees hide a low drone: a team sees one only
 //! along a line of open ground.
 //!
+//! Tall mountains stand round the edge of the field (see expectations/09-towers/rules/08-mountains.expect):
+//! they rise from [`MOUNTAINS_FROM`] to [`MOUNTAINS_FULL`] from the centre and are far higher than a drone flies.
+//! They leave a clearing round each base, each tower and the lake, so that the drones can start,
+//! and fight, in the open. The edge of the field is no road from one base to the other.
+//!
 //! Positions are on the field: north and east of its centre (m), as everywhere in the game. The
 //! map is worked out from the rules alone, so that the referee, the server, the 3D view and the
 //! commander app all get the same map.
@@ -30,6 +35,18 @@ const FOREST_MARGIN: f32 = 90.0;
 const FOREST_THINS: f32 = 400.0;
 /// A tree stands about this far from the next (m).
 const TREE_SPACING: f32 = 10.0;
+/// The mountains rise from this distance from the centre (m) and are at full height at the next.
+pub const MOUNTAINS_FROM: f32 = 400.0;
+pub const MOUNTAINS_FULL: f32 = 500.0;
+/// How tall the mountains are at most (m); the ridges are between 75 % and 100 % of it.
+pub const MOUNTAIN_HEIGHT: f32 = 400.0;
+/// The mountains stay this far off the clearings (m), and then rise over this distance.
+const MOUNTAIN_MARGIN: f32 = 60.0;
+const MOUNTAIN_FOOT: f32 = 100.0;
+/// The ridges are shaped by noise with cells this big (m).
+const RIDGE_CELL: f32 = 120.0;
+/// A drone that circles a point needs this much room round it (m): the mountains are not nearer.
+const ROOM: f32 = 60.0;
 /// The graph of lanes is cut into pieces this long (m).
 const STEP: f32 = 20.0;
 
@@ -276,6 +293,67 @@ impl Map {
         Some(Path { points, lane })
     }
 
+    /// How tall the mountains are at `p` (m): 0 on the field, and up to [`MOUNTAIN_HEIGHT`] at its edge.
+    pub fn mountain_height(&self, p: Vec2) -> f32 {
+        let rise = smooth(MOUNTAINS_FROM, MOUNTAINS_FULL, p.length());
+        if rise <= 0.0 {
+            return 0.0;
+        }
+        // The distance from the open ground that the mountains leave clear.
+        let clear = self
+            .bases
+            .iter()
+            .map(|b| b.distance(p) - BASE_CLEARING)
+            .chain(self.towers.iter().map(|t| t.distance(p) - TOWER_CLEARING))
+            .chain([self.lake.at.distance(p) - self.lake.radius])
+            .fold(f32::MAX, f32::min);
+        let foot = smooth(0.0, MOUNTAIN_FOOT, clear - MOUNTAIN_MARGIN);
+        MOUNTAIN_HEIGHT * rise * foot * (0.75 + 0.25 * ridges(p))
+    }
+
+    /// The point nearest `p`, on the line to the centre, that is clear of the mountains with room
+    /// to circle: `p` itself if it is. The drones are never sent into the mountains.
+    pub fn keep_clear(&self, p: Vec2) -> Vec2 {
+        let mut q = p;
+        while q.length() > 1.0 && self.mountain_height(q + q.normalize() * ROOM) > 1.0 {
+            q *= 0.97;
+        }
+        q
+    }
+
+    /// Can a drone that flies no higher than `ceiling` get round the outside of the field from one
+    /// base to the other, outside the tower ground (further out than [`MOUNTAINS_FROM`] + 50 m)?
+    pub fn edge_open(&self, ceiling: f32) -> bool {
+        let (cell, half) = (10.0, 650.0);
+        let n = (2.0 * half / cell) as usize;
+        let open = |ix: usize, iz: usize| {
+            let p = Vec2::new(ix as f32 * cell - half, iz as f32 * cell - half);
+            p.length() >= MOUNTAINS_FROM + 50.0 && p.length() <= half && self.mountain_height(p) < ceiling
+        };
+        let index = |p: Vec2| (((p.x + half) / cell) as usize, ((p.y + half) / cell) as usize);
+        let (from, to) = (index(self.bases[0]), index(self.bases[1]));
+        let mut seen = vec![false; (n + 1) * (n + 1)];
+        let mut todo = vec![from];
+        seen[from.0 * (n + 1) + from.1] = true;
+        while let Some((x, z)) = todo.pop() {
+            if (x, z) == to {
+                return true;
+            }
+            for (dx, dz) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
+                let (nx, nz) = (x as i32 + dx, z as i32 + dz);
+                if nx < 0 || nz < 0 || nx > n as i32 || nz > n as i32 {
+                    continue;
+                }
+                let (nx, nz) = (nx as usize, nz as usize);
+                if !seen[nx * (n + 1) + nz] && open(nx, nz) {
+                    seen[nx * (n + 1) + nz] = true;
+                    todo.push((nx, nz));
+                }
+            }
+        }
+        false
+    }
+
     /// The trees of the forest: the same every time, with none on open ground.
     pub fn trees(&self) -> Vec<TreeSpot> {
         let reach = self.field_radius + FOREST_MARGIN + FOREST_THINS;
@@ -287,7 +365,7 @@ impl Map {
                 let jz = hash(ix * 3 + 9, iz * 5 + 2) - 0.5;
                 let at = Vec2::new((ix as f32 + jx * 0.8) * TREE_SPACING, (iz as f32 + jz * 0.8) * TREE_SPACING);
                 // Leave a margin round the open ground, so that no crown hangs over a lane.
-                if at.length() > reach || self.open_with_margin(at, 6.0) {
+                if at.length() > reach || self.open_with_margin(at, 6.0) || self.mountain_height(at) > 1.0 {
                     continue;
                 }
                 // Past the field the woods thin out.
@@ -353,6 +431,22 @@ impl Graph {
             .min_by(|&a, &b| self.nodes[a].distance(p).total_cmp(&self.nodes[b].distance(p)))
             .expect("a graph has nodes")
     }
+}
+
+fn smooth(e0: f32, e1: f32, x: f32) -> f32 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Smooth noise between 0 and 1, the same every time: the ridges and the valleys of the mountains.
+fn ridges(p: Vec2) -> f32 {
+    let (x, z) = (p.x / RIDGE_CELL, p.y / RIDGE_CELL);
+    let (ix, iz) = (x.floor(), z.floor());
+    let (fx, fz) = (smooth(0.0, 1.0, x - ix), smooth(0.0, 1.0, z - iz));
+    let h = |dx: f32, dz: f32| hash(ix as i32 + dx as i32 + 101, iz as i32 + dz as i32 - 57);
+    let top = h(0.0, 0.0) + (h(1.0, 0.0) - h(0.0, 0.0)) * fx;
+    let bottom = h(0.0, 1.0) + (h(1.0, 1.0) - h(0.0, 1.0)) * fx;
+    top + (bottom - top) * fz
 }
 
 fn closest_on_segment(p: Vec2, a: Vec2, b: Vec2) -> Vec2 {
@@ -445,7 +539,7 @@ mod tests {
     fn the_forest_has_no_tree_on_open_ground_and_trees_are_the_same_every_time() {
         let m = map();
         let trees = m.trees();
-        assert!(trees.len() > 8_000 && trees.len() < 60_000, "{} trees", trees.len());
+        assert!(trees.len() > 3_000 && trees.len() < 60_000, "{} trees", trees.len());
         assert!(trees.iter().all(|t| !m.open(t.at)), "a tree on a lane or in a clearing");
         assert!(trees.iter().all(|t| (TREE_MIN..=TREE_MAX).contains(&t.height)));
         assert_eq!(trees, m.trees());
@@ -470,6 +564,48 @@ mod tests {
         let p = m.path(m.bases[0], m.towers[3]).unwrap();
         assert_eq!(p.lane, Some(LaneName::East));
         assert!(p.points.len() >= 3, "{:?}", p.points);
+    }
+
+    #[test]
+    fn the_mountains_are_tall_at_the_edge_and_leave_the_towers_the_bases_and_the_lake_clear() {
+        let m = map();
+        for p in [Vec2::new(0.0, 600.0), Vec2::new(0.0, -600.0), Vec2::new(300.0, 500.0), Vec2::new(-300.0, -500.0)] {
+            assert!(m.mountain_height(p) >= 250.0, "{p}: {}", m.mountain_height(p));
+        }
+        for p in m.towers.iter().chain(&m.bases).chain([&m.lake.at]) {
+            assert_eq!(m.mountain_height(*p), 0.0, "{p}");
+        }
+        assert_eq!(m.mountain_height(Vec2::ZERO), 0.0);
+        assert!(m.trees().iter().all(|t| m.mountain_height(t.at) <= 1.0), "a tree stands in the mountains");
+    }
+
+    #[test]
+    fn the_mountains_are_higher_than_a_drone_flies_wherever_they_close_the_edge() {
+        let m = map();
+        let ceiling = Rules::default().ceiling;
+        assert!(MOUNTAIN_HEIGHT * 0.75 > 2.0 * ceiling);
+        assert!(!m.edge_open(ceiling), "a way round the edge");
+        // The test can tell: with a ceiling above the mountains the way is open.
+        assert!(m.edge_open(MOUNTAIN_HEIGHT + 1.0));
+    }
+
+    #[test]
+    fn the_mountains_are_the_same_every_time_and_smooth() {
+        let m = map();
+        let p = Vec2::new(100.0, 540.0);
+        assert_eq!(m.mountain_height(p), m.mountain_height(p));
+        assert!((m.mountain_height(p) - m.mountain_height(p + Vec2::new(0.0, 1.0))).abs() < 15.0);
+    }
+
+    #[test]
+    fn a_point_in_the_mountains_is_pulled_out_with_room_to_circle() {
+        let m = map();
+        let q = m.keep_clear(Vec2::new(0.0, 580.0));
+        assert!(
+            q.length() < 480.0 && m.mountain_height(q) <= 1.0 && m.mountain_height(q + q.normalize() * ROOM) <= 1.0
+        );
+        assert_eq!(m.keep_clear(m.towers[2]), m.towers[2]);
+        assert_eq!(m.keep_clear(m.towers[1]), m.towers[1]);
     }
 
     #[test]
