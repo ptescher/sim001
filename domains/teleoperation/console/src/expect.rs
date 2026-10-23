@@ -372,6 +372,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
             patience: 480,
         };
         let mut report = expectation_story::Report::default();
+        let mut aborted = false;
         for plan in &acceptance.plans {
             let began = Instant::now();
             driver.budget = Duration::from_secs(test_budget(plan));
@@ -385,7 +386,10 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
             // A flight depends on the autopilot, the link and the timing of the machine: a test
             // that fails once gets one more go, from a fresh plane, and says so.
             let mut retried = false;
-            if matches!(r.status, expectation_story::Status::Failed) && std::env::var("SIM001_EXPECT_NO_RETRY").is_err() {
+            if matches!(r.status, expectation_story::Status::Failed)
+                && driver.dead.is_none()
+                && std::env::var("SIM001_EXPECT_NO_RETRY").is_err()
+            {
                 println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, began.elapsed().as_secs_f32());
                 driver.budget = Duration::from_secs(test_budget(plan));
                 r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts)
@@ -478,8 +482,22 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 }
             }
             report.results.push(r);
+            if let Some(why) = driver.dead.clone() {
+                // Nothing after this can run: say so now, not after every test has waited its turn.
+                let left = &acceptance.plans[report.results.len()..];
+                eprintln!("expect: the plane is not answering ({why}): stopping, {} tests not run", left.len());
+                report.results.extend(left.iter().map(|p| {
+                    expectation_story::PlanResult::with(expectation_story::Status::NotRun, p)
+                }));
+                aborted = true;
+                break;
+            }
         }
-        if let Some(dir) = &docs {
+        if aborted {
+            // Not saved: a run that stopped has nothing to say about the tests it did not reach, and
+            // must not replace the results of an earlier run with empty ones.
+            eprintln!("expect: the results were not saved");
+        } else if let Some(dir) = &docs {
             // Saved as the console's results, and merged with the sim's before the docs are written.
             match acceptance.publish(dir, "gcs", &report) {
                 Ok(_) => println!("expect: wrote the docs to {}", dir.display()),
@@ -808,6 +826,9 @@ struct ConsoleDriver {
     /// AUTO, asked for before the vehicle has a mission: set once the mission is arranged (an
     /// empty mission ends as AUTO starts, and ArduPlane flies home in RTL).
     pending_auto: bool,
+    /// Why the plane can't be got ready (the autopilot didn't come back, or never got ready to
+    /// arm): no other test can run either, so the run stops instead of waiting out each one.
+    dead: Option<String>,
 }
 
 impl ConsoleDriver {
@@ -833,6 +854,7 @@ impl ConsoleDriver {
             line: None,
             in_use: Default::default(),
             pending_auto: false,
+            dead: None,
         }
     }
 
@@ -1283,7 +1305,10 @@ impl Driver for ConsoleDriver {
         // A plane that has flown, or whose autopilot has lost its bearings, starts the next test
         // from a fresh plane: the sim starts again (as with R), and the station restarts ArduPilot.
         if self.vtol && self.needs_a_fresh_plane()? {
-            self.fresh_plane()?;
+            if let Err(e) = self.fresh_plane() {
+                self.dead = Some(e.clone());
+                return Err(e);
+            }
         }
         // The throttle stick starts down, as a pilot leaves it before arming.
         if self.vtol {
@@ -1301,7 +1326,10 @@ impl Driver for ConsoleDriver {
         // Nor is the autopilot's own start, the first time: the test begins from a vehicle that is
         // ready to arm.
         if self.vtol {
-            self.wait_until_ready_to_arm()?;
+            if let Err(e) = self.wait_until_ready_to_arm() {
+                self.dead = Some(e.clone());
+                return Err(e);
+            }
         }
         self.deadline = Some(Instant::now() + self.budget);
         Ok(())

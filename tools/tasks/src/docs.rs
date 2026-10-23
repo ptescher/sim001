@@ -179,7 +179,37 @@ fn command(step: &Step) -> Command {
     c
 }
 
+/// What the runners that fly the VTOL need and the checkout lacks: a native ArduPlane (see
+/// `ardupilot/build_native.sh`; a fresh git worktree has no `.ardupilot` until it is linked to the
+/// main checkout's) or Docker. Without it their tests would only say "not supported yet", an hour
+/// into the run.
+pub fn missing_sitl(root: &Path, docker_up: bool) -> Option<String> {
+    let native = root.join(".ardupilot/build/sitl/bin/arduplane");
+    if native.exists() || docker_up {
+        return None;
+    }
+    Some(format!(
+        "there is no ArduPlane SITL to fly the VTOL: {} is missing and Docker is not running.\n\
+         Build it (ardupilot/build_native.sh), link .ardupilot to the main checkout's if this is a worktree, \
+         or start Docker. `tasks docs --no-station` leaves out the console's tests.",
+        native.display()
+    ))
+}
+
+fn docker_up() -> bool {
+    Command::new("docker")
+        .arg("info")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 pub fn run(root: &Path, no_station: bool) -> i32 {
+    if let Some(why) = missing_sitl(root, docker_up()).filter(|_| !no_station) {
+        eprintln!("== not starting: {why}");
+        return 1;
+    }
     for step in steps(root, no_station) {
         println!("== {}", step.name);
         let ended = run_limited(&mut command(&step), step.limit);
@@ -267,6 +297,21 @@ mod tests {
 
     /// A runner that fails its tests goes on to the next one; building the sim and writing the
     /// manual do not.
+    /// A checkout with no ArduPlane and no Docker stops the run before it starts, saying how to fix it.
+    #[test]
+    fn a_run_with_no_ardupilot_stops_before_it_starts() {
+        let dir = std::env::temp_dir().join(format!("sim001-tasks-sitl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let why = missing_sitl(&dir, false).expect("nothing to fly the VTOL with");
+        assert!(why.contains("build_native.sh") && why.contains("--no-station"), "{why}");
+        assert!(missing_sitl(&dir, true).is_none(), "Docker is enough");
+        std::fs::create_dir_all(dir.join(".ardupilot/build/sitl/bin")).unwrap();
+        std::fs::write(dir.join(".ardupilot/build/sitl/bin/arduplane"), "").unwrap();
+        assert!(missing_sitl(&dir, false).is_none(), "a native build is enough");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn only_the_tests_may_fail() {
         for step in steps(&root(), false) {
