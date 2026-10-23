@@ -18,11 +18,11 @@ mavlink = { version = "0.19", default-features = false, features = ["std", "dial
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Acceptance tests (`--expect`): see github.com/ptescher/expectation and expectations/.
-expectation_cli = { git = "https://github.com/ptescher/expectation", branch = "follows" }
-expectation_harness = { git = "https://github.com/ptescher/expectation", branch = "follows" }
-expectation_model = { git = "https://github.com/ptescher/expectation", branch = "follows" }
-expectation_service = { git = "https://github.com/ptescher/expectation", branch = "follows" }
-expectation_story = { git = "https://github.com/ptescher/expectation", branch = "follows" }
+expectation_cli = { git = "https://github.com/ptescher/expectation" }
+expectation_harness = { git = "https://github.com/ptescher/expectation" }
+expectation_model = { git = "https://github.com/ptescher/expectation" }
+expectation_service = { git = "https://github.com/ptescher/expectation" }
+expectation_story = { git = "https://github.com/ptescher/expectation" }
 
 [package]
 name = "sim001"
