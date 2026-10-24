@@ -50,11 +50,7 @@ impl World {
 
     /// Blue drone `k`'s order, as the spec words it.
     fn order_of(&self, k: usize) -> String {
-        match self.blue.order(k) {
-            None => "none".into(),
-            Some(Order::Take(t)) => format!("take the {} tower", self.game.towers[t].name),
-            Some(o) => format!("{o:?}"),
-        }
+        self.say(self.blue.order(k))
     }
 
     /// An order, as the spec words it.
@@ -72,7 +68,12 @@ impl World {
         let blue = self.game.drone(Team::Blue, 0);
         for _ in 0..(secs / DT).round() as usize {
             self.game.step(DT);
-            self.told.tick(self.game.silent[blue], self.game.rules.link_timeout);
+            self.told.tick(
+                self.game.silent[blue],
+                self.game.rules.link_timeout,
+                self.game.charge(blue),
+                self.game.rules.bingo,
+            );
         }
     }
 
@@ -148,10 +149,10 @@ impl World {
         self.game.look();
     }
 
-    /// Blue holds `n` towers: its home tower, then the centre, the west, the east and Red's home
-    /// (the flank towers last: the section's start sets them on their own).
+    /// Blue holds `n` towers: its home tower, then the west, the east, the centre and Red's home
+    /// (the flank towers and the spire last: the section's start sets them on their own).
     fn blue_holds(&mut self, n: usize) {
-        for (k, name) in ["Blue home", "centre", "west", "east", "Red home"].into_iter().enumerate() {
+        for (k, name) in ["Blue home", "west", "east", "centre", "Red home"].into_iter().enumerate() {
             let holder = if k < n {
                 Some(Team::Blue)
             } else if name == "Red home" {
@@ -201,10 +202,25 @@ impl World {
                 ("low in the west lane, on the shore of the lake", self.shore(), Some(LOW))
             }
             "near the Red home tower" => ("near the Red home tower", self.shadow(), Some(ALT)),
-            _ => ("at its base", m.bases[0], None),
+            "over its base" => ("over its base", m.bases[0], Some(ALT)),
+            "in the west circle" => ("in the west circle", m.towers[1] + Vec2::new(40.0, 0.0), Some(ALT)),
+            other => match away_from(m, other) {
+                Some((name, at)) => (name, at, Some(ALT)),
+                None => ("at its base", m.bases[0], None),
+            },
         };
         self.put(i, at, alt);
         self.blue_place = Some((name, at));
+    }
+
+    /// The second Blue drone, flying that far east of the Red home tower, or at its base.
+    fn place_second(&mut self, v: &Value) {
+        let i = self.game.drone(Team::Blue, 1);
+        let words = v.as_str().unwrap_or_default();
+        match away_from(&self.game.map, words) {
+            Some((_, at)) => self.put(i, at, Some(ALT)),
+            None => self.home(i),
+        }
     }
 
     fn place_scout(&mut self, v: &Value) {
@@ -294,6 +310,22 @@ impl World {
     }
 }
 
+/// "150 m from the Red home tower": that far east of the tower, and the words.
+fn away_from(m: &recreation_towers::Map, words: &str) -> Option<(&'static str, Vec2)> {
+    const PLACES: [(&str, f32, usize); 9] = [
+        ("130 m from the Red home tower", 130.0, 4),
+        ("210 m from the Red home tower", 210.0, 4),
+        ("230 m from the Red home tower", 230.0, 4),
+        ("150 m from the Red home tower", 150.0, 4),
+        ("170 m from the Red home tower", 170.0, 4),
+        ("190 m from the centre tower", 190.0, 2),
+        ("210 m from the centre tower", 210.0, 2),
+        ("110 m from the west tower", 110.0, 1),
+        ("130 m from the west tower", 130.0, 1),
+    ];
+    PLACES.iter().find(|p| p.0 == words).map(|&(name, d, tower)| (name, m.towers[tower] + Vec2::new(0.0, d)))
+}
+
 fn holder_of(v: &Value) -> Option<Team> {
     match v.as_str() {
         Some("held by Blue") => Some(Team::Blue),
@@ -345,6 +377,8 @@ fn bindings() -> Bindings<World> {
         // The flank towers and their circles.
         .observe("the west tower", |w| holder_name(w.tower("west").holder))
         .arrange("the west tower", |w, v| w.hold("west", v))
+        .observe("the centre tower", |w| holder_name(w.tower("centre").holder))
+        .arrange("the centre tower", |w, v| w.hold("centre", v))
         .observe("the control of the west tower", |w| tenth(100.0 * w.tower("west").control))
         .arrange("the control of the west tower", |w, v| {
             w.tower_mut("west").control = v.as_f64().unwrap() as f32 / 100.0
@@ -402,8 +436,11 @@ fn bindings() -> Bindings<World> {
             s.seen = false;
         })
         .on("the game runs for 3 seconds", |w| w.run(3.0))
+        .on("the game runs for 110 seconds", |w| w.run(110.0))
         .on("the game runs for 10 seconds", |w| w.run(10.0))
+        .on("the game runs for 15 seconds", |w| w.run(15.0))
         .on("the game runs for 20 seconds", |w| w.run(20.0))
+        .on("the game runs for 45 seconds", |w| w.run(45.0))
         .on("the game runs for 1 minute", |w| w.run(60.0))
         .on("the Red scout flies into the fog for 10 seconds", |w| {
             let i = w.scout();
@@ -465,6 +502,16 @@ fn bindings() -> Bindings<World> {
         // The radio shadows.
         .observe("the Red home tower", |w| holder_name(w.tower("Red home").holder))
         .arrange("the Red home tower", |w, v| w.hold("Red home", v))
+        .observe("the second Blue drone", |w| {
+            let d = w.game.drones[w.game.drone(Team::Blue, 1)];
+            if d.phase != Phase::Flying {
+                return "at its base".to_string();
+            }
+            let m = &w.game.map;
+            let d_red = (d.at - m.towers[4]).length().round();
+            format!("{d_red} m from the Red home tower")
+        })
+        .arrange("the second Blue drone", |w, v| w.place_second(v))
         .observe("the link of the first Blue drone", |w| w.blue_link())
         .on("the first Blue drone flies out of the radio shadow", |w| {
             w.place_blue(&Value::from("at the Blue home tower"))
@@ -488,6 +535,31 @@ fn bindings() -> Bindings<World> {
             let i = w.game.drone(Team::Blue, 0);
             w.game.maps[Team::Blue.index()].drones[i].map_or(0.0, |s| tenth(w.game.time - s.time))
         })
+        // The battery.
+        .observe("the batteries", |w| if w.game.rules.standard_battery > 0.0 { "on" } else { "off" })
+        .arrange("the batteries", |w, v| {
+            let on = v.as_str() == Some("on");
+            let r = &mut w.game.rules;
+            (r.light_battery, r.standard_battery, r.heavy_battery) =
+                if on { (150.0, 240.0, 300.0) } else { (0.0, 0.0, 0.0) };
+            w.game.fill_batteries();
+            // The commander plays by the same rules.
+            w.blue = Commander::new(w.game.rules);
+        })
+        .observe("the battery of the first Blue drone", |w| tenth(w.game.battery[w.game.drone(Team::Blue, 0)]))
+        .arrange("the battery of the first Blue drone", |w, v| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.battery[i] = v.as_f64().unwrap() as f32;
+            w.game.reported[i] = w.game.battery[i];
+        })
+        .observe("the battery of the first Blue drone on the Blue map", |w| {
+            tenth(w.game.view(Team::Blue).drones[0].battery)
+        })
+        .observe("the condition of the first Blue drone", |w| match w.game.drones[w.game.drone(Team::Blue, 0)].phase {
+            Phase::Flying => "flying",
+            Phase::Ground => "on the ground",
+            Phase::Down => "down",
+        })
         // Standing orders.
         .observe("the order that the first Blue drone flies", |w| w.say(w.told.order))
         .arrange("the order that the first Blue drone flies", |w, v| {
@@ -507,6 +579,7 @@ fn bindings() -> Bindings<World> {
             w.told.standing = match v.as_str() {
                 Some("hold after 5 s") => Some(Standing { after: 5.0, then: Order::Hold }),
                 Some("go home after 5 s") => Some(Standing { after: 5.0, then: Order::Home }),
+                Some("hold after 30 s") => Some(Standing { after: 30.0, then: Order::Hold }),
                 _ => None,
             };
         })

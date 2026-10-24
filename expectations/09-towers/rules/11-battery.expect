@@ -1,0 +1,91 @@
+Feature: The battery
+  Each drone has a battery. The battery counts the seconds that the drone can still fly. A light
+  drone has 150 s, a standard drone 240 s and a heavy drone 300 s. A drone that flies uses 1 s
+  of battery each second. A drone on the ground uses none.
+
+  When a drone flies in a tower circle that holds enemy drones, it uses more: 1.5 s each second
+  for each unit of enemy weight in the circle. A drone recharges over its own base, 10 s each
+  second. It also recharges in the circle of a depot that its team holds, 3 s each second, if the
+  circle is not contested. A fort and the spire do not recharge a drone.
+
+  A drone with an empty battery is down. It is out of the game where it is, and it counts for
+  no circle. It is back on the ground at its base, with a full battery, 100 s later. The enemy
+  gets no points for a drone that is down.
+
+  Expectation: A drone that flies uses one second of battery each second
+    Given the batteries are on
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is low in the mid lane
+    When the game runs for 10 seconds
+    Then the battery of the first Blue drone is 90 s
+
+  Expectation: A drone over its base recharges 10 s each second
+    Given the batteries are on
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is over its base
+    When the game runs for 10 seconds
+    Then the battery of the first Blue drone is 190 s
+
+  Expectation: An enemy drone in the same circle makes a drone use more battery
+    Given the batteries are on
+    And the west tower is neutral
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is in the west circle
+    And the Red drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the battery of the first Blue drone is 75 s
+
+  Expectation: A depot that the team holds recharges a drone in its circle
+    Given the batteries are on
+    And the west tower is held by Blue
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is in the west circle
+    And the Red drones in the west circle are 0
+    When the game runs for 10 seconds
+    Then the battery of the first Blue drone is 120 s
+
+  Expectation: A depot does not recharge a drone in a contested circle
+    Overrides: A depot that the team holds recharges a drone in its circle
+    The circle holds a Red drone, so the depot recharges nobody.
+
+    Given the batteries are on
+    And the west tower is held by Blue
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is in the west circle
+    And the Red drones in the west circle are 1
+    When the game runs for 10 seconds
+    Then the battery of the first Blue drone is 75 s
+
+  Expectation: A fort does not recharge a drone
+    Given the batteries are on
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is at the Blue home tower
+    When the game runs for 10 seconds
+    Then the battery of the first Blue drone is 90 s
+
+  Expectation: A drone with an empty battery is down
+    Given the batteries are on
+    And the battery of the first Blue drone is 5 s
+    And the first Blue drone is low in the mid lane
+    When the game runs for 10 seconds
+    Then the condition of the first Blue drone is down
+
+  Expectation: A drone that is down is back at its base with a full battery 100 s later
+    Overrides: A drone with an empty battery is down
+    The drone is down for 100 s, and then it is on the ground at its base.
+
+    Given the batteries are on
+    And the battery of the first Blue drone is 5 s
+    And the first Blue drone is low in the mid lane
+    When the game runs for 110 seconds
+    Then the condition of the first Blue drone is on the ground
+    And the battery of the first Blue drone is 240 s
+
+  Expectation: The map keeps the battery that a drone out of contact last reported
+    Given the batteries are on
+    And the Red home tower is held by Red
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is low in the mid lane
+    When the first Blue drone flies into the radio shadow for 10 seconds
+    Then the battery of the first Blue drone on the Blue map is 100 s
+    And the age of the first Blue drone on the Blue map is 10 s

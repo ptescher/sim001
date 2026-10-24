@@ -5,7 +5,7 @@
 //! strategy that improves commanders may change; the rules, the referee, the fog and the view
 //! are elsewhere.
 
-use crate::{Order, Phase, Rules, TeamView};
+use crate::{Kind, Order, Phase, Rules, TeamView};
 use serde::{Deserialize, Serialize};
 
 /// Declares the tunable numbers: for each, a constant (its default) and a field of
@@ -69,6 +69,13 @@ tunable! {
     behind_by / BEHIND_BY = 0.0, 0.0, 0.9;
 }
 
+/// A drone flies about this fast (m/s), for the time it takes to get home.
+const CRUISE: f32 = 16.0;
+/// A drone goes to charge when its battery is down to the bingo level, the time to fly home and
+/// this margin (s); it goes back to work when the battery is this much full.
+const REFUEL_MARGIN: f32 = 15.0;
+const BACK_TO_WORK: f32 = 0.9;
+
 /// A computer in a team's seat.
 #[derive(Clone, Debug)]
 pub struct Commander {
@@ -80,6 +87,8 @@ pub struct Commander {
     behind: Vec<f32>,
     /// The tower each drone gave up, and until when (game time, s) it stays away.
     away: Vec<Option<(usize, f32)>>,
+    /// Each drone is on its way to charge, or charging.
+    recharging: Vec<bool>,
     /// The game time of the last decision.
     last: Option<f32>,
 }
@@ -91,7 +100,15 @@ impl Commander {
 
     pub fn with_tuning(rules: Rules, tuning: CommanderTuning) -> Commander {
         let n = rules.drones;
-        Commander { rules, tuning, orders: vec![None; n], behind: vec![0.0; n], away: vec![None; n], last: None }
+        Commander {
+            rules,
+            tuning,
+            orders: vec![None; n],
+            behind: vec![0.0; n],
+            away: vec![None; n],
+            recharging: vec![false; n],
+            last: None,
+        }
     }
 
     pub fn tuning(&self) -> CommanderTuning {
@@ -144,7 +161,32 @@ impl Commander {
         // A drone out of contact gets no order: it flies the one it has, and stays out of the
         // sums below.
         let linked: Vec<bool> = view.drones.iter().map(|d| d.linked).collect();
-        let up: Vec<bool> = view.drones.iter().map(|d| d.phase != Phase::Down && d.linked).collect();
+        // A drone whose battery is low goes to charge: home, or to a depot the team holds that is
+        // nearer. It is left out of the sums below until it is nearly full.
+        let mut charge: Vec<Option<Order>> = vec![None; self.orders.len()];
+        for d in view.drones.iter().filter(|d| d.linked && d.phase != Phase::Down) {
+            let full = self.rules.battery(self.rules.class(d.k));
+            if full <= 0.0 {
+                self.recharging[d.k] = false;
+                continue;
+            }
+            let home = d.at.distance(base);
+            let need = self.rules.bingo + home / CRUISE + REFUEL_MARGIN;
+            if self.recharging[d.k] {
+                self.recharging[d.k] = d.battery < BACK_TO_WORK * full;
+            } else {
+                self.recharging[d.k] = d.phase == Phase::Flying && d.battery <= need;
+            }
+            if self.recharging[d.k] {
+                let depot = (0..view.towers.len())
+                    .filter(|&t| view.towers[t].kind == Kind::Depot && ours(t))
+                    .min_by(|&a, &b| d.at.distance(view.towers[a].at).total_cmp(&d.at.distance(view.towers[b].at)))
+                    .filter(|&t| d.at.distance(view.towers[t].at) < home);
+                charge[d.k] = Some(depot.map_or(Order::Home, Order::Take));
+            }
+        }
+        let up: Vec<bool> =
+            view.drones.iter().map(|d| d.phase != Phase::Down && d.linked && !self.recharging[d.k]).collect();
         // Keep the orders that still make sense.
         for (k, o) in self.orders.iter_mut().enumerate() {
             let keep = match *o {
@@ -187,6 +229,11 @@ impl Commander {
                 .filter(|&&t| !away[k][t])
                 .min_by(|&&a, &&b| view.towers[a].at.distance(at).total_cmp(&view.towers[b].at.distance(at)));
             *order = spare.map(|&t| Order::Take(t));
+        }
+        for (k, order) in charge.into_iter().enumerate() {
+            if order.is_some() {
+                self.orders[k] = order;
+            }
         }
         self.orders.iter().enumerate().filter(|(k, _)| linked[*k]).filter_map(|(k, o)| o.map(|o| (k, o))).collect()
     }
@@ -370,5 +417,61 @@ mod tests {
         g.drones[scout].at = Vec2::new(300.0, 250.0);
         g.step(5.0);
         assert_ne!(decide(&mut c, &g)[0], Some(Order::Take(home)));
+    }
+
+    /// A game with the batteries on, Blue's first drone flying at `at` with `left` s of battery.
+    fn tired_game(at: Vec2, left: f32) -> Game {
+        let rules = Rules { light_battery: 150.0, standard_battery: 240.0, heavy_battery: 300.0, ..Rules::default() };
+        let mut g = Game::new(rules);
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i] = crate::Drone { at, alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        g.battery[i] = left;
+        g.look();
+        g
+    }
+
+    #[test]
+    fn a_drone_whose_battery_is_low_goes_home_and_is_sent_out_again_when_it_is_full() {
+        // 300 m from its base: 19 s home, so 60 s of bingo and the margin come first.
+        let mut g = tired_game(Vec2::new(-220.0, 0.0), 100.0);
+        let mut c = Commander::new(g.rules);
+        assert_ne!(decide(&mut c, &g)[0], Some(Order::Home), "100 s is enough");
+        let i = g.drone(Team::Blue, 0);
+        g.battery[i] = 80.0;
+        g.look();
+        assert_eq!(decide(&mut c, &g)[0], Some(Order::Home), "80 s is not");
+        // Home and part charged: it stays on the charge.
+        g.battery[i] = 150.0;
+        g.look();
+        assert_eq!(decide(&mut c, &g)[0], Some(Order::Home));
+        g.battery[i] = 230.0;
+        g.look();
+        assert_ne!(decide(&mut c, &g)[0], Some(Order::Home), "nearly full: back to work");
+    }
+
+    #[test]
+    fn a_drone_whose_battery_is_low_goes_to_a_depot_its_team_holds_if_that_is_nearer_than_its_base() {
+        let mut g = tired_game(Vec2::new(40.0, -330.0), 40.0);
+        let west = g.tower("west");
+        g.towers[west].holder = Some(Team::Blue);
+        g.towers[west].control = 1.0;
+        g.look();
+        let mut c = Commander::new(g.rules);
+        assert_eq!(decide(&mut c, &g)[0], Some(Order::Take(west)));
+        // The team does not hold it any more: home.
+        g.towers[west].holder = None;
+        g.towers[west].control = 0.0;
+        g.look();
+        let mut c = Commander::new(g.rules);
+        assert_eq!(decide(&mut c, &g)[0], Some(Order::Home));
+    }
+
+    #[test]
+    fn a_game_with_no_batteries_never_sends_a_drone_to_charge() {
+        let g = tired_game(Vec2::new(-220.0, 0.0), 0.0);
+        let mut g = g;
+        g.rules = Rules::default().without_batteries();
+        let mut c = Commander::new(g.rules);
+        assert_ne!(decide(&mut c, &g)[0], Some(Order::Home));
     }
 }

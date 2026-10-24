@@ -38,3 +38,14 @@ Feature: The computer commander
     And the Red drones in the west circle are 1
     When the computer commander of Blue plays for 15 seconds
     Then the order of the first Blue drone is take the Red home tower
+
+  Expectation: The commander sends a drone with a low battery home
+    Overrides: At the start, the commander sends a drone to each neutral tower
+    The commander sends a drone home when its battery is down to 60 s, and the time to fly home,
+    and 15 s more. The drone goes back to work when its battery is 90 % full.
+
+    Given the batteries are on
+    And the battery of the first Blue drone is 80 s
+    And the first Blue drone is low in the mid lane
+    When the computer commander of Blue decides
+    Then the order of the first Blue drone is go home

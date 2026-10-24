@@ -1,6 +1,6 @@
 //! What a seat gets: its team's map of the game ([`TeamView`]), and the orders it gives.
 
-use crate::{Game, Outcome, Phase, Team};
+use crate::{Game, Kind, Outcome, Phase, Team};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,8 @@ pub enum Order {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TowerView {
     pub name: String,
+    #[serde(default)]
+    pub kind: Kind,
     pub at: Vec2,
     /// As the team last saw it.
     pub control: f32,
@@ -56,6 +58,9 @@ pub struct OwnDrone {
     /// How long the team has not heard from it (s); 0 while it does.
     #[serde(default)]
     pub silent: f32,
+    /// What is left of its battery (s), as the drone last said (0 if the drones have none).
+    #[serde(default)]
+    pub battery: f32,
 }
 
 fn in_contact() -> bool {
@@ -102,6 +107,7 @@ impl Game {
             .zip(&map.towers)
             .map(|(t, s)| TowerView {
                 name: t.name.clone(),
+                kind: t.kind,
                 at: t.at,
                 control: s.control,
                 holder: s.holder,
@@ -122,7 +128,18 @@ impl Game {
                     Some(s) if !linked => (s.at, s.alt, s.vel, s.phase),
                     _ => (d.at, d.alt, d.vel, d.phase),
                 };
-                OwnDrone { k: j, at, alt, vel, phase, order: None, low: false, linked, silent: self.silent[i] }
+                OwnDrone {
+                    k: j,
+                    at,
+                    alt,
+                    vel,
+                    phase,
+                    order: None,
+                    low: false,
+                    linked,
+                    silent: self.silent[i],
+                    battery: self.reported[i],
+                }
             })
             .collect();
         let enemies = self

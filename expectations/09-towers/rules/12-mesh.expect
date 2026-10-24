@@ -1,0 +1,32 @@
+Feature: The mesh
+  A drone in a radio shadow can reach its team through a friend. A drone in a shadow is in
+  contact if a drone of its team is within 70 m of it, flies, and is in contact itself. One drone
+  can relay only for a drone that is in a shadow. A relayed drone does not relay for another.
+
+  Thus a drone at the edge of a shadow is a [[picket]]. A drone that circles a tower can never
+  be relayed from outside the shadow, because the circle is wider than the gap. It must leave
+  the circle to reach its team.
+
+  Expectation: A drone in a shadow is in contact through a friend outside the shadow
+    Given the Red home tower is held by Red
+    And the first Blue drone is 150 m from the Red home tower
+    And the second Blue drone is 210 m from the Red home tower
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A friend that is in a shadow itself does not relay
+    Overrides: A drone in a shadow is in contact through a friend outside the shadow
+    Both drones are in the radio shadow, so neither one is in contact.
+
+    Given the Red home tower is held by Red
+    And the first Blue drone is 150 m from the Red home tower
+    And the second Blue drone is 130 m from the Red home tower
+    Then the link of the first Blue drone is cut
+
+  Expectation: A friend more than 70 m away does not relay
+    Overrides: A drone in a shadow is in contact through a friend outside the shadow
+    The second Blue drone is outside the shadow, but 80 m from the first.
+
+    Given the Red home tower is held by Red
+    And the first Blue drone is 150 m from the Red home tower
+    And the second Blue drone is 230 m from the Red home tower
+    Then the link of the first Blue drone is cut

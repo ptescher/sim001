@@ -123,6 +123,34 @@ commander: once a second it sends one drone to each tower its team does not hold
 base first, each to the drone nearest it), keeps a drone on its tower until the team holds it, and
 first defends a held tower when it sees an enemy drone near it. It knows only its team's map.
 
+### The rules (v2), and a replay you can open
+
+Three kinds of tower: forts (the homes) block the enemy's radio 160 m round them, the spire (the
+centre) 200 m, and gives two points a second, and the depots (the flanks) 120 m and recharge a
+drone. A drone has a battery (150, 240 and 300 s for light, standard and heavy); an empty one is
+down for 100 s. An empty tower circle drifts back 1 % a second. A drone in a shadow is in contact
+if a friend in contact is within 70 m. A link is lost after 45 s, or a drone flies home at 60 s
+of battery, unless the commander gave it a standing order. The full rules are in
+[plans/towers-rules-v2.md](../../plans/towers-rules-v2.md), what the arena says of them in
+[plans/towers-rules-v2-results.md](../../plans/towers-rules-v2-results.md).
+
+To watch a game by these rules, in the fast arena and in a minute:
+
+```bash
+cargo run --release -p cognition_towers --example replay 7 persist failsafe towers-replay.html
+open towers-replay.html
+```
+
+`replay SEED BLUE RED OUT` plays one game (BLUE and RED are what a drone does in a radio shadow:
+`failsafe`, `persist` or `surface`) and writes a page that replays it: the towers by kind with
+their shadows, the control bars, each drone's battery, the drones out of contact and the ones that
+are down. [docs/towers-v2-replay.html](../../docs/towers-v2-replay.html) is one such game. The
+round robin of policies is `cargo run --release -p cognition_towers --example ruleset v2 200`.
+
+The game server below runs the drones with no batteries for now (it cannot put a drone down yet);
+the kinds, the shadows, the drift, the mesh and the new timings are in it, and the commander app
+draws the shadows and the kinds.
+
 ### The game server
 
 ```bash

@@ -5,7 +5,7 @@
 //! each order goes out with a standing order ([`recreation_towers::Standing`]) chosen from the
 //! team's map. An [`Autonomy`] chooses it. [`Prepared`] puts one on any captain.
 
-use crate::{Captain, TowersResult, play};
+use crate::{Captain, TowersResult, play_with};
 use recreation_towers::{Commander, Order, Rules, Standing, Team, TeamView};
 
 /// Chooses the standing order that goes with an order.
@@ -69,6 +69,30 @@ impl Autonomy for After {
     }
 }
 
+/// A drone out of contact for `after` s flies to the edge of the radio shadow it is in or heads
+/// for, to be heard again: the nearest point 10 m outside the shadow of the enemy tower that its
+/// order takes it to, on the side of its own base. For an order that goes to no enemy tower it
+/// does what the failsafe does.
+pub struct Surface {
+    pub after: f32,
+    pub rules: Rules,
+}
+
+impl Autonomy for Surface {
+    fn name(&self) -> String {
+        format!("surface after {} s", self.after)
+    }
+
+    fn standing(&self, view: &TeamView, _: usize, order: Order) -> Option<Standing> {
+        let Order::Take(t) = order else { return None };
+        let tower = view.towers.get(t)?;
+        (tower.holder == Some(view.team.other())).then_some(())?;
+        let out = (self.rules.base(view.team) - tower.at).normalize_or_zero();
+        let at = tower.at + out * (self.rules.shadow(tower.kind) + 10.0);
+        Some(Standing { after: self.after, then: Order::Goto(at) })
+    }
+}
+
 /// A captain with an autonomy: its orders go out with the autonomy's standing orders.
 pub struct Prepared<C, A> {
     pub captain: C,
@@ -97,17 +121,24 @@ pub struct Comparison {
     pub error: f32,
     /// Drone-seconds out of contact in a game, for `a` and for `b`.
     pub dark: [f32; 2],
+    /// Drones that went down with an empty battery in a game, for `a` and for `b`.
+    pub downs: [f32; 2],
 }
 
-/// Plays `a` against `b` on each seed, as Blue and as Red, each with the default commander.
+/// Plays `a` against `b` on each seed, as Blue and as Red, each with the default commander, by
+/// the default rules.
 pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comparison, String> {
-    let rules = Rules::default();
+    compare_with(Rules::default(), a, b, seeds)
+}
+
+/// The same, by `rules`.
+pub fn compare_with(rules: Rules, a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comparison, String> {
     let seat = |autonomy| Prepared { captain: Commander::new(rules), autonomy };
     let mut c = Comparison::default();
     let mut scores = vec![];
     for &seed in seeds {
-        let first: TowersResult = play(&mut seat(a), &mut seat(b), seed)?;
-        let second: TowersResult = play(&mut seat(b), &mut seat(a), seed)?;
+        let first: TowersResult = play_with(rules, &mut seat(a), &mut seat(b), seed)?;
+        let second: TowersResult = play_with(rules, &mut seat(b), &mut seat(a), seed)?;
         for (r, mine) in [(&first, Team::Blue), (&second, Team::Red)] {
             let s = r.score_for(mine, rules.win_score);
             scores.push(s);
@@ -119,6 +150,8 @@ pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comp
             }
             c.dark[0] += r.dark[mine.index()];
             c.dark[1] += r.dark[mine.other().index()];
+            c.downs[0] += r.downs[mine.index()] as f32;
+            c.downs[1] += r.downs[mine.other().index()] as f32;
         }
     }
     let n = scores.len().max(1) as f32;
@@ -126,6 +159,7 @@ pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comp
     let var = scores.iter().map(|s| (s - c.margin).powi(2)).sum::<f32>() / (n - 1.0).max(1.0);
     c.error = (var / n).sqrt();
     c.dark = c.dark.map(|d| d / n);
+    c.downs = c.downs.map(|d| d / n);
     Ok(c)
 }
 
@@ -155,19 +189,39 @@ mod tests {
     }
 
     #[test]
+    fn a_comparison_by_rules_plays_the_batteries_of_those_rules() {
+        let rules = Rules { light_battery: 150.0, standard_battery: 240.0, heavy_battery: 300.0, ..Rules::default() };
+        let c = compare_with(rules, &Persist, &Persist, &seeds(2)).unwrap();
+        assert_eq!(c.games, 4);
+        assert!(c.downs.iter().all(|d| d.is_finite() && *d >= 0.0), "{c:?}");
+        // The commander sends a drone to charge in time: only the drones it cannot reach go down.
+        assert!(c.downs[0] < 2.0, "{c:?}");
+    }
+
+    #[test]
     fn the_drones_are_dark_for_some_of_a_game() {
         let c = compare(&Failsafe, &Failsafe, &seeds(4)).unwrap();
         assert!(c.dark[0] > 0.0, "no drone ever went dark: {c:?}");
     }
 
-    /// The baseline a learned autonomy has to beat. Measured on 100 seeds (200 games): persist
-    /// +0.74 ± 0.08 against the failsafe, and 76 % of the games won. An attacker is always in the
-    /// shadow of the tower it takes (the shadow is wider than the circle), so a failsafe that
-    /// sends it home after 20 s, as long as the capture takes, pulls it off the tower.
+    /// The baseline in v1 (plans/edge.md): measured on 200 seeds, persist +0.73 +- 0.06
+    /// against the failsafe. An attacker is always in the shadow of the tower it takes (the shadow
+    /// is wider than the circle), so a failsafe that sends it home after 20 s, as long as the
+    /// capture takes, pulls it off the tower.
     #[test]
-    fn flying_the_order_on_beats_the_failsafe_by_a_clear_margin() {
-        let c = compare(&Persist, &Failsafe, &seeds(30)).unwrap();
+    fn in_v1_flying_the_order_on_beats_the_failsafe_by_a_clear_margin() {
+        let c = compare_with(Rules::v1(), &Persist, &Failsafe, &seeds(30)).unwrap();
         assert!(c.margin > 3.0 * c.error, "{c:?}");
         assert!(c.dark[0] < c.dark[1], "persisting ends the shadows sooner: {c:?}");
+    }
+
+    /// In v2 as proposed, persisting still wins but by less: +0.34 +- 0.07 on 200 seeds (v1 +0.73).
+    /// The test says it stays a clear win and not a landslide, so a rule change that undoes the
+    /// battery, or one that makes the failsafe hopeless again, shows.
+    #[test]
+    fn in_v2_flying_the_order_on_still_wins_but_by_less() {
+        let v1 = compare_with(Rules::v1(), &Persist, &Failsafe, &seeds(60)).unwrap();
+        let v2 = compare(&Persist, &Failsafe, &seeds(60)).unwrap();
+        assert!(v2.margin > 0.0 && v2.margin < v1.margin - 2.0 * (v1.error + v2.error), "{v1:?} {v2:?}");
     }
 }

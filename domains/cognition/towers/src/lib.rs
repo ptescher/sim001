@@ -9,7 +9,7 @@
 
 mod autonomy;
 
-pub use autonomy::{After, Autonomy, Comparison, Failsafe, Persist, Prepared, compare};
+pub use autonomy::{After, Autonomy, Comparison, Failsafe, Persist, Prepared, Surface, compare, compare_with};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
@@ -141,6 +141,9 @@ pub struct TowersResult {
     /// Drone-seconds out of contact in the radio shadows, for Blue and for Red.
     #[serde(default)]
     pub dark: [f32; 2],
+    /// Drones that went down with an empty battery, for Blue and for Red.
+    #[serde(default)]
+    pub downs: [usize; 2],
 }
 
 impl TowersResult {
@@ -170,12 +173,21 @@ pub struct Match {
     told: Vec<Instruction>,
     next_decision: f32,
     dark: [f32; 2],
+    /// Each drone is down now, and how many times each team's drones went down.
+    down: Vec<bool>,
+    downs: [usize; 2],
+    /// Each drone has taken off.
+    took_off: Vec<bool>,
 }
 
 impl Match {
     /// The start of a game on `seed`: the drones on the ground, the wind and the delay drawn.
     pub fn new(seed: u64) -> Match {
-        let rules = Rules::default();
+        Match::with_rules(Rules::default(), seed)
+    }
+
+    /// The same, with the rules of the game.
+    pub fn with_rules(rules: Rules, seed: u64) -> Match {
         let mut rng = fastrand::Rng::with_seed(seed);
         let mut game = Game::new(rules);
         let wind = {
@@ -210,6 +222,9 @@ impl Match {
             told: vec![Instruction::default(); 2 * rules.drones],
             next_decision: 0.0,
             dark: [0.0; 2],
+            down: vec![false; 2 * rules.drones],
+            downs: [0; 2],
+            took_off: vec![false; 2 * rules.drones],
         }
     }
 
@@ -244,14 +259,33 @@ impl Match {
         });
         for (i, told) in self.told.iter_mut().enumerate() {
             // Out of contact long enough, a drone flies its standing order, or home.
-            told.tick(game.silent[i], game.rules.link_timeout);
+            told.tick(game.silent[i], game.rules.link_timeout, game.charge(i), game.rules.bingo);
             if flyers[i].order != told.order {
                 flyers[i].hold = flyers[i].at;
                 flyers[i].order = told.order;
             }
         }
         for (i, f) in flyers.iter_mut().enumerate() {
+            // The referee puts a drone down when its battery is empty, and stands it at its base
+            // again later: a drone that is down does not fly, and one that is back starts again.
+            if game.drones[i].phase == Phase::Down {
+                if !self.down[i] {
+                    self.down[i] = true;
+                    f.flying = false;
+                    self.downs[game.drones[i].team.index()] += 1;
+                    self.pending.retain(|p| p.1 != i);
+                }
+                continue;
+            }
+            if self.down[i] {
+                self.down[i] = false;
+                let d = game.drones[i];
+                let heading = if d.team == Team::Blue { 0.0 } else { std::f32::consts::PI };
+                *f = Flyer { at: d.at, alt: 0.0, heading, flying: false, order: None, hold: d.at, ..*f };
+                self.told[i] = Instruction::default();
+            }
             f.step(game, self.wind, TAKEOFF_APART * (i % drones) as f32, DT);
+            self.took_off[i] |= f.flying;
             let d = &mut game.drones[i];
             d.at = f.at;
             d.alt = f.alt;
@@ -274,16 +308,27 @@ impl Match {
             outcome,
             score: self.game.score,
             length: self.game.time,
-            flew: self.flyers.iter().filter(|f| f.flying).count(),
+            flew: self.took_off.iter().filter(|&&t| t).count(),
             held: [held(Team::Blue), held(Team::Red)],
             dark: self.dark,
+            downs: self.downs,
         })
     }
 }
 
 /// Plays one game: `blue` against `red`, on `seed`.
 pub fn play(blue: &mut dyn Captain, red: &mut dyn Captain, seed: u64) -> Result<TowersResult, String> {
-    let mut m = Match::new(seed);
+    play_with(Rules::default(), blue, red, seed)
+}
+
+/// The same, with the rules of the game.
+pub fn play_with(
+    rules: Rules,
+    blue: &mut dyn Captain,
+    red: &mut dyn Captain,
+    seed: u64,
+) -> Result<TowersResult, String> {
+    let mut m = Match::with_rules(rules, seed);
     loop {
         if let Some(result) = m.result() {
             return Ok(result);
@@ -418,7 +463,7 @@ mod tests {
     fn a_game_between_two_captains_ends_with_every_drone_flown() {
         let r = play(&mut default(), &mut default(), 1).unwrap();
         assert_eq!(r.flew, 2 * Rules::default().drones);
-        assert!(r.length <= 480.0 + DT && r.length > 60.0, "{r:?}");
+        assert!(r.length <= Rules::default().duration + DT && r.length > 60.0, "{r:?}");
         assert!(r.score.iter().any(|s| *s > 0.0), "{r:?}");
     }
 
@@ -480,6 +525,7 @@ mod tests {
             flew: 6,
             held: [3, 1],
             dark: [0.0; 2],
+            downs: [0; 2],
         };
         assert_eq!(r.score_for(Team::Blue, 500.0), 1.5);
         assert_eq!(r.score_for(Team::Red, 500.0), -1.5);
@@ -545,7 +591,7 @@ mod tests {
         let mut m = Match::new(1);
         let i = put_blue(&mut m, true);
         m.told[i].give(Order::Hold, None);
-        run(&mut m, 19.0, &mut Silent);
+        run(&mut m, 44.0, &mut Silent);
         assert!(m.game.jammed[i], "it holds in the shadow");
         assert_eq!(m.flyers[i].order, Some(Order::Hold));
         run(&mut m, 2.0, &mut Silent);
@@ -565,5 +611,41 @@ mod tests {
         put_blue(&mut m, true);
         run(&mut m, 10.0, &mut Silent);
         assert_eq!(m.flyers[i].order, Some(Order::Home));
+    }
+
+    fn tired() -> Rules {
+        Rules { light_battery: 150.0, standard_battery: 240.0, heavy_battery: 300.0, ..Rules::default() }
+    }
+
+    #[test]
+    fn a_drone_with_an_empty_battery_is_down_and_flies_again_after_the_respawn() {
+        let mut m = Match::with_rules(tired(), 1);
+        let i = put_blue(&mut m, false);
+        m.game.battery[i] = 5.0;
+        m.told[i].give(Order::Hold, None);
+        run(&mut m, 6.0, &mut Silent);
+        assert_eq!(m.game.drones[i].phase, Phase::Down);
+        assert!(!m.flyers[i].flying, "a drone that is down does not fly");
+        let down_at = m.game.drones[i].at;
+        run(&mut m, 90.0, &mut Silent);
+        assert_eq!(m.game.drones[i].phase, Phase::Down);
+        assert_eq!(m.game.drones[i].at, down_at, "it stays where it fell");
+        run(&mut m, 12.0, &mut Silent);
+        assert!(m.game.drones[i].at.distance(m.game.rules.base(Team::Blue)) < 60.0, "back at its base");
+        assert_eq!(m.game.battery[i], 240.0);
+        run(&mut m, 10.0, &mut Silent);
+        assert!(m.flyers[i].flying, "it takes off again");
+        assert_eq!(m.flyers[i].order, None, "and has to be told what to do");
+    }
+
+    #[test]
+    fn the_result_counts_the_drones_that_went_down() {
+        let mut m = Match::with_rules(tired(), 1);
+        let i = put_blue(&mut m, false);
+        m.game.battery[i] = 2.0;
+        m.told[i].give(Order::Hold, None);
+        m.game.time = m.game.rules.duration - 10.0;
+        run(&mut m, 11.0, &mut Silent);
+        assert_eq!(m.result().unwrap().downs, [1, 0]);
     }
 }

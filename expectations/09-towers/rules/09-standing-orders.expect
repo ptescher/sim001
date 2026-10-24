@@ -4,7 +4,8 @@ Feature: Standing orders
   commander cannot ask later: the radio shadow of an enemy tower cuts the link, and the drone
   flies alone.
 
-  Without a standing order, a drone that loses its link flies home. With a standing order, it
+  Without a standing order, a drone that loses its link flies home. It also flies home when it
+  is out of contact and its [[battery]] gets down to 60 s: that is enough to fly home. With a standing order, it
   does what the commander planned. It stays on that order, also when it is in contact again,
   until the commander gives it a new order.
 
@@ -32,7 +33,7 @@ Feature: Standing orders
     And the order that the first Blue drone flies is take the west tower
     And the standing order of the first Blue drone is none
     And the first Blue drone is near the Red home tower
-    When the game runs for 20 seconds
+    When the game runs for 45 seconds
     Then the order that the first Blue drone flies is go home
 
   Expectation: A drone with a standing order does not fly home when its link is lost
@@ -43,7 +44,7 @@ Feature: Standing orders
     And the order that the first Blue drone flies is take the west tower
     And the standing order of the first Blue drone is hold after 5 s
     And the first Blue drone is near the Red home tower
-    When the game runs for 20 seconds
+    When the game runs for 45 seconds
     Then the order that the first Blue drone flies is hold
 
   Expectation: A drone stays on its standing order when it is in contact again
@@ -58,3 +59,26 @@ Feature: Standing orders
     And the standing order of the first Blue drone is hold after 5 s
     When the first Blue drone is given the order to hold
     Then the standing order of the first Blue drone is none
+
+  Expectation: A drone with no standing order flies home when its battery is low
+    Given the batteries are on
+    And the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is none
+    And the battery of the first Blue drone is 70 s
+    And the first Blue drone is near the Red home tower
+    When the game runs for 15 seconds
+    Then the order that the first Blue drone flies is go home
+
+  Expectation: A standing order replaces the flight home at a low battery
+    Overrides: A drone with no standing order flies home when its battery is low
+    The commander takes the risk. The standing order is not due for 30 s.
+
+    Given the batteries are on
+    And the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is hold after 30 s
+    And the battery of the first Blue drone is 70 s
+    And the first Blue drone is near the Red home tower
+    When the game runs for 15 seconds
+    Then the order that the first Blue drone flies is take the west tower

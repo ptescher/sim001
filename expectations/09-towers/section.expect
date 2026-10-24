@@ -17,8 +17,8 @@ Section: Towers
 
   You do not fly the drones with sticks. You command your team from the commander app: you
   give each drone an order, and the drone flies it by plan in [[AGENT mode]]. To take a tower,
-  send drones to circle it. Each tower that your team holds gives you one point each second.
-  The first team to 500 points wins. If no team has 500 points after 8 minutes, the team with
+  send drones to circle it. Each tower that your team holds gives you one point each second. The centre tower gives two.
+  The first team to 600 points wins. If no team has 600 points after 10 minutes, the team with
   more points wins.
 
   A team does not see the whole field. It sees round its drones, its base and the towers that
@@ -35,7 +35,7 @@ Vocabulary:
     Shows: won by Blue: the game stops, and it says BLUE WINS
     Shows: won by Red: the game stops, and it says RED WINS
     Shows: a draw: the game stops, and it says DRAW
-  State: the time left is 0..480 s
+  State: the time left is 0..600 s
     Set: wait until the clock shows {value}
     Shows: the clock shows {value} left
   State: the score of Blue is 0..1000 points
@@ -64,6 +64,10 @@ Vocabulary:
     Set: wait until {value} Red drones circle the west tower
   State: the Blue drones on the ground in the west circle are 0..3
     Set: land Blue drones in the circle of the west tower until {value} of them stand there
+  State: the centre tower is held by Blue | held by Red | neutral
+    Shows: held by Blue: the centre tower is blue
+    Shows: held by Red: the centre tower is red
+    Shows: neutral: the centre tower is grey
   State: the east tower is held by Blue | held by Red | neutral
     Shows: held by Blue: the east tower is blue
     Shows: held by Red: the east tower is red
@@ -85,7 +89,15 @@ Vocabulary:
     Shows: low in the mid lane, ahead of the first Blue drone: the Red scout flies 17 m high in the mid lane, 120 m ahead of the first Blue drone
     Shows: low over the lake: the Red scout flies 17 m high over the middle of the lake
   # Where the first Blue drone is, and how it flies (the lanes, the forest and the lake).
-  State: the first Blue drone is at its base | at the Blue home tower | low in the mid lane | low in the west lane, on the shore of the lake | near the Red home tower
+  State: the first Blue drone is at its base | at the Blue home tower | low in the mid lane | low in the west lane, on the shore of the lake | near the Red home tower | 150 m from the Red home tower | 170 m from the Red home tower | 190 m from the centre tower | 210 m from the centre tower | 110 m from the west tower | 130 m from the west tower | over its base | in the west circle
+    Shows: 150 m from the Red home tower: the first Blue drone flies 50 m high, 150 m east of the Red home tower
+    Shows: 170 m from the Red home tower: the first Blue drone flies 50 m high, 170 m east of the Red home tower
+    Shows: 190 m from the centre tower: the first Blue drone flies 50 m high, 190 m east of the centre tower
+    Shows: 210 m from the centre tower: the first Blue drone flies 50 m high, 210 m east of the centre tower
+    Shows: 110 m from the west tower: the first Blue drone flies 50 m high, 110 m east of the west tower
+    Shows: 130 m from the west tower: the first Blue drone flies 50 m high, 130 m east of the west tower
+    Shows: over its base: the first Blue drone circles 50 m high over the Blue base
+    Shows: in the west circle: the first Blue drone circles the west tower, 50 m high
     Shows: near the Red home tower: the first Blue drone flies 50 m high, 100 m from the Red home tower, on the side of the centre of the field
     Shows: at the Blue home tower: the first Blue drone circles the Blue home tower
     Shows: low in the mid lane: the first Blue drone flies 17 m high in the mid lane, 210 m from the Blue home tower
@@ -111,6 +123,12 @@ Vocabulary:
     Say: wait 3 seconds
   Event: the game runs for 10 seconds
     Say: wait 10 seconds
+  Event: the game runs for 110 seconds
+    Say: wait 110 seconds
+  Event: the game runs for 15 seconds
+    Say: wait 15 seconds
+  Event: the game runs for 45 seconds
+    Say: wait 45 seconds
   Event: the game runs for 20 seconds
     Say: wait 20 seconds
   Event: the game runs for 1 minute
@@ -142,12 +160,28 @@ Vocabulary:
     Say: order the first Blue drone to fly to the Blue home tower, and wait until it is more than 140 m from the Red home tower
   Event: the first Blue drone flies into the radio shadow for 10 seconds
     Say: order the first Blue drone to fly to a point 100 m from the Red home tower, and wait 10 seconds
+  # The mesh: a second Blue drone that relays the radio.
+  State: the second Blue drone is at its base | 130 m from the Red home tower | 210 m from the Red home tower | 230 m from the Red home tower
+    Shows: 130 m from the Red home tower: the second Blue drone flies 50 m high, 130 m east of the Red home tower
+    Shows: 210 m from the Red home tower: the second Blue drone flies 50 m high, 210 m east of the Red home tower, outside the radio shadow
+    Shows: 230 m from the Red home tower: the second Blue drone flies 50 m high, 230 m east of the Red home tower
+  # The battery of the drones.
+  State: the batteries are off | on
+    Set: {value}
+    Shows: on: the list of drones shows the battery of each drone in seconds, and a drone with an empty battery goes down
+  State: the battery of the first Blue drone is 0..300 s
+    Shows: the list of drones shows BAT {value} s beside B1
+  State: the battery of the first Blue drone on the Blue map is 0..300 s
+    Shows: the Blue map shows the battery that B1 last reported, {value} s, with its age
+  State: the condition of the first Blue drone is flying | down | on the ground
+    Shows: down: B1 is out of the game, and the list of drones shows DOWN beside B1
   # Standing orders: what a drone out of contact does.
   State: the order that the first Blue drone flies is none | take the west tower | hold | go home
     Shows: the order {value} is the order that B1 flies now. In the app, the list of drones shows it beside B1
-  State: the standing order of the first Blue drone is none | hold after 5 s | go home after 5 s
+  State: the standing order of the first Blue drone is none | hold after 5 s | go home after 5 s | hold after 30 s
     Shows: hold after 5 s: the list of drones shows STANDING HOLD beside the order of B1
     Shows: go home after 5 s: the list of drones shows STANDING HOME beside the order of B1
+    Shows: hold after 30 s: the list of drones shows STANDING HOLD 30 beside the order of B1
   Event: the first Blue drone flies through the radio shadow for 10 seconds
     Say: order the first Blue drone to fly to a point 100 m from the Red home tower, wait 10 seconds, and order it back to the Blue home tower
   Event: the first Blue drone is given the order to hold
@@ -242,9 +276,9 @@ Vocabulary:
     Say: wait for the end of the game. The server flies the drones with a computer commander for each team
 
   Phrase: a game of Towers is in play
-    Say: wait until all the drones stand at their bases, and the clock shows 480 s
+    Say: wait until all the drones stand at their bases, and the clock shows 600 s
     Given the game of Towers is in play
-    And the time left is 480 s
+    And the time left is 600 s
     And the score of Blue is 0 points
     And the score of Red is 0 points
     And the towers held by Blue are 1

@@ -426,9 +426,28 @@ Term: Clearing
   [[tower]], round each [[base]], and over the lake.
 
 Term: Radio shadow
-  In [[Towers]], the ground and the air within 140 m of a [[tower]] that the enemy holds. A
+  In [[Towers]], the ground and the air within 160 m of a fort, 200 m of a spire, or 120 m of a depot, when the enemy holds it. A
   drone in a radio shadow is out of contact with its team. It sends no telemetry and no camera
-  picture, and it gets no new order. After 20 s out of contact, it flies home by itself.
+  picture, and it gets no new order. After 45 s out of contact, it flies home by itself.
+
+Term: Fort
+  In [[Towers]], a home tower. It blocks the radio of the enemy 160 m round it.
+
+Term: Spire
+  In [[Towers]], the centre tower. It blocks the radio 200 m round it. A team that holds it sees
+  250 m round it. It gives two points each second.
+
+Term: Depot
+  In [[Towers]], the west tower and the east tower. A depot blocks the radio 120 m round it.
+
+Term: Battery
+  In [[Towers]], the seconds that a drone can still fly. A flying drone uses 1 s each second, and
+  more when enemy drones share its tower circle. A drone recharges over its base and in the
+  circle of a depot that its team holds. A drone with an empty battery is down for 100 s.
+
+Term: Picket
+  In [[Towers]], a drone that flies just outside a radio shadow, to relay the radio of a drone
+  inside it. See [[The mesh]].
 
 Term: Standing order
   In [[Towers]], a plan that a commander gives to a drone with its order. It says what the drone

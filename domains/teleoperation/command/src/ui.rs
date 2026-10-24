@@ -21,7 +21,7 @@ use gpui::{
 };
 use recreation_towers::map::{LANE_HALF_WIDTH, Map};
 use recreation_towers::seat::Join;
-use recreation_towers::{Class, Order, Outcome, Phase, Rules, Team, TeamView};
+use recreation_towers::{Class, Kind, Order, Outcome, Phase, Rules, Team, TeamView};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -616,8 +616,18 @@ impl Render for CommanderView {
                     Phase::Down => "DOWN".into(),
                 };
                 let low = if d.low { " LOW" } else { "" };
-                let label =
-                    format!("{}{}  {:<7} {}{low}", &team_name(v.team)[..1], k + 1, phase, order_text(d.order, v));
+                // The battery, in a game that has them: the last the drone sent.
+                let battery = match self.seat.state().rules {
+                    Some(r) if r.battery(r.class(k)) > 0.0 => format!("  BAT {:.0} s", d.battery),
+                    _ => String::new(),
+                };
+                let label = format!(
+                    "{}{}  {:<7} {}{low}{battery}",
+                    &team_name(v.team)[..1],
+                    k + 1,
+                    phase,
+                    order_text(d.order, v)
+                );
                 drones = drones.child(
                     button(format!("drone-{k}"), label, selected.contains(&k))
                         .border_color(c(if selected.contains(&k) { tint } else { BEZEL_EDGE }))
@@ -731,7 +741,7 @@ fn paint_map(
     // What the team sees, as the server would work it out from this map.
     let mut eyes: Vec<(Vec2, f32)> = vec![(rules.base(v.team), rules.base_vision)];
     eyes.extend(v.drones.iter().filter(|d| d.phase != Phase::Down).map(|d| (d.at, rules.drone_vision)));
-    eyes.extend(v.towers.iter().filter(|t| t.holder == Some(v.team)).map(|t| (t.at, rules.tower_vision)));
+    eyes.extend(v.towers.iter().filter(|t| t.holder == Some(v.team)).map(|t| (t.at, rules.vision(t.kind))));
     for (at, range) in &eyes {
         let (sx, sy) = map.to_screen(*at);
         if ground.is_some() {
@@ -766,6 +776,12 @@ fn paint_map(
         let (tx, ty) = map.to_screen(t.at);
         let colour = t.holder.map_or(GREY, theme_team);
         let alpha = if t.seen { 1.0 } else { 0.55 };
+        // The radio shadow of a tower that the enemy holds: a drone of the team in it is cut off.
+        if t.holder == Some(v.team.other()) {
+            let shadow = rules.shadow(t.kind) * s;
+            fill_circle(window, tx, ty, shadow, ca(theme_team(v.team.other()), 0.10 * alpha));
+            dashed_circle(window, tx, ty, shadow, 1.0, 5.0, ca(theme_team(v.team.other()), 0.6 * alpha));
+        }
         if t.contested && flash {
             circle(window, tx, ty, rules.circle_radius * s, 2.5, c(AMBER));
         } else {
@@ -780,7 +796,13 @@ fn paint_map(
         let (from, colour) = if filled >= 0.0 { (tx, BLUE) } else { (tx + filled, RED) };
         fill_rect(window, from, by, filled.abs(), 5.0, ca(colour, alpha));
         fill_rect(window, tx - 0.5, by - 1.0, 1.0, 7.0, c(WHITE));
-        let label = if t.seen { t.name.to_uppercase() } else { format!("{} ({:.0} s)", t.name.to_uppercase(), t.age) };
+        let kind = match t.kind {
+            Kind::Fort => "FORT",
+            Kind::Spire => "SPIRE x2",
+            Kind::Depot => "DEPOT",
+        };
+        let name = format!("{} {kind}", t.name.to_uppercase());
+        let label = if t.seen { name } else { format!("{name} ({:.0} s)", t.age) };
         text(window, cx, &label, tx, by + 14.0, 10.0, ca(WHITE, alpha), Align::Center);
     }
     let tint = theme_team(v.team);
