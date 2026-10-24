@@ -158,6 +158,9 @@ Vocabulary:
     Shows: in contact: the list of drones shows the telemetry of B1, and CAMERAS shows its picture
     Shows: cut: the list of drones shows NO LINK beside B1, with the time since the last contact. CAMERAS shows no picture of B1
     Shows: lost: the list of drones shows NO LINK beside B1, and the order of B1 is the last order that you gave. The drone flies home by itself
+  State: the link filter lets the frames of the first Blue drone through is yes | no
+    Shows: yes: the filter of the link passes the frames to and from B1
+    Shows: no: the filter of the link drops the frames to and from B1, as a radio shadow does
   State: the first Blue drone on the Blue map is live | last in contact
     Shows: last in contact: the Blue map shows the first Blue drone dim, where Blue last heard from it
   State: the age of the first Blue drone on the Blue map is 0..600 s
