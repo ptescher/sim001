@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Towers replay</title>
+<style>
+  :root {
+    --bg: #12161b; --panel: #1a2027; --line: #2b343e; --text: #e6ebf0; --muted: #94a0ad;
+    --blue: #4f9cf9; --red: #f0625f; --grey: #8b95a1; --field: #1d2a22; --lane: #3a4a3f; --lake: #1d3447;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f6f8; --panel: #fff; --line: #d6dce3; --text: #1b2430; --muted: #5f6b79;
+      --blue: #2a73d6; --red: #d6403d; --grey: #7b8591; --field: #e3ece5; --lane: #c4d3c8; --lake: #cfe0ee; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 320px; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+  h1 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  svg { width: 100%; height: auto; display: block; border-radius: 8px; background: var(--bg); }
+  .bar { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  input[type=range] { flex: 1; }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 5px; }
+  .score { display: grid; grid-template-columns: 52px 1fr 44px; gap: 8px; align-items: center; margin: 6px 0; }
+  .track { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+  .fill { height: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 2px 4px; }
+  td { padding: 3px 4px; border-top: 1px solid var(--line); white-space: nowrap; }
+  .bat { display: inline-block; width: 46px; height: 7px; background: var(--line); border-radius: 4px; overflow: hidden; vertical-align: middle; }
+  .bat > i { display: block; height: 100%; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  .legend { font-size: 12px; color: var(--muted); display: grid; gap: 4px; margin-top: 8px; }
+  .big { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div class="card">
+      <h1 id="title"></h1>
+      <div class="sub" id="sub"></div>
+      <svg id="map" viewBox="-640 -640 1280 1280" role="img" aria-label="The field of Towers, replayed"></svg>
+      <div class="bar">
+        <button id="play">Pause</button>
+        <input id="seek" type="range" min="0" value="0" step="1" aria-label="Time">
+        <select id="speed" aria-label="Speed">
+          <option value="1">1x</option><option value="2">2x</option><option value="5" selected>5x</option><option value="10">10x</option><option value="20">20x</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div style="display:grid; gap:16px; align-content:start">
+    <div class="card">
+      <div class="row"><span class="sub">Time</span><span class="big" id="clock"></span></div>
+      <div class="score"><b style="color:var(--blue)">Blue</b><div class="track"><div class="fill" id="sb" style="background:var(--blue)"></div></div><span id="nb"></span></div>
+      <div class="score"><b style="color:var(--red)">Red</b><div class="track"><div class="fill" id="sr" style="background:var(--red)"></div></div><span id="nr"></span></div>
+      <div class="sub" id="result"></div>
+    </div>
+    <div class="card">
+      <table id="drones"><thead><tr><th>Drone</th><th>Order</th><th>Battery</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card legend">
+      <div><b>Tower kinds.</b> Square: fort (home). Diamond: spire (centre, 2 points a second). Triangle: depot (flank, recharges).</div>
+      <div><b>Dashed disc.</b> The radio shadow of a held tower. An enemy drone inside it is out of contact.</div>
+      <div><b>Dim drone, NO LINK.</b> Out of contact: it gets no orders and flies its standing order, or goes home.</div>
+      <div><b>Cross.</b> Down, with an empty battery. It comes back at its base after the respawn time.</div>
+      <div><b>Bar under a tower.</b> Control, from Red (left) to Blue (right). It drifts back when nobody is there.</div>
+    </div>
+  </div>
+</div>
+<script>
+const D = __DATA__;
+const NS = 'http://www.w3.org/2000/svg';
+const col = ['var(--blue)', 'var(--red)'];
+const el = (name, attrs, parent) => {
+  const e = document.createElementNS(NS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+document.getElementById('title').textContent = D.title;
+document.getElementById('sub').textContent =
+  `Shadow ${D.towers.map(t => t.kind + ' ' + t.shadow + ' m').filter((v, i, a) => a.indexOf(v) === i).join(', ')}. ` +
+  `Link lost after ${D.rules.timeout} s, mesh ${D.rules.mesh} m, contest drain ${D.rules.contest}, drift ${D.rules.decay} s across the bar, respawn ${D.rules.respawn} s.`;
+
+const svg = document.getElementById('map');
+const base = el('g', {}, svg);
+el('circle', { cx: 0, cy: 0, r: D.field, fill: 'var(--field)', stroke: 'var(--line)', 'stroke-width': 2 }, base);
+el('circle', { cx: D.lake.x, cy: -D.lake.y, r: D.lake.r, fill: 'var(--lake)' }, base);
+for (const lane of D.lanes) {
+  el('polyline', { points: lane.map(p => `${p[0]},${-p[1]}`).join(' '), fill: 'none', stroke: 'var(--lane)', 'stroke-width': 10, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, base);
+}
+D.bases.forEach((b, i) => {
+  el('rect', { x: b[0] - 12, y: -b[1] - 12, width: 24, height: 24, rx: 4, fill: 'none', stroke: col[i], 'stroke-width': 2, 'stroke-dasharray': '3 3' }, base);
+  const t = el('text', { x: b[0], y: -b[1] + (i === 0 ? 30 : -20), 'text-anchor': 'middle', fill: col[i], 'font-size': 12 }, base);
+  t.textContent = i === 0 ? 'BLUE BASE' : 'RED BASE';
+});
+const towerLayer = el('g', {}, svg);
+const droneLayer = el('g', {}, svg);
+
+function glyph(kind, x, y, s, attrs, parent) {
+  if (kind === 'fort') return el('rect', { x: x - s, y: y - s, width: 2 * s, height: 2 * s, ...attrs }, parent);
+  if (kind === 'spire') return el('polygon', { points: `${x},${y - s * 1.3} ${x + s * 1.3},${y} ${x},${y + s * 1.3} ${x - s * 1.3},${y}`, ...attrs }, parent);
+  return el('polygon', { points: `${x},${y - s * 1.2} ${x + s * 1.2},${y + s} ${x - s * 1.2},${y + s}`, ...attrs }, parent);
+}
+
+function draw(f) {
+  towerLayer.replaceChildren();
+  droneLayer.replaceChildren();
+  D.towers.forEach((t, i) => {
+    const s = f.towers[i];
+    const x = t.x, y = -t.y;
+    if (s.h !== null) {
+      const enemy = 1 - s.h;
+      el('circle', { cx: x, cy: y, r: t.shadow, fill: col[enemy], 'fill-opacity': 0.1, stroke: col[enemy], 'stroke-opacity': 0.55, 'stroke-dasharray': '4 5' }, towerLayer);
+    }
+    el('circle', { cx: x, cy: y, r: D.circle, fill: 'none', stroke: s.fight ? 'var(--text)' : 'var(--grey)', 'stroke-width': s.fight ? 3 : 1.5, 'stroke-dasharray': s.fight ? '5 4' : '0' }, towerLayer);
+    const own = s.h === null ? 'var(--grey)' : col[s.h];
+    glyph(t.kind, x, y, 11, { fill: own, stroke: 'var(--bg)', 'stroke-width': 2 }, towerLayer);
+    el('rect', { x: x - 30, y: y + 22, width: 60, height: 6, rx: 3, fill: 'var(--line)' }, towerLayer);
+    const w = Math.abs(s.c) * 30;
+    el('rect', { x: s.c >= 0 ? x : x - w, y: y + 22, width: w, height: 6, fill: s.c >= 0 ? col[0] : col[1] }, towerLayer);
+    el('rect', { x: x - 0.75, y: y + 20, width: 1.5, height: 10, fill: 'var(--text)' }, towerLayer);
+    const label = el('text', { x, y: y - 24, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 12 }, towerLayer);
+    label.textContent = `${t.name.toUpperCase()}${t.points > 1 ? ' x' + t.points : ''}`;
+  });
+  for (const d of f.drones) {
+    const x = d.x, y = -d.y;
+    const r = d.class === 'heavy' ? 9 : d.class === 'light' ? 5 : 7;
+    if (d.phase === 'down') {
+      const c = col[d.team];
+      el('path', { d: `M${x - 7},${y - 7} L${x + 7},${y + 7} M${x + 7},${y - 7} L${x - 7},${y + 7}`, stroke: c, 'stroke-width': 3, 'stroke-linecap': 'round', opacity: 0.8 }, droneLayer);
+      continue;
+    }
+    const g = el('g', { opacity: d.cut ? 0.5 : d.phase === 'ground' ? 0.55 : 1 }, droneLayer);
+    el('circle', { cx: x, cy: y, r, fill: col[d.team], stroke: 'var(--bg)', 'stroke-width': 2 }, g);
+    if (d.cut) {
+      el('circle', { cx: x, cy: y, r: r + 5, fill: 'none', stroke: col[d.team], 'stroke-dasharray': '2 3' }, g);
+      const t = el('text', { x, y: y - r - 8, 'text-anchor': 'middle', fill: col[d.team], 'font-size': 10 }, g);
+      t.textContent = 'NO LINK';
+    }
+    if (d.cap > 0) {
+      el('rect', { x: x - 10, y: y + r + 4, width: 20, height: 3, fill: 'var(--line)' }, g);
+      const p = Math.max(0, Math.min(1, d.bat / d.cap));
+      el('rect', { x: x - 10, y: y + r + 4, width: 20 * p, height: 3, fill: p < 0.25 ? 'var(--red)' : 'var(--text)' }, g);
+    }
+  }
+}
+
+const tbody = document.querySelector('#drones tbody');
+function panel(f) {
+  const rows = f.drones.map((d, i) => {
+    const p = d.cap > 0 ? Math.max(0, Math.min(1, d.bat / d.cap)) : 1;
+    const status = d.phase === 'down' ? 'DOWN' : d.cut ? 'NO LINK' : d.phase === 'ground' ? 'ground' : '';
+    const name = (d.team === 0 ? 'B' : 'R') + ((i % (f.drones.length / 2)) + 1) + ' ' + d.class;
+    return `<tr><td style="color:${col[d.team]}">${name}</td><td>${d.order}</td>` +
+      `<td><span class="bat"><i style="width:${p * 100}%;background:${p < 0.25 ? 'var(--red)' : 'var(--text)'}"></i></span> ${Math.round(d.bat)}</td>` +
+      `<td>${status ? `<span class="tag">${status}</span>` : ''}</td></tr>`;
+  });
+  tbody.innerHTML = rows.join('');
+  const left = Math.max(0, D.duration - f.t);
+  document.getElementById('clock').textContent = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+  for (const [i, id] of [[0, 'b'], [1, 'r']]) {
+    document.getElementById('s' + id).style.width = Math.min(100, 100 * f.score[i] / D.win) + '%';
+    document.getElementById('n' + id).textContent = Math.floor(f.score[i]);
+  }
+}
+
+const seek = document.getElementById('seek');
+seek.max = D.frames.length - 1;
+let at = 0, playing = true, last = performance.now(), acc = 0;
+function show() {
+  const f = D.frames[Math.round(at)];
+  draw(f); panel(f);
+  seek.value = Math.round(at);
+  const done = Math.round(at) >= D.frames.length - 1;
+  document.getElementById('result').textContent = done
+    ? `${D.result.outcome} after ${Math.round(D.result.length)} s. Drones down: Blue ${D.result.downs[0]}, Red ${D.result.downs[1]}. Drone-seconds out of contact: Blue ${Math.round(D.result.dark[0])}, Red ${Math.round(D.result.dark[1])}.`
+    : '';
+}
+function tick(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (playing) {
+    at += dt * Number(document.getElementById('speed').value);
+    if (at >= D.frames.length - 1) { at = D.frames.length - 1; playing = false; document.getElementById('play').textContent = 'Replay'; }
+    show();
+  }
+  requestAnimationFrame(tick);
+}
+document.getElementById('play').onclick = () => {
+  if (at >= D.frames.length - 1) at = 0;
+  playing = !playing;
+  document.getElementById('play').textContent = playing ? 'Pause' : 'Play';
+};
+seek.oninput = () => { at = Number(seek.value); show(); };
+show();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

@@ -34,6 +34,8 @@ use world::World;
 const BASE_PORT: u16 = 9002;
 /// The computer commanders decide once a second of game time.
 const DECIDE_EVERY: f32 = 1.0;
+/// The server stops if no drone has sent a packet after this long.
+const NO_PACKETS_AFTER: Duration = Duration::from_secs(60);
 /// The seats get the game four times a second.
 const SEND_EVERY: Duration = Duration::from_millis(250);
 
@@ -224,6 +226,15 @@ fn main() {
         std::thread::sleep(Duration::from_millis(20));
         {
             let mut w = world.lock().unwrap();
+            // A SITL that never answers (no `.ardupilot` in this checkout, a build that is not
+            // there) leaves the game waiting for ever: stop with the reason.
+            if start.elapsed() > NO_PACKETS_AFTER && w.packets.iter().all(|&p| p == 0) {
+                eprintln!(
+                    "error: no drone sent a physics packet in {} s: is `.ardupilot` here (a fresh git worktree has none: symlink the main checkout's), and is SIM001_BIN the AGENT build?",
+                    NO_PACKETS_AFTER.as_secs()
+                );
+                std::process::exit(2);
+            }
             // GO waits for the people.
             if !seats.people_seated() && !w.started() {
                 w.go = w.go.max(w.now() + 1.0);
