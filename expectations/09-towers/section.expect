@@ -107,6 +107,8 @@ Vocabulary:
     Shows: held by Red: the Blue map shows the east tower red
     Shows: neutral: the Blue map shows the east tower grey
 
+  Event: the game runs for 3 seconds
+    Say: wait 3 seconds
   Event: the game runs for 10 seconds
     Say: wait 10 seconds
   Event: the game runs for 20 seconds
@@ -140,6 +142,16 @@ Vocabulary:
     Say: order the first Blue drone to fly to the Blue home tower, and wait until it is more than 140 m from the Red home tower
   Event: the first Blue drone flies into the radio shadow for 10 seconds
     Say: order the first Blue drone to fly to a point 100 m from the Red home tower, and wait 10 seconds
+  # Standing orders: what a drone out of contact does.
+  State: the order that the first Blue drone flies is none | take the west tower | hold | go home
+    Shows: the order {value} is the order that B1 flies now. In the app, the list of drones shows it beside B1
+  State: the standing order of the first Blue drone is none | hold after 5 s | go home after 5 s
+    Shows: hold after 5 s: the list of drones shows STANDING HOLD beside the order of B1
+    Shows: go home after 5 s: the list of drones shows STANDING HOME beside the order of B1
+  Event: the first Blue drone flies through the radio shadow for 10 seconds
+    Say: order the first Blue drone to fly to a point 100 m from the Red home tower, wait 10 seconds, and order it back to the Blue home tower
+  Event: the first Blue drone is given the order to hold
+    Say: order the first Blue drone to hold
   # The mountains at the edge of the field.
   State: the mountains at the east edge of the field are 0..1000 m
     Shows: at least 250 m: the east edge of the field is a wall of mountains

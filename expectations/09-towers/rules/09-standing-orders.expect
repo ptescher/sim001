@@ -1,0 +1,60 @@
+Feature: Standing orders
+  A commander can give a drone a [[standing order]] with its order. The standing order says what
+  the drone does if it is out of contact for some time. It is the answer to a question that the
+  commander cannot ask later: the radio shadow of an enemy tower cuts the link, and the drone
+  flies alone.
+
+  Without a standing order, a drone that loses its link flies home. With a standing order, it
+  does what the commander planned. It stays on that order, also when it is in contact again,
+  until the commander gives it a new order.
+
+  Expectation: A drone out of contact keeps its order until the standing order is due
+    Given the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is hold after 5 s
+    And the first Blue drone is near the Red home tower
+    When the game runs for 3 seconds
+    Then the order that the first Blue drone flies is take the west tower
+
+  Expectation: A drone out of contact does what its standing order says
+    Overrides: A drone out of contact keeps its order until the standing order is due
+    The standing order is due 5 s after the link is cut.
+
+    Given the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is hold after 5 s
+    And the first Blue drone is near the Red home tower
+    When the game runs for 10 seconds
+    Then the order that the first Blue drone flies is hold
+
+  Expectation: A drone with no standing order flies home when its link is lost
+    Given the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is none
+    And the first Blue drone is near the Red home tower
+    When the game runs for 20 seconds
+    Then the order that the first Blue drone flies is go home
+
+  Expectation: A drone with a standing order does not fly home when its link is lost
+    Overrides: A drone with no standing order flies home when its link is lost
+    The standing order is the plan of the commander. It replaces the failsafe.
+
+    Given the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is hold after 5 s
+    And the first Blue drone is near the Red home tower
+    When the game runs for 20 seconds
+    Then the order that the first Blue drone flies is hold
+
+  Expectation: A drone stays on its standing order when it is in contact again
+    Given the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is go home after 5 s
+    When the first Blue drone flies through the radio shadow for 10 seconds
+    Then the order that the first Blue drone flies is go home
+
+  Expectation: A new order replaces the standing order
+    Given the order that the first Blue drone flies is take the west tower
+    And the standing order of the first Blue drone is hold after 5 s
+    When the first Blue drone is given the order to hold
+    Then the standing order of the first Blue drone is none

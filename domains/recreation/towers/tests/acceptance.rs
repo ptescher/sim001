@@ -9,7 +9,7 @@ use expectation_story::Status;
 use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
-use recreation_towers::{Commander, Game, Link, Order, Outcome, Phase, Rules, Team};
+use recreation_towers::{Commander, Game, Instruction, Link, Order, Outcome, Phase, Rules, Standing, Team};
 use std::path::Path;
 
 /// The referee's step (s): the host steps it with the physics, faster than this.
@@ -31,12 +31,21 @@ struct World {
     scout_place: Option<(&'static str, Vec2)>,
     /// The plan that the first Blue drone was given by its last order.
     plan: Option<Plan>,
+    /// What the first Blue drone was told: its order, and its standing order.
+    told: Instruction,
 }
 
 impl World {
     fn new() -> World {
         let rules = Rules::default();
-        World { game: Game::new(rules), blue: Commander::new(rules), blue_place: None, scout_place: None, plan: None }
+        World {
+            game: Game::new(rules),
+            blue: Commander::new(rules),
+            blue_place: None,
+            scout_place: None,
+            plan: None,
+            told: Instruction::default(),
+        }
     }
 
     /// Blue drone `k`'s order, as the spec words it.
@@ -48,9 +57,22 @@ impl World {
         }
     }
 
+    /// An order, as the spec words it.
+    fn say(&self, order: Option<Order>) -> String {
+        match order {
+            None => "none".into(),
+            Some(Order::Take(t)) => format!("take the {} tower", self.game.towers[t].name),
+            Some(Order::Hold) => "hold".into(),
+            Some(Order::Home) => "go home".into(),
+            Some(Order::Goto(_)) => "go to a point".into(),
+        }
+    }
+
     fn run(&mut self, secs: f32) {
+        let blue = self.game.drone(Team::Blue, 0);
         for _ in 0..(secs / DT).round() as usize {
             self.game.step(DT);
+            self.told.tick(self.game.silent[blue], self.game.rules.link_timeout);
         }
     }
 
@@ -379,6 +401,7 @@ fn bindings() -> Bindings<World> {
             s.time = time;
             s.seen = false;
         })
+        .on("the game runs for 3 seconds", |w| w.run(3.0))
         .on("the game runs for 10 seconds", |w| w.run(10.0))
         .on("the game runs for 20 seconds", |w| w.run(20.0))
         .on("the game runs for 1 minute", |w| w.run(60.0))
@@ -450,6 +473,11 @@ fn bindings() -> Bindings<World> {
             w.place_blue(&Value::from("near the Red home tower"));
             w.run(10.0);
         })
+        .on("the first Blue drone flies through the radio shadow for 10 seconds", |w| {
+            w.place_blue(&Value::from("near the Red home tower"));
+            w.run(10.0);
+            w.place_blue(&Value::from("at the Blue home tower"));
+        })
         .observe("the first Blue drone on the Blue map", |w| {
             match w.game.maps[Team::Blue.index()].drones[w.game.drone(Team::Blue, 0)] {
                 Some(s) if s.seen => "live",
@@ -460,6 +488,29 @@ fn bindings() -> Bindings<World> {
             let i = w.game.drone(Team::Blue, 0);
             w.game.maps[Team::Blue.index()].drones[i].map_or(0.0, |s| tenth(w.game.time - s.time))
         })
+        // Standing orders.
+        .observe("the order that the first Blue drone flies", |w| w.say(w.told.order))
+        .arrange("the order that the first Blue drone flies", |w, v| {
+            let tower = v.as_str().and_then(|v| v.strip_prefix("take the ")).and_then(|v| v.strip_suffix(" tower"));
+            w.told.order = match (tower, v.as_str()) {
+                (Some(t), _) => Some(Order::Take(w.game.tower(t))),
+                (_, Some("hold")) => Some(Order::Hold),
+                (_, Some("go home")) => Some(Order::Home),
+                _ => None,
+            };
+        })
+        .observe("the standing order of the first Blue drone", |w| match w.told.standing {
+            None => "none".to_string(),
+            Some(s) => format!("{} after {} s", w.say(Some(s.then)), s.after),
+        })
+        .arrange("the standing order of the first Blue drone", |w, v| {
+            w.told.standing = match v.as_str() {
+                Some("hold after 5 s") => Some(Standing { after: 5.0, then: Order::Hold }),
+                Some("go home after 5 s") => Some(Standing { after: 5.0, then: Order::Home }),
+                _ => None,
+            };
+        })
+        .on("the first Blue drone is given the order to hold", |w| w.told.give(Order::Hold, None))
         // The mountains.
         .observe("the mountains at the east edge of the field", |w| w.mountains_at(Vec2::new(0.0, 600.0)))
         .observe("the mountains at the west edge of the field", |w| w.mountains_at(Vec2::new(0.0, -600.0)))

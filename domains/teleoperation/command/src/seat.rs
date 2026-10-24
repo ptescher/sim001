@@ -58,7 +58,7 @@ impl Seat {
 
     /// Sends an order for the team's drone `drone`, flown `low` (along the lanes) or high.
     pub fn order(&self, drone: usize, order: Order, low: bool) {
-        let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low });
+        let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low, standing: None });
     }
 
     /// Stops connecting: the connection that is open ends with its server, and is not made

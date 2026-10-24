@@ -96,13 +96,13 @@ fn seat(stream: TcpStream, clients: Arc<Mutex<Vec<Client>>>, world: Arc<Mutex<Wo
     }
     let Join::Command(team) = join else { return };
     for line in lines {
-        if let Ok(ToServer::Order { drone, order, low }) = seat::decode::<ToServer>(&line)
+        if let Ok(ToServer::Order { drone, order, low, standing }) = seat::decode::<ToServer>(&line)
             && drone < rules.drones
         {
             let mut w = world.lock().unwrap();
             let i = w.game.drone(team, drone);
             // A drone out of contact does not hear it.
-            w.command(i, order, low);
+            w.command_standing(i, order, low, standing);
         }
     }
     // The commander has gone: its seat is free again.
