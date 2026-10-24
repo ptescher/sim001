@@ -5,13 +5,16 @@ Feature: The mountains
   the enemy. The drones must pass the towers.
 
   Expectation: Tall mountains stand at the edge of the field
+    Given a game of Towers is in play
     Then the mountains at the east edge of the field are at least 250 m
     And the mountains at the west edge of the field are at least 250 m
 
   Expectation: The mountains leave the bases, the towers and the lake clear
+    Given a game of Towers is in play
     Then the mountains at the bases, the towers and the lake are 0 m
 
   Expectation: A drone cannot go round the outside of the field
+    Given a game of Towers is in play
     Then the way round the edge of the field from base to base is closed
 
   Expectation: A drone that is sent into the mountains flies to the foot of them

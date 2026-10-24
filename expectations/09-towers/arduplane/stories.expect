@@ -3,13 +3,13 @@ Story: Watching two computer teams play
   I want to watch two computer commanders play a game with real ArduPilot drones
   So that I have a baseline for my own commander
 
-  The game server starts six ArduPlane SITL drones, and it plays a whole game with a computer
+  The game server starts ten ArduPlane SITL drones, and it plays a whole game with a computer
   commander for each team. At the end, its report tells you how the drones flew and what each
   team took.
 
   Scenario: Play and watch
     When two computer teams play a game of Towers
-    Then the drones in AGENT mode are 6
+    Then the drones in AGENT mode are 10
     And the commands that the drones refused are 0
     And the towers that Blue took are at least 1
     And the towers that Red took are at least 1

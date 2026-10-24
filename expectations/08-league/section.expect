@@ -105,7 +105,7 @@ Vocabulary:
     Shows: won by Red: the game of Towers ends, and Red has more points
     Shows: a draw: the game of Towers ends with equal points
   State: the drones that flew in the captain game are 0..12
-    Shows: 6: all six drones took off and flew
+    Shows: 10: all ten drones took off and flew
   State: the score of the captain against itself is -10..10
     Shows: 0: on every seed, the score is exactly 0
   State: the mean difference of the captain challenger is -10..10

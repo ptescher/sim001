@@ -1,6 +1,6 @@
 # The Towers game server with an ArduPlane SITL for each drone (domains/recreation/towers_server).
 
 Section: The game with ArduPlane drones
-  Launch: start the Towers game server. Run `cargo run --release -p recreation_towers_server -- --speedup 10`. The server starts six ArduPlane SITL drones, and a computer commander for each team
+  Launch: start the Towers game server. Run `cargo run --release -p recreation_towers_server -- --speedup 10`. The server starts ten ArduPlane SITL drones, and a computer commander for each team
   The game server flies a whole game with real ArduPlane flight controllers. Its report at the end
   tells you how the drones flew and what each team took.
