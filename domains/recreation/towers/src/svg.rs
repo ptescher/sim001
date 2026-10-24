@@ -126,7 +126,7 @@ pub fn map_with_valley_svg(view: &TeamView, rules: &Rules, map: &Map) -> String 
     let mut eyes = vec![(rules.base(view.team), rules.base_vision)];
     // A drone out of contact sends no picture.
     eyes.extend(view.drones.iter().filter(|d| d.phase != Phase::Down && d.linked).map(|d| (d.at, rules.drone_vision)));
-    eyes.extend(view.towers.iter().filter(|t| t.holder == Some(view.team)).map(|t| (t.at, rules.tower_vision)));
+    eyes.extend(view.towers.iter().filter(|t| t.holder == Some(view.team)).map(|t| (t.at, rules.vision(t.kind))));
     for (p, range) in eyes {
         let (x, y) = at(p);
         let _ = write!(s, r##"<circle cx="{x:.1}" cy="{y:.1}" r="{:.1}" fill="{FIELD}"/>"##, range * scale);
@@ -161,7 +161,7 @@ pub fn map_with_valley_svg(view: &TeamView, rules: &Rules, map: &Map) -> String 
             let _ = write!(
                 s,
                 r##"<circle cx="{x:.1}" cy="{y:.1}" r="{:.1}" fill="{}" fill-opacity="0.12" stroke="{}" stroke-opacity="{:.2}" stroke-dasharray="2 3"/>"##,
-                rules.jam_radius * scale,
+                rules.shadow(t.kind) * scale,
                 team_colour(view.team.other()),
                 team_colour(view.team.other()),
                 0.6 * alpha

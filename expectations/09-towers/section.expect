@@ -17,8 +17,8 @@ Section: Towers
 
   You do not fly the drones with sticks. You command your team from the commander app: you
   give each drone an order, and the drone flies it by plan in [[AGENT mode]]. To take a tower,
-  send drones to circle it. Each tower that your team holds gives you one point each second.
-  The first team to 500 points wins. If no team has 500 points after 8 minutes, the team with
+  send drones to circle it. Each tower that your team holds gives you one point each second. The centre tower gives two.
+  The first team to 600 points wins. If no team has 600 points after 8 minutes, the team with
   more points wins.
 
   A team does not see the whole field. It sees round its drones, its base and the towers that
@@ -64,6 +64,10 @@ Vocabulary:
     Set: wait until {value} Red drones circle the west tower
   State: the Blue drones on the ground in the west circle are 0..3
     Set: land Blue drones in the circle of the west tower until {value} of them stand there
+  State: the centre tower is held by Blue | held by Red | neutral
+    Shows: held by Blue: the centre tower is blue
+    Shows: held by Red: the centre tower is red
+    Shows: neutral: the centre tower is grey
   State: the east tower is held by Blue | held by Red | neutral
     Shows: held by Blue: the east tower is blue
     Shows: held by Red: the east tower is red
@@ -85,7 +89,13 @@ Vocabulary:
     Shows: low in the mid lane, ahead of the first Blue drone: the Red scout flies 17 m high in the mid lane, 120 m ahead of the first Blue drone
     Shows: low over the lake: the Red scout flies 17 m high over the middle of the lake
   # Where the first Blue drone is, and how it flies (the lanes, the forest and the lake).
-  State: the first Blue drone is at its base | at the Blue home tower | low in the mid lane | low in the west lane, on the shore of the lake | near the Red home tower
+  State: the first Blue drone is at its base | at the Blue home tower | low in the mid lane | low in the west lane, on the shore of the lake | near the Red home tower | 150 m from the Red home tower | 170 m from the Red home tower | 190 m from the centre tower | 210 m from the centre tower | 110 m from the west tower | 130 m from the west tower
+    Shows: 150 m from the Red home tower: the first Blue drone flies 50 m high, 150 m east of the Red home tower
+    Shows: 170 m from the Red home tower: the first Blue drone flies 50 m high, 170 m east of the Red home tower
+    Shows: 190 m from the centre tower: the first Blue drone flies 50 m high, 190 m east of the centre tower
+    Shows: 210 m from the centre tower: the first Blue drone flies 50 m high, 210 m east of the centre tower
+    Shows: 110 m from the west tower: the first Blue drone flies 50 m high, 110 m east of the west tower
+    Shows: 130 m from the west tower: the first Blue drone flies 50 m high, 130 m east of the west tower
     Shows: near the Red home tower: the first Blue drone flies 50 m high, 100 m from the Red home tower, on the side of the centre of the field
     Shows: at the Blue home tower: the first Blue drone circles the Blue home tower
     Shows: low in the mid lane: the first Blue drone flies 17 m high in the mid lane, 210 m from the Blue home tower

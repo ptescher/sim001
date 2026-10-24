@@ -1,6 +1,6 @@
 Feature: Radio shadows
   A tower that a team holds blocks the radio of the enemy. The [[radio shadow]] of a tower is
-  all the ground and the air within 140 m of it, at all heights. A drone in the radio shadow of
+  all the ground and the air within its radio range, at all heights. [[Kinds of tower]] says how far that is for each kind. A drone in the radio shadow of
   an enemy tower is out of contact with its team. A tower that nobody holds, and a tower of the
   own team, block no radio.
 

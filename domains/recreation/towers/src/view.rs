@@ -1,6 +1,6 @@
 //! What a seat gets: its team's map of the game ([`TeamView`]), and the orders it gives.
 
-use crate::{Game, Outcome, Phase, Team};
+use crate::{Game, Kind, Outcome, Phase, Team};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,8 @@ pub enum Order {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TowerView {
     pub name: String,
+    #[serde(default)]
+    pub kind: Kind,
     pub at: Vec2,
     /// As the team last saw it.
     pub control: f32,
@@ -102,6 +104,7 @@ impl Game {
             .zip(&map.towers)
             .map(|(t, s)| TowerView {
                 name: t.name.clone(),
+                kind: t.kind,
                 at: t.at,
                 control: s.control,
                 holder: s.holder,

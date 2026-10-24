@@ -29,6 +29,20 @@ pub use view::{EnemyDrone, Order, OwnDrone, TeamView, TowerView};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
+/// What a tower is: the map fixes it. The kinds differ in how far their radio shadow goes, how
+/// far they see and how many points they give ([`Rules::shadow`], [`Rules::vision`],
+/// [`Rules::points`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Kind {
+    /// A home tower.
+    #[default]
+    Fort,
+    /// The centre tower: the widest shadow, the longest sight and the most points.
+    Spire,
+    /// A flank tower: the narrowest shadow.
+    Depot,
+}
+
 /// A side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Team {
@@ -127,17 +141,23 @@ pub struct Rules {
     pub capture_time: f32,
     /// The score that wins.
     pub win_score: f32,
+    /// The points each second for a held tower: a fort or a depot, and the spire.
+    pub tower_score: f32,
+    pub spire_score: f32,
     /// How long a game lasts (s).
     pub duration: f32,
-    /// A tower that a team holds blocks the radio of the enemy this far round it (m, across), at
-    /// all heights.
+    /// A fort that a team holds blocks the radio of the enemy this far round it (m, across), at
+    /// all heights. A spire and a depot block it as far as their own radii.
     pub jam_radius: f32,
+    pub spire_jam_radius: f32,
+    pub depot_jam_radius: f32,
     /// A drone out of contact this long has lost its link (s): it flies home by itself.
     pub link_timeout: f32,
     /// The highest a drone flies (m): the AGENT ceiling. The mountains are higher.
     pub ceiling: f32,
     /// How far a team sees round a tower it holds, a drone and its base (m, across).
     pub tower_vision: f32,
+    pub spire_vision: f32,
     pub drone_vision: f32,
     pub base_vision: f32,
 }
@@ -156,12 +176,17 @@ impl Default for Rules {
             circle_radius: 60.0,
             circle_ceiling: 120.0,
             capture_time: 20.0,
-            win_score: 500.0,
+            win_score: 600.0,
+            tower_score: 1.0,
+            spire_score: 2.0,
             duration: 480.0,
-            jam_radius: 140.0,
+            jam_radius: 160.0,
+            spire_jam_radius: 200.0,
+            depot_jam_radius: 120.0,
             link_timeout: 20.0,
             ceiling: 100.0,
             tower_vision: 200.0,
+            spire_vision: 250.0,
             drone_vision: 150.0,
             base_vision: 150.0,
         }
@@ -172,6 +197,31 @@ impl Rules {
     /// The class of a team's drone `k`.
     pub fn class(&self, k: usize) -> Class {
         self.squad[k]
+    }
+
+    /// How far a held tower of this kind blocks the enemy's radio (m, across).
+    pub fn shadow(&self, kind: Kind) -> f32 {
+        match kind {
+            Kind::Fort => self.jam_radius,
+            Kind::Spire => self.spire_jam_radius,
+            Kind::Depot => self.depot_jam_radius,
+        }
+    }
+
+    /// How far a team sees round a tower of this kind that it holds (m, across).
+    pub fn vision(&self, kind: Kind) -> f32 {
+        match kind {
+            Kind::Spire => self.spire_vision,
+            _ => self.tower_vision,
+        }
+    }
+
+    /// The points each second a held tower of this kind gives.
+    pub fn points(&self, kind: Kind) -> f32 {
+        match kind {
+            Kind::Spire => self.spire_score,
+            _ => self.tower_score,
+        }
     }
 
     /// Where a team's base is (north, east of the centre).
@@ -207,6 +257,8 @@ pub struct Drone {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Tower {
     pub name: String,
+    #[serde(default)]
+    pub kind: Kind,
     /// North, east of the centre (m).
     pub at: Vec2,
     /// From −1 (Red) to +1 (Blue).
@@ -293,19 +345,20 @@ impl Game {
     /// ground at its base.
     pub fn new(rules: Rules) -> Game {
         let map = Map::new(&rules);
-        let tower = |name: &str, at: Vec2, holder: Option<Team>| Tower {
+        let tower = |name: &str, kind: Kind, at: Vec2, holder: Option<Team>| Tower {
             name: name.to_string(),
+            kind,
             at,
             control: holder.map_or(0.0, Team::sign),
             holder,
             contested: false,
         };
         let towers = vec![
-            tower("Blue home", map.towers[0], Some(Team::Blue)),
-            tower("west", map.towers[1], None),
-            tower("centre", map.towers[2], None),
-            tower("east", map.towers[3], None),
-            tower("Red home", map.towers[4], Some(Team::Red)),
+            tower("Blue home", Kind::Fort, map.towers[0], Some(Team::Blue)),
+            tower("west", Kind::Depot, map.towers[1], None),
+            tower("centre", Kind::Spire, map.towers[2], None),
+            tower("east", Kind::Depot, map.towers[3], None),
+            tower("Red home", Kind::Fort, map.towers[4], Some(Team::Red)),
         ];
         let drones: Vec<Drone> = Team::BOTH
             .into_iter()
@@ -388,7 +441,7 @@ impl Game {
                 && self
                     .towers
                     .iter()
-                    .any(|t| t.holder == Some(d.team.other()) && t.at.distance(d.at) <= self.rules.jam_radius);
+                    .any(|t| t.holder == Some(d.team.other()) && t.at.distance(d.at) <= self.rules.shadow(t.kind));
             self.jammed[i] = jammed;
             self.silent[i] = if jammed { self.silent[i] + dt } else { 0.0 };
         }
@@ -433,9 +486,10 @@ impl Game {
 
     fn score(&mut self, dt: f32) {
         for team in Team::BOTH {
-            let held = self.towers.iter().filter(|t| t.holder == Some(team)).count();
+            let points: f32 =
+                self.towers.iter().filter(|t| t.holder == Some(team)).map(|t| self.rules.points(t.kind)).sum();
             let s = &mut self.score[team.index()];
-            *s = (*s + held as f32 * dt).min(self.rules.win_score);
+            *s = (*s + points * dt).min(self.rules.win_score);
         }
         let [blue, red] = self.score;
         let win = self.rules.win_score;
@@ -467,7 +521,7 @@ impl Game {
             });
         let towers = self.towers.iter().filter(|t| t.holder == Some(team)).map(|t| Eye {
             at: t.at,
-            range: r.tower_vision,
+            range: r.vision(t.kind),
             high: true,
         });
         let base = Eye { at: r.base(team), range: r.base_vision, high: false };
@@ -593,6 +647,48 @@ mod tests {
     }
 
     #[test]
+    fn the_home_towers_are_forts_the_centre_is_the_spire_and_the_flanks_are_depots() {
+        let g = Game::new(Rules::default());
+        let kinds: Vec<(&str, Kind)> = g.towers.iter().map(|t| (t.name.as_str(), t.kind)).collect();
+        assert_eq!(
+            kinds,
+            [
+                ("Blue home", Kind::Fort),
+                ("west", Kind::Depot),
+                ("centre", Kind::Spire),
+                ("east", Kind::Depot),
+                ("Red home", Kind::Fort)
+            ]
+        );
+        let r = g.rules;
+        assert_eq!([r.shadow(Kind::Fort), r.shadow(Kind::Spire), r.shadow(Kind::Depot)], [160.0, 200.0, 120.0]);
+        assert_eq!([r.points(Kind::Fort), r.points(Kind::Spire), r.points(Kind::Depot)], [1.0, 2.0, 1.0]);
+    }
+
+    #[test]
+    fn a_team_sees_250_m_round_the_spire_it_holds_and_200_m_round_a_depot() {
+        let mut g = Game::new(Rules::default());
+        let (centre, west) = (g.tower("centre"), g.tower("west"));
+        let red = g.drone(Team::Red, 0);
+        // A Red drone above the trees, 240 m from the one tower that Blue holds.
+        for (tower, seen) in [(centre, true), (west, false)] {
+            for t in [centre, west] {
+                g.towers[t].holder = (t == tower).then_some(Team::Blue);
+            }
+            g.drones[red] = Drone {
+                at: g.towers[tower].at + Vec2::new(0.0, 240.0),
+                alt: 60.0,
+                phase: Phase::Flying,
+                ..g.drones[red]
+            };
+            g.maps = Game::new(Rules::default()).maps;
+            g.look();
+            let s = g.maps[Team::Blue.index()].drones[red].map(|s| s.seen);
+            assert_eq!(s.unwrap_or(false), seen, "{}", g.towers[tower].name);
+        }
+    }
+
+    #[test]
     fn a_tower_is_held_at_the_end_of_the_bar_and_lost_at_the_middle() {
         let mut g = Game::new(Rules::default());
         let west = g.tower("west");
@@ -622,10 +718,10 @@ mod tests {
     #[test]
     fn the_first_to_the_win_score_wins_and_the_game_stops() {
         let mut g = Game::new(Rules::default());
-        g.score = [499.5, 100.0];
+        g.score = [599.5, 100.0];
         run(&mut g, 1.0);
         assert_eq!(g.outcome, Some(Outcome::Won(Team::Blue)));
-        assert_eq!(g.score[0], 500.0, "the score stops at the win");
+        assert_eq!(g.score[0], 600.0, "the score stops at the win");
         let (time, score) = (g.time, g.score);
         run(&mut g, 5.0);
         assert_eq!((g.time, g.score), (time, score), "a finished game does not change");
@@ -739,7 +835,7 @@ mod tests {
     fn a_drone_near_a_tower_of_the_enemy_is_cut_and_after_the_timeout_lost() {
         let mut g = Game::new(Rules::default());
         let red_home = g.towers[4].at;
-        fly(&mut g, Team::Blue, 0, red_home + Vec2::new(-139.0, 0.0));
+        fly(&mut g, Team::Blue, 0, red_home + Vec2::new(-159.0, 0.0));
         g.look();
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
         run(&mut g, 19.9);
@@ -748,7 +844,7 @@ mod tests {
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Lost);
         // Out of the shadow, in contact at once, and the clock starts again.
         let i = g.drone(Team::Blue, 0);
-        g.drones[i].at = red_home + Vec2::new(-141.0, 0.0);
+        g.drones[i].at = red_home + Vec2::new(-161.0, 0.0);
         run(&mut g, 0.1);
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Up);
         assert_eq!(g.silent[i], 0.0);

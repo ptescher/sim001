@@ -1,7 +1,7 @@
 Feature: Points and the end of the game
-  Each tower that a team holds gives the team one point each second. The first team to 500
-  points wins. If no team has 500 points when the clock gets to 0, the team with more points
-  wins. Equal points at the end is a draw. When the game stops, the scores and the towers do
+  Each tower that a team holds gives the team one point each second. The spire gives two. The
+  first team to 600 points wins. If no team has 600 points when the clock gets to 0, the team
+  with more points wins. Equal points at the end is a draw. When the game stops, the scores and the towers do
   not change.
 
   Expectation: Each tower that a team holds gives one point each second
@@ -10,13 +10,20 @@ Feature: Points and the end of the game
     When the game runs for 10 seconds
     Then the score of Blue is 20 points
 
-  Expectation: The first team to 500 points wins
+  Expectation: The spire gives two points each second
+    Given the towers held by Blue are 1
+    And the centre tower is held by Blue
+    And the score of Blue is 0 points
+    When the game runs for 10 seconds
+    Then the score of Blue is 30 points
+
+  Expectation: The first team to 600 points wins
     Given the towers held by Blue are at least 1
-    And the score of Blue is 495 points
+    And the score of Blue is 595 points
     And the score of Red is at most 400 points
     When the game runs for 10 seconds
     Then the game of Towers is won by Blue
-    And the score of Blue is 500 points
+    And the score of Blue is 600 points
 
   Expectation: When the clock gets to 0, the team with more points wins
     Given the time left is 5 s

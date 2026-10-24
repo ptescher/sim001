@@ -148,10 +148,10 @@ impl World {
         self.game.look();
     }
 
-    /// Blue holds `n` towers: its home tower, then the centre, the west, the east and Red's home
-    /// (the flank towers last: the section's start sets them on their own).
+    /// Blue holds `n` towers: its home tower, then the west, the east, the centre and Red's home
+    /// (the flank towers and the spire last: the section's start sets them on their own).
     fn blue_holds(&mut self, n: usize) {
-        for (k, name) in ["Blue home", "centre", "west", "east", "Red home"].into_iter().enumerate() {
+        for (k, name) in ["Blue home", "west", "east", "centre", "Red home"].into_iter().enumerate() {
             let holder = if k < n {
                 Some(Team::Blue)
             } else if name == "Red home" {
@@ -201,7 +201,10 @@ impl World {
                 ("low in the west lane, on the shore of the lake", self.shore(), Some(LOW))
             }
             "near the Red home tower" => ("near the Red home tower", self.shadow(), Some(ALT)),
-            _ => ("at its base", m.bases[0], None),
+            other => match away_from(m, other) {
+                Some((name, at)) => (name, at, Some(ALT)),
+                None => ("at its base", m.bases[0], None),
+            },
         };
         self.put(i, at, alt);
         self.blue_place = Some((name, at));
@@ -294,6 +297,19 @@ impl World {
     }
 }
 
+/// "150 m from the Red home tower": that far east of the tower, and the words.
+fn away_from(m: &recreation_towers::Map, words: &str) -> Option<(&'static str, Vec2)> {
+    const PLACES: [(&str, f32, usize); 6] = [
+        ("150 m from the Red home tower", 150.0, 4),
+        ("170 m from the Red home tower", 170.0, 4),
+        ("190 m from the centre tower", 190.0, 2),
+        ("210 m from the centre tower", 210.0, 2),
+        ("110 m from the west tower", 110.0, 1),
+        ("130 m from the west tower", 130.0, 1),
+    ];
+    PLACES.iter().find(|p| p.0 == words).map(|&(name, d, tower)| (name, m.towers[tower] + Vec2::new(0.0, d)))
+}
+
 fn holder_of(v: &Value) -> Option<Team> {
     match v.as_str() {
         Some("held by Blue") => Some(Team::Blue),
@@ -345,6 +361,8 @@ fn bindings() -> Bindings<World> {
         // The flank towers and their circles.
         .observe("the west tower", |w| holder_name(w.tower("west").holder))
         .arrange("the west tower", |w, v| w.hold("west", v))
+        .observe("the centre tower", |w| holder_name(w.tower("centre").holder))
+        .arrange("the centre tower", |w, v| w.hold("centre", v))
         .observe("the control of the west tower", |w| tenth(100.0 * w.tower("west").control))
         .arrange("the control of the west tower", |w, v| {
             w.tower_mut("west").control = v.as_f64().unwrap() as f32 / 100.0
