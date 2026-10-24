@@ -8,6 +8,7 @@ description = "The commander app of Towers: a person's seat on the game server, 
 gpui = "0.2.2"
 # The game: the seat protocol, the team's map, the rules.
 recreation_towers = { path = "../../recreation/towers" }
+recreation_towers_ground = { path = "../../recreation/towers_ground" }
 glam = "0.33"
 # The sensor feed protocol: the cameras of the drones come the way the sim's sensor camera does.
 teleoperation_shared = { path = "../shared" }

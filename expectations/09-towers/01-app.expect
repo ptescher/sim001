@@ -63,6 +63,15 @@ Feature: Commanding from the app
     When the game runs for 2 minutes
     Then the west tower on the Blue map is held by Blue
 
+  Expectation: The app flies its drones itself
+    The app is the ground station of its team: it does not hand the game server an order to carry
+    out. It puts each drone in AGENT mode and sends it its plan as MAVLink, through the air, as the
+    ground station of a real drone does. The game server only plays the world.
+
+    Given the order of the first Blue drone is take the west tower
+    When the game runs for 2 minutes
+    Then the drones that the app flies in AGENT mode are at least 1
+
   Expectation: LOW makes the selected drone fly low
     Given the selected drone is the first Blue drone
     And the flight of the first Blue drone is high

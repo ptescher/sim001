@@ -7,11 +7,10 @@
 
 use crate::terrain::Valley;
 use crate::trees::Forest;
-use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
 use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
-use recreation_towers::flight;
 use recreation_towers::{Class, Game, Instruction, Link, Order, Phase as Referee, Rules, Standing, Team};
+use recreation_towers_ground::leg_for;
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
 use simulation_physics::{Environment, FlightState, Phase, Start, step};
@@ -20,8 +19,6 @@ use simulation_physics::{Environment, FlightState, Phase, Start, step};
 pub const RESPAWN: f32 = 15.0;
 /// A drone this far from where it started (m) has left its base.
 const AWAY: f32 = 100.0;
-/// Each plan is good for this long (s); the ground sends a new one about once a second.
-pub const PLAN_TTL: f32 = 3.0;
 
 /// The world point (x east, y up, z south) of a field point at `alt` above the ground.
 pub fn to_world(at: Vec2, alt: f32) -> Vec3 {
@@ -52,40 +49,6 @@ pub fn base_start(rules: &Rules, team: Team, k: usize) -> Start {
     let at = rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0));
     let heading = if team == Team::Blue { std::f32::consts::PI } else { 0.0 };
     Start { pos: to_world(at, 0.0), heading }
-}
-
-/// Where drone `i` flies to carry out `order`, flown `low` or high.
-pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
-    let d = &game.drones[i];
-    let (team, k) = (d.team, i % game.rules.drones);
-    let target = match order {
-        Order::Take(t) => game.towers[t].at,
-        Order::Goto(p) => p,
-        Order::Hold => d.at,
-        Order::Home => game.rules.base(team),
-    };
-    if order == Order::Hold {
-        // Circle where it is: low only if it is over open ground.
-        let low = low && game.map.open(d.at);
-        let alt = if low { flight::low_height(team, k) } else { flight::orbit_height(team, k) };
-        flight::Leg { orbit: false, point: d.at, alt, radius: 0.0 }
-    } else {
-        let plan = flight::plan(&game.map, d.at, target, low);
-        flight::leg(&game.map, &plan, team, k, d.at, d.alt)
-    }
-}
-
-/// The plan for drone `i` (its index in the game) to carry out `order`, flown `low` or high, with
-/// home at (`lat`, `lon`).
-pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64), id: u16) -> WirePlan {
-    let leg = leg_for(game, i, order, low);
-    let (primitive, radius) = match (order, leg.orbit) {
-        (Order::Hold, _) => (Primitive::Loiter, 0.0),
-        (_, true) => (Primitive::Orbit, leg.radius),
-        (_, false) => (Primitive::Goto, 0.0),
-    };
-    let (lat, lon) = to_global(home.0, home.1, leg.point.x, leg.point.y);
-    WirePlan { id, primitive, target: 0, lat, lon, alt: leg.alt, radius, ttl: PLAN_TTL }
 }
 
 /// The fastest a hovering drone is flown (m/s): its QLOITER's full stick (`Q_LOIT_SPEED_MS` in
@@ -302,6 +265,18 @@ impl World {
         self.standing[i] = standing;
     }
 
+    /// What the ground sees of the game: all of it.
+    pub fn situation(&self) -> recreation_towers_ground::Situation<'_> {
+        recreation_towers_ground::Situation {
+            now: self.now(),
+            game: &self.game,
+            orders: &self.orders,
+            lows: &self.lows,
+            standing: &self.standing,
+            wing: (0..self.orders.len()).map(|i| self.on_the_wing(i)).collect(),
+        }
+    }
+
     /// The drone has no wing for the on-board executor to fly (a quadcopter), so its order is flown from
     /// here by its radio, and the standing order is carried out here too.
     pub fn flown_from_here(&self, i: usize) -> bool {
@@ -408,6 +383,9 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cognition_plan::Primitive;
+    use recreation_towers::flight;
+    use recreation_towers_ground::plan_for;
 
     fn world() -> World {
         World::new(Rules::default().without_batteries(), 0.0)

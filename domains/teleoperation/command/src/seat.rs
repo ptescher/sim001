@@ -6,6 +6,7 @@ use recreation_towers::seat::{self, Join, ToSeat, ToServer};
 use recreation_towers::{Advice, Order, Rules, TeamView};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -23,6 +24,10 @@ pub struct State {
     pub status: Status,
     pub rules: Option<Rules>,
     pub view: Option<TeamView>,
+    /// The ports of the air in front of the team's drones, on the server's host: the way to them.
+    pub air: Vec<u16>,
+    /// The orders given, by drone number in the team: the order and whether it is flown low.
+    pub orders: Vec<(Option<Order>, bool)>,
     /// What the advisor said lately, and when (the last few).
     pub advice: Vec<(Advice, Instant)>,
 }
@@ -37,6 +42,8 @@ pub struct Seat {
     orders: Mutex<Sender<ToServer>>,
     /// Each (re)connection's number: a connection that is not the newest stops.
     generation: Arc<AtomicU64>,
+    /// The drones that the app's own ground has put in AGENT mode (station.rs).
+    pub flown: AtomicUsize,
 }
 
 impl Seat {
@@ -45,9 +52,17 @@ impl Seat {
         let seat = Arc::new(Seat {
             addr: addr.to_string(),
             join,
-            state: Arc::new(Mutex::new(State { status: Status::Connecting, rules: None, view: None, advice: vec![] })),
+            state: Arc::new(Mutex::new(State {
+                status: Status::Connecting,
+                rules: None,
+                view: None,
+                air: vec![],
+                orders: vec![],
+                advice: vec![],
+            })),
             orders: Mutex::new(tx),
             generation: Arc::new(AtomicU64::new(0)),
+            flown: AtomicUsize::new(0),
         });
         seat.reconnect();
         seat
@@ -63,6 +78,14 @@ impl Seat {
 
     /// Sends an order for the team's drone `drone`, flown `low` (along the lanes) or high.
     pub fn order(&self, drone: usize, order: Order, low: bool) {
+        // The app is the team's ground station: the order is its own to carry out (station.rs).
+        {
+            let mut s = self.state();
+            if s.orders.len() <= drone {
+                s.orders.resize(drone + 1, (None, false));
+            }
+            s.orders[drone] = (Some(order), low);
+        }
         let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low, standing: None });
     }
 
@@ -75,7 +98,8 @@ impl Seat {
     /// Forgets the game and connects again (to a new game on the same server address).
     pub fn reconnect(&self) {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        *self.state() = State { status: Status::Connecting, rules: None, view: None, advice: vec![] };
+        *self.state() =
+            State { status: Status::Connecting, rules: None, view: None, air: vec![], orders: vec![], advice: vec![] };
         let (tx, rx) = channel();
         *self.orders.lock().unwrap() = tx;
         let (addr, join, state, current) = (self.addr.clone(), self.join, self.state.clone(), self.generation.clone());
@@ -116,9 +140,10 @@ fn run(addr: &str, join: Join, state: &Mutex<State>, orders: Receiver<ToServer>,
             let Ok(msg) = seat::decode::<ToSeat>(&line) else { continue };
             let mut s = state.lock().unwrap();
             match msg {
-                ToSeat::Welcome { join, rules } => {
+                ToSeat::Welcome { join, rules, air } => {
                     s.status = Status::Seated(join);
                     s.rules = Some(rules);
+                    s.air = air;
                 }
                 ToSeat::Refused(why) => s.status = Status::Refused(why),
                 ToSeat::View(v) => s.view = Some(v),

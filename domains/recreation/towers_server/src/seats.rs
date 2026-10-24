@@ -20,16 +20,19 @@ pub struct Seats {
     people: [bool; 2],
 }
 
+/// The ports of the air in front of the drones, by drone number in the game.
+pub type AirPorts = Arc<Vec<u16>>;
+
 impl Seats {
     /// Listens on `port`. `people[team]`: that team's seat is kept for a person.
-    pub fn listen(port: u16, world: Arc<Mutex<World>>, people: [bool; 2]) -> std::io::Result<Seats> {
+    pub fn listen(port: u16, world: Arc<Mutex<World>>, people: [bool; 2], air: AirPorts) -> std::io::Result<Seats> {
         let listener = TcpListener::bind(("0.0.0.0", port))?;
         let clients: Arc<Mutex<Vec<Client>>> = Arc::new(Mutex::new(vec![]));
         let c2 = clients.clone();
         std::thread::Builder::new().name("seats".into()).spawn(move || {
             for stream in listener.incoming().map_while(Result::ok) {
-                let (clients, world) = (c2.clone(), world.clone());
-                std::thread::spawn(move || seat(stream, clients, world, people));
+                let (clients, world, air) = (c2.clone(), world.clone(), air.clone());
+                std::thread::spawn(move || seat(stream, clients, world, people, air));
             }
         })?;
         Ok(Seats { clients, people })
@@ -76,7 +79,13 @@ impl Seats {
 }
 
 /// One seat's connection: what it is, then its orders.
-fn seat(stream: TcpStream, clients: Arc<Mutex<Vec<Client>>>, world: Arc<Mutex<World>>, people: [bool; 2]) {
+fn seat(
+    stream: TcpStream,
+    clients: Arc<Mutex<Vec<Client>>>,
+    world: Arc<Mutex<World>>,
+    people: [bool; 2],
+    air: AirPorts,
+) {
     let Ok(mut out) = stream.try_clone() else { return };
     let mut lines = BufReader::new(stream).lines().map_while(Result::ok);
     let Some(join) = lines.next().and_then(|l| seat::decode::<ToServer>(&l).ok()) else {
@@ -97,7 +106,12 @@ fn seat(stream: TcpStream, clients: Arc<Mutex<Vec<Client>>>, world: Arc<Mutex<Wo
             return;
         }
         let Ok(stream) = out.try_clone() else { return };
-        if writeln!(out, "{}", seat::encode(&ToSeat::Welcome { join, rules })).is_err() {
+        // A seat that commands is its team's ground station: it gets the way to its drones.
+        let ports = match join {
+            Join::Command(t) => air[t.index() * rules.drones..(t.index() + 1) * rules.drones].to_vec(),
+            _ => vec![],
+        };
+        if writeln!(out, "{}", seat::encode(&ToSeat::Welcome { join, rules, air: ports })).is_err() {
             return;
         }
         clients.push(Client { join, stream });

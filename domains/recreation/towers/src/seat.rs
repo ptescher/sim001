@@ -80,6 +80,11 @@ pub enum ToSeat {
     Welcome {
         join: Join,
         rules: Rules,
+        /// The ports of the air in front of the team's drones (drone `k` at `k`), on the server's
+        /// host, for a seat that commands: the seat is the team's ground station and sends its
+        /// drones MAVLink there. Empty when the server flies the team.
+        #[serde(default)]
+        air: Vec<u16>,
     },
     /// The seat may not have what it asked for (the team's seat is a computer's, or taken).
     Refused(String),

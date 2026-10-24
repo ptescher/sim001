@@ -286,7 +286,13 @@ impl Link {
     /// Connects to a plane's MAVLink TCP port (`"127.0.0.1:5770"`: SITL instance N listens on
     /// 5760 + 10·N) and starts reading.
     pub fn connect(address: &str) -> io::Result<Link> {
-        let mut conn = mavlink::connect::<MavMessage>(&format!("tcpout:{address}"))?;
+        Link::open(&format!("tcpout:{address}"))
+    }
+
+    /// Opens a link by its MAVLink connection string: `tcpout:HOST:PORT`, `serial:PATH:BAUD`, ...
+    pub fn open(url: &str) -> io::Result<Link> {
+        let address = url;
+        let mut conn = mavlink::connect::<MavMessage>(url)?;
         conn.set_protocol_version(MavlinkVersion::V2);
         conn.set_allow_recv_any_version(true);
         let conn = Arc::new(conn);
@@ -301,9 +307,14 @@ impl Link {
 
     /// [`Link::connect`], trying again until `patience` runs out (SITL takes a moment to listen).
     pub fn connect_patiently(address: &str, patience: Duration) -> io::Result<Link> {
+        Link::open_patiently(&format!("tcpout:{address}"), patience)
+    }
+
+    /// [`Link::open`], trying again until `patience` runs out.
+    pub fn open_patiently(url: &str, patience: Duration) -> io::Result<Link> {
         let start = Instant::now();
         loop {
-            match Link::connect(address) {
+            match Link::open(url) {
                 Ok(l) => return Ok(l),
                 Err(e) if start.elapsed() > patience => return Err(e),
                 Err(_) => std::thread::sleep(Duration::from_millis(200)),
