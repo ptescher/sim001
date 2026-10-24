@@ -11,7 +11,7 @@
 //! | heartbeat | `HEARTBEAT` as a GCS, once a second |
 
 use crate::Craft;
-use cognition_plan::{CMD_GAME, CMD_PLAN, WireGame, WirePlan, status_names, wire::CommandInt};
+use cognition_plan::{CMD_GAME, CMD_PLAN, CMD_STANDING, WireGame, WirePlan, status_names, wire::CommandInt};
 use mavlink::dialects::ardupilotmega::*;
 use mavlink::error::MessageReadError;
 use mavlink::{MavConnection, MavHeader, MavlinkVersion};
@@ -43,6 +43,7 @@ pub fn command_int(c: &CommandInt, target: (u8, u8)) -> Option<MavMessage> {
     let (command, frame) = match c.command {
         CMD_PLAN => (MavCmd::MAV_CMD_USER_1, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT),
         CMD_GAME => (MavCmd::MAV_CMD_USER_2, MavFrame::MAV_FRAME_MISSION),
+        CMD_STANDING => (MavCmd::MAV_CMD_USER_3, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT),
         _ => return None,
     };
     Some(MavMessage::COMMAND_INT(COMMAND_INT_DATA {
@@ -324,6 +325,11 @@ impl Link {
         s.last_plan = Some(plan.id);
         s.plans_sent += 1;
         Ok(())
+    }
+
+    /// Gives the plane a standing plan: it flies it by itself if no new plan comes for `plan.ttl` s.
+    pub fn send_standing(&self, plan: &WirePlan) -> io::Result<()> {
+        self.send(&command_int(&plan.to_standing_command(), self.target()).expect("a standing plan"))
     }
 
     pub fn send_game(&self, game: &WireGame) -> io::Result<()> {

@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define AGENT_EXEC_ABI_VERSION 2
+#define AGENT_EXEC_ABI_VERSION 3
 #define AGENT_MAX_TRACKS 8
 
 struct agent_plan {
@@ -90,6 +90,15 @@ uint32_t agent_exec_abi_version(void);
 int32_t agent_exec_step(const struct agent_state *state, const struct agent_plan *plan,
                         const struct agent_track *tracks, const struct agent_limits *limits,
                         struct agent_demand *out);
+
+// The standing plan: the plan's fields, but `ttl` is the seconds without a new plan after which the
+// executor flies it by itself (the ground's way to say what to do when the link is lost). Give it
+// as often as you like: the same id again changes nothing, and a new id replaces it. A new plan
+// (a new id to agent_exec_step) starts the time again. Null takes it away.
+void agent_exec_set_standing(const struct agent_plan *plan);
+
+// The primitive flown on the last step (0 none, 1 pursue, ... 6 loiter): Loiter for a plan that ran out.
+uint8_t agent_exec_flown(void);
 
 // Forget the plan and all memory (on entering AGENT mode).
 void agent_exec_reset(void);

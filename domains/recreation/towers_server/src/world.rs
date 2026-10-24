@@ -302,6 +302,12 @@ impl World {
         self.standing[i] = standing;
     }
 
+    /// The drone has no wing for the on-board executor to fly (a quadcopter), so its order is flown from
+    /// here by its radio, and the standing order is carried out here too.
+    pub fn flown_from_here(&self, i: usize) -> bool {
+        self.game.drones[i].class == recreation_towers::Class::Light
+    }
+
     /// What the drones' radios do after a step of the referee: a drone in contact tells its team
     /// its order; one that is out of contact long enough flies its standing order, or, with none,
     /// home (the failsafe), and stays on that order until the team can give it another.
@@ -309,6 +315,11 @@ impl World {
         for i in 0..self.orders.len() {
             if self.game.link(i) == Link::Up {
                 self.told[i] = (self.orders[i], self.lows[i]);
+                continue;
+            }
+            // A drone on the wing flies its standing order itself (the ground sends it ahead:
+            // `ground.rs`). Only a drone with no wing, flown from here by its radio, needs this.
+            if !self.flown_from_here(i) {
                 continue;
             }
             let mut flown = Instruction { order: self.orders[i], standing: self.standing[i] };
@@ -565,15 +576,28 @@ mod tests {
         assert!(w.lows[light]);
     }
 
-    /// Blue's drone 1 flies in the radio shadow of the Red home tower.
-    fn shadowed() -> (World, usize) {
+    /// Blue's drone `k` flies in the radio shadow of the Red home tower.
+    fn shadowed_k(k: usize) -> (World, usize) {
         let mut w = world();
-        let i = w.game.drone(Team::Blue, 1);
+        let i = w.game.drone(Team::Blue, k);
         w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
         w.game.drones[i].alt = 50.0;
         w.game.drones[i].phase = Referee::Flying;
         w.game.look();
         (w, i)
+    }
+
+    /// A drone on the wing in a shadow.
+    fn shadowed() -> (World, usize) {
+        shadowed_k(1)
+    }
+
+    /// A drone with no wing in a shadow: the server flies its order.
+    fn shadowed_light() -> (World, usize) {
+        let k = (0..Rules::default().drones)
+            .find(|&k| Rules::default().class(k) == recreation_towers::Class::Light)
+            .expect("a light drone");
+        shadowed_k(k)
     }
 
     #[test]
@@ -599,7 +623,7 @@ mod tests {
 
     #[test]
     fn a_standing_order_given_in_contact_replaces_the_failsafe() {
-        let (mut w, i) = shadowed();
+        let (mut w, i) = shadowed_light();
         let west = w.game.tower("west");
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
         w.game.look();
@@ -619,8 +643,23 @@ mod tests {
     }
 
     #[test]
-    fn a_drone_that_lost_its_link_flies_home_and_its_team_still_sees_its_old_order() {
+    fn a_drone_on_the_wing_keeps_the_order_the_team_gave_it_for_it_flies_its_standing_order_itself() {
         let (mut w, i) = shadowed();
+        let west = w.game.tower("west");
+        w.game.drones[i].at = Vec2::new(-300.0, 0.0);
+        w.game.look();
+        w.command(i, Order::Take(west), false);
+        w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
+        for _ in 0..600 {
+            w.game.step(0.1);
+            w.link_up();
+        }
+        assert_eq!(w.orders[i], Some(Order::Take(west)), "60 s out of contact: the ground only shows what it sent");
+    }
+
+    #[test]
+    fn a_drone_that_lost_its_link_flies_home_and_its_team_still_sees_its_old_order() {
+        let (mut w, i) = shadowed_light();
         let west = w.game.tower("west");
         // Told while it was in contact...
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
@@ -638,7 +677,7 @@ mod tests {
         w.game.step(0.1);
         w.link_up();
         assert_eq!(w.orders[i], Some(Order::Home));
-        assert!(!w.lows[i]);
+        assert_eq!(w.lows[i], w.low_by_default(i), "a light drone flies home low");
         assert_eq!(w.told[i], (Some(Order::Take(west)), false), "its team is not told");
         // Out of the shadow, it hears the team again and gets its order back.
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);

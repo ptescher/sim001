@@ -166,6 +166,8 @@ struct World {
     ex: Executor,
     /// `ModeAgent::plan` and `have_plan`: the plan last accepted, handed to the executor each step.
     plan: Option<Plan>,
+    /// `ModeAgent::standing`: the standing plan last accepted, handed to the executor each step.
+    standing: Option<Plan>,
     reply: &'static str,
     /// AG_ENV and AG_FALL.
     interventions: u32,
@@ -205,6 +207,7 @@ impl World {
             limits: limits(85.0, 4.0),
             ex: Executor::new(),
             plan: None,
+            standing: None,
             reply: "none",
             interventions: 0,
             fallback: 0,
@@ -270,6 +273,7 @@ impl World {
                     s.pos = [f32::NAN; 3];
                     s.vel = [f32::NAN; 3];
                 }
+                self.ex.set_standing(self.standing.as_ref());
                 let d = self.ex.step(&s, self.plan.as_ref(), &self.tracks(), &self.limits);
                 self.interventions += d.intervened as u32;
                 if d.fallback != self.fallback && d.fallback == 3 {
@@ -362,11 +366,23 @@ impl World {
         }
     }
 
+    /// A standing plan as the console sends it: `standing PRIMITIVE NORTH EAST ALT RADIUS AFTER`,
+    /// through the wire format (`CMD_STANDING`), with an id one more than the last standing plan's.
+    fn send_standing(&mut self, primitive: Primitive, north: f32, east: f32, alt: f32, radius: f32, after: f32) {
+        self.build();
+        let id = self.standing.map_or(0, |p| p.id).wrapping_add(1);
+        let (lat, lon) = to_global(HOME.0, HOME.1, north, east);
+        let wire = WirePlan { id, primitive, target: 0, lat, lon, alt, radius, ttl: after };
+        let decoded = WirePlan::from_standing_command(&wire.to_standing_command()).expect("a standing plan");
+        self.standing = Some(decoded.to_plan(HOME.0, HOME.1));
+    }
+
     /// `ModeAgent::_enter`.
     fn set_mode(&mut self, mode: Mode) {
         if mode == Mode::Agent && self.mode != Mode::Agent {
             self.ex.reset();
             self.plan = None;
+            self.standing = None;
             self.interventions = 0;
             self.fallback = 0;
         }
@@ -636,6 +652,8 @@ fn bindings() -> Bindings<World> {
             _ => "none",
         })
         .arrange("the reported fallback", |_, _| {})
+        .observe("the primitive that the plane flies", |w| primitive_name(w.ex.flown() as u8))
+        .arrange("the primitive that the plane flies", |_, _| {})
         .observe("the messages about a recovery", |w| w.recoveries as f64)
         .arrange("the messages about a recovery", |_, _| {})
         .observe("the reported interventions", |w| w.interventions as f64)
@@ -671,6 +689,42 @@ fn bindings() -> Bindings<World> {
         .on("the ground sends a loiter plan", |w| w.send(6, 0.0, 0.0, 0.0, 0.0, 600.0, false))
         .on("the ground sends a pursue plan", |w| w.send(1, 0.0, 0.0, 0.0, 0.0, 600.0, false))
         .on("the ground sends an evade plan", |w| w.send(2, 0.0, 0.0, 0.0, 0.0, 600.0, false))
+        .on(
+            "the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 30 seconds",
+            |w| {
+                w.send(3, 80.0, 10.0, 40.0, 0.0, 600.0, false);
+                w.send_standing(Primitive::Orbit, 70.0, 0.0, 45.0, 45.0, 20.0);
+                w.run(30.0);
+            },
+        )
+        .on(
+            "the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 10 seconds",
+            |w| {
+                w.send(3, 80.0, 10.0, 40.0, 0.0, 600.0, false);
+                w.send_standing(Primitive::Orbit, 70.0, 0.0, 45.0, 45.0, 20.0);
+                w.run(10.0);
+            },
+        )
+        .on(
+            "the ground sends a go-to plan and a standing orbit plan for 20 s, and again a go-to plan after 15 seconds, and the plane flies on for 15 seconds",
+            |w| {
+                w.send(3, 80.0, 10.0, 40.0, 0.0, 600.0, false);
+                w.send_standing(Primitive::Orbit, 70.0, 0.0, 45.0, 45.0, 20.0);
+                w.run(15.0);
+                w.send(3, 80.0, 10.0, 40.0, 0.0, 600.0, false);
+                w.run(15.0);
+            },
+        )
+        .on(
+            "the ground sends a go-to plan and a standing orbit plan for 20 s, and a go-to plan after 30 seconds",
+            |w| {
+                w.send(3, 80.0, 10.0, 40.0, 0.0, 600.0, false);
+                w.send_standing(Primitive::Orbit, 70.0, 0.0, 45.0, 45.0, 20.0);
+                w.run(30.0);
+                w.send(3, 80.0, 10.0, 40.0, 0.0, 600.0, false);
+                w.run(0.1);
+            },
+        )
         .on("the ground sends a malformed plan", |w| w.send(9, 80.0, 10.0, 40.0, 0.0, 600.0, false))
         .on("the ground sends the plan id again with an orbit", |w| w.send(4, 70.0, 0.0, 45.0, 45.0, 600.0, true))
         .on("the plane loses its position estimate", |w| w.position_lost = true)
@@ -727,9 +781,10 @@ impl Driver for Windowless {
     }
     fn can_arrange(&self, var: &Variable, value: &Value) -> bool {
         let fresh = match var.subject.as_str() {
-            "the reply to the plan" | "the reported primitive" | "the reported fallback" => {
-                value.as_str() == Some("none")
-            }
+            "the reply to the plan"
+            | "the reported primitive"
+            | "the primitive that the plane flies"
+            | "the reported fallback" => value.as_str() == Some("none"),
             "the time to live of the plan"
             | "the reported plan"
             | "the reported interventions"
