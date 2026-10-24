@@ -68,6 +68,7 @@ pub enum SimSet {
 }
 
 fn main() {
+    suite_budget::begin();
     install_controller_mappings();
     let args: Vec<String> = std::env::args().collect();
     let flag = |f: &str| args.iter().any(|a| a == f);

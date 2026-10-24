@@ -43,6 +43,7 @@ sim001_command [options]
   --docs DIR         with --expect: write the results and screenshots of the window to DIR (merged with the others')";
 
 fn main() {
+    suite_budget::begin();
     let args: Vec<String> = std::env::args().collect();
     let flag = |f: &str| args.iter().any(|a| a == f);
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();

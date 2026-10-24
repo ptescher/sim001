@@ -1,0 +1,10 @@
+[package]
+name = "suite_budget"
+version = "0.1.0"
+edition = "2024"
+description = "The time one acceptance suite may take (SIM001_SUITE_BUDGET, 120 s): a runner asks it before each test and marks the tests it had no time for as failed"
+
+[dependencies]
+expectation_harness.workspace = true
+expectation_model.workspace = true
+expectation_story.workspace = true

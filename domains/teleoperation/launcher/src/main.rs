@@ -27,6 +27,7 @@ sim001_launcher [options]
   --docs DIR         with --expect: write the results and screenshots of the window to DIR";
 
 fn main() {
+    suite_budget::begin();
     let args: Vec<String> = std::env::args().collect();
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     if args.iter().any(|a| a == "-h" || a == "--help") {

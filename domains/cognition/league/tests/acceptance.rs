@@ -333,7 +333,22 @@ fn every_test_of_the_section_passes() {
     let ours = a.suite.subtree(section);
     // With SIM001_DOCS=DIR the results and pictures of the league's report go into the project's docs.
     let docs = std::env::var("SIM001_DOCS").ok().map(PathBuf::from);
-    let report = a.run(&mut bindings(), &RunOptions { docs_dir: docs.clone(), ..Default::default() });
+    let opts = RunOptions { docs_dir: docs.clone(), ..Default::default() };
+    let mut driver = bindings();
+    let suite_time = suite_budget::Budget::from_env();
+    let report = expectation_story::Report {
+        results: a
+            .plans
+            .iter()
+            .map(|plan| {
+                if suite_time.spent() {
+                    suite_time.ran_out(&a.suite, plan, &driver)
+                } else {
+                    expectation_harness::run(&a.suite, std::slice::from_ref(plan), &mut driver, &opts).results.remove(0)
+                }
+            })
+            .collect(),
+    };
     if let Some(dir) = &docs {
         a.publish(dir, "league", &report).unwrap();
     }

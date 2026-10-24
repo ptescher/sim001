@@ -28,6 +28,7 @@ raw-window-handle = "0.6"
 expectation_harness = { git = "https://github.com/ptescher/expectation" }
 expectation_model = { git = "https://github.com/ptescher/expectation" }
 expectation_story = { git = "https://github.com/ptescher/expectation" }
+suite_budget = { path = "../../../tools/suite_budget" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

@@ -16,6 +16,7 @@ teleoperation_core = { path = "../core" }
 expectation_harness = { git = "https://github.com/ptescher/expectation" }
 expectation_model = { git = "https://github.com/ptescher/expectation" }
 expectation_story = { git = "https://github.com/ptescher/expectation" }
+suite_budget = { path = "../../../tools/suite_budget" }
 # The screenshots' JPEGs (snapshot.rs); the same image crate as GPUI's.
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
