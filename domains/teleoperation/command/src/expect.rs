@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
+use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
 
 /// The process exit code once the run is over (0 when everything that could run passed).
@@ -86,6 +87,9 @@ const OBSERVED: &[&str] = &[
     "the seat of the app",
     "the towers on the app's map",
     "the selected drone",
+    "the unit panel of the app",
+    "the class in the unit panel",
+    "the mass in the unit panel",
     "the west tower on the Blue map",
     "the order of the first Blue drone",
     "the order of the second Blue drone",
@@ -153,6 +157,11 @@ struct AppDriver {
     cameras: bool,
     /// The game has been used: the next test needs a fresh one.
     used: bool,
+    /// The game server died: no test can run, so the run stops.
+    dead: Cell<bool>,
+    /// What the driver did in this test, and when (s since the test began): for a failure's report.
+    trace: RefCell<Vec<(f32, String)>>,
+    began: Cell<Instant>,
 }
 
 impl AppDriver {
@@ -204,6 +213,51 @@ impl AppDriver {
         }
     }
 
+    /// Where to start looking after a failed test: the app's state, the end of the server's log,
+    /// and the whole log saved beside it (the next test's server overwrites it).
+    fn note(&self, what: impl Into<String>) {
+        self.trace.borrow_mut().push((self.began.get().elapsed().as_secs_f32(), what.into()));
+    }
+
+    fn debug(&self, title: &str) {
+        println!("expect:   steps (s since the test began):");
+        for (t, what) in self.trace.borrow().iter() {
+            println!("expect:     {t:6.1}  {what}");
+        }
+        let state = self.call(|v, _, _| {
+            let s = v.seat.state();
+            let game = s.view.as_ref().map_or("no map yet".to_string(), |m| {
+                let orders: Vec<_> = m.drones.iter().map(|d| order_name(d.order, m)).collect();
+                format!("game time {:.0} s, outcome {:?}, orders {orders:?}", m.time, m.outcome)
+            });
+            format!("seat {:?}, selected {:?}, {game}", s.status, v.selected)
+        });
+        println!("expect:   app: {}", state.unwrap_or_else(|e| e));
+        let log = crate::server::root().join("logs/towers/server.log");
+        let Ok(text) = std::fs::read_to_string(&log) else {
+            println!("expect:   no server log at {}", log.display());
+            return;
+        };
+        let slug: String = title.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
+        let saved = log.with_file_name(format!("failed-{slug}.log"));
+        let kept = std::fs::write(&saved, &text).is_ok();
+        println!("expect:   server log ({}):", if kept { saved.display().to_string() } else { log.display().to_string() });
+        let lines: Vec<&str> = text.lines().collect();
+        for l in &lines[lines.len().saturating_sub(12)..] {
+            println!("expect:     {l}");
+        }
+    }
+
+    /// Whether the game server has exited. The run cannot go on: the tests after this one stop.
+    fn server_exited(&self) -> bool {
+        self.dead.get() || self.server.lock().unwrap().as_mut().is_some_and(|s| s.exited().is_some())
+    }
+
+    fn died(&self) -> String {
+        self.dead.set(true);
+        self.server.lock().unwrap().as_mut().and_then(Server::exited).unwrap_or_else(|| "the game server exited".into())
+    }
+
     fn seated(&self) -> Result<(), String> {
         let end = Instant::now() + SEATED;
         loop {
@@ -214,6 +268,7 @@ impl AppDriver {
             match status {
                 Status::Seated(_) if view => return Ok(()),
                 Status::Refused(why) => return Err(format!("the server refused the seat: {why}")),
+                _ if self.server_exited() => return Err(self.died()),
                 _ if Instant::now() > end => return Err("the app got no seat on the game server".into()),
                 _ => std::thread::sleep(Duration::from_millis(200)),
             }
@@ -234,6 +289,9 @@ impl AppDriver {
 
     /// Right-clicks the tower `name` on the map: an order for the selected drones.
     fn click_tower(&self, name: &'static str) -> Result<(), String> {
+        // Draw first: the map's bounds are those of the last frame, and the layout may have changed
+        // since (a selection shows the UNIT panel), which would move the tower under the click.
+        self.with_window(|w, cx| w.draw(cx).clear())?;
         let (x, y) = self.call(move |v, _, _| {
             let (view, rules) = {
                 let s = v.seat.state();
@@ -241,10 +299,11 @@ impl AppDriver {
             };
             let (Some(view), Some(rules)) = (view, rules) else { return Err("the app has no map".to_string()) };
             let tower = view.towers.iter().find(|t| t.name == name).ok_or(format!("no {name} tower"))?;
-            Ok(MapView::new(v.map_bounds.get(), &rules).to_screen(tower.at))
+            let b = v.map_bounds.get();
+            let at = MapView::new(b, &rules).to_screen(tower.at);
+            Ok(at)
         })??;
         self.with_window(move |w, cx| {
-            w.draw(cx).clear();
             press(w, cx, point(px(x), px(y)), MouseButton::Right)
         })
     }
@@ -260,6 +319,9 @@ impl AppDriver {
 
 impl Driver for AppDriver {
     fn reset(&mut self) -> Result<(), String> {
+        self.trace.borrow_mut().clear();
+        self.began.set(Instant::now());
+        self.note("reset");
         if self.used {
             // A fresh game: a new server, and the seat taken again. The seat hangs up first, or
             // it would come back to the new server as it starts, and take the seat itself.
@@ -278,6 +340,7 @@ impl Driver for AppDriver {
     }
 
     fn arrange(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
+        self.note(format!("arrange: {} = {}", var.subject, text(value)));
         let subject = var.subject.as_str();
         if START.iter().any(|(s, _)| is(subject, s)) {
             return if self.can_arrange(var, value) {
@@ -330,6 +393,7 @@ impl Driver for AppDriver {
     }
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
+        self.note(format!("perform: {}", event.text));
         match event.text.to_lowercase().as_str() {
             "the commander joins the game" => self.seated(),
             "the commander selects the first blue drone" => self.click_button("drone-0"),
@@ -361,6 +425,7 @@ impl Driver for AppDriver {
     }
 
     fn observe(&mut self, var: &Variable) -> Result<Value, String> {
+        self.note(format!("observe: {}", var.subject));
         let subject = var.subject.as_str();
         if let Some((_, v)) = START.iter().find(|(s, _)| is(subject, s)) {
             // Each test starts on a fresh game.
@@ -393,6 +458,15 @@ impl Driver for AppDriver {
             return Ok(Value::from(selected.map_or("none", |k| DRONES[k])));
         }
         let view = view.ok_or("the app has no map yet")?;
+        if lower.starts_with("the unit panel") || lower.ends_with("in the unit panel") {
+            let rules = self.call(|v, _, _| v.seat.state().rules)?.ok_or("the app has no rules yet")?;
+            let class = selected.filter(|&k| k < view.drones.len()).map(|k| rules.class(k));
+            return Ok(match lower.as_str() {
+                "the unit panel of the app" => Value::from(if class.is_some() { "shown" } else { "hidden" }),
+                "the class in the unit panel" => Value::from(class.map_or("none", |c| c.name())),
+                _ => Value::from(class.map_or(0.0, |c| (c.mass_kg() * 100.0).round() as f64 / 100.0)),
+            });
+        }
         if lower == "the towers on the app's map" {
             return Ok(Value::from(view.towers.len() as f64));
         }
@@ -468,7 +542,7 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     })
     .detach();
     std::thread::spawn(move || {
-        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false };
+        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false, dead: Cell::new(false), trace: RefCell::default(), began: Cell::new(Instant::now()) };
         // The section's tests of the rules (with no window) and of the server are not the app's.
         let all = acceptance.plans.len();
         let plans: Vec<_> =
@@ -486,9 +560,16 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
             let r = r.results.into_iter().next().unwrap();
             match r.status {
                 TestStatus::Passed => println!("expect: ✓ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32()),
-                _ => println!("expect: ✗ {} {:?} ({:.0} s)", plan.title, r.status, began.elapsed().as_secs_f32()),
+                _ => {
+                    println!("expect: ✗ {} {:?} ({:.0} s)", plan.title, r.status, began.elapsed().as_secs_f32());
+                    driver.debug(&plan.title);
+                }
             }
             report.results.push(r);
+            if driver.dead.get() {
+                println!("expect: stopping, the remaining tests need the game server");
+                break;
+            }
         }
         let acceptance = Acceptance { plans, ..acceptance };
         if let Some(dir) = &docs {

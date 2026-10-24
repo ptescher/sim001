@@ -183,6 +183,13 @@ Vocabulary:
   State: the selected drone is none | the first Blue drone | the second Blue drone | the third Blue drone
     Set: click {value} in the list of drones
     Shows: the first Blue drone: B1 is lit in the list of drones, and a ring goes round B1 on the map
+  State: the unit panel of the app is hidden | shown
+    Shows: hidden: the app has no UNIT panel
+    Shows: shown: the UNIT panel is under the list of drones
+  State: the class in the unit panel is none | standard | light | heavy
+    Shows: the UNIT panel says CLASS {value}, and its icon is the shape of that class
+  State: the mass in the unit panel is 0..5 kg
+    Shows: the UNIT panel says MASS {value} kg
   State: the west tower on the Blue map is held by Blue | held by Red | neutral
     Shows: held by Blue: the west tower on the map turns blue
     Shows: neutral: the west tower on the map is grey
