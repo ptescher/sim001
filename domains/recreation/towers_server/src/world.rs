@@ -214,7 +214,13 @@ impl World {
         );
         let radio = self.radio(i, dt);
         self.sync(i);
-        if i == 0 && self.started() {
+        if i == 0 {
+            // Before GO the game stands still, but the drones still hear their orders (and the
+            // commander sees them).
+            if !self.started() {
+                self.link_up();
+                return radio;
+            }
             let before: Vec<_> = self.game.towers.iter().map(|t| t.holder).collect();
             self.game.step(dt);
             self.link_up();
