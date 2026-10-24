@@ -3,7 +3,7 @@
 //! the server is not up yet, it tries again.
 
 use recreation_towers::seat::{self, Join, ToSeat, ToServer};
-use recreation_towers::{Advice, Order, Rules, TeamView};
+use recreation_towers::{Advice, Order, Rules, Sites, TeamView, Umpire};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::atomic::AtomicUsize;
@@ -24,11 +24,12 @@ pub struct State {
     pub status: Status,
     pub rules: Option<Rules>,
     pub view: Option<TeamView>,
-    /// What the server last sent: the towers, the base, the clock and the score. The ground station
-    /// makes `view` from it and from the telemetry of its drones (station.rs).
-    pub raw_view: Option<TeamView>,
-    /// The station makes the `view`.
-    pub station: bool,
+    /// What the server last said: the umpire's word, and what the team's towers and base report. The
+    /// ground station makes `view` from them and from the telemetry of its drones (station.rs).
+    pub umpire: Option<Umpire>,
+    pub sites: Option<Sites>,
+    /// How many maps of the team the server sent a seat that commands (it sends none).
+    pub maps: usize,
     /// The ports of the air in front of the team's drones, on the server's host: the way to them.
     pub air: Vec<u16>,
     /// The orders given, by drone number in the team: the order and whether it is flown low.
@@ -63,8 +64,9 @@ impl Seat {
                 status: Status::Connecting,
                 rules: None,
                 view: None,
-                raw_view: None,
-                station: false,
+                umpire: None,
+                sites: None,
+                maps: 0,
                 air: vec![],
                 orders: vec![],
                 advice: vec![],
@@ -112,8 +114,9 @@ impl Seat {
             status: Status::Connecting,
             rules: None,
             view: None,
-            raw_view: None,
-            station: false,
+            umpire: None,
+            sites: None,
+            maps: 0,
             air: vec![],
             orders: vec![],
             advice: vec![],
@@ -165,11 +168,13 @@ fn run(addr: &str, join: Join, state: &Mutex<State>, orders: Receiver<ToServer>,
                 }
                 ToSeat::Refused(why) => s.status = Status::Refused(why),
                 ToSeat::View(v) => {
-                    if !s.station {
-                        s.view = Some(v.clone());
+                    if matches!(join, Join::Command(_)) {
+                        s.maps += 1;
                     }
-                    s.raw_view = Some(v);
+                    s.view = Some(v);
                 }
+                ToSeat::Umpire(u) => s.umpire = Some(u),
+                ToSeat::Sites(sites) => s.sites = Some(sites),
                 ToSeat::Truth(_) => {}
                 ToSeat::Advice(a) => {
                     s.advice.push((a, Instant::now()));

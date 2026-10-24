@@ -272,6 +272,8 @@ Vocabulary:
     Shows: at least 1: the app has put a drone in AGENT mode and sent it plans by MAVLink, through the air
   State: the position reports that the app heard from its drones are 0..1000000
     Shows: at least 10: the app has heard the position of its drones in their telemetry (GLOBAL_POSITION_INT), and the drones on its map are where those reports put them
+  State: the maps of the game that the game server sent the app are 0..100000
+    Shows: 0: the app got no map of its team from the game server: only the word of the umpire (the clock, the score and the outcome) and the reports of the towers and the base
   State: the camera feeds in the app are 0..5
     Shows: 5: CAMERAS shows the picture from the camera of each Blue drone, beside its name
   Event: the game runs for 2 minutes

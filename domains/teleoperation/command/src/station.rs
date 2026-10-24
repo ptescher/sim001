@@ -75,14 +75,14 @@ fn run(seat: &Seat, host: &str) {
     let mut flying: Option<Flying> = None;
     loop {
         std::thread::sleep(LOOK_EVERY);
-        let (status, rules, view, air, orders) = {
+        let (status, rules, umpire, sites, air, orders) = {
             let s = seat.state();
-            (s.status.clone(), s.rules, s.raw_view.clone(), s.air.clone(), s.orders.clone())
+            (s.status.clone(), s.rules, s.umpire, s.sites.clone(), s.air.clone(), s.orders.clone())
         };
-        let (Status::Seated(Join::Command(team)), Some(rules), Some(view)) = (status, rules, view) else {
-            if flying.take().is_some() {
-                seat.state().station = false;
-            }
+        let (Status::Seated(Join::Command(team)), Some(rules), Some(umpire), Some(sites)) =
+            (status, rules, umpire, sites)
+        else {
+            flying = None;
             seat.flown.store(0, Ordering::SeqCst);
             continue;
         };
@@ -113,7 +113,34 @@ fn run(seat: &Seat, host: &str) {
         }
         let f = flying.as_mut().expect("a ground");
         let n = f.rules.drones;
-        // The picture the ground plans from: the team's map, with the drones where the team has them.
+        // The map: the umpire's word and the reports of the sites, plus what the drones report of
+        // themselves and of the enemy in their telemetry.
+        let rate = f.clock.rate() as f32;
+        let (mut own, mut seen) = (vec![None; n], vec![]);
+        for (k, report) in own.iter_mut().enumerate() {
+            let (position, sightings) = f.ground.telemetry(k);
+            *report = position.map(|p| {
+                let (north, east) = cognition_plan::to_local(f.home.0, f.home.1, p.lat, p.lon);
+                OwnReport {
+                    at: Vec2::new(north, east),
+                    alt: p.alt,
+                    vel: Vec2::new(p.vel[0], p.vel[1]),
+                    age: p.heard.elapsed().as_secs_f32() * rate,
+                }
+            });
+            seen.extend(sightings.iter().map(|s| {
+                let (north, east) = cognition_plan::to_local(f.home.0, f.home.1, s.lat, s.lon);
+                Seen {
+                    enemy: s.enemy,
+                    at: Vec2::new(north, east),
+                    alt: s.alt_amsl - f.home.2,
+                    vel: Vec2::new(s.speed * s.heading.to_radians().cos(), s.speed * s.heading.to_radians().sin()),
+                    age: s.heard.elapsed().as_secs_f32() * rate,
+                }
+            }));
+        }
+        let view = map::build(&umpire, &sites, &own, &seen, &orders, &f.rules);
+        // The picture the ground plans from is the map: the drones where the team has them.
         for d in &view.drones {
             let g = &mut f.game.drones[f.first + d.k];
             (g.at, g.alt, g.vel, g.phase) = (d.at, d.alt, d.vel, d.phase);
@@ -150,34 +177,6 @@ fn run(seat: &Seat, host: &str) {
         f.ground.tick(&situation);
         seat.flown.store(f.ground.agent_drones(), Ordering::SeqCst);
         seat.heard.store(f.ground.position_reports() as usize, Ordering::SeqCst);
-        // The map: what the server says of the towers, plus what the drones report of themselves and of the enemy.
-        let rate = f.clock.rate() as f32;
-        let (mut own, mut seen) = (vec![None; n], vec![]);
-        for (k, report) in own.iter_mut().enumerate() {
-            let (position, sightings) = f.ground.telemetry(k);
-            *report = position.map(|p| {
-                let (north, east) = cognition_plan::to_local(f.home.0, f.home.1, p.lat, p.lon);
-                OwnReport {
-                    at: Vec2::new(north, east),
-                    alt: p.alt,
-                    vel: Vec2::new(p.vel[0], p.vel[1]),
-                    age: p.heard.elapsed().as_secs_f32() * rate,
-                }
-            });
-            seen.extend(sightings.iter().map(|s| {
-                let (north, east) = cognition_plan::to_local(f.home.0, f.home.1, s.lat, s.lon);
-                Seen {
-                    enemy: s.enemy,
-                    at: Vec2::new(north, east),
-                    alt: s.alt_amsl - f.home.2,
-                    vel: Vec2::new(s.speed * s.heading.to_radians().cos(), s.speed * s.heading.to_radians().sin()),
-                    age: s.heard.elapsed().as_secs_f32() * rate,
-                }
-            }));
-        }
-        let made = map::build(&view, &own, &seen, &f.rules);
-        let mut state = seat.state();
-        state.station = true;
-        state.view = Some(made);
+        seat.state().view = Some(view);
     }
 }
