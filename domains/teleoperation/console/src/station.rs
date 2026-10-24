@@ -8,7 +8,6 @@
 use simulation_sitl::Ports;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
 use teleoperation_shared::layout::Rect;
 
 const SITL_IMAGE: &str = "sim001-ardupilot-sitl";
@@ -479,12 +478,12 @@ fn ensure_docker() -> Result<(), String> {
     {
         println!("  starting Docker Desktop...");
         let _ = Command::new("open").args(["-ga", "Docker"]).status();
-        let deadline = Instant::now() + Duration::from_secs(180);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
         while !docker_up() {
-            if Instant::now() > deadline {
+            if std::time::Instant::now() > deadline {
                 return Err("Docker Desktop didn't come up within 3 minutes".into());
             }
-            std::thread::sleep(Duration::from_secs(2));
+            std::thread::sleep(std::time::Duration::from_secs(2));
         }
         println!("  running");
         Ok(())
