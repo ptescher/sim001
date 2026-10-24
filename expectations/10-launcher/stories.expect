@@ -56,7 +56,7 @@ Story: Starting a game of Towers
   I want to start a game of Towers from the launcher
   So that I play it without a terminal
 
-  TOWERS starts the commander app of [[Towers]]. It starts the game server, with six ArduPlane
+  TOWERS starts the commander app of [[Towers]]. It starts the game server, with ten ArduPlane
   drones, and the 3D view that sends the picture from each drone. You command Blue. First you
   start a practice game, where nobody commands Red and there is no 3D view. Then you start a
   game against the computer, with the cameras on. The first line of the LOG screen shows what

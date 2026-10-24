@@ -14,7 +14,7 @@ Feature: Playing Towers with ArduPilot drones
 
   Expectation: Every drone flies the game in AGENT mode
     When two computer teams play a game of Towers
-    Then the drones in AGENT mode are 6
+    Then the drones in AGENT mode are 10
     And the commands that the drones refused are 0
 
   Expectation: Each computer team takes towers

@@ -33,7 +33,7 @@ Story: Judging a Towers captain
     Given the champion captain is the timid captain
     And the challenger captain is the default captain
     When the arena plays a game of Towers between two default captains
-    Then the drones that flew in the captain game are 6
+    Then the drones that flew in the captain game are 10
     When the default captain plays itself from both sides
     Then the score of the captain against itself is 0
     When the league judges the captain challenger
