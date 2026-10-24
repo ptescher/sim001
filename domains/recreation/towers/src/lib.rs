@@ -15,6 +15,7 @@
 
 mod advisor;
 mod commander;
+mod filter;
 pub mod flight;
 mod instruction;
 pub mod map;
@@ -24,6 +25,7 @@ mod view;
 
 pub use advisor::{Advice, AdviceKind, Advisor};
 pub use commander::{Commander, CommanderTuning};
+pub use filter::LinkFilter;
 pub use instruction::{Instruction, Standing};
 pub use map::Map;
 pub use view::{EnemyDrone, Order, OwnDrone, Sites, TeamView, TowerView, Umpire};

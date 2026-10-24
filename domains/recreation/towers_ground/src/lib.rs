@@ -28,8 +28,9 @@ pub const PLAN_TTL: f32 = 3.0;
 pub enum Transport {
     /// TCP to the simulated ground radio: drone `k` at `host:ports[k]`.
     Tcp { host: String, ports: Vec<u16> },
-    /// A serial line to a ground radio (one for the team's drones: they answer to their system ids).
-    Serial { path: String, baud: u32 },
+    /// A serial line to a ground radio for each drone: `paths[k]` for drone `k` (a radio on a bench
+    /// has one drone behind it).
+    Serial { paths: Vec<String>, baud: u32 },
 }
 
 impl Transport {
@@ -37,7 +38,7 @@ impl Transport {
     pub fn url(&self, k: usize) -> Option<String> {
         match self {
             Transport::Tcp { host, ports } => ports.get(k).map(|p| format!("tcpout:{host}:{p}")),
-            Transport::Serial { path, baud } => Some(format!("serial:{path}:{baud}")),
+            Transport::Serial { paths, baud } => paths.get(k).map(|p| format!("serial:{p}:{baud}")),
         }
     }
 }
@@ -427,4 +428,19 @@ pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64)
     };
     let (lat, lon) = to_global(home.0, home.1, leg.point.x, leg.point.y);
     WirePlan { id, primitive, target: 0, lat, lon, alt: leg.alt, radius, ttl: PLAN_TTL }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_transport_names_the_connection_of_each_drone() {
+        let tcp = Transport::Tcp { host: "127.0.0.1".into(), ports: vec![6001, 6002] };
+        assert_eq!(tcp.url(1).as_deref(), Some("tcpout:127.0.0.1:6002"));
+        assert_eq!(tcp.url(2), None);
+        let serial = Transport::Serial { paths: vec!["/dev/cu.usbserial-0".into()], baud: 57600 };
+        assert_eq!(serial.url(0).as_deref(), Some("serial:/dev/cu.usbserial-0:57600"));
+        assert_eq!(serial.url(1), None, "a drone with no radio has no connection");
+    }
 }

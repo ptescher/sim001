@@ -8,6 +8,10 @@ Feature: Radio shadows
   flies the order that it had. If it is out of contact for 45 s, its link is lost. It then flies
   home by itself, and it stays on that order until the team can give it a new one.
 
+  In the sim, the simulated air drops the frames of a drone in a radio shadow. In the field there is
+  no such air, so the link has a filter: it knows who holds the towers and where the drones are, and
+  it drops the frames that the rule says are lost. It is the same rule on both platforms.
+
   Expectation: A tower that a team holds blocks the radio of the enemy
     Given the Red home tower is held by Red
     And the first Blue drone is near the Red home tower
@@ -24,6 +28,7 @@ Feature: Radio shadows
 
   Expectation: A drone that leaves the radio shadow is in contact again
     Overrides: A tower that a team holds blocks the radio of the enemy
+    Overrides: The filter of the link drops the frames of a drone in a radio shadow
     The tower still blocks the radio, but the drone is not in its shadow now.
 
     Given the Red home tower is held by Red
@@ -74,3 +79,21 @@ Feature: Radio shadows
     And the first Blue drone is near the Red home tower
     When the computer commander of Blue decides
     Then the order of the first Blue drone is none
+
+  Expectation: The filter of the link drops the frames of a drone in a radio shadow
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    Then the link filter lets the frames of the first Blue drone through is no
+
+  Expectation: The filter of the link passes the frames of a drone in contact
+    Overrides: The filter of the link drops the frames of a drone in a radio shadow
+    Given the Red home tower is held by Red
+    And the first Blue drone is at the Blue home tower
+    Then the link filter lets the frames of the first Blue drone through is yes
+
+  Expectation: The filter of the link passes the frames of a drone that a friend relays
+    Overrides: The filter of the link drops the frames of a drone in a radio shadow
+    Given the Red home tower is held by Red
+    And the first Blue drone is 150 m from the Red home tower
+    And the second Blue drone is 210 m from the Red home tower
+    Then the link filter lets the frames of the first Blue drone through is yes

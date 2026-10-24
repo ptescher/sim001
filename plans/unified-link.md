@@ -165,3 +165,21 @@ can run it, a failure for the right reason, then the code.
   must also stop hearing the ground).
 - The field umpire's source of truth: Remote ID, the drones' own telemetry, or logs after the game.
 - How a drone reports what it sees within the link's rate (`Downlink` is narrow).
+
+## Status
+
+Steps 1 to 7 are in (PR #45), as far as a machine with no radio can take them:
+
+1. The Towers spec has the platforms `sim` and `field`.
+2. `towers_server/src/air.rs`: the simulated air, one proxy per drone (shadows, range; not yet rate or loss).
+3. The standing plan (`CMD_STANDING`) and the executor fly the standing order and the flight home on board.
+   Quadcopters, flown by the server's radio, still have the server tick.
+4. `recreation_towers_ground`: the ground, behind a `Transport`; the commander app runs it for its team.
+5. The sensors report enemies through the air; the station builds its drones and enemies from telemetry.
+6. A seat that commands gets `Umpire` and `Sites`, not a map. Tower holders still come from the server.
+7. `LinkFilter` (the radio shadow as a filter in the link, held to the referee by a test), the serial
+   transport (one radio for each drone), and `sim001_command --expect --platform field`, which is
+   "not supported yet" until the bench is there.
+
+Open: the bench itself (a field driver that stages a game), the rate and loss of the air, quadcopters
+flown over MAVLink, the field umpire's source of truth, and what the drones report within the link's rate.
