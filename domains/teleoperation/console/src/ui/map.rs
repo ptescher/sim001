@@ -86,6 +86,9 @@ pub struct Marker {
     pub detail: String,
 }
 
+/// A mission item: its kind, where it is (none when it has no position) and its altitude.
+pub type MissionItem = (WpKind, Option<(f32, f32)>, f32);
+
 /// Snapshot of what the map draws, so the vehicle lock isn't held while painting.
 pub struct MapData {
     pub origin: Origin,
@@ -94,7 +97,7 @@ pub struct MapData {
     pub heading: f32,
     pub velocity: (f32, f32),
     pub home: Option<(f32, f32)>,
-    pub mission: Vec<(WpKind, Option<(f32, f32)>, f32)>,
+    pub mission: Vec<MissionItem>,
     pub mission_seq: u16,
     pub guided: Option<(f32, f32)>,
     pub trail: Vec<(f32, f32)>,

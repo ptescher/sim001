@@ -159,6 +159,7 @@ fn fetch_tiled<T: Copy + Default>(
     Ok(Mosaic { w, h, bands, lon0: req.lon0, lat1: req.lat1, dlon, dlat, data })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn arcgis_url(service: &str, extra: &str, lon0: f64, lat0: f64, lon1: f64, lat1: f64, w: usize, h: usize) -> String {
     format!(
         "{service}?bbox={lon0:.8},{lat0:.8},{lon1:.8},{lat1:.8}&bboxSR=4326&imageSR=4326&size={w},{h}\

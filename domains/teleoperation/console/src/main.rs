@@ -13,7 +13,7 @@ mod station;
 mod tx15_screen;
 mod ui;
 // The screenless half of the station lives in teleoperation_core; keep the old paths.
-use teleoperation_core::{debug, geo, link, vehicle};
+use teleoperation_core::{geo, link, vehicle};
 
 use geo::{Origin, TerrainMap};
 use gpui::{
@@ -128,11 +128,9 @@ fn main() {
         );
         std::process::exit(1);
     }
-    if station_mode {
-        if let Err(e) = station::prepare(&opts, &assets) {
-            eprintln!("\x1b[1;31mstation: {e}\x1b[0m");
-            std::process::exit(1);
-        }
+    if station_mode && let Err(e) = station::prepare(&opts, &assets) {
+        eprintln!("\x1b[1;31mstation: {e}\x1b[0m");
+        std::process::exit(1);
     }
 
     // The map's home is ArduPilot's home and the sim's pilot box: everything is relative to it.

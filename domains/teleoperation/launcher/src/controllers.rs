@@ -90,10 +90,10 @@ pub fn serial_radios() -> Vec<SerialRadio> {
         let value = line.split_once(" = ").map(|(_, v)| v.trim().trim_matches('"').to_string());
         if line.contains("\"USB Product Name\"") {
             product = value.unwrap_or_default();
-        } else if line.contains("\"IOCalloutDevice\"") {
-            if let Some(v) = value {
-                by_path.push((v, product.clone()));
-            }
+        } else if line.contains("\"IOCalloutDevice\"")
+            && let Some(v) = value
+        {
+            by_path.push((v, product.clone()));
         }
     }
     paths

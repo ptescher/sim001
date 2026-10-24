@@ -177,12 +177,11 @@ impl Render for SensorView {
                 f.as_ref().is_none_or(|f| f.at.elapsed().as_secs_f32() > 1.5),
             )
         };
-        if let Some((_, img)) = &frame {
-            if self.shown.as_ref().is_none_or(|s| !Arc::ptr_eq(s, img)) {
-                if let Some(old) = self.shown.replace(img.clone()) {
-                    let _ = window.drop_image(old);
-                }
-            }
+        if let Some((_, img)) = &frame
+            && self.shown.as_ref().is_none_or(|s| !Arc::ptr_eq(s, img))
+            && let Some(old) = self.shown.replace(img.clone())
+        {
+            let _ = window.drop_image(old);
         }
         let overlay = {
             let v = self.vehicle.lock().unwrap();

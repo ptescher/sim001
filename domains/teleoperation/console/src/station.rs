@@ -231,17 +231,17 @@ fn restart_dead(
             let _ = writeln!(log, "--- exited ({status}) ---");
         }
         // One that panics at every start is not started for ever: the run is better failed at once.
-        if let Some(panic) = &panicked {
-            if tries.panicked(*instance) > MAX_PANIC_RESTARTS {
-                let why = format!(
-                    "ArduPlane {instance} panicked {} starts in a row ({panic}); giving up on it",
-                    MAX_PANIC_RESTARTS + 1
-                );
-                said.push(why.clone());
-                tries.gave_up.push(why);
-                given_up.push(*instance);
-                continue;
-            }
+        if let Some(panic) = &panicked
+            && tries.panicked(*instance) > MAX_PANIC_RESTARTS
+        {
+            let why = format!(
+                "ArduPlane {instance} panicked {} starts in a row ({panic}); giving up on it",
+                MAX_PANIC_RESTARTS + 1
+            );
+            said.push(why.clone());
+            tries.gave_up.push(why);
+            given_up.push(*instance);
+            continue;
         }
         match respawn(*instance) {
             Ok(new) => {

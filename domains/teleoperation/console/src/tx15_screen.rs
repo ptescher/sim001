@@ -9,6 +9,7 @@ pub struct Lamps {
     pub armed: bool,
 }
 
+#[allow(dead_code)] // the tests below read the sim's JSON with it
 /// Read the sim's JSON: `{"live":true,"mode":"FBWA","armed":true}`.
 pub fn parse(json: &str) -> Option<Lamps> {
     let field = |name: &str| -> Option<&str> {

@@ -111,6 +111,7 @@ pub enum Align {
 }
 
 /// Draws one line of monospace text with its vertical centre at `y`. Returns its width.
+#[allow(clippy::too_many_arguments)]
 pub fn text(window: &mut Window, cx: &mut App, s: &str, x: f32, y: f32, size: f32, color: Hsla, align: Align) -> f32 {
     if s.is_empty() {
         return 0.0;
@@ -131,6 +132,7 @@ pub fn text(window: &mut Window, cx: &mut App, s: &str, x: f32, y: f32, size: f3
 }
 
 /// Text on an opaque box, for readouts that sit over moving symbology.
+#[allow(clippy::too_many_arguments)]
 pub fn boxed_text(
     window: &mut Window,
     cx: &mut App,

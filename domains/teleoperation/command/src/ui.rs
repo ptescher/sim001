@@ -717,6 +717,7 @@ fn theme_team(t: Team) -> u32 {
 }
 
 /// The team's map: the fog, what the team sees, the towers and the drones.
+#[allow(clippy::too_many_arguments)]
 fn paint_map(
     b: Bounds<Pixels>,
     v: &TeamView,

@@ -288,7 +288,7 @@ impl Gcs {
             self.arm_confirm = None;
         }
         let alive = v.link.alive();
-        let armed = v.armed;
+        let _armed = v.armed;
         // ArduPilot reports whether its pre-arm checks pass; until then (e.g. the first ~30 s
         // while the EKF initialises) say so, with the latest reason. Arming is still allowed.
         const PREARM_CHECK: u32 = 0x1000_0000;
@@ -504,7 +504,7 @@ impl Gcs {
     fn annunciators(&self, v: &Vehicle, agl: Option<f32>, tile_w: f32) -> Div {
         use Ann::*;
         let alive = v.link.alive();
-        let flash = (v.now() * 2.0) as u32 % 2 == 0;
+        let flash = ((v.now() * 2.0) as u32).is_multiple_of(2);
         let s = |bit: u32| -> Ann {
             match v.sensor_ok(bit) {
                 None => Off,

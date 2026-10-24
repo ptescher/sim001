@@ -280,7 +280,6 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     // A hung run never leaves the windows open: the whole run has a limit, and the console quits when
     // it passes. Each test has its own budget (below); this is for what a budget can't catch.
     // SIM001_EXPECT_ONLY=<text>: run only the tests whose title has it (while working on them).
-    let mut acceptance = acceptance;
     if let Ok(only) = std::env::var("SIM001_EXPECT_ONLY") {
         acceptance.plans.retain(|p| p.title.contains(&only));
     }
@@ -1177,11 +1176,12 @@ impl Driver for ConsoleDriver {
         self.deadline = None;
         // A plane that has flown, or whose autopilot has lost its bearings, starts the next test
         // from a fresh plane: the sim starts again (as with R), and the station restarts ArduPilot.
-        if self.vtol && self.needs_a_fresh_plane()? {
-            if let Err(e) = self.fresh_plane() {
-                self.dead = Some(e.clone());
-                return Err(e);
-            }
+        if self.vtol
+            && self.needs_a_fresh_plane()?
+            && let Err(e) = self.fresh_plane()
+        {
+            self.dead = Some(e.clone());
+            return Err(e);
         }
         // The throttle stick starts down, as a pilot leaves it before arming.
         if self.vtol {
@@ -1198,11 +1198,11 @@ impl Driver for ConsoleDriver {
         })?;
         // Nor is the autopilot's own start, the first time: the test begins from a vehicle that is
         // ready to arm.
-        if self.vtol {
-            if let Err(e) = self.wait_until_ready_to_arm() {
-                self.dead = Some(e.clone());
-                return Err(e);
-            }
+        if self.vtol
+            && let Err(e) = self.wait_until_ready_to_arm()
+        {
+            self.dead = Some(e.clone());
+            return Err(e);
         }
         self.deadline = Some(Instant::now() + self.budget);
         Ok(())
@@ -1506,10 +1506,10 @@ impl Driver for ConsoleDriver {
             Some(jpeg)
         })?;
         // With the TX15 on the serial line, its screen goes above the console's.
-        if let (Some(jpg), Some(line)) = (&bytes, &self.line) {
-            if let Some(svg) = crate::tx15_screen::composite(jpg, &line.svg()) {
-                return Ok(Some(Screenshot::svg(svg)));
-            }
+        if let (Some(jpg), Some(line)) = (&bytes, &self.line)
+            && let Some(svg) = crate::tx15_screen::composite(jpg, &line.svg())
+        {
+            return Ok(Some(Screenshot::svg(svg)));
         }
         Ok(bytes.map(Screenshot::jpeg))
     }
