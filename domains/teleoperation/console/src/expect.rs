@@ -19,8 +19,8 @@ use crate::vehicle::{Waypoint, WpKind, mode_number};
 use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screenshot};
 use expectation_model::{Event, Value, Variable};
 use gpui::{
-    App, AppContext as _, Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Pixels, PlatformInput, Point, Window, WindowHandle,
+    App, AppContext as _, Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
+    PlatformInput, Point, Window, WindowHandle,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -124,20 +124,14 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator toggles the planning tool", Act::Button("plan")),
     ("operator toggles the fly-to tool", Act::Button("goto")),
     ("operator clicks the map", Act::Map(MouseButton::Left)),
-    (
-        "operator right-clicks the map",
-        Act::Map(MouseButton::Right),
-    ),
+    ("operator right-clicks the map", Act::Map(MouseButton::Right)),
     ("operator raises the plan altitude", Act::Button("alt-up")),
     ("operator lowers the plan altitude", Act::Button("alt-dn")),
     ("operator adds a takeoff", Act::Button("tkof")),
     ("operator adds a return home", Act::Button("rtl")),
     ("operator clears the plan", Act::Button("clear")),
     ("operator uploads the plan", Act::Button("upload")),
-    (
-        "operator downloads the vehicle's mission",
-        Act::Button("download"),
-    ),
+    ("operator downloads the vehicle's mission", Act::Button("download")),
     ("operator edits the vehicle's mission", Act::Button("edit")),
     ("operator restarts the mission", Act::Button("restart")),
     ("operator arms the vehicle", Act::Arm),
@@ -145,35 +139,16 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator switches to AUTO", Act::Button("mode-AUTO")),
     ("operator switches to AUTO anyway", Act::Twice("mode-AUTO")),
     ("operator takes off vertically", Act::Button("vtol-tkof")),
-    (
-        "operator switches to forward flight",
-        Act::Button("mode-CRUISE"),
-    ),
+    ("operator switches to forward flight", Act::Button("mode-CRUISE")),
     ("operator switches to hover", Act::Button("mode-QLOITER")),
     ("operator lands vertically", Act::Button("mode-QLAND")),
-    (
-        "pilot raises the throttle stick",
-        Act::Radio(RadioMove::Throttle(STICK_HIGH)),
-    ),
-    (
-        "pilot centres the throttle stick",
-        Act::Radio(RadioMove::Throttle(STICK_MIDDLE)),
-    ),
-    (
-        "pilot lowers the throttle stick",
-        Act::Radio(RadioMove::Throttle(STICK_LOW)),
-    ),
-    (
-        "pilot switches to qhover",
-        Act::Radio(RadioMove::Mode("QHOVER")),
-    ),
+    ("pilot raises the throttle stick", Act::Radio(RadioMove::Throttle(STICK_HIGH))),
+    ("pilot centres the throttle stick", Act::Radio(RadioMove::Throttle(STICK_MIDDLE))),
+    ("pilot lowers the throttle stick", Act::Radio(RadioMove::Throttle(STICK_LOW))),
+    ("pilot switches to qhover", Act::Radio(RadioMove::Mode("QHOVER"))),
     (
         "pilot switches back to a hover",
-        Act::Radios(&[
-            RadioMove::Elevator(0.0),
-            RadioMove::Throttle(STICK_MIDDLE),
-            RadioMove::Mode("QLOITER"),
-        ]),
+        Act::Radios(&[RadioMove::Elevator(0.0), RadioMove::Throttle(STICK_MIDDLE), RadioMove::Mode("QLOITER")]),
     ),
     (
         "pilot switches to forward flight",
@@ -183,17 +158,8 @@ const EVENTS: &[(&str, Act)] = &[
             RadioMove::Mode("FBWA"),
         ]),
     ),
-    (
-        "pilot switches to cruise",
-        Act::Radios(&[
-            RadioMove::Throttle(STICK_TOP),
-            RadioMove::Mode("CRUISE"),
-        ]),
-    ),
-    (
-        "pilot sends the plane home",
-        Act::Radio(RadioMove::Mode("QRTL")),
-    ),
+    ("pilot switches to cruise", Act::Radios(&[RadioMove::Throttle(STICK_TOP), RadioMove::Mode("CRUISE")])),
+    ("pilot sends the plane home", Act::Radio(RadioMove::Mode("QRTL"))),
     ("pilot starts a race", Act::Key(Key::Race)),
     ("pilot starts a game of tag", Act::Key(Key::Tag)),
     ("countdown ends", Act::Go),
@@ -238,14 +204,8 @@ const STATES: &[&str] = &[
     "opponents",
 ];
 /// States an action can change directly (the others change through events).
-const SETTABLE: &[&str] = &[
-    "autopilot mode",
-    "plan altitude",
-    "throttle stick",
-    "aileron stick",
-    "arm switch",
-    "mode switch",
-];
+const SETTABLE: &[&str] =
+    &["autopilot mode", "plan altitude", "throttle stick", "aileron stick", "arm switch", "mode switch"];
 
 const MODE_IDS: [&str; 10] = [
     "mode-MANUAL",
@@ -291,15 +251,7 @@ type Job = Box<dyn FnOnce(&mut App, WindowHandle<Gcs>) + Send>;
 
 /// Load and check the suite before anything opens, then start the runner thread.
 pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
-    let Config {
-        suite,
-        docs,
-        only,
-        vtol,
-        rc_modes,
-        radio,
-        vehicle,
-    } = config;
+    let Config { suite, docs, only, vtol, rc_modes, radio, vehicle } = config;
     let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
         Ok(a) => a.with_coverage(),
         Err(e) => {
@@ -309,23 +261,15 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     };
     if let Some(only) = &only {
         let only = only.to_lowercase();
-        acceptance
-            .plans
-            .retain(|p| p.title.to_lowercase().contains(&only));
+        acceptance.plans.retain(|p| p.title.to_lowercase().contains(&only));
     }
-    println!(
-        "expect: {} tests from {}",
-        acceptance.plans.len(),
-        suite.display()
-    );
+    println!("expect: {} tests from {}", acceptance.plans.len(), suite.display());
 
     let (tx, rx): (Sender<Job>, Receiver<Job>) = channel();
     // The UI thread answers the runner's jobs between frames.
     cx.spawn(async move |cx| {
         loop {
-            cx.background_executor()
-                .timer(Duration::from_millis(5))
-                .await;
+            cx.background_executor().timer(Duration::from_millis(5)).await;
             while let Ok(job) = rx.try_recv() {
                 let _ = cx.update(|cx| job(cx, console));
             }
@@ -343,7 +287,10 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     let total = run_limit();
     std::thread::spawn(move || {
         std::thread::sleep(total);
-        eprintln!("expect: the run took more than {} s: stopping (SIM001_EXPECT_TOTAL sets the limit)", total.as_secs());
+        eprintln!(
+            "expect: the run took more than {} s: stopping (SIM001_EXPECT_TOTAL sets the limit)",
+            total.as_secs()
+        );
         crate::station::exit(2);
     });
     // A radio that the test doesn't use is held like a keyboard pilot's: the sticks centred, and
@@ -351,25 +298,27 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     let in_use = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     if let Some(line) = radio.clone() {
         let in_use = in_use.clone();
-        std::thread::spawn(move || loop {
-            if !in_use.load(Ordering::SeqCst) {
-                let (armed, mode) = {
-                    let v = vehicle.lock().unwrap();
-                    (v.armed, v.mode().to_string())
-                };
-                line.fly(aviation_line::Pilot { throttle: idle_throttle(armed, &mode), ..aviation_line::Pilot::AT_REST });
+        std::thread::spawn(move || {
+            loop {
+                if !in_use.load(Ordering::SeqCst) {
+                    let (armed, mode) = {
+                        let v = vehicle.lock().unwrap();
+                        (v.armed, v.mode().to_string())
+                    };
+                    line.fly(aviation_line::Pilot {
+                        throttle: idle_throttle(armed, &mode),
+                        ..aviation_line::Pilot::AT_REST
+                    });
+                }
+                std::thread::sleep(Duration::from_millis(100));
             }
-            std::thread::sleep(Duration::from_millis(100));
         });
     }
     std::thread::spawn(move || {
         let mut driver = ConsoleDriver::new(tx, vtol, rc_modes);
         driver.line = radio;
         driver.in_use = in_use.clone();
-        let opts = RunOptions {
-            docs_dir: docs.clone(),
-            patience: 480,
-        };
+        let opts = RunOptions { docs_dir: docs.clone(), patience: 480 };
         let mut report = expectation_story::Report::default();
         let mut aborted = false;
         let suite_time = suite_budget::Budget::from_env();
@@ -381,12 +330,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 continue;
             }
             driver.budget = suite_time.cap(Duration::from_secs(test_budget(plan)));
-            let r = expectation_harness::run(
-                &acceptance.suite,
-                std::slice::from_ref(plan),
-                &mut driver,
-                &opts,
-            );
+            let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
             let mut r = r.results.into_iter().next().unwrap();
             // A flight depends on the autopilot, the link and the timing of the machine: a test
             // that fails once gets one more go, from a fresh plane, and says so.
@@ -415,11 +359,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 // Another system's test (the sim's), or one for a feature the console lacks.
                 expectation_story::Status::Unsupported => {}
                 _ => {
-                    println!(
-                        "expect: ✗ {} ({:.0} s)",
-                        plan.title,
-                        began.elapsed().as_secs_f32()
-                    );
+                    println!("expect: ✗ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32());
                     // What the vehicle was saying, for working out why. (Not part of the test's time:
                     // after the budget, the driver refuses every call.)
                     driver.deadline = None;
@@ -441,13 +381,26 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                             .iter()
                             .filter(|s| s.t > end - 480.0)
                             .filter(|s| {
-                                let keep = s.t - last >= 4.0 && (s.alt.abs() > 1.0 || s.airspeed > 12.0 || s.t > end - 480.0 && s.alt > 0.5 || true);
+                                let keep = s.t - last >= 4.0
+                                    && (s.alt.abs() > 1.0
+                                        || s.airspeed > 12.0
+                                        || s.t > end - 480.0 && s.alt > 0.5
+                                        || true);
                                 if keep {
                                     last = s.t;
                                 }
                                 keep
                             })
-                            .map(|s| format!("t-{:.0}s height {:.1} m, airspeed {:.1}, ground speed {:.1}, throttle {:.0}", end - s.t, s.alt, s.airspeed, s.groundspeed, s.throttle))
+                            .map(|s| {
+                                format!(
+                                    "t-{:.0}s height {:.1} m, airspeed {:.1}, ground speed {:.1}, throttle {:.0}",
+                                    end - s.t,
+                                    s.alt,
+                                    s.airspeed,
+                                    s.groundspeed,
+                                    s.throttle
+                                )
+                            })
                             .collect::<Vec<_>>()
                     }) {
                         for r in rows {
@@ -456,12 +409,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                     }
                     if let Ok(lines) = driver.call(|g, _, _| {
                         let v = g.vehicle.lock().unwrap();
-                        v.log
-                            .iter()
-                            .rev()
-                            .take(70)
-                            .map(|l| l.text.clone())
-                            .collect::<Vec<_>>()
+                        v.log.iter().rev().take(70).map(|l| l.text.clone()).collect::<Vec<_>>()
                     }) {
                         for l in lines.iter().rev() {
                             println!("expect:   vehicle: {l}");
@@ -472,7 +420,8 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                     if let Ok((report, events)) = driver.call(|g, _, _| {
                         let v = g.vehicle.lock().unwrap();
                         let report = teleoperation_core::debug::state_report(&v);
-                        let events: Vec<String> = v.debug.tail(80).into_iter().map(teleoperation_core::debug::format_line).collect();
+                        let events: Vec<String> =
+                            v.debug.tail(80).into_iter().map(teleoperation_core::debug::format_line).collect();
                         (report, events)
                     }) {
                         for (k, val) in report {
@@ -482,7 +431,10 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                             println!("expect:   debug: {e}");
                         }
                     }
-                    for l in teleoperation_core::debug::tail_lines(&crate::station::logs_dir().join("sitl/arduplane.log"), 20) {
+                    for l in teleoperation_core::debug::tail_lines(
+                        &crate::station::logs_dir().join("sitl/arduplane.log"),
+                        20,
+                    ) {
                         println!("expect:   arduplane: {l}");
                     }
                 }
@@ -492,9 +444,9 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 // Nothing after this can run: say so now, not after every test has waited its turn.
                 let left = &acceptance.plans[report.results.len()..];
                 eprintln!("expect: the plane is not answering ({why}): stopping, {} tests not run", left.len());
-                report.results.extend(left.iter().map(|p| {
-                    expectation_story::PlanResult::with(expectation_story::Status::NotRun, p)
-                }));
+                report.results.extend(
+                    left.iter().map(|p| expectation_story::PlanResult::with(expectation_story::Status::NotRun, p)),
+                );
                 aborted = true;
                 break;
             }
@@ -531,11 +483,7 @@ fn click(window: &mut Window, cx: &mut App, at: Point<Pixels>, button: MouseButt
     let mut send = |e: PlatformInput| {
         let _ = window.dispatch_event(e, cx);
     };
-    send(PlatformInput::MouseMove(MouseMoveEvent {
-        position: at,
-        pressed_button: None,
-        modifiers,
-    }));
+    send(PlatformInput::MouseMove(MouseMoveEvent { position: at, pressed_button: None, modifiers }));
     send(PlatformInput::MouseDown(MouseDownEvent {
         button,
         position: at,
@@ -543,12 +491,7 @@ fn click(window: &mut Window, cx: &mut App, at: Point<Pixels>, button: MouseButt
         click_count: 1,
         first_mouse: false,
     }));
-    send(PlatformInput::MouseUp(MouseUpEvent {
-        button,
-        position: at,
-        modifiers,
-        click_count: 1,
-    }));
+    send(PlatformInput::MouseUp(MouseUpEvent { button, position: at, modifiers, click_count: 1 }));
 }
 
 fn click_button(window: &mut Window, cx: &mut App, id: &str) -> Result<(), String> {
@@ -564,16 +507,11 @@ fn map_point(g: &Gcs) -> Result<Point<Pixels>, String> {
         return Err("the map isn't on screen".into());
     }
     let n = g.map.plan.len() as f32;
-    Ok(Point::new(
-        b.center().x + gpui::px(40.0 * ((n % 5.0) - 2.0)),
-        b.center().y - gpui::px(30.0 * (n % 4.0)),
-    ))
+    Ok(Point::new(b.center().x + gpui::px(40.0 * ((n % 5.0) - 2.0)), b.center().y - gpui::px(30.0 * (n % 4.0))))
 }
 
 fn enum_value(v: &Value) -> Result<String, String> {
-    v.as_str()
-        .map(str::to_string)
-        .ok_or_else(|| format!("expected a name, got {v}"))
+    v.as_str().map(str::to_string).ok_or_else(|| format!("expected a name, got {v}"))
 }
 
 fn kind_name(k: WpKind) -> &'static str {
@@ -602,15 +540,8 @@ fn kind_of(name: &str) -> Option<WpKind> {
 
 /// A waypoint of our own on the valley floor near home, for arranging a plan.
 fn waypoint(g: &Gcs, i: usize) -> Waypoint {
-    let (lat, lon) = g
-        .origin
-        .to_ll(80.0 + 40.0 * i as f32, 50.0 * ((i % 3) as f32 - 1.0));
-    Waypoint {
-        kind: WpKind::Waypoint,
-        lat,
-        lon,
-        alt: g.map.plan_alt,
-    }
+    let (lat, lon) = g.origin.to_ll(80.0 + 40.0 * i as f32, 50.0 * ((i % 3) as f32 - 1.0));
+    Waypoint { kind: WpKind::Waypoint, lat, lon, alt: g.map.plan_alt }
 }
 
 /// The vehicle's mission (after its home) is the plan.
@@ -620,8 +551,7 @@ fn same(plan: &[Waypoint], mission: &[Waypoint]) -> bool {
         && plan.iter().zip(m).all(|(a, b)| {
             a.kind == b.kind
                 && (a.alt - b.alt).abs() < 1.0
-                && (!a.has_position()
-                    || ((a.lat - b.lat).abs() < 1e-4 && (a.lon - b.lon).abs() < 1e-4))
+                && (!a.has_position() || ((a.lat - b.lat).abs() < 1e-4 && (a.lon - b.lon).abs() < 1e-4))
         })
 }
 
@@ -649,11 +579,7 @@ fn opponents(v: &crate::vehicle::Vehicle) -> &'static str {
     let Some((_, _, home)) = v.home else {
         return "not on the map";
     };
-    let heights: Vec<f32> = v
-        .other_aircraft()
-        .iter()
-        .map(|t| t.position.alt - home)
-        .collect();
+    let heights: Vec<f32> = v.other_aircraft().iter().map(|t| t.position.alt - home).collect();
     if heights.is_empty() {
         "not on the map"
     } else if heights.iter().all(|h| *h < 3.0) {
@@ -696,17 +622,13 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
         "plan" => Value::from(plan.len() as f64),
         "plan altitude" => Value::from(g.map.plan_alt),
         "last plan item" => Value::from(plan.last().map_or("none", |w| kind_name(w.kind))),
-        "takeoff" => Value::from(if plan.first().is_some_and(|w| w.kind == WpKind::Takeoff) {
-            "planned"
-        } else {
-            "not planned"
+        "takeoff" => {
+            Value::from(if plan.first().is_some_and(|w| w.kind == WpKind::Takeoff) { "planned" } else { "not planned" })
+        }
+        "newest waypoint" => Value::from(match plan.iter().rev().find(|w| w.kind == WpKind::Waypoint) {
+            Some(w) if (w.alt - g.map.plan_alt).abs() > 0.5 => "at another altitude",
+            _ => "at the plan altitude",
         }),
-        "newest waypoint" => Value::from(
-            match plan.iter().rev().find(|w| w.kind == WpKind::Waypoint) {
-                Some(w) if (w.alt - g.map.plan_alt).abs() > 0.5 => "at another altitude",
-                _ => "at the plan altitude",
-            },
-        ),
         "vehicle mission" => Value::from(if v.mission.len() <= 1 {
             "empty"
         } else if same(plan, &v.mission) {
@@ -797,17 +719,9 @@ fn arrange_model(g: &mut Gcs, key: &str, value: &Value) -> Result<(), String> {
                 g.map.plan.push(w);
             }
             let alt = g.map.plan_alt;
-            let other = if alt + 10.0 <= 300.0 {
-                alt + 10.0
-            } else {
-                alt - 10.0
-            };
+            let other = if alt + 10.0 <= 300.0 { alt + 10.0 } else { alt - 10.0 };
             let last = g.map.plan.last_mut().unwrap();
-            last.alt = if name()? == "at another altitude" {
-                other
-            } else {
-                alt
-            };
+            last.alt = if name()? == "at another altitude" { other } else { alt };
         }
         _ => return Err(format!("can't put {key} in place: {value}")),
     }
@@ -884,7 +798,11 @@ impl ConsoleDriver {
             return Ok(());
         }
         let sent = self.call(move |g, _, _| g.sensor.as_ref().map(|s| s.send_radio(radio)).is_some())?;
-        if sent { Ok(()) } else { Err("there is no link to the sim to carry the radio: start the station (--station)".into()) }
+        if sent {
+            Ok(())
+        } else {
+            Err("there is no link to the sim to carry the radio: start the station (--station)".into())
+        }
     }
 
     /// Move the stand-in radio and tell the sim.
@@ -898,11 +816,8 @@ impl ConsoleDriver {
             RadioMove::Aileron(a) => self.radio.roll = a,
             RadioMove::Elevator(e) => self.radio.pitch = e,
             RadioMove::Mode(name) => {
-                let slot = self
-                    .rc_modes
-                    .iter()
-                    .position(|m| *m == name)
-                    .ok_or("this plane has no such mode on its switch")?;
+                let slot =
+                    self.rc_modes.iter().position(|m| *m == name).ok_or("this plane has no such mode on its switch")?;
                 self.radio.mode = slot.min(5) as u8;
             }
         }
@@ -934,12 +849,7 @@ impl ConsoleDriver {
                     "centred"
                 }),
                 "arm switch" => Value::from(if r.arm { "on" } else { "off" }),
-                _ => Value::from(
-                    *self
-                        .rc_modes
-                        .get(r.mode as usize)
-                        .ok_or("this plane has no mode switch")?,
-                ),
+                _ => Value::from(*self.rc_modes.get(r.mode as usize).ok_or("this plane has no mode switch")?),
             });
         }
         Ok(match key {
@@ -955,19 +865,12 @@ impl ConsoleDriver {
                 1350..=1649 => "centred",
                 _ => "right",
             }),
-            "arm switch" if self.radio.connected => {
-                Value::from(if self.radio.arm { "on" } else { "off" })
-            }
+            "arm switch" if self.radio.connected => Value::from(if self.radio.arm { "on" } else { "off" }),
             "arm switch" => Value::from(if rc[4] > 1500 { "on" } else { "off" }),
             _ => {
                 // The mode switch's position nearest to the PWM.
                 let slot = simulation_aircraft::rc_mode_slot(rc[7]);
-                Value::from(
-                    *self
-                        .rc_modes
-                        .get(slot)
-                        .ok_or("this plane has no mode switch")?,
-                )
+                Value::from(*self.rc_modes.get(slot).ok_or("this plane has no mode switch")?)
             }
         })
     }
@@ -975,10 +878,7 @@ impl ConsoleDriver {
     /// error that `call` gives them.
     fn out_of_time(&self) -> Result<(), String> {
         if self.deadline.is_some_and(|d| Instant::now() > d) {
-            return Err(format!(
-                "the test ran out of time ({} s)",
-                self.budget.as_secs()
-            ));
+            return Err(format!("the test ran out of time ({} s)", self.budget.as_secs()));
         }
         Ok(())
     }
@@ -993,11 +893,8 @@ impl ConsoleDriver {
         let job: Job = Box::new(move |cx, console| {
             let _ = console.update(cx, |g, w, cx| tx.send(f(g, w, cx)));
         });
-        self.tx
-            .send(job)
-            .map_err(|_| "the console has quit".to_string())?;
-        rx.recv_timeout(ANSWER)
-            .map_err(|_| "the console stopped answering".to_string())
+        self.tx.send(job).map_err(|_| "the console has quit".to_string())?;
+        rx.recv_timeout(ANSWER).map_err(|_| "the console stopped answering".to_string())
     }
 
     /// Run `f` on the UI thread against the window alone. Input has to be delivered this way:
@@ -1010,11 +907,8 @@ impl ConsoleDriver {
         let job: Job = Box::new(move |cx, console| {
             let _ = cx.update_window(console.into(), |_, w, cx| tx.send(f(w, cx)));
         });
-        self.tx
-            .send(job)
-            .map_err(|_| "the console has quit".to_string())?;
-        rx.recv_timeout(ANSWER)
-            .map_err(|_| "the console stopped answering".to_string())
+        self.tx.send(job).map_err(|_| "the console has quit".to_string())?;
+        rx.recv_timeout(ANSWER).map_err(|_| "the console stopped answering".to_string())
     }
 
     fn send(&self, cmd: Cmd) -> Result<(), String> {
@@ -1024,10 +918,7 @@ impl ConsoleDriver {
     }
 
     fn read(&self, key: &str) -> Result<Value, String> {
-        if matches!(
-            key,
-            "throttle stick" | "aileron stick" | "arm switch" | "mode switch"
-        ) {
+        if matches!(key, "throttle stick" | "aileron stick" | "arm switch" | "mode switch") {
             return self.rc_reading(key);
         }
         if key == "radio line" {
@@ -1111,18 +1002,14 @@ impl ConsoleDriver {
                     return Err("there is no plan to upload".into());
                 }
                 self.send(Cmd::Upload(plan))?;
-                self.wait_for(30, "the upload", |g| {
-                    same(&g.map.plan, &g.vehicle.lock().unwrap().mission)
-                })
+                self.wait_for(30, "the upload", |g| same(&g.map.plan, &g.vehicle.lock().unwrap().mission))
             }
             _ => {
                 // Out of date: something on the vehicle, and a plan that differs from it.
                 if state.as_str() == Some("empty") {
                     let one = self.call(|g, _, _| vec![waypoint(g, 0)])?;
                     self.send(Cmd::Upload(one))?;
-                    self.wait_for(30, "the upload", |g| {
-                        g.vehicle.lock().unwrap().mission.len() > 1
-                    })?;
+                    self.wait_for(30, "the upload", |g| g.vehicle.lock().unwrap().mission.len() > 1)?;
                 }
                 self.call(|g, _, _| {
                     let w = waypoint(g, g.map.plan.len() + 1);
@@ -1143,9 +1030,9 @@ impl ConsoleDriver {
             if self.read(key)?.as_str() != Some(mode.as_str()) {
                 self.send(Cmd::SetMode(n))?;
                 let m = mode.clone();
-                if let Err(e) = self.wait_for(30, &format!("the {mode} mode"), move |g| {
-                    g.vehicle.lock().unwrap().mode() == m
-                }) {
+                if let Err(e) =
+                    self.wait_for(30, &format!("the {mode} mode"), move |g| g.vehicle.lock().unwrap().mode() == m)
+                {
                     // Why the autopilot said no, when it said why.
                     let recent = self.call(|g, _, _| {
                         let v = g.vehicle.lock().unwrap();
@@ -1183,10 +1070,7 @@ impl ConsoleDriver {
                         for _ in 0..6 {
                             self.send(Cmd::Arm(true))?;
                             self.out_of_time()?;
-                            if self
-                                .wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed)
-                                .is_ok()
-                            {
+                            if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                                 break;
                             }
                         }
@@ -1202,9 +1086,7 @@ impl ConsoleDriver {
                 })?;
                 if want == "cruising" && self.flight_now()? != "cruising" {
                     self.press("mode-CRUISE")?;
-                    self.wait_for(60, "the plane cruising", |g| {
-                        flight(&g.vehicle.lock().unwrap()) == "cruising"
-                    })?;
+                    self.wait_for(60, "the plane cruising", |g| flight(&g.vehicle.lock().unwrap()) == "cruising")?;
                 }
                 Ok(())
             }
@@ -1221,18 +1103,13 @@ impl ConsoleDriver {
         self.call(move |g, _, _| {
             let v = g.vehicle.lock().unwrap();
             v.link.alive()
-                && (v.arms > seen
-                    || v.armed
-                    || v.alt_rel.abs() > 1.0
-                    || v.sensor_ok(PREARM_CHECK) == Some(false))
+                && (v.arms > seen || v.armed || v.alt_rel.abs() > 1.0 || v.sensor_ok(PREARM_CHECK) == Some(false))
         })
     }
 
     /// Start the sim again with a fresh plane, and wait for ArduPilot to go and come back.
     fn fresh_plane(&mut self) -> Result<(), String> {
-        println!(
-            "expect: starting the next test from a fresh plane (the autopilot restarts, about a minute)"
-        );
+        println!("expect: starting the next test from a fresh plane (the autopilot restarts, about a minute)");
         self.radio = radio_for_a_fresh_plane(self.radio);
         self.deliver_radio(self.radio)?;
         // The sim starts again, as with the R key.
@@ -1242,12 +1119,8 @@ impl ConsoleDriver {
             }
         })?;
         // The station restarts the autopilot: its link drops, and then comes back.
-        let _ = self.wait_for(45, "the autopilot restarting", |g| {
-            !g.vehicle.lock().unwrap().link.alive()
-        });
-        self.wait_for(180, "the autopilot coming back", |g| {
-            g.vehicle.lock().unwrap().link.alive()
-        })?;
+        let _ = self.wait_for(45, "the autopilot restarting", |g| !g.vehicle.lock().unwrap().link.alive());
+        self.wait_for(180, "the autopilot coming back", |g| g.vehicle.lock().unwrap().link.alive())?;
         // ArduPilot goes to the mode of its mode switch a few seconds after it is ready, and a test
         // that sets a mode before then has it taken away; by the time it is ready to arm, that is
         // long done.
@@ -1261,17 +1134,11 @@ impl ConsoleDriver {
     /// settling when the status already says the checks pass).
     fn wait_until_ready_to_arm(&self) -> Result<(), String> {
         const PREARM_CHECK: u32 = 0x1000_0000;
-        self.wait_for(
-            240,
-            "the autopilot being ready to arm (is the station running? use --station)",
-            |g| {
-                let v = g.vehicle.lock().unwrap();
-                v.sensor_ok(PREARM_CHECK) == Some(true)
-                    && v.prearm
-                        .as_ref()
-                        .is_none_or(|p| p.0.elapsed() > Duration::from_secs(10))
-            },
-        )
+        self.wait_for(240, "the autopilot being ready to arm (is the station running? use --station)", |g| {
+            let v = g.vehicle.lock().unwrap();
+            v.sensor_ok(PREARM_CHECK) == Some(true)
+                && v.prearm.as_ref().is_none_or(|p| p.0.elapsed() > Duration::from_secs(10))
+        })
     }
 
     fn perform_key(&self, k: Key) -> Result<(), String> {
@@ -1350,11 +1217,9 @@ impl Driver for ConsoleDriver {
                 if want != "connected" {
                     return Err("can't cut the link".into());
                 }
-                self.wait_for(
-                    120,
-                    "the link coming up (is the station running? use --station)",
-                    |g| g.vehicle.lock().unwrap().link.alive(),
-                )?;
+                self.wait_for(120, "the link coming up (is the station running? use --station)", |g| {
+                    g.vehicle.lock().unwrap().link.alive()
+                })?;
                 // The start the spec describes waits for the ARM button to read ARM, not NOT READY:
                 // the vehicle has passed its pre-arm checks. (A switch arms once, and not if it's too early.)
                 const PREARM_CHECK: u32 = 0x1000_0000;
@@ -1368,10 +1233,7 @@ impl Driver for ConsoleDriver {
                     for _ in 0..6 {
                         self.send(Cmd::Arm(true))?;
                         self.out_of_time()?;
-                        if self
-                            .wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed)
-                            .is_ok()
-                        {
+                        if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                             return Ok(());
                         }
                     }
@@ -1404,11 +1266,7 @@ impl Driver for ConsoleDriver {
             }
             "airframe" => {
                 let want = name()?;
-                self.check(
-                    key,
-                    &want,
-                    " (start the station with --aircraft t1s-vtol for a VTOL)",
-                )
+                self.check(key, &want, " (start the station with --aircraft t1s-vtol for a VTOL)")
             }
             "throttle stick" => {
                 let t = match name()?.as_str() {
@@ -1442,10 +1300,7 @@ impl Driver for ConsoleDriver {
                 // In a countdown the sim holds the switch off until GO: the pilot puts it on, and
                 // nothing arms.
                 let counting = |g: &mut Gcs| {
-                    g.sensor
-                        .as_ref()
-                        .and_then(|s| s.game())
-                        .is_some_and(|x| x.clock == GameClock::CountingDown)
+                    g.sensor.as_ref().and_then(|s| s.game()).is_some_and(|x| x.clock == GameClock::CountingDown)
                 };
                 if self.call(move |g, _, _| counting(g))? {
                     std::thread::sleep(SETTLE);
@@ -1453,10 +1308,7 @@ impl Driver for ConsoleDriver {
                 }
                 for _ in 0..100 {
                     self.out_of_time()?;
-                    if self
-                        .wait_for(3, "arming", |g| g.vehicle.lock().unwrap().armed)
-                        .is_ok()
-                    {
+                    if self.wait_for(3, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                         return self.check(key, &want, "");
                     }
                     self.radio_move(RadioMove::ArmSwitch(false))?;
@@ -1466,8 +1318,7 @@ impl Driver for ConsoleDriver {
                 let (why, recent) = self.call(|g, _, _| {
                     let v = g.vehicle.lock().unwrap();
                     let why = v.prearm.as_ref().map(|p| p.1.clone());
-                    let recent: Vec<String> =
-                        v.log.iter().rev().take(8).map(|l| l.text.clone()).collect();
+                    let recent: Vec<String> = v.log.iter().rev().take(8).map(|l| l.text.clone()).collect();
                     (why, recent)
                 })?;
                 Err(format!(
@@ -1478,11 +1329,8 @@ impl Driver for ConsoleDriver {
             }
             "mode switch" => {
                 let want = name()?;
-                let slot = self
-                    .rc_modes
-                    .iter()
-                    .position(|m| *m == want)
-                    .ok_or("this plane has no such mode on its switch")?;
+                let slot =
+                    self.rc_modes.iter().position(|m| *m == want).ok_or("this plane has no such mode on its switch")?;
                 self.radio_move(RadioMove::ModeSwitch(slot))?;
                 std::thread::sleep(SETTLE);
                 self.check(key, &want, "")
@@ -1495,25 +1343,23 @@ impl Driver for ConsoleDriver {
                 if have + 0.5 >= want || self.read("flight")?.as_str() == Some("grounded") {
                     Ok(())
                 } else {
-                    Err(format!(
-                        "the plane is at {have:.0} m and can't be put at {want:.0} m without flying there"
-                    ))
+                    Err(format!("the plane is at {have:.0} m and can't be put at {want:.0} m without flying there"))
                 }
             }
             "home position" => {
                 if name()? != "set" {
                     return Err("can't unset home".into());
                 }
-                self.wait_for(60, "home being set", |g| {
-                    g.vehicle.lock().unwrap().home.is_some()
-                })
+                self.wait_for(60, "home being set", |g| g.vehicle.lock().unwrap().home.is_some())
             }
             "plane" if name()? == "on the ground" => self.check(key, "on the ground", ""),
             // A mission flown from the hand: armed in AUTO, the pilot throws the plane (Space in
             // the sim's window), and ArduPlane takes it from there.
             "plane" if name()? == "flying the mission" => {
                 if self.read(key)?.as_str() != Some("flying the mission") {
-                    if self.read("autopilot mode")?.as_str() != Some("AUTO") || self.read("vehicle")?.as_str() != Some("armed") {
+                    if self.read("autopilot mode")?.as_str() != Some("AUTO")
+                        || self.read("vehicle")?.as_str() != Some("armed")
+                    {
                         return Err("only a plane armed in AUTO flies the mission".into());
                     }
                     self.perform_key(Key::Throw)?;
@@ -1550,11 +1396,7 @@ impl Driver for ConsoleDriver {
             // No game: press the key of the one being played, which stops it.
             "game clock" | "game" if matches!(name()?.as_str(), "off" | "free flight") => {
                 if let Some(game) = self.call(|g, _, _| g.sensor.as_ref().and_then(|s| s.game()))? {
-                    self.perform_key(if game.kind == GameKind::Race {
-                        Key::Race
-                    } else {
-                        Key::Tag
-                    })?;
+                    self.perform_key(if game.kind == GameKind::Race { Key::Race } else { Key::Tag })?;
                 }
                 self.check(key, &name()?, "")
             }
@@ -1585,19 +1427,13 @@ impl Driver for ConsoleDriver {
                 Ok(())
             }
             // The radio's three inputs are put in place the way the pilot moves them.
-            "throttle stick" | "aileron stick" | "arm switch" | "mode switch" => {
-                self.arrange(var, value)
-            }
+            "throttle stick" | "aileron stick" | "arm switch" | "mode switch" => self.arrange(var, value),
             other => Err(format!("{other} isn't something to set")),
         }
     }
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
-        let act = EVENTS
-            .iter()
-            .find(|(k, _)| *k == event.key)
-            .map(|(_, a)| a)
-            .ok_or("no way to do it")?;
+        let act = EVENTS.iter().find(|(k, _)| *k == event.key).map(|(_, a)| a).ok_or("no way to do it")?;
         match *act {
             Act::Button(id) => self.press(id),
             Act::Twice(id) => {
@@ -1609,31 +1445,17 @@ impl Driver for ConsoleDriver {
                     self.press("arm")?;
                     self.press("arm")?;
                     self.out_of_time()?;
-                    if self
-                        .wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed)
-                        .is_ok()
-                    {
+                    if self.wait_for(5, "arming", |g| g.vehicle.lock().unwrap().armed).is_ok() {
                         return Ok(());
                     }
                 }
-                let why = self.call(|g, _, _| {
-                    g.vehicle
-                        .lock()
-                        .unwrap()
-                        .prearm
-                        .as_ref()
-                        .map(|p| p.1.clone())
-                })?;
-                Err(format!(
-                    "the vehicle wouldn't arm: {}",
-                    why.unwrap_or_else(|| "no reason given".into())
-                ))
+                let why = self.call(|g, _, _| g.vehicle.lock().unwrap().prearm.as_ref().map(|p| p.1.clone()))?;
+                Err(format!("the vehicle wouldn't arm: {}", why.unwrap_or_else(|| "no reason given".into())))
             }
             Act::Radio(m) => self.radio_move(m),
             Act::Radios(moves) => moves.iter().try_for_each(|m| self.radio_move(*m)),
             Act::Key(k) => {
-                let sent =
-                    self.call(move |g, _, _| g.sensor.as_ref().map(|s| s.press_key(k)).is_some())?;
+                let sent = self.call(move |g, _, _| g.sensor.as_ref().map(|s| s.press_key(k)).is_some())?;
                 if !sent {
                     return Err("there is no link to the sim to press its keys: start the station (--station)".into());
                 }
@@ -1641,10 +1463,7 @@ impl Driver for ConsoleDriver {
                 Ok(())
             }
             Act::Go => self.wait_for(30, "GO", |g| {
-                g.sensor
-                    .as_ref()
-                    .and_then(|s| s.game())
-                    .is_some_and(|x| x.clock == GameClock::Running)
+                g.sensor.as_ref().and_then(|s| s.game()).is_some_and(|x| x.clock == GameClock::Running)
             }),
             Act::Map(button) => {
                 let at = self.call(|g, _, _| map_point(g))??;
@@ -1716,14 +1535,24 @@ mod tests {
     fn the_stick_pulled_back_raises_the_pitch_channel() {
         // The elevator of the radio moves as the sim's USB radio did: -1 is back (nose up), and a
         // stick pulled back sends more than 1500 us on the pitch channel of ArduPlane.
-        let back = RadioState { pitch: ELEVATOR_A_LITTLE_BACK, connected: true, ..radio_at_rest(radio_state_for_test()) };
+        let back =
+            RadioState { pitch: ELEVATOR_A_LITTLE_BACK, connected: true, ..radio_at_rest(radio_state_for_test()) };
         assert!(pilot_of(&back).channels()[1] > 1500, "{:?}", pilot_of(&back).channels());
         let forward = RadioState { pitch: 0.5, ..back };
         assert!(pilot_of(&forward).channels()[1] < 1500);
     }
 
     fn radio_state_for_test() -> RadioState {
-        RadioState { connected: false, roll: 0.0, pitch: 0.0, yaw: 0.0, throttle: 0.0, arm: false, mode: 0, reset_presses: 0 }
+        RadioState {
+            connected: false,
+            roll: 0.0,
+            pitch: 0.0,
+            yaw: 0.0,
+            throttle: 0.0,
+            arm: false,
+            mode: 0,
+            reset_presses: 0,
+        }
     }
 
     #[test]
@@ -1767,49 +1596,25 @@ mod tests {
     #[test]
     fn the_driver_covers_the_planning_and_command_tests() {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
-        let a = Acceptance::load(&dir)
-            .unwrap_or_else(|e| panic!("{e}"))
-            .with_coverage();
+        let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
         let (tx, _rx) = channel();
         let driver = ConsoleDriver::new(tx, false, vec![]);
         let v = &a.suite.vocabulary;
-        let gcs = a
-            .suite
-            .sections
-            .iter()
-            .find(|s| s.slug == "gcs")
-            .expect("a gcs section")
-            .id;
+        let gcs = a.suite.sections.iter().find(|s| s.slug == "gcs").expect("a gcs section").id;
         let ours = a.suite.subtree(gcs);
         let supported = |p: &expectation_story::Plan| {
-            p.start
-                .iter()
-                .all(|(x, _)| driver.supports(Need::Arrange(v.var(x))))
+            p.start.iter().all(|(x, _)| driver.supports(Need::Arrange(v.var(x))))
                 && p.steps
                     .iter()
                     .flat_map(|s| &s.checks)
                     .chain(&p.start_checks)
                     .all(|c| driver.supports(Need::Observe(v.var(c.var))))
-                && p.steps
-                    .iter()
-                    .filter_map(|s| s.action.event)
-                    .all(|e| driver.supports(Need::Perform(v.event(e))))
-                && p.steps
-                    .iter()
-                    .flat_map(|s| s.action.changes.vars())
-                    .all(|x| driver.supports(Need::Set(v.var(x))))
+                && p.steps.iter().filter_map(|s| s.action.event).all(|e| driver.supports(Need::Perform(v.event(e))))
+                && p.steps.iter().flat_map(|s| s.action.changes.vars()).all(|x| driver.supports(Need::Set(v.var(x))))
         };
-        let plans: Vec<_> = a
-            .plans
-            .iter()
-            .filter(|p| ours.contains(&p.section))
-            .collect();
+        let plans: Vec<_> = a.plans.iter().filter(|p| ours.contains(&p.section)).collect();
         let n = plans.iter().filter(|p| supported(p)).count();
         println!("{n} of {} console tests are supported", plans.len());
-        assert!(
-            n >= 16,
-            "only {n} of {} console tests are supported",
-            plans.len()
-        );
+        assert!(n >= 16, "only {n} of {} console tests are supported", plans.len());
     }
 }

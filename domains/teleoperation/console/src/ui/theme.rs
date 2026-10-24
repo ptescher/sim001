@@ -3,8 +3,8 @@
 //! type and corners come from the shared theme (domains/illustration/theme, its Night variant), which
 //! the sim's HUD and the docs use too; this puts them in the shape GPUI wants.
 
-use illustration_theme::{NIGHT as P, geometry};
 use gpui::{Hsla, Rgba, rgb};
+use illustration_theme::{NIGHT as P, geometry};
 
 pub const FONT: &str = illustration_theme::typography::UI;
 

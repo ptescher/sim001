@@ -396,7 +396,8 @@ impl CommanderView {
             Phase::Ground => "GROUND",
             Phase::Down => "DOWN",
         };
-        let more = if self.selected.len() > 1 { format!("  (+{} more)", self.selected.len() - 1) } else { String::new() };
+        let more =
+            if self.selected.len() > 1 { format!("  (+{} more)", self.selected.len() - 1) } else { String::new() };
         let rows = [
             ("CLASS", class.name().to_uppercase()),
             ("WEIGHT", format!("{} on a tower", class.weight())),
@@ -406,9 +407,7 @@ impl CommanderView {
             ("STATE", format!("{state}{}", if d.low { " LOW" } else { "" })),
         ];
         let mut stats = div().flex().flex_col().flex_1().text_sm();
-        stats = stats.child(
-            div().text_color(c(tint)).child(format!("{}{}{more}", &team_name(v.team)[..1], k + 1)),
-        );
+        stats = stats.child(div().text_color(c(tint)).child(format!("{}{}{more}", &team_name(v.team)[..1], k + 1)));
         for (name, value) in rows {
             stats = stats.child(
                 div()
@@ -937,9 +936,37 @@ fn unit_icon(window: &mut Window, x: f32, y: f32, class: Class, colour: gpui::Hs
         Class::Standard | Class::Heavy => {
             // A VTOL aeroplane: fuselage, wing, tailplane; the heavy one is bigger.
             let s = if class == Class::Heavy { 1.0 } else { 0.8 };
-            fill_poly(window, &[(x, y - 36.0 * s), (x + 4.0 * s, y - 24.0 * s), (x + 4.0 * s, y + 32.0 * s), (x - 4.0 * s, y + 32.0 * s), (x - 4.0 * s, y - 24.0 * s)], colour);
-            fill_poly(window, &[(x - 36.0 * s, y - 2.0 * s), (x + 36.0 * s, y - 2.0 * s), (x + 36.0 * s, y + 8.0 * s), (x - 36.0 * s, y + 8.0 * s)], colour);
-            fill_poly(window, &[(x - 14.0 * s, y + 24.0 * s), (x + 14.0 * s, y + 24.0 * s), (x + 14.0 * s, y + 32.0 * s), (x - 14.0 * s, y + 32.0 * s)], colour);
+            fill_poly(
+                window,
+                &[
+                    (x, y - 36.0 * s),
+                    (x + 4.0 * s, y - 24.0 * s),
+                    (x + 4.0 * s, y + 32.0 * s),
+                    (x - 4.0 * s, y + 32.0 * s),
+                    (x - 4.0 * s, y - 24.0 * s),
+                ],
+                colour,
+            );
+            fill_poly(
+                window,
+                &[
+                    (x - 36.0 * s, y - 2.0 * s),
+                    (x + 36.0 * s, y - 2.0 * s),
+                    (x + 36.0 * s, y + 8.0 * s),
+                    (x - 36.0 * s, y + 8.0 * s),
+                ],
+                colour,
+            );
+            fill_poly(
+                window,
+                &[
+                    (x - 14.0 * s, y + 24.0 * s),
+                    (x + 14.0 * s, y + 24.0 * s),
+                    (x + 14.0 * s, y + 32.0 * s),
+                    (x - 14.0 * s, y + 32.0 * s),
+                ],
+                colour,
+            );
             for dx in [-22.0, 22.0] {
                 circle(window, x + dx * s, y - 14.0 * s, 8.0 * s, 1.5, colour);
             }

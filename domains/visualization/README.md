@@ -17,7 +17,7 @@ photos (see [Looking like a photo](#looking-like-a-photo)).
 | --- | --- | --- |
 | `visualization_mappack` | [mappack/](mappack) | The map pack format: the config in `maps/<name>/map.txt` and what `mapbuild` writes to `build/`, read back by the world and the console. No dependencies |
 | `visualization_world` | [world/](world) | The place: ground heights, water, trees and buildings, for the procedural Alpine Valley or a real place from a map pack. The physics flies over it too, so it has no renderer in it (only `glam`) |
-| `visualization_mapbuild` | [mapbuild/](mapbuild) | `mapbuild`: builds a real place's map pack from USGS lidar and imagery and OSM. Excluded from the workspace: it keeps its own lockfile |
+| `visualization_mapbuild` | [mapbuild/](mapbuild) | `mapbuild`: builds a real place's map pack from USGS lidar and imagery and OSM. |
 | `visualization_engine` | [engine/](engine) | The Bevy view: terrain, forest, grass, water, clouds, sky and haze, the planes, the cameras (line of sight, chase, nose), the loading screen, and pictures from set views (`capture`). `EnginePlugin`, then fill in `Scene` before `EngineSet::Draw` |
 | `visualization_telemetry` | [telemetry/](telemetry) | A real plane's MAVLink (`HOME_POSITION`, `GLOBAL_POSITION_INT`, `ATTITUDE`) turned into where the view draws it. No Bevy, so it runs in tests. The acceptance test of [Watching a real plane](../../expectations/05-visualization) runs here |
 | `visualization_viewer` | [viewer/](viewer) | `sim001_view`: the engine and the telemetry together, in a window |

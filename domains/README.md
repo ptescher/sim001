@@ -27,9 +27,9 @@ the compiler enforce that.
 | [cognition](cognition/README.md) | AI control of planes, from the sim to the real thing: the plan executor that runs on board, the plan protocol, the fast arena, the league that keeps making the executor better, and the ground control agent (see [plans/sim2real-tag.md](../plans/sim2real-tag.md) and [plans/league.md](../plans/league.md)). |
 
 The sim (`src/`) predates the layout and will move into a domain as the work goes on.
-The three GPUI apps (`teleoperation/console`, `teleoperation/command`, `teleoperation/launcher`)
-and `visualization/mapbuild` are excluded from the workspace: each keeps its own lockfile and
-builds on its own. They still use the workspace's modules by path.
+Everything (the three GPUI apps `teleoperation/console`, `teleoperation/command` and
+`teleoperation/launcher`, and `visualization/mapbuild` included) is one workspace with one
+`Cargo.lock` and one `target/`; there are no per-module target directories.
 
 A third-party crate that more than one module uses has its version once, in the root
 `Cargo.toml`'s `[workspace.dependencies]`; a module names it with `name.workspace = true`, and adds

@@ -124,7 +124,8 @@ mod tests {
 
     #[test]
     fn the_example_controls_cfg_maps_the_tx15() {
-        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../controls.cfg.example")).unwrap();
+        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../controls.cfg.example"))
+            .unwrap();
         let m = parse_mapping(&text);
         assert!(m.channels.len() >= 4, "{:?}", m.channels);
     }

@@ -116,14 +116,8 @@ pub fn text(window: &mut Window, cx: &mut App, s: &str, x: f32, y: f32, size: f3
         return 0.0;
     }
     let s: SharedString = s.to_string().into();
-    let run = TextRun {
-        len: s.len(),
-        font: font(FONT),
-        color,
-        background_color: None,
-        underline: None,
-        strikethrough: None,
-    };
+    let run =
+        TextRun { len: s.len(), font: font(FONT), color, background_color: None, underline: None, strikethrough: None };
     let shaped = window.text_system().shape_line(s, px(size), &[run], None);
     let w = f(shaped.width);
     let x0 = match align {
@@ -137,7 +131,17 @@ pub fn text(window: &mut Window, cx: &mut App, s: &str, x: f32, y: f32, size: f3
 }
 
 /// Text on an opaque box, for readouts that sit over moving symbology.
-pub fn boxed_text(window: &mut Window, cx: &mut App, s: &str, x: f32, y: f32, size: f32, color: Hsla, align: Align, min_w: f32) {
+pub fn boxed_text(
+    window: &mut Window,
+    cx: &mut App,
+    s: &str,
+    x: f32,
+    y: f32,
+    size: f32,
+    color: Hsla,
+    align: Align,
+    min_w: f32,
+) {
     let w = (s.chars().count() as f32 * size * 0.62).max(min_w);
     let x0 = match align {
         Align::Left => x,
@@ -161,7 +165,9 @@ pub fn rot(x: f32, y: f32, a: f32) -> (f32, f32) {
 pub fn round_corners(window: &mut Window, b: Bounds<Pixels>, r: f32, color: Hsla) {
     let (x, y, w, h) = rect(b);
     let n = 10;
-    for (cx0, cy0, sx, sy) in [(x, y, 1.0f32, 1.0f32), (x + w, y, -1.0, 1.0), (x + w, y + h, -1.0, -1.0), (x, y + h, 1.0, -1.0)] {
+    for (cx0, cy0, sx, sy) in
+        [(x, y, 1.0f32, 1.0f32), (x + w, y, -1.0, 1.0), (x + w, y + h, -1.0, -1.0), (x, y + h, 1.0, -1.0)]
+    {
         // The corner square minus the quarter disc: corner point, then the arc.
         let mut pts = vec![(cx0, cy0)];
         for i in 0..=n {
