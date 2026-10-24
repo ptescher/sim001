@@ -3,7 +3,7 @@
 # See domains/README.md. The sim (this package) predates the layout. domains/teleoperation/console
 # and domains/visualization/mapbuild keep their own lockfiles and build on their own.
 [workspace]
-members = ["domains/*/*", "tools/tasks", "tools/expectation"]
+members = ["domains/*/*", "tools/tasks", "tools/expectation", "tools/suite_budget"]
 exclude = ["domains/teleoperation/console", "domains/teleoperation/command", "domains/teleoperation/launcher", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
 
 # The third-party crates more than one module uses, at one version (`name.workspace = true` in a
@@ -64,6 +64,7 @@ communication_traffic = { path = "domains/communication/traffic" }
 expectation_harness.workspace = true
 expectation_model.workspace = true
 expectation_story.workspace = true
+suite_budget = { path = "tools/suite_budget" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

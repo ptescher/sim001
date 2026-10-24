@@ -346,7 +346,29 @@ fn the_server_plays_a_game_with_arduplane() {
     }
     // With SIM001_DOCS=DIR the results and pictures of the map go into the project's docs.
     let docs = std::env::var("SIM001_DOCS").ok().map(PathBuf::from);
-    let report = a.run_with(&mut driver, &RunOptions { docs_dir: docs.clone(), ..Default::default() }, &mut services);
+    let opts = RunOptions { docs_dir: docs.clone(), ..Default::default() };
+    let suite_time = suite_budget::Budget::from_env();
+    let report = expectation_story::Report {
+        results: a
+            .plans
+            .iter()
+            .map(|plan| {
+                if suite_time.spent() {
+                    suite_time.ran_out(&a.suite, plan, &driver)
+                } else {
+                    expectation_harness::run::run_with(
+                        &a.suite,
+                        std::slice::from_ref(plan),
+                        &mut driver,
+                        &opts,
+                        &mut services,
+                    )
+                    .results
+                    .remove(0)
+                }
+            })
+            .collect(),
+    };
     if let Some(dir) = &docs {
         a.publish(dir, "towers-server", &report).unwrap();
     }

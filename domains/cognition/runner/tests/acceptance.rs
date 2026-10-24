@@ -482,8 +482,29 @@ fn the_section_runs_in_sitl() {
         println!("not supported yet: {why}");
     }
     let published = std::env::var("SIM001_DOCS").ok().map(PathBuf::from);
-    let report =
-        a.run_with(&mut driver, &RunOptions { docs_dir: published.clone(), ..Default::default() }, &mut services);
+    let opts = RunOptions { docs_dir: published.clone(), ..Default::default() };
+    let suite_time = suite_budget::Budget::from_env();
+    let report = expectation_story::Report {
+        results: a
+            .plans
+            .iter()
+            .map(|plan| {
+                if suite_time.spent() {
+                    suite_time.ran_out(&a.suite, plan, &driver)
+                } else {
+                    expectation_harness::run::run_with(
+                        &a.suite,
+                        std::slice::from_ref(plan),
+                        &mut driver,
+                        &opts,
+                        &mut services,
+                    )
+                    .results
+                    .remove(0)
+                }
+            })
+            .collect(),
+    };
     drop(driver);
     if let Some(out) = &published {
         a.publish(out, "cognition-sitl", &report).unwrap();

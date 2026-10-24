@@ -19,3 +19,4 @@ cognition_plan = { path = "../plan" }
 expectation_harness.workspace = true
 expectation_model.workspace = true
 expectation_story.workspace = true
+suite_budget = { path = "../../../tools/suite_budget" }

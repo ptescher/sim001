@@ -465,10 +465,16 @@ pub fn start(cx: &mut App, window: WindowHandle<Launcher>, config: Config) {
         println!("expect: {} tests of the launcher", acceptance.plans.len());
         let opts = RunOptions { docs_dir: docs.clone(), patience: 20 };
         let mut report = expectation_story::Report::default();
+        let suite_time = suite_budget::Budget::from_env();
         for plan in &acceptance.plans {
             let began = Instant::now();
-            let r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts);
-            let r = r.results.into_iter().next().unwrap();
+            let r = if suite_time.spent() {
+                suite_time.ran_out(&acceptance.suite, plan, &driver)
+            } else {
+                expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts)
+                    .results
+                    .remove(0)
+            };
             match r.status {
                 TestStatus::Passed => println!("expect: ✓ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32()),
                 _ => println!("expect: ✗ {} {:?} ({:.0} s)", plan.title, r.status, began.elapsed().as_secs_f32()),

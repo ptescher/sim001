@@ -61,6 +61,7 @@ sim001_gcs [options]
   --autotest         SITL only: upload a circuit, arm, fly AUTO, GUIDED goto, RTL";
 
 fn main() {
+    suite_budget::begin();
     let args: Vec<String> = std::env::args().collect();
     let flag = |f: &str| args.iter().any(|a| a == f);
     let arg = |name: &str| {

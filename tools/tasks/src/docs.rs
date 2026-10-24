@@ -1,4 +1,4 @@
-//! Runs every acceptance runner, each with a time limit, then writes the manual from what they
+//! Runs every acceptance runner, each within two minutes, then writes the manual from what they
 //! left in `docs/`. The runners: the domains that run with no window (Towers among them), the
 //! league, the AGENT mode in ArduPilot SITL, the Towers game server, the sim's own tests, the VTOL
 //! on its own and the sim with a flight controller beside it, the launcher, the Towers commander
@@ -12,6 +12,13 @@ use crate::limit::{Ended, run as run_limited};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
+
+/// How long one suite may run (`SIM001_SUITE_BUDGET`): every runner stops starting tests when it is
+/// spent and marks the rest failed, so that the suites can run side by side on a big box and all be
+/// over in two minutes.
+pub const SUITE_SECS: u64 = 120;
+/// What a suite gets on top, to write its results and shut down; past it the runner is killed.
+const GRACE_SECS: u64 = 30;
 
 /// One runner: what to run, how long it may take, and whether the rest goes on if it fails.
 #[derive(Debug, PartialEq)]
@@ -30,6 +37,7 @@ fn s(v: &[&str]) -> Vec<String> {
     v.iter().map(|a| a.to_string()).collect()
 }
 
+/// A chore of the build (no time limit worth the name: a cold build is slow).
 fn cargo(name: &'static str, root: &Path, args: &[&str], secs: u64) -> Step {
     Step {
         name,
@@ -42,7 +50,31 @@ fn cargo(name: &'static str, root: &Path, args: &[&str], secs: u64) -> Step {
     }
 }
 
-/// The steps of `tasks docs`.
+/// A suite: it gets the budget and the grace, and its failures are tests that failed.
+fn suite(mut step: Step) -> Step {
+    step.env.push(("SIM001_SUITE_BUDGET".into(), SUITE_SECS.to_string()));
+    step.limit = Duration::from_secs(SUITE_SECS + GRACE_SECS);
+    step.may_fail = true;
+    step
+}
+
+/// The packages with a `tests/acceptance.rs` that `tasks docs` runs, and what each is.
+const WINDOWLESS: &[&str] =
+    &["communication_radio", "aviation_computer", "visualization_telemetry", "cognition_executor", "recreation_towers"];
+
+fn acceptance(name: &'static str, root: &Path, docs_env: &(String, String), packages: &[&str]) -> Step {
+    let mut args = vec!["test", "--release"];
+    for p in packages {
+        args.extend(["-p", p]);
+    }
+    args.extend(["--test", "acceptance"]);
+    let mut step = cargo(name, root, &args, 0);
+    step.env.push(docs_env.clone());
+    suite(step)
+}
+
+/// The steps of `tasks docs`: everything is built first, so that each suite's clock runs on the
+/// tests and not on the compiler; then the suites, each within its budget; then the manual.
 pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     let docs = root.join("docs");
     let docs_arg = docs.display().to_string();
@@ -50,129 +82,72 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     let sim = root.join("target/release/sim001").display().to_string();
     let mut out = vec![];
 
-    let mut windowless = cargo(
-        "the domains with no window",
-        root,
-        &[
-            "test",
-            "--release",
-            "-p",
-            "communication_radio",
-            "-p",
-            "aviation_computer",
-            "-p",
-            "visualization_telemetry",
-            "-p",
-            "cognition_executor",
-            "-p",
-            "recreation_towers",
-            "--test",
-            "acceptance",
-        ],
-        900,
-    );
-    windowless.env.push(docs_env.clone());
-    out.push(windowless);
+    let mut test_build = vec!["test", "--release", "--no-run"];
+    for p in WINDOWLESS.iter().chain(&["cognition_league", "cognition_runner", "recreation_towers_server"]) {
+        test_build.extend(["-p", p]);
+    }
+    test_build.extend(["--test", "acceptance"]);
+    out.push(cargo("build the tests", root, &test_build, 3600));
+    out.push(cargo("build the sim", root, &["build", "--release"], 3600));
+    for (name, dir) in [
+        ("build the launcher", "launcher"),
+        ("build the Towers commander app", "command"),
+        ("build the console", "console"),
+    ] {
+        if dir == "console" && no_station {
+            continue;
+        }
+        out.push(cargo(name, &root.join("domains/teleoperation").join(dir), &["build", "--release"], 3600));
+    }
 
-    // The league plays thousands of games in the fast arena: minutes, with no window.
-    let mut league =
-        cargo("the league", root, &["test", "--release", "-p", "cognition_league", "--test", "acceptance"], 900);
-    league.env.push(docs_env.clone());
-    league.may_fail = true;
-    out.push(league);
-
-    let mut agent = cargo(
-        "the AGENT mode in ArduPilot SITL",
-        root,
-        &["test", "--release", "-p", "cognition_runner", "--test", "acceptance"],
-        400,
-    );
-    agent.env.push(docs_env.clone());
-    agent.may_fail = true;
-    out.push(agent);
-
+    out.push(acceptance("the domains with no window", root, &docs_env, WINDOWLESS));
+    // The league plays its games in the fast arena, as many as the budget lets it.
+    out.push(acceptance("the league", root, &docs_env, &["cognition_league"]));
+    out.push(acceptance("the AGENT mode in ArduPilot SITL", root, &docs_env, &["cognition_runner"]));
     // A whole game of Towers between two computer teams, six ArduPlane SITL drones.
-    let mut towers = cargo(
-        "the Towers game server",
-        root,
-        &["test", "--release", "-p", "recreation_towers_server", "--test", "acceptance"],
-        900,
-    );
-    towers.env.push(docs_env);
-    towers.may_fail = true;
-    out.push(towers);
+    out.push(acceptance("the Towers game server", root, &docs_env, &["recreation_towers_server"]));
 
-    out.push(cargo("build the sim", root, &["build", "--release"], 900));
-    let sim_plain = Step {
-        name: "the sim",
-        program: sim.clone(),
-        args: s(&["--expect", "--docs", &docs_arg]),
-        dir: root.to_path_buf(),
-        env: vec![],
-        limit: Duration::from_secs(480),
-        may_fail: true,
-    };
-    out.push(sim_plain);
-    // The VTOL on its own: ArduPilot flies it (the sim asks the harness for ArduPilot).
-    out.push(Step {
-        name: "the VTOL on its own",
-        program: sim.clone(),
-        args: s(&["--aircraft", "t1s-vtol", "--expect", "--docs", &docs_arg]),
-        dir: root.to_path_buf(),
-        env: vec![("SIM001_EXPECT_TIMEOUT".into(), "400".into())],
-        limit: Duration::from_secs(1500),
-        may_fail: true,
-    });
-    // The same on the Seeker 3, a quadcopter: the hover tests run on either.
-    out.push(Step {
-        name: "the Seeker 3 on its own",
-        program: sim.clone(),
-        args: s(&["--aircraft", "seeker3", "--expect", "--docs", &docs_arg]),
-        dir: root.to_path_buf(),
-        env: vec![("SIM001_EXPECT_TIMEOUT".into(), "400".into())],
-        limit: Duration::from_secs(1500),
-        may_fail: true,
-    });
-    // The sim with a flight controller: it flies from its sticks while ArduPilot steps the physics beside it.
-    out.push(Step {
-        name: "the sim with a flight controller",
-        program: sim,
-        args: s(&["--aircraft", "t1s-vtol", "--direct", "--expect", "--docs", &docs_arg]),
-        dir: root.to_path_buf(),
-        env: vec![],
-        limit: Duration::from_secs(400),
-        may_fail: true,
-    });
-    // The launcher's window, with a stand-in for each program it starts.
-    out.push(Step {
-        name: "the launcher",
-        program: "cargo".into(),
-        args: s(&["run", "--release", "--", "--expect", "--docs", &docs_arg]),
-        dir: root.join("domains/teleoperation/launcher"),
-        env: vec![],
-        limit: Duration::from_secs(900),
-        may_fail: true,
-    });
-    // The commander app of Towers, each test on a fresh game of its own server.
-    out.push(Step {
-        name: "the Towers commander app",
-        program: "cargo".into(),
-        args: s(&["run", "--release", "--", "--expect", "--docs", &docs_arg]),
-        dir: root.join("domains/teleoperation/command"),
-        env: vec![],
-        limit: Duration::from_secs(1800),
-        may_fail: true,
-    });
-    if !no_station {
-        out.push(Step {
-            name: "the console (the station)",
-            program: "cargo".into(),
-            args: s(&["run", "--release", "--", "--station", "--expect", "--docs", &docs_arg]),
-            dir: root.join("domains/teleoperation/console"),
+    let sim_step = |name: &'static str, extra: &[&str]| {
+        let mut args = s(extra);
+        args.extend(s(&["--expect", "--docs", &docs_arg]));
+        suite(Step {
+            name,
+            program: sim.clone(),
+            args,
+            dir: root.to_path_buf(),
             env: vec![],
-            limit: Duration::from_secs(2400),
+            limit: Duration::ZERO,
             may_fail: true,
-        });
+        })
+    };
+    out.push(sim_step("the sim", &[]));
+    // The VTOL on its own: ArduPilot flies it (the sim asks the harness for ArduPilot).
+    out.push(sim_step("the VTOL on its own", &["--aircraft", "t1s-vtol"]));
+    // The same on the Seeker 3, a quadcopter: the hover tests run on either.
+    out.push(sim_step("the Seeker 3 on its own", &["--aircraft", "seeker3"]));
+    // The sim with a flight controller: it flies from its sticks while ArduPilot steps the physics beside it.
+    out.push(sim_step("the sim with a flight controller", &["--aircraft", "t1s-vtol", "--direct"]));
+
+    let app = |name: &'static str, dir: &str, extra: &[&str]| {
+        let mut args = s(&["run", "--release", "--"]);
+        args.extend(s(extra));
+        args.extend(s(&["--expect", "--docs", &docs_arg]));
+        suite(Step {
+            name,
+            program: "cargo".into(),
+            args,
+            dir: root.join("domains/teleoperation").join(dir),
+            env: vec![],
+            limit: Duration::ZERO,
+            may_fail: true,
+        })
+    };
+    // The launcher's window, with a stand-in for each program it starts.
+    out.push(app("the launcher", "launcher", &[]));
+    // The commander app of Towers, each test on a fresh game of its own server.
+    out.push(app("the Towers commander app", "command", &[]));
+    if !no_station {
+        out.push(app("the console (the station)", "console", &["--station"]));
     }
     out.push(cargo(
         "the manual",
@@ -257,11 +232,15 @@ mod tests {
         assert_eq!(
             names(&all),
             [
+                "build the tests",
+                "build the sim",
+                "build the launcher",
+                "build the Towers commander app",
+                "build the console",
                 "the domains with no window",
                 "the league",
                 "the AGENT mode in ArduPilot SITL",
                 "the Towers game server",
-                "build the sim",
                 "the sim",
                 "the VTOL on its own",
                 "the Seeker 3 on its own",
@@ -301,11 +280,19 @@ mod tests {
         let find = |n: &str| all.iter().find(|s| s.name == n).unwrap();
         let alone = find("the VTOL on its own");
         assert!(alone.args.contains(&"t1s-vtol".to_string()) && !alone.args.contains(&"--direct".to_string()));
-        assert!(alone.limit >= Duration::from_secs(1200), "ArduPilot flies in real time");
         let quad = find("the Seeker 3 on its own");
         assert!(quad.args.contains(&"seeker3".to_string()) && !quad.args.contains(&"--direct".to_string()));
         let beside = find("the sim with a flight controller");
         assert!(beside.args.contains(&"--direct".to_string()));
+    }
+
+    /// Every suite has the same budget, and is killed a little after it.
+    #[test]
+    fn every_suite_has_two_minutes_and_a_grace() {
+        for step in steps(&root(), false).iter().filter(|s| s.may_fail) {
+            assert!(step.env.contains(&("SIM001_SUITE_BUDGET".to_string(), "120".to_string())), "{}", step.name);
+            assert_eq!(step.limit, Duration::from_secs(150), "{}", step.name);
+        }
     }
 
     /// A runner that fails its tests goes on to the next one; building the sim and writing the
@@ -328,8 +315,7 @@ mod tests {
     #[test]
     fn only_the_tests_may_fail() {
         for step in steps(&root(), false) {
-            let chore =
-                step.name == "build the sim" || step.name == "the manual" || step.name == "the domains with no window";
+            let chore = step.name.starts_with("build ") || step.name == "the manual";
             assert_eq!(step.may_fail, !chore, "{}", step.name);
         }
     }
@@ -339,7 +325,7 @@ mod tests {
         for step in steps(&root(), false) {
             let writes = step.args.iter().any(|a| a == "/checkout/docs")
                 || step.env.iter().any(|(k, v)| k == "SIM001_DOCS" && v == "/checkout/docs");
-            let is_runner = !matches!(step.name, "build the sim");
+            let is_runner = !step.name.starts_with("build ");
             assert_eq!(writes, is_runner, "{}", step.name);
         }
     }

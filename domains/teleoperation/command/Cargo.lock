@@ -5148,6 +5148,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "suite_budget"
+version = "0.1.0"
+dependencies = [
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+]
+
+[[package]]
 name = "sval"
 version = "2.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5392,6 +5401,7 @@ dependencies = [
  "illustration_theme",
  "image",
  "recreation_towers",
+ "suite_budget",
  "teleoperation_shared",
 ]
 

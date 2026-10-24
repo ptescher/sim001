@@ -2316,6 +2316,7 @@ dependencies = [
  "recreation_towers",
  "serde",
  "serde_json",
+ "suite_budget",
 ]
 
 [[package]]
@@ -2336,6 +2337,7 @@ dependencies = [
  "simulation_aircraft",
  "simulation_physics",
  "simulation_sitl",
+ "suite_budget",
 ]
 
 [[package]]
@@ -5132,6 +5134,7 @@ dependencies = [
  "simulation_aircraft",
  "simulation_physics",
  "simulation_sitl",
+ "suite_budget",
 ]
 
 [[package]]
@@ -5442,6 +5445,7 @@ dependencies = [
  "simulation_aircraft",
  "simulation_physics",
  "simulation_sitl",
+ "suite_budget",
  "teleoperation_shared",
  "visualization_engine",
 ]
@@ -5609,6 +5613,15 @@ name = "strict-num"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
+
+[[package]]
+name = "suite_budget"
+version = "0.1.0"
+dependencies = [
+ "expectation_harness",
+ "expectation_model",
+ "expectation_story",
+]
 
 [[package]]
 name = "swash"

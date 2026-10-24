@@ -270,14 +270,13 @@ const FRAME: Duration = Duration::from_millis(150);
 /// Longest the runner waits for the console to answer a job.
 const ANSWER: Duration = Duration::from_secs(60);
 
-/// The time the whole run may take: each test's budget and a fresh plane for each, with a margin,
-/// or `SIM001_EXPECT_TOTAL` (seconds).
-fn run_limit(plans: &[expectation_story::Plan]) -> Duration {
+/// The time the whole run may take: the suite's budget (`SIM001_SUITE_BUDGET`, 120 s) and a
+/// grace to write the results in, or `SIM001_EXPECT_TOTAL` (seconds).
+fn run_limit() -> Duration {
     if let Some(s) = std::env::var("SIM001_EXPECT_TOTAL").ok().and_then(|s| s.parse().ok()) {
         return Duration::from_secs(s);
     }
-    let tests: u64 = plans.iter().map(|p| test_budget(p) + 120).sum();
-    Duration::from_secs(300 + tests)
+    suite_budget::Budget::from_env().limit() + Duration::from_secs(30)
 }
 
 /// A test's time: 30 s, and 40 s for each step. An expectation that does one thing has about
@@ -341,7 +340,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
     if let Ok(only) = std::env::var("SIM001_EXPECT_ONLY") {
         acceptance.plans.retain(|p| p.title.contains(&only));
     }
-    let total = run_limit(&acceptance.plans);
+    let total = run_limit();
     std::thread::spawn(move || {
         std::thread::sleep(total);
         eprintln!("expect: the run took more than {} s: stopping (SIM001_EXPECT_TOTAL sets the limit)", total.as_secs());
@@ -373,9 +372,15 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
         };
         let mut report = expectation_story::Report::default();
         let mut aborted = false;
+        let suite_time = suite_budget::Budget::from_env();
         for plan in &acceptance.plans {
             let began = Instant::now();
-            driver.budget = Duration::from_secs(test_budget(plan));
+            if suite_time.spent() {
+                println!("expect: ✗ {} (no time left in the suite's {} s)", plan.title, suite_time.limit().as_secs());
+                report.results.push(suite_time.ran_out(&acceptance.suite, plan, &driver));
+                continue;
+            }
+            driver.budget = suite_time.cap(Duration::from_secs(test_budget(plan)));
             let r = expectation_harness::run(
                 &acceptance.suite,
                 std::slice::from_ref(plan),
@@ -388,10 +393,11 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
             let mut retried = false;
             if matches!(r.status, expectation_story::Status::Failed)
                 && driver.dead.is_none()
+                && !suite_time.spent()
                 && std::env::var("SIM001_EXPECT_NO_RETRY").is_err()
             {
                 println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, began.elapsed().as_secs_f32());
-                driver.budget = Duration::from_secs(test_budget(plan));
+                driver.budget = suite_time.cap(Duration::from_secs(test_budget(plan)));
                 r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts)
                     .results
                     .into_iter()
@@ -1754,9 +1760,8 @@ mod tests {
     fn a_run_has_a_limit_longer_than_its_tests_and_it_can_be_set() {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
         let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
-        let one = &a.plans[..1];
-        assert!(run_limit(one) > Duration::from_secs(test_budget(&one[0])));
-        assert!(run_limit(&a.plans) > run_limit(one));
+        let _ = &a;
+        assert!(run_limit() > suite_budget::Budget::from_env().limit());
     }
 
     #[test]

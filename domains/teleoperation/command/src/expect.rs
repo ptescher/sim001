@@ -162,6 +162,8 @@ struct AppDriver {
     /// What the driver did in this test, and when (s since the test began): for a failure's report.
     trace: RefCell<Vec<(f32, String)>>,
     began: Cell<Instant>,
+    /// The time the whole suite has (`SIM001_SUITE_BUDGET`): no wait outlasts it.
+    suite: suite_budget::Budget,
 }
 
 impl AppDriver {
@@ -199,7 +201,7 @@ impl AppDriver {
 
     /// Waits until `done` holds of the app's map, or `patience` runs out.
     fn until(&self, patience: Duration, what: &str, done: impl Fn(&TeamView) -> bool) -> Result<(), String> {
-        let end = Instant::now() + patience;
+        let end = Instant::now() + self.suite.cap(patience);
         loop {
             if let Some(v) = self.view()?
                 && done(&v)
@@ -259,7 +261,7 @@ impl AppDriver {
     }
 
     fn seated(&self) -> Result<(), String> {
-        let end = Instant::now() + SEATED;
+        let end = Instant::now() + self.suite.cap(SEATED);
         loop {
             let (status, view) = self.call(|v, _, _| {
                 let s = v.seat.state();
@@ -408,7 +410,7 @@ impl Driver for AppDriver {
             e @ ("the game runs for 2 minutes" | "the game runs for 3 minutes") => {
                 let minutes: f32 = if e.ends_with("2 minutes") { 2.0 } else { 3.0 };
                 let from = self.view()?.map_or(0.0, |v| v.time);
-                let end = Instant::now() + GAME;
+                let end = Instant::now() + self.suite.cap(GAME);
                 loop {
                     let v = self.view()?;
                     if v.as_ref().is_some_and(|v| v.time >= from + 60.0 * minutes || v.outcome.is_some()) {
@@ -434,7 +436,7 @@ impl Driver for AppDriver {
         let lower = subject.to_lowercase();
         if lower == "the camera feeds in the app" {
             // The 3D view loads the valley first, which takes a while.
-            let end = Instant::now() + FEEDS;
+            let end = Instant::now() + self.suite.cap(FEEDS);
             loop {
                 let live = self.call(|v, _, _| v.cameras.live())?;
                 if live >= 3 || Instant::now() > end {
@@ -542,7 +544,7 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     })
     .detach();
     std::thread::spawn(move || {
-        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false, dead: Cell::new(false), trace: RefCell::default(), began: Cell::new(Instant::now()) };
+        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false, dead: Cell::new(false), trace: RefCell::default(), began: Cell::new(Instant::now()), suite: suite_budget::Budget::from_env() };
         // The section's tests of the rules (with no window) and of the server are not the app's.
         let all = acceptance.plans.len();
         let plans: Vec<_> =
@@ -551,13 +553,18 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
         let mut report = expectation_story::Report::default();
         for plan in &plans {
             let began = Instant::now();
-            let r = expectation_harness::run(
-                &acceptance.suite,
-                std::slice::from_ref(plan),
-                &mut driver,
-                &RunOptions { docs_dir: docs.clone(), ..Default::default() },
-            );
-            let r = r.results.into_iter().next().unwrap();
+            let r = if driver.suite.spent() {
+                driver.suite.ran_out(&acceptance.suite, plan, &driver)
+            } else {
+                expectation_harness::run(
+                    &acceptance.suite,
+                    std::slice::from_ref(plan),
+                    &mut driver,
+                    &RunOptions { docs_dir: docs.clone(), ..Default::default() },
+                )
+                .results
+                .remove(0)
+            };
             match r.status {
                 TestStatus::Passed => println!("expect: ✓ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32()),
                 _ => {

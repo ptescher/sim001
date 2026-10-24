@@ -194,15 +194,19 @@ pub fn plugin(
         .add_systems(Update, track_occlusion)
         .add_systems(Update, serve.before(SimSet::Input).run_if(in_state(AppState::Running)));
     let standin: Shared = Arc::default();
-    install_standin(&app.world().resource::<SharedSim>().0, standin.clone());
+    let core = app.world().resource::<SharedSim>().0.clone();
+    install_standin(&core, standin.clone());
 
     std::thread::spawn(move || {
         let mut services = services;
+        let suite_time = suite_budget::Budget::from_env();
         let mut driver = SimDriver {
             tx,
             flight_controller,
             ardupilot_flying,
             standin,
+            suite_time: Some(suite_time),
+            core: Some(core),
             deadline: Mutex::new(None),
             needs: if services.is_empty() { vec![] } else { vec!["ardupilot".to_string()] },
         };
@@ -211,6 +215,18 @@ pub fn plugin(
         let began = std::time::Instant::now();
         for plan in &acceptance.plans {
             let started = std::time::Instant::now();
+            if suite_time.spent() {
+                let r = suite_time.ran_out(&acceptance.suite, plan, &driver);
+                if matches!(r.status, expectation_story::Status::Failed) {
+                    println!(
+                        "expect: ✗ {} (no time left in the suite's {} s)",
+                        plan.title,
+                        suite_time.limit().as_secs()
+                    );
+                }
+                report.results.push(r);
+                continue;
+            }
             let mut r = expectation_harness::run::run_with(
                 &acceptance.suite,
                 std::slice::from_ref(plan),
@@ -226,7 +242,9 @@ pub fn plugin(
             // a test that fails once gets one more go, and says so.
             let mut retried = false;
             say_what_ardupilot_did(&driver, &r);
-            if matches!(r.status, expectation_story::Status::Failed) && std::env::var("SIM001_EXPECT_NO_RETRY").is_err()
+            if matches!(r.status, expectation_story::Status::Failed)
+                && !suite_time.spent()
+                && std::env::var("SIM001_EXPECT_NO_RETRY").is_err()
             {
                 println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, started.elapsed().as_secs_f32());
                 r = expectation_harness::run::run_with(
@@ -281,6 +299,8 @@ pub fn plugin(
             eprint!("{}", report.failures(&acceptance.suite, &acceptance.plans));
         }
         let exit = if report.passed() { AppExit::Success } else { AppExit::from_code(1) };
+        // The last test's time may have run out: quitting is not part of it.
+        *driver.deadline.lock().unwrap() = None;
         let _ = driver.call(move |w| w.write_message(exit));
     });
 }
@@ -426,6 +446,10 @@ struct SimDriver {
     /// ArduPilot flies the plane (a VTOL started with no `--direct`), so the sim's own modes aren't there.
     ardupilot_flying: bool,
     standin: Shared,
+    /// The time the whole suite has (`SIM001_SUITE_BUDGET`): a test's deadline is never past it.
+    suite_time: Option<suite_budget::Budget>,
+    /// The sim's state, to read and change without waiting for a frame.
+    core: Option<Arc<Mutex<SimCore>>>,
     /// When the test that is running has to be done (`SIM001_EXPECT_TIMEOUT` s after it starts,
     /// default 40): a test that is not done by then is a failure, and the suite moves on.
     deadline: Mutex<Option<std::time::Instant>>,
@@ -440,7 +464,8 @@ impl SimDriver {
             if !enabled || up {
                 return Ok(());
             }
-            if started.elapsed() > Duration::from_secs(180) {
+            if started.elapsed() > self.suite_time.map_or(Duration::from_secs(180), |b| b.cap(Duration::from_secs(180)))
+            {
                 return Err("ArduPilot never connected: start its SITL container (`ardupilot/run_sitl.sh`)".into());
             }
             std::thread::sleep(Duration::from_millis(500));
@@ -450,6 +475,9 @@ impl SimDriver {
     /// An error if the test has used up its time.
     fn out_of_time(&self) -> Result<(), String> {
         if self.deadline.lock().unwrap().is_some_and(|d| std::time::Instant::now() > d) {
+            if let Some(b) = self.suite_time.filter(|b| b.spent()) {
+                return Err(format!("the suite ran out of time ({} s)", b.limit().as_secs()));
+            }
             let secs = std::env::var("SIM001_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(40);
             return Err(format!("the test ran out of time ({secs} s)"));
         }
@@ -467,7 +495,13 @@ impl SimDriver {
         rx.recv_timeout(ANSWER).map_err(|_| "the sim stopped answering".to_string())
     }
 
+    /// Runs `f` on the sim's state. The state is behind a lock, so this does not wait for a frame
+    /// (about 90 ms of a window that draws the 3D view): only what needs the world does.
     fn sim<T: Send + 'static>(&self, f: impl FnOnce(&mut SimCore) -> T + Send + 'static) -> Result<T, String> {
+        if let Some(core) = &self.core {
+            self.out_of_time()?;
+            return Ok(f(&mut core.lock().unwrap()));
+        }
         self.call(move |w| f(&mut w.resource::<SharedSim>().0.lock().unwrap()))
     }
 
@@ -668,7 +702,9 @@ impl Driver for SimDriver {
             input.keyboard_only = true;
         });
         let secs = std::env::var("SIM001_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(40);
-        *self.deadline.lock().unwrap() = Some(std::time::Instant::now() + Duration::from_secs(secs));
+        let allowed = Duration::from_secs(secs);
+        let allowed = self.suite_time.map_or(allowed, |b| b.cap(allowed));
+        *self.deadline.lock().unwrap() = Some(std::time::Instant::now() + allowed);
         done
     }
 
@@ -1004,6 +1040,8 @@ mod tests {
             flight_controller: false,
             ardupilot_flying: false,
             standin: Default::default(),
+            suite_time: None,
+            core: None,
             deadline: Mutex::new(None),
             needs: vec![],
         };
