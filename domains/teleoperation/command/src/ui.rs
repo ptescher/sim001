@@ -16,8 +16,8 @@ use crate::theme::*;
 use glam::Vec2;
 use gpui::{
     App, Bounds, ContentMask, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, SharedString, Stateful, Window, canvas,
-    div, prelude::*, px,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, ScrollDelta, ScrollWheelEvent,
+    SharedString, Stateful, Window, canvas, div, prelude::*, px,
 };
 use recreation_towers::map::{LANE_HALF_WIDTH, Map};
 use recreation_towers::seat::Join;
@@ -49,28 +49,50 @@ type Drag = ((f32, f32), (f32, f32), bool);
 /// A left button press that moves less than this (screen pixels) is a click, not a box.
 const DRAG: f32 = 4.0;
 
-/// The field on the map: the whole field fits, north up.
+/// The field on the map, north up: the whole field fits at zoom 1; zoomed in, `look` is the
+/// point of the field at the middle of the map.
 #[derive(Clone, Copy)]
 pub struct MapView {
     centre: (f32, f32),
     /// Pixels per metre.
     scale: f32,
+    look: Vec2,
 }
 
+/// The most the map zooms in.
+const ZOOM_MAX: f32 = 8.0;
+
+/// The minimap's side (screen pixels) and its distance from the corner of the map.
+const MINI: f32 = 150.0;
+const MINI_MARGIN: f32 = 10.0;
+
 impl MapView {
+    /// The whole field.
     pub fn new(b: Bounds<Pixels>, rules: &Rules) -> MapView {
+        MapView::framed(b, rules, 1.0, Vec2::ZERO)
+    }
+
+    /// The field magnified `zoom` times about `look`.
+    pub fn framed(b: Bounds<Pixels>, rules: &Rules, zoom: f32, look: Vec2) -> MapView {
         let (x, y, w, h) = rect(b);
-        let scale = 0.5 * w.min(h) / (rules.field_radius * 1.08);
-        MapView { centre: (x + w * 0.5, y + h * 0.5), scale }
+        let scale = zoom * 0.5 * w.min(h) / (rules.field_radius * 1.08);
+        MapView { centre: (x + w * 0.5, y + h * 0.5), scale, look }
     }
 
     pub fn to_screen(self, at: Vec2) -> (f32, f32) {
-        (self.centre.0 + at.y * self.scale, self.centre.1 - at.x * self.scale)
+        let d = at - self.look;
+        (self.centre.0 + d.y * self.scale, self.centre.1 - d.x * self.scale)
     }
 
     pub fn to_field(self, sx: f32, sy: f32) -> Vec2 {
-        Vec2::new((self.centre.1 - sy) / self.scale, (sx - self.centre.0) / self.scale)
+        self.look + Vec2::new((self.centre.1 - sy) / self.scale, (sx - self.centre.0) / self.scale)
     }
+}
+
+/// The minimap's square on the map `b`: bottom right.
+fn minimap_rect(b: Bounds<Pixels>) -> (f32, f32, f32, f32) {
+    let (x, y, w, h) = rect(b);
+    (x + w - MINI - MINI_MARGIN, y + h - MINI - MINI_MARGIN, MINI, MINI)
 }
 
 pub struct CommanderView {
@@ -80,6 +102,11 @@ pub struct CommanderView {
     /// A box being dragged on the map: where the button went down, where the mouse is now
     /// (screen pixels), and whether Shift was held.
     drag: Option<Drag>,
+    /// How far the map is zoomed in (1: the whole field), and the point of the field it is centred on.
+    zoom: f32,
+    look: Vec2,
+    /// The left button is down on the minimap, moving the view.
+    minimap_drag: bool,
     pub map_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The valley (lanes, lake, clearings), worked out from the game's rules once they arrive.
     valley: Option<Map>,
@@ -115,6 +142,9 @@ impl CommanderView {
             seat,
             selected: vec![],
             drag: None,
+            zoom: 1.0,
+            look: Vec2::ZERO,
+            minimap_drag: false,
             map_bounds: Rc::new(Cell::new(Bounds::default())),
             valley: None,
             ground,
@@ -259,12 +289,58 @@ impl CommanderView {
 
     fn map_field(&self, p: gpui::Point<Pixels>) -> Option<(MapView, Vec2)> {
         let rules = self.seat.state().rules?;
-        let map = MapView::new(self.map_bounds.get(), &rules);
+        let map = MapView::framed(self.map_bounds.get(), &rules, self.zoom, self.look);
         Some((map, map.to_field(f(p.x), f(p.y))))
+    }
+
+    /// Keeps the view on the field.
+    fn clamp_look(&mut self, rules: &Rules) {
+        self.look = self.look.clamp_length_max(rules.field_radius);
+        if self.zoom <= 1.0 {
+            self.look = Vec2::ZERO;
+        }
+    }
+
+    /// Whether the minimap shows (the map is zoomed in), and the screen point `p` is on it.
+    fn on_minimap(&self, p: gpui::Point<Pixels>) -> bool {
+        let (mx, my, mw, mh) = minimap_rect(self.map_bounds.get());
+        let (px_, py_) = (f(p.x), f(p.y));
+        self.zoom > 1.0 && px_ >= mx && px_ <= mx + mw && py_ >= my && py_ <= my + mh
+    }
+
+    /// Centres the view on the point of the field under `p` on the minimap.
+    fn look_from_minimap(&mut self, p: gpui::Point<Pixels>) {
+        let Some(rules) = self.seat.state().rules else { return };
+        let (mx, my, mw, mh) = minimap_rect(self.map_bounds.get());
+        let mini = MapView::new(Bounds { origin: pt(mx, my), size: gpui::size(px(mw), px(mh)) }, &rules);
+        self.look = mini.to_field(f(p.x).clamp(mx, mx + mw), f(p.y).clamp(my, my + mh));
+        self.clamp_look(&rules);
+    }
+
+    /// The wheel zooms about the point under the mouse.
+    fn map_scroll(&mut self, ev: &ScrollWheelEvent, cx: &mut Context<Self>) {
+        let Some((_, at)) = self.map_field(ev.position) else { return };
+        let Some(rules) = self.seat.state().rules else { return };
+        let dy = match ev.delta {
+            ScrollDelta::Pixels(p) => f(p.y),
+            ScrollDelta::Lines(l) => l.y * 20.0,
+        };
+        let zoom = (self.zoom * (dy * 0.004).exp()).clamp(1.0, ZOOM_MAX);
+        // Keep the point under the mouse where it is: look = at - (at - look) * old / new.
+        self.look = at - (at - self.look) * (self.zoom / zoom);
+        self.zoom = zoom;
+        self.clamp_look(&rules);
+        cx.notify();
     }
 
     fn map_down(&mut self, ev: &MouseDownEvent, cx: &mut Context<Self>) {
         let p = (f(ev.position.x), f(ev.position.y));
+        if ev.button == MouseButton::Left && self.on_minimap(ev.position) {
+            self.minimap_drag = true;
+            self.look_from_minimap(ev.position);
+            cx.notify();
+            return;
+        }
         match ev.button {
             MouseButton::Left => self.drag = Some((p, p, ev.modifiers.shift)),
             MouseButton::Right => {
@@ -278,6 +354,15 @@ impl CommanderView {
     }
 
     fn map_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
+        if self.minimap_drag {
+            if ev.dragging() {
+                self.look_from_minimap(ev.position);
+            } else {
+                self.minimap_drag = false;
+            }
+            cx.notify();
+            return;
+        }
         if let Some((_, to, _)) = &mut self.drag {
             if ev.dragging() {
                 *to = (f(ev.position.x), f(ev.position.y));
@@ -290,6 +375,10 @@ impl CommanderView {
 
     /// The button went up: a click selects the drone under it; a drag selects the drones in its box.
     fn map_up(&mut self, ev: &MouseUpEvent, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.minimap_drag) {
+            cx.notify();
+            return;
+        }
         let Some((from, _, add)) = self.drag.take() else { return };
         let to = (f(ev.position.x), f(ev.position.y));
         if let Some((map, at)) = self.map_field(ev.position) {
@@ -580,13 +669,14 @@ impl Render for CommanderView {
         let selected = self.selected.clone();
         let painted = selected.clone();
         let drag = self.drag;
+        let (zoom, look) = (self.zoom, self.look);
         let (v2, r2) = (view.clone(), rules);
         let map_canvas = canvas(
             |_, _, _| {},
             move |b, _, window, cx| {
                 bounds.set(b);
                 if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
-                    paint_map(b, v, r, m, ground.as_deref(), &painted, drag, window, cx);
+                    paint_map(b, v, r, m, ground.as_deref(), &painted, drag, (zoom, look), window, cx);
                 }
                 round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
             },
@@ -598,6 +688,7 @@ impl Render for CommanderView {
             .child(map_canvas)
             .on_mouse_down(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
             .on_mouse_down(MouseButton::Right, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
+            .on_scroll_wheel(cx.listener(|this, ev, _, cx| this.map_scroll(ev, cx)))
             .on_mouse_move(cx.listener(|this, ev, _, cx| this.map_move(ev, cx)))
             .on_mouse_up(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)))
             .on_mouse_up_out(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)));
@@ -690,6 +781,7 @@ impl Render for CommanderView {
             .gap(px(GAP))
             .w(px(340.0))
             .flex_none()
+            .min_h(px(0.0))
             .child(scrolling("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)));
         if let Some(unit) = unit {
             right = right.child(screen("UNIT", unit));
@@ -708,7 +800,15 @@ impl Render for CommanderView {
             .bg(c(CONSOLE))
             .font_family(FONT)
             .child(top)
-            .child(div().flex().flex_1().gap(px(GAP)).child(screen("FIELD", map).flex_1()).child(right))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .gap(px(GAP))
+                    .child(screen("FIELD", map).flex_1().min_w(px(0.0)))
+                    .child(right),
+            )
     }
 }
 
@@ -726,11 +826,12 @@ fn paint_map(
     ground: Option<&Ground>,
     selected: &[usize],
     drag: Option<Drag>,
+    (zoom, look): (f32, Vec2),
     window: &mut Window,
     cx: &mut App,
 ) {
     let (x, y, w, h) = rect(b);
-    let map = MapView::new(b, rules);
+    let map = MapView::framed(b, rules, zoom, look);
     let s = map.scale;
     fill_rect(window, x, y, w, h, c(FOG));
     // The ground: the picture of the valley, dim; what the team sees is lit over it. Without the
@@ -864,6 +965,9 @@ fn paint_map(
         fill_rect(window, bx, by, bw, bh, ca(WHITE, 0.1));
         stroke_rect(window, bx, by, bw, bh, 1.0, ca(WHITE, 0.8));
     }
+    if zoom > 1.0 {
+        paint_minimap(window, b, v, rules, map);
+    }
     if let Some(outcome) = v.outcome {
         let banner = match outcome {
             Outcome::Won(t) => format!("{} WINS", team_name(t)),
@@ -973,4 +1077,33 @@ fn unit_icon(window: &mut Window, x: f32, y: f32, class: Class, colour: gpui::Hs
             }
         }
     }
+}
+
+/// The whole field in a corner of the map, with the part the map shows outlined.
+fn paint_minimap(window: &mut Window, b: Bounds<Pixels>, v: &TeamView, rules: &Rules, shown: MapView) {
+    let (mx, my, mw, mh) = minimap_rect(b);
+    fill_rect(window, mx, my, mw, mh, ca(0x000000, 0.75));
+    stroke_rect(window, mx, my, mw, mh, 1.0, ca(WHITE, 0.6));
+    let mini = MapView::new(Bounds { origin: pt(mx, my), size: gpui::size(px(mw), px(mh)) }, rules);
+    let (cx0, cy0) = mini.to_screen(Vec2::ZERO);
+    circle(window, cx0, cy0, rules.field_radius * mini.scale, 1.0, ca(GREY, 0.6));
+    for t in &v.towers {
+        let (x, y) = mini.to_screen(t.at);
+        fill_rect(window, x - 2.5, y - 2.5, 5.0, 5.0, c(t.holder.map_or(GREY, theme_team)));
+    }
+    for e in v.enemies.iter().filter(|e| e.seen) {
+        let (x, y) = mini.to_screen(e.at);
+        fill_circle(window, x, y, 2.0, c(theme_team(v.team.other())));
+    }
+    for d in v.drones.iter().filter(|d| d.phase != Phase::Down) {
+        let (x, y) = mini.to_screen(d.at);
+        fill_circle(window, x, y, 2.5, c(theme_team(v.team)));
+    }
+    // The view: the map's corners, on the minimap.
+    let (x, y, w, h) = rect(b);
+    let (a, z) = (shown.to_field(x, y), shown.to_field(x + w, y + h));
+    let (a, z) = (mini.to_screen(a), mini.to_screen(z));
+    let (vx, vy) = (a.0.min(z.0).max(mx), a.1.min(z.1).max(my));
+    let (vx1, vy1) = (a.0.max(z.0).min(mx + mw), a.1.max(z.1).min(my + mh));
+    stroke_rect(window, vx, vy, (vx1 - vx).max(2.0), (vy1 - vy).max(2.0), 1.5, c(WHITE));
 }
