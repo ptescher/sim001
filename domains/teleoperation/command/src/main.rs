@@ -6,6 +6,7 @@
 //!   cargo run --release -- --team red --watch        watch Red's map, with no orders
 //!   cargo run --release -- --serve --no-cameras      the same, with no 3D view and no pictures from the drones
 
+mod bench;
 mod cameras;
 mod draw;
 mod expect;
@@ -13,6 +14,7 @@ mod ground;
 mod seat;
 mod server;
 mod snapshot;
+mod station;
 mod theme;
 mod ui;
 
@@ -39,6 +41,8 @@ sim001_command [options]
   --connect ADDR     the game server (default 127.0.0.1:5955)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../../../expectations) against this app,
                      each on a fresh game of its own server (needs the AGENT build of ArduPlane), and exit
+  --platform field   with --expect: read the suite as the field and run it on the bench (a ground radio and a
+                     flight controller: SIM001_FIELD_RADIO, SIM001_FIELD_FC); without them, nothing is supported yet
   --only TEXT        with --expect: run only the tests whose title contains TEXT
   --docs DIR         with --expect: write the results and screenshots of the window to DIR (merged with the others')";
 
@@ -54,6 +58,16 @@ fn main() {
     let team = if arg("--team").is_some_and(|t| t.eq_ignore_ascii_case("red")) { Team::Red } else { Team::Blue };
     let join = if flag("--watch") { Join::Watch(team) } else { Join::Command(team) };
     let expect = flag("--expect");
+    if expect && arg("--platform").is_some_and(|p| p == "field") {
+        let suite = args
+            .iter()
+            .position(|a| a == "--expect")
+            .and_then(|i| args.get(i + 1))
+            .filter(|a| !a.starts_with("--"))
+            .map(PathBuf::from)
+            .unwrap_or_else(|| server::root().join("expectations"));
+        std::process::exit(bench::run(&suite, arg("--only").as_deref()));
+    }
     let serve = flag("--serve") || expect;
     // A server of its own takes a free port for its seats (the usual one may be in use), which
     // the app, the 3D view and any restarted game all use.
@@ -101,6 +115,10 @@ fn main() {
         println!("game server started ({}); its log is logs/towers/server.log", server_args.join(" "));
     }
     let seat = seat::Seat::connect(&addr, join);
+    // A seat that commands is the team's ground station: it flies the team's drones itself.
+    if matches!(join, Join::Command(_)) {
+        station::start(seat.clone(), addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string());
+    }
     // The pictures from the team's drones: the 3D view of the game is on the server's machine.
     let cameras = match join {
         Join::Command(t) | Join::Watch(t) if cameras_on => cameras::Cameras::connect(

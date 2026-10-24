@@ -15,6 +15,7 @@
 
 mod advisor;
 mod commander;
+mod filter;
 pub mod flight;
 mod instruction;
 pub mod map;
@@ -24,9 +25,10 @@ mod view;
 
 pub use advisor::{Advice, AdviceKind, Advisor};
 pub use commander::{Commander, CommanderTuning};
+pub use filter::LinkFilter;
 pub use instruction::{Instruction, Standing};
 pub use map::Map;
-pub use view::{EnemyDrone, Order, OwnDrone, TeamView, TowerView};
+pub use view::{EnemyDrone, Order, OwnDrone, Sites, TeamView, TowerView, Umpire};
 
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
@@ -416,6 +418,9 @@ pub struct Game {
     pub outcome: Option<Outcome>,
     /// Blue's, Red's.
     pub maps: [TeamMap; 2],
+    /// What each team's sites saw (its towers and its base, not its drones) of each drone, as it
+    /// last saw it: the part of the fog that a ground station cannot build from its drones' reports.
+    pub site_drones: [Vec<Option<DroneSighting>>; 2],
     /// Each drone is in the radio shadow of an enemy tower now.
     pub jammed: Vec<bool>,
     /// How long each drone has been out of contact (s); 0 while it is in contact.
@@ -477,6 +482,7 @@ impl Game {
             score: [0.0; 2],
             time: 0.0,
             outcome: None,
+            site_drones: [vec![None; n], vec![None; n]],
             maps: [team_map.clone(), team_map],
             jammed: vec![false; n],
             silent: vec![0.0; n],
@@ -722,13 +728,18 @@ impl Game {
     /// What `team` can see from: each of its drones that is not down, its base and each tower it
     /// holds, with how far each sees (m, across) and whether it looks from above the trees.
     fn eyes(&self, team: Team) -> Vec<Eye> {
+        self.eyes_of(team, true)
+    }
+
+    /// The same, with or without the team's drones: its sites alone are its towers and its base.
+    fn eyes_of(&self, team: Team, with_drones: bool) -> Vec<Eye> {
         let r = &self.rules;
         // A drone out of contact sends no picture: it sees nothing for its team.
         let drones = self
             .drones
             .iter()
             .enumerate()
-            .filter(|(i, d)| d.team == team && d.phase != Phase::Down && !self.jammed[*i])
+            .filter(|(i, d)| with_drones && d.team == team && d.phase != Phase::Down && !self.jammed[*i])
             .map(|(_, d)| Eye {
                 at: d.at,
                 range: r.drone_vision,
@@ -753,6 +764,29 @@ impl Game {
         })
     }
 
+    /// The enemy drones (their numbers in the game) that drone `i` sees with its sensor alone: in
+    /// its sensor range, and not hidden by the trees from where it looks. What it reports to its
+    /// team, when the team can hear it.
+    pub fn drone_senses(&self, i: usize) -> Vec<usize> {
+        let d = &self.drones[i];
+        if d.phase == Phase::Down {
+            return vec![];
+        }
+        let eye = [Eye {
+            at: d.at,
+            range: self.rules.drone_vision,
+            high: d.phase == Phase::Flying && d.alt >= self.rules.treetop,
+        }];
+        (0..self.drones.len())
+            .filter(|&j| {
+                let e = &self.drones[j];
+                e.team != d.team
+                    && e.phase != Phase::Down
+                    && self.sees_drone(&eye, e.at, e.alt, e.phase == Phase::Flying)
+            })
+            .collect()
+    }
+
     /// Each team looks round and updates its map.
     pub fn look(&mut self) {
         self.jam(0.0);
@@ -773,6 +807,24 @@ impl Game {
                     }
                 })
                 .collect();
+            // The sites alone (towers and base): what a ground station is told besides its drones' reports.
+            let site_eyes = self.eyes_of(team, false);
+            let site_seen: Vec<bool> = self
+                .drones
+                .iter()
+                .map(|d| {
+                    d.team != team
+                        && d.phase != Phase::Down
+                        && self.sees_drone(&site_eyes, d.at, d.alt, d.phase == Phase::Flying)
+                })
+                .collect();
+            for ((d, s), seen) in self.drones.iter().zip(self.site_drones[team.index()].iter_mut()).zip(site_seen) {
+                if seen {
+                    *s = Some(DroneSighting { at: d.at, alt: d.alt, vel: d.vel, phase: d.phase, time, seen: true });
+                } else if let Some(s) = s {
+                    s.seen = false;
+                }
+            }
             let map = &mut self.maps[team.index()];
             for ((d, s), seen) in self.drones.iter().zip(map.drones.iter_mut()).zip(seen) {
                 if seen {
@@ -1391,5 +1443,19 @@ mod tests {
         g.look();
         let s = g.maps[Team::Blue.index()].towers[east];
         assert_eq!((s.holder, s.seen), (Some(Team::Red), true));
+    }
+
+    #[test]
+    fn a_drone_senses_the_enemy_in_its_range_and_the_site_view_leaves_out_what_only_drones_saw() {
+        let mut g = Game::new(Rules::default());
+        let east = Vec2::new(0.0, 300.0);
+        fly(&mut g, Team::Blue, 0, east);
+        fly(&mut g, Team::Red, 0, east + Vec2::new(0.0, 50.0));
+        fly(&mut g, Team::Red, 1, east + Vec2::new(0.0, 900.0));
+        g.step(0.1);
+        let (blue, scout, far) = (g.drone(Team::Blue, 0), g.drone(Team::Red, 0), g.drone(Team::Red, 1));
+        assert_eq!(g.drone_senses(blue), vec![scout], "the near one, not the far one ({far})");
+        assert!(g.view(Team::Blue).enemies.iter().any(|e| e.k == 0 && e.seen), "the team sees it through its drone");
+        assert!(g.site_view(Team::Blue).enemies.is_empty(), "its sites see nothing of it");
     }
 }

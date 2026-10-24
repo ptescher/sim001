@@ -30,6 +30,11 @@ Section: Towers
   see [[Captains for Towers]].
 
 Vocabulary:
+  # plans/unified-link.md: the commander app is the same ground station on both platforms. The
+  # first platform is the default, so plain lines are about the sim: the game server with
+  # simulated air and ArduPlane SITL. The field is real drones and a real radio, on a bench rig.
+  Platform: sim | field
+
   State: the game of Towers is in play | won by Blue | won by Red | a draw
     Shows: in play: the clock runs, and the scores go up
     Shows: won by Blue: the game stops, and it says BLUE WINS
@@ -99,6 +104,7 @@ Vocabulary:
     Shows: over its base: the first Blue drone circles 50 m high over the Blue base
     Shows: in the west circle: the first Blue drone circles the west tower, 50 m high
     Shows: near the Red home tower: the first Blue drone flies 50 m high, 100 m from the Red home tower, on the side of the centre of the field
+    Set[field]: near the Red home tower: fly the first Blue drone to the marker 50 m high and 100 m from the Red home tower, on the side of the centre of the field
     Shows: at the Blue home tower: the first Blue drone circles the Blue home tower
     Shows: low in the mid lane: the first Blue drone flies 17 m high in the mid lane, 210 m from the Blue home tower
     Shows: low in the west lane, on the shore of the lake: the first Blue drone flies 17 m high in the west lane, where the lane goes along the lake
@@ -152,6 +158,9 @@ Vocabulary:
     Shows: in contact: the list of drones shows the telemetry of B1, and CAMERAS shows its picture
     Shows: cut: the list of drones shows NO LINK beside B1, with the time since the last contact. CAMERAS shows no picture of B1
     Shows: lost: the list of drones shows NO LINK beside B1, and the order of B1 is the last order that you gave. The drone flies home by itself
+  State: the link filter lets the frames of the first Blue drone through is yes | no
+    Shows: yes: the filter of the link passes the frames to and from B1
+    Shows: no: the filter of the link drops the frames to and from B1, as a radio shadow does
   State: the first Blue drone on the Blue map is live | last in contact
     Shows: last in contact: the Blue map shows the first Blue drone dim, where Blue last heard from it
   State: the age of the first Blue drone on the Blue map is 0..600 s
@@ -262,6 +271,12 @@ Vocabulary:
     Set: select B1, and click LOW until it is {value}
     Shows: low: the list of drones shows LOW beside the order of B1
     Shows: high: the list of drones shows the order of B1 with no LOW
+  State: the drones that the app flies in AGENT mode are 0..5
+    Shows: at least 1: the app has put a drone in AGENT mode and sent it plans by MAVLink, through the air
+  State: the position reports that the app heard from its drones are 0..1000000
+    Shows: at least 10: the app has heard the position of its drones in their telemetry (GLOBAL_POSITION_INT), and the drones on its map are where those reports put them
+  State: the maps of the game that the game server sent the app are 0..100000
+    Shows: 0: the app got no map of its team from the game server: only the word of the umpire (the clock, the score and the outcome) and the reports of the towers and the base
   State: the camera feeds in the app are 0..5
     Shows: 5: CAMERAS shows the picture from the camera of each Blue drone, beside its name
   Event: the game runs for 2 minutes
@@ -285,6 +300,10 @@ Vocabulary:
     Shows: at least 1: the report of the server says `RESULT taken_blue=` with 1 or more
   State: the towers that Red took are 0..100
     Shows: at least 1: the report of the server says `RESULT taken_red=` with 1 or more
+  State: the frames that the air carried between the ground and the drones are 0..100000000
+    Shows: at least 1: the report of the server says `RESULT air_carried=` with 1 or more. Every order, plan and telemetry frame went through the simulated air
+  State: the sensor reports that the drones sent are 0..100000000
+    Shows: at least 1: the report of the server says `RESULT sensed=` with 1 or more. A drone told the ground, over the air, of an enemy drone that it saw
   State: the sightings from the fog on the Blue seat are 0..100000
     Shows: 0: a seat that watches Blue never gets a Red drone that Blue does not see, or the place of a Red drone that Blue does not see now
   State: the Red drones that the Blue seat saw are 0..5

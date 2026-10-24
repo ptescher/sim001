@@ -231,6 +231,8 @@ const OBSERVED: &[&str] = &[
     "the drones in AGENT mode",
     "the commands that the drones refused",
     "the drones that crashed",
+    "the frames that the air carried between the ground and the drones",
+    "the sensor reports that the drones sent",
     "the towers that Blue took",
     "the towers that Red took",
     "the sightings from the fog on the Blue seat",
@@ -294,6 +296,8 @@ impl Driver for Server {
             "the drones in AGENT mode" => result("in_agent")?,
             "the commands that the drones refused" => result("refused")?,
             "the drones that crashed" => result("crashes")?,
+            "the frames that the air carried between the ground and the drones" => result("air_carried")?,
+            "the sensor reports that the drones sent" => result("sensed")?,
             "the towers that Blue took" => result("taken_blue")?,
             "the towers that Red took" => result("taken_red")?,
             "the sightings from the fog on the Blue seat" => p.leaks as f64,
@@ -341,7 +345,7 @@ impl Driver for Server {
 #[test]
 fn the_server_plays_a_game_with_arduplane() {
     let dir = root().join("expectations");
-    let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
+    let a = Acceptance::load_for(&dir, "sim").unwrap_or_else(|e| panic!("{e}")).with_coverage();
     let section = a.suite.sections.iter().find(|s| s.slug == "towers").expect("a towers section").id;
     let ours = a.suite.subtree(section);
     let mut driver = Server { bin: agent_dir(), played: None };

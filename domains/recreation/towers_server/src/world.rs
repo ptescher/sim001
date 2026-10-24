@@ -7,11 +7,10 @@
 
 use crate::terrain::Valley;
 use crate::trees::Forest;
-use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
 use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
-use recreation_towers::flight;
 use recreation_towers::{Class, Game, Instruction, Link, Order, Phase as Referee, Rules, Standing, Team};
+use recreation_towers_ground::leg_for;
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
 use simulation_physics::{Environment, FlightState, Phase, Start, step};
@@ -20,8 +19,6 @@ use simulation_physics::{Environment, FlightState, Phase, Start, step};
 pub const RESPAWN: f32 = 15.0;
 /// A drone this far from where it started (m) has left its base.
 const AWAY: f32 = 100.0;
-/// Each plan is good for this long (s); the ground sends a new one about once a second.
-pub const PLAN_TTL: f32 = 3.0;
 
 /// The world point (x east, y up, z south) of a field point at `alt` above the ground.
 pub fn to_world(at: Vec2, alt: f32) -> Vec3 {
@@ -52,40 +49,6 @@ pub fn base_start(rules: &Rules, team: Team, k: usize) -> Start {
     let at = rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0));
     let heading = if team == Team::Blue { std::f32::consts::PI } else { 0.0 };
     Start { pos: to_world(at, 0.0), heading }
-}
-
-/// Where drone `i` flies to carry out `order`, flown `low` or high.
-pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
-    let d = &game.drones[i];
-    let (team, k) = (d.team, i % game.rules.drones);
-    let target = match order {
-        Order::Take(t) => game.towers[t].at,
-        Order::Goto(p) => p,
-        Order::Hold => d.at,
-        Order::Home => game.rules.base(team),
-    };
-    if order == Order::Hold {
-        // Circle where it is: low only if it is over open ground.
-        let low = low && game.map.open(d.at);
-        let alt = if low { flight::low_height(team, k) } else { flight::orbit_height(team, k) };
-        flight::Leg { orbit: false, point: d.at, alt, radius: 0.0 }
-    } else {
-        let plan = flight::plan(&game.map, d.at, target, low);
-        flight::leg(&game.map, &plan, team, k, d.at, d.alt)
-    }
-}
-
-/// The plan for drone `i` (its index in the game) to carry out `order`, flown `low` or high, with
-/// home at (`lat`, `lon`).
-pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64), id: u16) -> WirePlan {
-    let leg = leg_for(game, i, order, low);
-    let (primitive, radius) = match (order, leg.orbit) {
-        (Order::Hold, _) => (Primitive::Loiter, 0.0),
-        (_, true) => (Primitive::Orbit, leg.radius),
-        (_, false) => (Primitive::Goto, 0.0),
-    };
-    let (lat, lon) = to_global(home.0, home.1, leg.point.x, leg.point.y);
-    WirePlan { id, primitive, target: 0, lat, lon, alt: leg.alt, radius, ttl: PLAN_TTL }
 }
 
 /// The fastest a hovering drone is flown (m/s): its QLOITER's full stick (`Q_LOIT_SPEED_MS` in
@@ -181,6 +144,9 @@ pub struct World {
     pub top_speed: Vec<f32>,
     /// Physics packets from each drone's SITL.
     pub packets: Vec<u64>,
+    /// The game time at which each drone's sensor next reports (s), and the sequence of its frames.
+    next_sense: Vec<f32>,
+    sense_seq: Vec<u8>,
 }
 
 impl World {
@@ -211,6 +177,8 @@ impl World {
             away: vec![None; n],
             top_speed: vec![0.0; n],
             packets: vec![0; n],
+            next_sense: vec![0.0; n],
+            sense_seq: vec![0; n],
         }
     }
 
@@ -281,25 +249,69 @@ impl World {
         radio
     }
 
-    /// The seats may give drone `i` an order: it is in contact.
-    pub fn can_command(&self, i: usize) -> bool {
+    /// The radio reaches drone `i` now: the air carries its frames. A drone in a radio shadow, or
+    /// out of the radio's range of its team's base, is out of reach.
+    pub fn in_reach(&self, i: usize) -> bool {
+        let d = &self.game.drones[i];
         !self.game.jammed[i]
+            && d.at.distance(self.game.rules.base(d.team)) < communication_air::Technology::MavlinkNetwork.range()
     }
 
-    /// Gives drone `i` an order, if it is in contact. Whether it was heard.
-    pub fn command(&mut self, i: usize, order: Order, low: bool) -> bool {
+    /// The team gives drone `i` an order. The team does not know whether it is heard: the order is
+    /// the team's, and the air carries it to the drone, or drops it (see `air`).
+    pub fn command(&mut self, i: usize, order: Order, low: bool) {
         self.command_standing(i, order, low, None)
     }
 
-    /// Gives drone `i` an order and a standing order, if it is in contact. Whether it was heard.
-    pub fn command_standing(&mut self, i: usize, order: Order, low: bool, standing: Option<Standing>) -> bool {
-        if !self.can_command(i) {
-            return false;
-        }
+    /// The team gives drone `i` an order and a standing order.
+    pub fn command_standing(&mut self, i: usize, order: Order, low: bool, standing: Option<Standing>) {
         self.orders[i] = Some(order);
         self.lows[i] = low;
         self.standing[i] = standing;
-        true
+    }
+
+    /// What drone `i`'s sensor reports now, once a second of game time: each enemy drone in its
+    /// range, as an ADSB_VEHICLE frame from the drone (see `cognition_agent::link::sighting_frame`).
+    pub fn sense(&mut self, i: usize) -> Vec<Vec<u8>> {
+        if !self.started() || self.game.time < self.next_sense[i] {
+            return vec![];
+        }
+        self.next_sense[i] = self.game.time + 1.0;
+        let home = recreation_towers_ground::sitl_home();
+        self.game
+            .drone_senses(i)
+            .into_iter()
+            .map(|j| {
+                let d = &self.game.drones[j];
+                let craft = cognition_agent::Craft {
+                    id: j as u8 + 1,
+                    pos: Vec3::new(d.at.x, d.at.y, -d.alt),
+                    vel: Vec3::new(d.vel.x, d.vel.y, 0.0),
+                    flying: true,
+                };
+                let t = cognition_agent::link::Traffic::from_craft(&craft, home, "SEEN");
+                self.sense_seq[i] = self.sense_seq[i].wrapping_add(1);
+                cognition_agent::link::sighting_frame(i as u8 + 1, self.sense_seq[i], j, &t)
+            })
+            .collect()
+    }
+
+    /// What the ground sees of the game: all of it.
+    pub fn situation(&self) -> recreation_towers_ground::Situation<'_> {
+        recreation_towers_ground::Situation {
+            now: self.now(),
+            game: &self.game,
+            orders: &self.orders,
+            lows: &self.lows,
+            standing: &self.standing,
+            wing: (0..self.orders.len()).map(|i| self.on_the_wing(i)).collect(),
+        }
+    }
+
+    /// The drone has no wing for the on-board executor to fly (a quadcopter), so its order is flown from
+    /// here by its radio, and the standing order is carried out here too.
+    pub fn flown_from_here(&self, i: usize) -> bool {
+        self.game.drones[i].class == recreation_towers::Class::Light
     }
 
     /// What the drones' radios do after a step of the referee: a drone in contact tells its team
@@ -309,6 +321,11 @@ impl World {
         for i in 0..self.orders.len() {
             if self.game.link(i) == Link::Up {
                 self.told[i] = (self.orders[i], self.lows[i]);
+                continue;
+            }
+            // A drone on the wing flies its standing order itself (the ground sends it ahead:
+            // `ground.rs`). Only a drone with no wing, flown from here by its radio, needs this.
+            if !self.flown_from_here(i) {
                 continue;
             }
             let mut flown = Instruction { order: self.orders[i], standing: self.standing[i] };
@@ -397,6 +414,9 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cognition_plan::Primitive;
+    use recreation_towers::flight;
+    use recreation_towers_ground::plan_for;
 
     fn world() -> World {
         World::new(Rules::default().without_batteries(), 0.0)
@@ -565,10 +585,10 @@ mod tests {
         assert!(w.lows[light]);
     }
 
-    /// Blue's drone 1 flies in the radio shadow of the Red home tower.
-    fn shadowed() -> (World, usize) {
+    /// Blue's drone `k` flies in the radio shadow of the Red home tower.
+    fn shadowed_k(k: usize) -> (World, usize) {
         let mut w = world();
-        let i = w.game.drone(Team::Blue, 1);
+        let i = w.game.drone(Team::Blue, k);
         w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
         w.game.drones[i].alt = 50.0;
         w.game.drones[i].phase = Referee::Flying;
@@ -576,25 +596,48 @@ mod tests {
         (w, i)
     }
 
+    /// A drone on the wing in a shadow.
+    fn shadowed() -> (World, usize) {
+        shadowed_k(1)
+    }
+
+    /// A drone with no wing in a shadow: the server flies its order.
+    fn shadowed_light() -> (World, usize) {
+        let k = (0..Rules::default().drones)
+            .find(|&k| Rules::default().class(k) == recreation_towers::Class::Light)
+            .expect("a light drone");
+        shadowed_k(k)
+    }
+
     #[test]
-    fn a_drone_in_the_radio_shadow_does_not_hear_an_order_and_one_in_contact_does() {
+    fn the_air_carries_to_a_drone_in_contact_and_not_to_one_in_a_radio_shadow() {
+        let (mut w, i) = shadowed();
+        assert!(!w.in_reach(i));
+        let j = w.game.drone(Team::Blue, 0);
+        assert!(w.in_reach(j));
+        // Out of the radio's range, a drone in no shadow is out of reach too.
+        w.game.drones[j].at = Vec2::new(-10_000.0, 0.0);
+        w.game.look();
+        assert!(!w.in_reach(j));
+    }
+
+    #[test]
+    fn an_order_is_the_teams_whether_or_not_the_drone_hears_it() {
         let (mut w, i) = shadowed();
         let west = w.game.tower("west");
-        assert!(!w.command(i, Order::Take(west), true));
-        assert_eq!((w.orders[i], w.lows[i]), (Some(Order::Home), false));
-        let j = w.game.drone(Team::Blue, 0);
-        assert!(w.command(j, Order::Take(west), true));
-        assert_eq!((w.orders[j], w.lows[j]), (Some(Order::Take(west)), true));
+        w.command(i, Order::Take(west), true);
+        assert_eq!((w.orders[i], w.lows[i]), (Some(Order::Take(west)), true));
+        assert_eq!(w.told[i].0, Some(Order::Home), "its team is told only what the drone heard");
     }
 
     #[test]
     fn a_standing_order_given_in_contact_replaces_the_failsafe() {
-        let (mut w, i) = shadowed();
+        let (mut w, i) = shadowed_light();
         let west = w.game.tower("west");
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
         w.game.look();
         let standing = Standing { after: 5.0, then: Order::Hold };
-        assert!(w.command_standing(i, Order::Take(west), false, Some(standing)));
+        w.command_standing(i, Order::Take(west), false, Some(standing));
         w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
         for _ in 0..49 {
             w.game.step(0.1);
@@ -609,13 +652,28 @@ mod tests {
     }
 
     #[test]
-    fn a_drone_that_lost_its_link_flies_home_and_its_team_still_sees_its_old_order() {
+    fn a_drone_on_the_wing_keeps_the_order_the_team_gave_it_for_it_flies_its_standing_order_itself() {
         let (mut w, i) = shadowed();
+        let west = w.game.tower("west");
+        w.game.drones[i].at = Vec2::new(-300.0, 0.0);
+        w.game.look();
+        w.command(i, Order::Take(west), false);
+        w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
+        for _ in 0..600 {
+            w.game.step(0.1);
+            w.link_up();
+        }
+        assert_eq!(w.orders[i], Some(Order::Take(west)), "60 s out of contact: the ground only shows what it sent");
+    }
+
+    #[test]
+    fn a_drone_that_lost_its_link_flies_home_and_its_team_still_sees_its_old_order() {
+        let (mut w, i) = shadowed_light();
         let west = w.game.tower("west");
         // Told while it was in contact...
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
         w.game.look();
-        assert!(w.command(i, Order::Take(west), false));
+        w.command(i, Order::Take(west), false);
         w.link_up();
         assert_eq!(w.told[i], (Some(Order::Take(west)), false));
         // ...then the shadow: it flies on for the timeout, and then the failsafe takes it home.
@@ -628,12 +686,12 @@ mod tests {
         w.game.step(0.1);
         w.link_up();
         assert_eq!(w.orders[i], Some(Order::Home));
-        assert!(!w.lows[i]);
+        assert_eq!(w.lows[i], w.low_by_default(i), "a light drone flies home low");
         assert_eq!(w.told[i], (Some(Order::Take(west)), false), "its team is not told");
         // Out of the shadow, it hears the team again and gets its order back.
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
         w.game.step(0.1);
-        assert!(w.command(i, Order::Take(west), false));
+        w.command(i, Order::Take(west), false);
     }
 
     #[test]

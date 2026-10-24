@@ -10,7 +10,8 @@ use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
 use recreation_towers::{
-    Advice, AdviceKind, Advisor, Commander, Game, Instruction, Link, Order, Outcome, Phase, Rules, Standing, Team,
+    Advice, AdviceKind, Advisor, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase, Rules,
+    Standing, Team,
 };
 use std::path::Path;
 
@@ -308,6 +309,17 @@ impl World {
         self.plan = Some(flight::plan(&self.game.map, d.at, target, low));
     }
 
+    /// The filter of the link, told what the referee's game has: who holds the towers, where the drones are.
+    /// It says whether the first Blue drone's frames go through.
+    fn filter_passes_blue(&self) -> &'static str {
+        let mut filter = LinkFilter::new(self.game.rules);
+        filter.set_holders(&self.game.towers.iter().map(|t| t.holder).collect::<Vec<_>>());
+        for (i, d) in self.game.drones.iter().enumerate() {
+            filter.set_drone(i, d.at, d.alt, d.phase == Phase::Flying);
+        }
+        if filter.reaches(self.game.drone(Team::Blue, 0)) { "yes" } else { "no" }
+    }
+
     fn blue_link(&self) -> &'static str {
         match self.game.link(self.game.drone(Team::Blue, 0)) {
             Link::Up => "in contact",
@@ -560,6 +572,8 @@ fn bindings() -> Bindings<World> {
         })
         .arrange("the second Blue drone", |w, v| w.place_second(v))
         .observe("the link of the first Blue drone", |w| w.blue_link())
+        .observe("the link filter lets the frames of the first Blue drone through", |w| w.filter_passes_blue())
+        .arrange("the link filter lets the frames of the first Blue drone through", |_, _| {})
         .on("the first Blue drone flies out of the radio shadow", |w| {
             w.place_blue(&Value::from("at the Blue home tower"))
         })

@@ -11,7 +11,7 @@
 //! | heartbeat | `HEARTBEAT` as a GCS, once a second |
 
 use crate::Craft;
-use cognition_plan::{CMD_GAME, CMD_PLAN, WireGame, WirePlan, status_names, wire::CommandInt};
+use cognition_plan::{CMD_GAME, CMD_PLAN, CMD_STANDING, WireGame, WirePlan, status_names, wire::CommandInt};
 use mavlink::dialects::ardupilotmega::*;
 use mavlink::error::MessageReadError;
 use mavlink::{MavConnection, MavHeader, MavlinkVersion};
@@ -27,6 +27,9 @@ pub const GCS_COMPID: u8 = 190;
 /// The ICAO addresses the station gives its planes on the uplink: this, with the plane's id in
 /// the low byte.
 pub const ICAO_BASE: u32 = 0x00_5A_00_00;
+/// The ICAO address of an enemy that the plane's own sensor reports: this, with the enemy's number in the
+/// game in the low byte. (Not the traffic that the station uplinks, which ArduPilot passes on too.)
+pub const SENSE_ICAO_BASE: u32 = 0x00_5E_00_00;
 /// `MAV_MODE_FLAG_SAFETY_ARMED`.
 const ARMED: u8 = 128;
 
@@ -43,6 +46,7 @@ pub fn command_int(c: &CommandInt, target: (u8, u8)) -> Option<MavMessage> {
     let (command, frame) = match c.command {
         CMD_PLAN => (MavCmd::MAV_CMD_USER_1, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT),
         CMD_GAME => (MavCmd::MAV_CMD_USER_2, MavFrame::MAV_FRAME_MISSION),
+        CMD_STANDING => (MavCmd::MAV_CMD_USER_3, MavFrame::MAV_FRAME_GLOBAL_RELATIVE_ALT),
         _ => return None,
     };
     Some(MavMessage::COMMAND_INT(COMMAND_INT_DATA {
@@ -160,6 +164,48 @@ pub fn adsb_vehicle(t: &Traffic) -> MavMessage {
     })
 }
 
+/// The frame in which a plane's sensor reports the enemy `enemy` (its number in the game), as the
+/// plane's autopilot (`sysid`, component 1) would send it.
+pub fn sighting_frame(sysid: u8, seq: u8, enemy: usize, t: &Traffic) -> Vec<u8> {
+    let MavMessage::ADSB_VEHICLE(mut d) = adsb_vehicle(t) else { unreachable!("adsb_vehicle gives ADSB_VEHICLE") };
+    d.ICAO_address = SENSE_ICAO_BASE | (enemy as u32 & 0xFF);
+    let mut out = Vec::with_capacity(48);
+    mavlink::write_v2_msg(
+        &mut out,
+        MavHeader { system_id: sysid, component_id: 1, sequence: seq },
+        &MavMessage::ADSB_VEHICLE(d),
+    )
+    .expect("writing to a Vec cannot fail");
+    out
+}
+
+/// An enemy that the plane's sensor reported.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Sighting {
+    /// Its number in the game.
+    pub enemy: usize,
+    pub lat: f64,
+    pub lon: f64,
+    pub alt_amsl: f32,
+    pub heading: f32,
+    pub speed: f32,
+    pub climb: f32,
+    /// When the plane's report came.
+    pub heard: Instant,
+}
+
+/// The plane's position, from its `GLOBAL_POSITION_INT`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PositionReport {
+    pub lat: f64,
+    pub lon: f64,
+    /// Above home (m).
+    pub alt: f32,
+    /// North, east and down (m/s).
+    pub vel: [f32; 3],
+    pub heard: Instant,
+}
+
 /// A `COMMAND_ACK` from the plane.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ack {
@@ -211,6 +257,12 @@ pub struct LinkState {
     pub best_plan_echo: Option<i32>,
     /// How the link went down.
     pub error: Option<String>,
+    /// The plane's last position report, and how many there have been.
+    pub position: Option<PositionReport>,
+    pub position_reports: u64,
+    /// What the plane's sensor last reported of each enemy, and how many reports there have been.
+    pub sightings: Vec<Sighting>,
+    pub sensor_reports: u64,
 }
 
 impl LinkState {
@@ -260,6 +312,33 @@ impl LinkState {
                     _ => {}
                 }
             }
+            MavMessage::GLOBAL_POSITION_INT(p) => {
+                self.position_reports += 1;
+                self.position = Some(PositionReport {
+                    lat: p.lat as f64 * 1e-7,
+                    lon: p.lon as f64 * 1e-7,
+                    alt: p.relative_alt as f32 * 1e-3,
+                    vel: [p.vx as f32 * 1e-2, p.vy as f32 * 1e-2, p.vz as f32 * 1e-2],
+                    heard: Instant::now(),
+                });
+            }
+            MavMessage::ADSB_VEHICLE(a) if a.ICAO_address & 0xFFFF00 == SENSE_ICAO_BASE => {
+                self.sensor_reports += 1;
+                let s = Sighting {
+                    enemy: (a.ICAO_address & 0xFF) as usize,
+                    lat: a.lat as f64 * 1e-7,
+                    lon: a.lon as f64 * 1e-7,
+                    alt_amsl: a.altitude as f32 * 1e-3,
+                    heading: a.heading as f32 * 1e-2,
+                    speed: a.hor_velocity as f32 * 1e-2,
+                    climb: a.ver_velocity as f32 * 1e-2,
+                    heard: Instant::now(),
+                };
+                match self.sightings.iter_mut().find(|o| o.enemy == s.enemy) {
+                    Some(o) => *o = s,
+                    None => self.sightings.push(s),
+                }
+            }
             MavMessage::STATUSTEXT(t) => {
                 self.texts_heard += 1;
                 self.texts.push(t.text.to_str().unwrap_or("").trim_end_matches('\0').to_string());
@@ -285,7 +364,13 @@ impl Link {
     /// Connects to a plane's MAVLink TCP port (`"127.0.0.1:5770"`: SITL instance N listens on
     /// 5760 + 10·N) and starts reading.
     pub fn connect(address: &str) -> io::Result<Link> {
-        let mut conn = mavlink::connect::<MavMessage>(&format!("tcpout:{address}"))?;
+        Link::open(&format!("tcpout:{address}"))
+    }
+
+    /// Opens a link by its MAVLink connection string: `tcpout:HOST:PORT`, `serial:PATH:BAUD`, ...
+    pub fn open(url: &str) -> io::Result<Link> {
+        let address = url;
+        let mut conn = mavlink::connect::<MavMessage>(url)?;
         conn.set_protocol_version(MavlinkVersion::V2);
         conn.set_allow_recv_any_version(true);
         let conn = Arc::new(conn);
@@ -300,9 +385,14 @@ impl Link {
 
     /// [`Link::connect`], trying again until `patience` runs out (SITL takes a moment to listen).
     pub fn connect_patiently(address: &str, patience: Duration) -> io::Result<Link> {
+        Link::open_patiently(&format!("tcpout:{address}"), patience)
+    }
+
+    /// [`Link::open`], trying again until `patience` runs out.
+    pub fn open_patiently(url: &str, patience: Duration) -> io::Result<Link> {
         let start = Instant::now();
         loop {
-            match Link::connect(address) {
+            match Link::open(url) {
                 Ok(l) => return Ok(l),
                 Err(e) if start.elapsed() > patience => return Err(e),
                 Err(_) => std::thread::sleep(Duration::from_millis(200)),
@@ -324,6 +414,11 @@ impl Link {
         s.last_plan = Some(plan.id);
         s.plans_sent += 1;
         Ok(())
+    }
+
+    /// Gives the plane a standing plan: it flies it by itself if no new plan comes for `plan.ttl` s.
+    pub fn send_standing(&self, plan: &WirePlan) -> io::Result<()> {
+        self.send(&command_int(&plan.to_standing_command(), self.target()).expect("a standing plan"))
     }
 
     pub fn send_game(&self, game: &WireGame) -> io::Result<()> {
@@ -626,5 +721,43 @@ mod tests {
     fn a_link_to_nowhere_fails() {
         let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         assert!(Link::connect(&format!("127.0.0.1:{port}")).is_err());
+    }
+
+    #[test]
+    fn a_sensor_report_and_a_position_report_land_in_the_link_state() {
+        let t = Traffic {
+            id: 6,
+            lat: -35.36,
+            lon: 149.17,
+            alt_amsl: 640.0,
+            heading: 90.0,
+            speed: 12.0,
+            climb: 0.0,
+            callsign: "Red2".into(),
+        };
+        let bytes = sighting_frame(3, 0, 6, &t);
+        let (hdr, msg) = MavlinkReader::new(&bytes[..]).read_any_message::<MavMessage>().unwrap();
+        let mut state = LinkState::default();
+        state.handle(hdr, msg);
+        // The traffic that the station uplinks (ICAO_BASE) is not a sighting.
+        let mut out = vec![];
+        mavlink::write_v2_msg(&mut out, hdr, &adsb_vehicle(&t)).unwrap();
+        let (hdr, msg) = MavlinkReader::new(&out[..]).read_any_message::<MavMessage>().unwrap();
+        state.handle(hdr, msg);
+        assert_eq!((state.sensor_reports, state.sightings.len()), (1, 1));
+        let s = state.sightings[0];
+        assert_eq!(s.enemy, 6);
+        assert!((s.lat - -35.36).abs() < 1e-6 && (s.speed - 12.0).abs() < 0.01);
+        let p = MavMessage::GLOBAL_POSITION_INT(GLOBAL_POSITION_INT_DATA {
+            lat: -353_600_000,
+            lon: 1_491_700_000,
+            relative_alt: 55_000,
+            vx: 100,
+            ..Default::default()
+        });
+        state.handle(hdr, p);
+        let r = state.position.unwrap();
+        assert_eq!(state.position_reports, 1);
+        assert!((r.alt - 55.0).abs() < 1e-3 && (r.vel[0] - 1.0).abs() < 1e-3);
     }
 }

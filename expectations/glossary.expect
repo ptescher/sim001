@@ -458,3 +458,8 @@ Term: Standing order
 Term: Mountains
   In [[Towers]], the tall mountains round the edge of the field. They are higher than a drone
   can fly. They leave the [[base]]s, the [[tower]]s and the lake clear.
+
+Term: standing plan
+  A plan that the ground gives a plane ahead of time, with a time. If no new plan comes for that
+  long, the plane flies it on its own. It is how a plane knows what to do when it is out of
+  contact.

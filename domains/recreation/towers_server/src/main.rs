@@ -13,7 +13,7 @@
 //! which needs about a minute of its own time before it arms (`--warmup`). Needs the AGENT build:
 //! `SIM001_BIN`, else `.ardupilot-agent/build/sitl/bin`.
 
-mod ground;
+mod air;
 mod seats;
 mod terrain;
 mod trees;
@@ -22,6 +22,7 @@ mod world;
 use glam::Vec3;
 use recreation_games::Radio;
 use recreation_towers::{Advisor, Class, Commander, Outcome, Rules, Team};
+use recreation_towers_ground as ground;
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
 use std::net::{TcpListener, UdpSocket};
 use std::path::{Path, PathBuf};
@@ -153,11 +154,6 @@ fn radio_channels(r: &Radio) -> [u16; 8] {
     ]
 }
 
-fn name(rules: &Rules, i: usize) -> String {
-    let team = if i < rules.drones { "Blue" } else { "Red" };
-    format!("{team}{}", i % rules.drones + 1)
-}
-
 fn main() {
     let mut a = args();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root");
@@ -202,10 +198,25 @@ fn main() {
             })
             .unwrap();
     }
+    // The ground reaches each drone through the air: a frame goes only while the radio reaches it.
+    let air: Vec<air::Channel> = (0..n)
+        .map(|i| {
+            let sitl = launch::MAVLINK_PORT + 10 * (a.first_instance + i as u16);
+            let w = world.clone();
+            let w2 = world.clone();
+            air::open(
+                sitl,
+                Arc::new(move || w.lock().unwrap().in_reach(i)),
+                Arc::new(move || w2.lock().unwrap().sense(i)),
+            )
+            .expect("the air for a drone")
+        })
+        .collect();
+    let air_ports: Arc<Vec<u16>> = Arc::new(air.iter().map(|c| c.port).collect());
     // Clients find the seats at the port printed below (the next one up if this one is taken).
     let seats = (a.seat_port..=a.seat_port.saturating_add(20))
         .find_map(|port| {
-            let seats = seats::Seats::listen(port, world.clone(), a.people).ok()?;
+            let seats = seats::Seats::listen(port, world.clone(), a.people, air_ports.clone()).ok()?;
             a.seat_port = port;
             Some(seats)
         })
@@ -235,14 +246,18 @@ fn main() {
         a.seat_port,
         a.seat_port
     );
-    let names: Vec<String> = (0..n).map(|i| name(&rules, i)).collect();
-    let ports: Vec<u16> = (0..n as u16).map(|i| launch::MAVLINK_PORT + 10 * (a.first_instance + i)).collect();
+    let names: Vec<String> = (0..n).map(|i| ground::drone_name(&rules, i)).collect();
     // Light drones have no wing for AGENT to fly: they are flown by the radio, in QLOITER.
     let modes: Vec<u32> = (0..n)
         .map(|i| if rules.class(i % rules.drones) == Class::Light { ground::QLOITER_MODE } else { ground::AGENT_MODE })
         .collect();
-    let home = cognition_agent::parse_home(launch::HOME).expect("the SITL home");
-    let mut ground = ground::Ground::connect(&names, &modes, &ports, home);
+    let home = ground::sitl_home();
+    // The server is the ground of a team that no person commands; a person's app is its own.
+    let flown: Vec<usize> = (0..n).filter(|&i| !a.people[usize::from(i >= rules.drones)]).collect();
+    let flown_modes: Vec<u32> = flown.iter().map(|&i| modes[i]).collect();
+    let transport =
+        ground::Transport::Tcp { host: "127.0.0.1".into(), ports: flown.iter().map(|&i| air_ports[i]).collect() };
+    let mut ground = ground::Ground::connect(&transport, &names, &flown, &flown_modes, home);
     // A person who commands a team has an advisor.
     let mut advisors: Vec<(Team, Advisor)> =
         Team::BOTH.into_iter().filter(|t| a.people[t.index()]).map(|t| (t, Advisor::new(rules))).collect();
@@ -301,7 +316,8 @@ fn main() {
                 }
             }
         }
-        ground.tick(&world);
+        let sent = ground.decide(&world.lock().unwrap().situation());
+        ground.send(sent);
         if last_send.elapsed() >= SEND_EVERY {
             last_send = Instant::now();
             let mut w = world.lock().unwrap();
@@ -319,6 +335,10 @@ fn main() {
                 .iter()
                 .map(|t| format!("{} {:+.0}%{}", t.name, 100.0 * t.control, if t.contested { "!" } else { "" }))
                 .collect();
+            println!(
+                "        air {:?}",
+                air.iter().map(|c| (c.counts.carried(), c.counts.dropped())).collect::<Vec<_>>()
+            );
             println!(
                 "[{:>3}s] t {:.0}s ({}) | Blue {:.0} Red {:.0} | {} | packets {:?}",
                 start.elapsed().as_secs(),
@@ -371,6 +391,9 @@ fn main() {
             println!("RESULT light_away={away:.1}");
             println!("RESULT light_top_speed={:.1}", light.iter().map(|&i| w.top_speed[i]).fold(0.0, f32::max));
             println!("RESULT light_low={}", light.iter().filter(|&&i| w.lows[i]).count());
+            println!("RESULT air_carried={}", air.iter().map(|c| c.counts.carried()).sum::<u64>());
+            println!("RESULT air_dropped={}", air.iter().map(|c| c.counts.dropped()).sum::<u64>());
+            println!("RESULT sensed={}", air.iter().map(|c| c.counts.sensed()).sum::<u64>());
             drop(w);
             std::thread::sleep(Duration::from_millis(500));
             drop(fleet);

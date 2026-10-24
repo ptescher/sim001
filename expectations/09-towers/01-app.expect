@@ -63,6 +63,37 @@ Feature: Commanding from the app
     When the game runs for 2 minutes
     Then the west tower on the Blue map is held by Blue
 
+  Expectation: The app flies its drones itself
+    The app is the ground station of its team: it does not hand the game server an order to carry
+    out. It puts each drone in AGENT mode and sends it its plan as MAVLink, through the air, as the
+    ground station of a real drone does. The game server only plays the world.
+
+    Given the order of the first Blue drone is take the west tower
+    When the game runs for 2 minutes
+    Then the drones that the app flies in AGENT mode are at least 1
+
+  Expectation: The map of the app shows its drones where their telemetry puts them
+    The app does not get the places of its drones from the game server. Each drone sends its
+    position in its telemetry, and the app builds the part of its map that shows its drones from
+    those reports. A drone that the app has not heard from lately is shown dim, where the app last
+    heard it, with the time since. The enemy drones on the map are the ones that the drones, the
+    towers and the base report, never an enemy that nobody told the app about.
+
+    Given the order of the first Blue drone is take the west tower
+    When the game runs for 2 minutes
+    Then the position reports that the app heard from its drones are at least 10
+
+  Expectation: The game server is the umpire of the app, and not its map
+    The game server tells the app the clock, the score and the outcome of the game, and what the
+    towers and the base of its team see. It does not tell the app where its drones are, and it
+    does not hand it a map of its team: the app makes the map from the reports of its drones and of
+    its sites, as a ground station of a real team does. In the field, a service that reads the
+    drones' positions (Remote ID, or logs) is the umpire.
+
+    Given the order of the first Blue drone is take the west tower
+    When the game runs for 2 minutes
+    Then the maps of the game that the game server sent the app are 0
+
   Expectation: LOW makes the selected drone fly low
     Given the selected drone is the first Blue drone
     And the flight of the first Blue drone is high

@@ -96,6 +96,9 @@ const OBSERVED: &[&str] = &[
     "the order of the third Blue drone",
     "the flight of the first Blue drone",
     "the camera feeds in the app",
+    "the drones that the app flies in AGENT mode",
+    "the position reports that the app heard from its drones",
+    "the maps of the game that the game server sent the app",
 ];
 
 /// The cameras need the 3D view to load the valley first.
@@ -436,6 +439,18 @@ impl Driver for AppDriver {
             return Ok(v.parse::<f64>().map_or_else(|_| Value::from(*v), Value::from));
         }
         let lower = subject.to_lowercase();
+        if lower == "the drones that the app flies in agent mode" {
+            let flown = self.call(|v, _, _| v.seat.flown.load(std::sync::atomic::Ordering::SeqCst))?;
+            return Ok(Value::from(flown as f64));
+        }
+        if lower == "the position reports that the app heard from its drones" {
+            let heard = self.call(|v, _, _| v.seat.heard.load(std::sync::atomic::Ordering::SeqCst))?;
+            return Ok(Value::from(heard as f64));
+        }
+        if lower == "the maps of the game that the game server sent the app" {
+            let maps = self.call(|v, _, _| v.seat.state().maps)?;
+            return Ok(Value::from(maps as f64));
+        }
         if lower == "the camera feeds in the app" {
             // The 3D view loads the valley first, which takes a while.
             let end = Instant::now() + self.suite.cap(FEEDS);
@@ -521,7 +536,7 @@ impl Driver for AppDriver {
 /// Loads the suite, then runs the section's tests on a thread of their own and quits.
 pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     let Config { suite, only, docs, server, server_args, cameras } = config;
-    let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
+    let mut acceptance = match Acceptance::load_for(&suite, "sim") {
         Ok(a) => a.with_coverage(),
         Err(e) => {
             eprint!("{e}");

@@ -90,6 +90,11 @@ Vocabulary:
     Shows: plan expired: AG_FALL is 1 (`fall=1`), and the plane circles where it is
     Shows: bad input: AG_FALL is 2 (`fall=2`), and the plane flies wings level
     Shows: recovery: AG_FALL is 3 (`fall=3`). The plane gets its airspeed or its height back before it flies the plan again
+  State: the primitive that the plane flies is none | pursue | evade | go to | orbit | band | loiter
+    Shows: none: AG_FLY is 0
+    Shows: go to: AG_FLY is 3, go to
+    Shows: orbit: AG_FLY is 4, orbit
+    Shows: loiter: AG_FLY is 6, loiter
   State: the reported interventions are 0..1000000
     Shows: above 0: AG_ENV is more than 0 (`env=` in the console)
     Shows: AG_ENV is {value}
@@ -155,6 +160,16 @@ Vocabulary:
     Say: type `plan pursue 0 0 0 0 600 2` in the console. The plane chases Merlin, the aircraft with the id 2
   Event: the ground sends an evade plan
     Say: type `plan evade 0 0 0 0 600 2` in the console. The plane breaks away from Merlin, id 2
+  # A go-to plan and a standing plan: the standing orbit circles the arena centre at 45 m from it,
+  # at 45 m. If no new plan comes for 20 s, the plane flies it.
+  Event: the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 30 seconds
+    Say: type `plan goto 80 10 40 0 600` and `standing orbit 70 0 45 45 20` in the console. Then type `wait 30`
+  Event: the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 10 seconds
+    Say: type `plan goto 80 10 40 0 600` and `standing orbit 70 0 45 45 20` in the console. Then type `wait 10`
+  Event: the ground sends a go-to plan and a standing orbit plan for 20 s, and again a go-to plan after 15 seconds, and the plane flies on for 15 seconds
+    Say: type `plan goto 80 10 40 0 600` and `standing orbit 70 0 45 45 20` in the console. Type `wait 15`, then `plan goto 80 10 40 0 600` again, and `wait 15`
+  Event: the ground sends a go-to plan and a standing orbit plan for 20 s, and a go-to plan after 30 seconds
+    Say: type `plan goto 80 10 40 0 600` and `standing orbit 70 0 45 45 20` in the console. Type `wait 30`, then `plan goto 80 10 40 0 600` again
   Event: the ground sends a malformed plan
     Say: type `plan 9 80 10 40 0 600` in the console. There is no primitive 9
   Event: the ground sends the plan id again with an orbit
