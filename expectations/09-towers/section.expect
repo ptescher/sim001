@@ -30,6 +30,11 @@ Section: Towers
   see [[Captains for Towers]].
 
 Vocabulary:
+  # plans/unified-link.md: the commander app is the same ground station on both platforms. The
+  # first platform is the default, so plain lines are about the sim: the game server with
+  # simulated air and ArduPlane SITL. The field is real drones and a real radio, on a bench rig.
+  Platform: sim | field
+
   State: the game of Towers is in play | won by Blue | won by Red | a draw
     Shows: in play: the clock runs, and the scores go up
     Shows: won by Blue: the game stops, and it says BLUE WINS
@@ -99,6 +104,7 @@ Vocabulary:
     Shows: over its base: the first Blue drone circles 50 m high over the Blue base
     Shows: in the west circle: the first Blue drone circles the west tower, 50 m high
     Shows: near the Red home tower: the first Blue drone flies 50 m high, 100 m from the Red home tower, on the side of the centre of the field
+    Set[field]: near the Red home tower: fly the first Blue drone to the marker 50 m high and 100 m from the Red home tower, on the side of the centre of the field
     Shows: at the Blue home tower: the first Blue drone circles the Blue home tower
     Shows: low in the mid lane: the first Blue drone flies 17 m high in the mid lane, 210 m from the Blue home tower
     Shows: low in the west lane, on the shore of the lake: the first Blue drone flies 17 m high in the west lane, where the lane goes along the lake
