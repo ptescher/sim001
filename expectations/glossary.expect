@@ -430,6 +430,12 @@ Term: Radio shadow
   drone in a radio shadow is out of contact with its team. It sends no telemetry and no camera
   picture, and it gets no new order. After 20 s out of contact, it flies home by itself.
 
+Term: Standing order
+  In [[Towers]], a plan that a commander gives to a drone with its order. It says what the drone
+  does if it is out of contact for some seconds: for example, hold, or go home. The drone stays
+  on the standing order until the commander gives it a new order. A drone with no standing order
+  flies home when its link is lost.
+
 Term: Mountains
   In [[Towers]], the tall mountains round the edge of the field. They are higher than a drone
   can fly. They leave the [[base]]s, the [[tower]]s and the lake clear.

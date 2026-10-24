@@ -15,12 +15,14 @@
 
 mod commander;
 pub mod flight;
+mod instruction;
 pub mod map;
 pub mod seat;
 pub mod svg;
 mod view;
 
 pub use commander::{Commander, CommanderTuning};
+pub use instruction::{Instruction, Standing};
 pub use map::Map;
 pub use view::{EnemyDrone, Order, OwnDrone, TeamView, TowerView};
 

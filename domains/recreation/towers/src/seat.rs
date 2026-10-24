@@ -6,7 +6,7 @@
 //! The fog is the server's: a seat that commands or watches a team gets only that team's map
 //! ([`ToSeat::View`]). Only a spectator gets the whole game ([`ToSeat::Truth`]).
 
-use crate::{Drone, Game, Order, Outcome, Rules, Team, TeamView, Tower};
+use crate::{Drone, Game, Order, Outcome, Rules, Standing, Team, TeamView, Tower};
 use serde::{Deserialize, Serialize};
 
 /// The game server's port for seats: never a SITL port (those end in 0, 2 or 3).
@@ -33,6 +33,9 @@ pub enum ToServer {
         order: Order,
         #[serde(default)]
         low: bool,
+        /// What the drone does if it is out of contact for a time: a plan for the radio shadows.
+        #[serde(default)]
+        standing: Option<Standing>,
     },
 }
 

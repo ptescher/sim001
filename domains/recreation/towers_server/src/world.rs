@@ -11,7 +11,7 @@ use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
 use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
 use recreation_towers::flight;
-use recreation_towers::{Game, Link, Order, Phase as Referee, Rules, Team};
+use recreation_towers::{Game, Instruction, Link, Order, Phase as Referee, Rules, Standing, Team};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
 use simulation_physics::{Environment, FlightState, Phase, Start, step};
@@ -131,6 +131,8 @@ pub struct World {
     pub orders: Vec<Option<Order>>,
     /// Each drone's order is flown low, along the lanes (by its index in the game).
     pub lows: Vec<bool>,
+    /// Each drone's standing order: what it does when it is out of contact (by its index in the game).
+    pub standing: Vec<Option<Standing>>,
     /// The order each team last knew of for each drone, and whether it is low: what the drone
     /// was told while it was in contact. A drone out of contact flies on, and its team is not told
     /// what it flies now (the order is the team's, and the drone's own failsafe is not).
@@ -165,6 +167,7 @@ impl World {
             down_for: vec![0.0; n],
             orders: vec![Some(Order::Home); n],
             lows: vec![false; n],
+            standing: vec![None; n],
             told: vec![(Some(Order::Home), false); n],
             terrain,
             forest,
@@ -233,29 +236,35 @@ impl World {
 
     /// Gives drone `i` an order, if it is in contact. Whether it was heard.
     pub fn command(&mut self, i: usize, order: Order, low: bool) -> bool {
+        self.command_standing(i, order, low, None)
+    }
+
+    /// Gives drone `i` an order and a standing order, if it is in contact. Whether it was heard.
+    pub fn command_standing(&mut self, i: usize, order: Order, low: bool, standing: Option<Standing>) -> bool {
         if !self.can_command(i) {
             return false;
         }
         self.orders[i] = Some(order);
         self.lows[i] = low;
+        self.standing[i] = standing;
         true
     }
 
     /// What the drones' radios do after a step of the referee: a drone in contact tells its team
-    /// its order; one that has lost its link flies home by itself (the failsafe), and stays on
-    /// that order until the team can give it another.
+    /// its order; one that is out of contact long enough flies its standing order, or, with none,
+    /// home (the failsafe), and stays on that order until the team can give it another.
     fn link_up(&mut self) {
         for i in 0..self.orders.len() {
-            match self.game.link(i) {
-                Link::Up => self.told[i] = (self.orders[i], self.lows[i]),
-                Link::Cut => {}
-                Link::Lost => {
-                    if self.orders[i] != Some(Order::Home) {
-                        println!("failsafe: drone {i} lost its link, and flies home");
-                        self.orders[i] = Some(Order::Home);
-                        self.lows[i] = false;
-                    }
-                }
+            if self.game.link(i) == Link::Up {
+                self.told[i] = (self.orders[i], self.lows[i]);
+                continue;
+            }
+            let mut flown = Instruction { order: self.orders[i], standing: self.standing[i] };
+            flown.tick(self.game.silent[i], self.game.rules.link_timeout);
+            if flown.order != self.orders[i] {
+                println!("failsafe: drone {i} out of contact, and flies {:?}", flown.order);
+                self.orders[i] = flown.order;
+                self.lows[i] = false;
             }
         }
     }
@@ -438,6 +447,27 @@ mod tests {
         let j = w.game.drone(Team::Blue, 0);
         assert!(w.command(j, Order::Take(west), true));
         assert_eq!((w.orders[j], w.lows[j]), (Some(Order::Take(west)), true));
+    }
+
+    #[test]
+    fn a_standing_order_given_in_contact_replaces_the_failsafe() {
+        let (mut w, i) = shadowed();
+        let west = w.game.tower("west");
+        w.game.drones[i].at = Vec2::new(-300.0, 0.0);
+        w.game.look();
+        let standing = Standing { after: 5.0, then: Order::Hold };
+        assert!(w.command_standing(i, Order::Take(west), false, Some(standing)));
+        w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
+        for _ in 0..49 {
+            w.game.step(0.1);
+            w.link_up();
+        }
+        assert_eq!(w.orders[i], Some(Order::Take(west)), "4.9 s");
+        for _ in 0..251 {
+            w.game.step(0.1);
+            w.link_up();
+        }
+        assert_eq!(w.orders[i], Some(Order::Hold), "30 s: the standing order, and not home");
     }
 
     #[test]

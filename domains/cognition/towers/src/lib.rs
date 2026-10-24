@@ -7,10 +7,16 @@
 //! process, or one in a process of its own ([`SeatProcess`]), so that two captains with different
 //! code can play each other.
 
+mod autonomy;
+
+pub use autonomy::{After, Autonomy, Comparison, Failsafe, Persist, Prepared, compare};
+
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
 use recreation_towers::flight::{ORBIT_RADIUS, orbit_height};
-use recreation_towers::{Commander, CommanderTuning, Game, Order, Outcome, Phase, Rules, Team, TeamView};
+use recreation_towers::{
+    Commander, CommanderTuning, Game, Instruction, Order, Outcome, Phase, Rules, Standing, Team, TeamView,
+};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -37,11 +43,20 @@ const DELAY: (f32, f32) = (0.3, 2.0);
 pub trait Captain {
     /// The orders for the team's drones: `(drone, order)` for each.
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String>;
+
+    /// The standing orders that go with `orders`, given just now: `(drone, standing order)`.
+    fn standing(&mut self, _view: &TeamView, _orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
+        vec![]
+    }
 }
 
 impl<C: Captain + ?Sized> Captain for &mut C {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         (**self).decide(view)
+    }
+
+    fn standing(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
+        (**self).standing(view, orders)
     }
 }
 
@@ -123,6 +138,9 @@ pub struct TowersResult {
     pub flew: usize,
     /// Towers each team held at the end.
     pub held: [usize; 2],
+    /// Drone-seconds out of contact in the radio shadows, for Blue and for Red.
+    #[serde(default)]
+    pub dark: [f32; 2],
 }
 
 impl TowersResult {
@@ -138,77 +156,140 @@ impl TowersResult {
     }
 }
 
-/// Plays one game: `blue` against `red`, on `seed`.
-pub fn play(blue: &mut dyn Captain, red: &mut dyn Captain, seed: u64) -> Result<TowersResult, String> {
-    let rules = Rules::default();
-    let mut rng = fastrand::Rng::with_seed(seed);
-    let mut game = Game::new(rules);
-    let wind = {
-        let (speed, dir) = (rng.f32() * WIND_MAX, rng.f32() * std::f32::consts::TAU);
-        Vec2::new(dir.cos(), dir.sin()) * speed
-    };
-    let delay = DELAY.0 + rng.f32() * (DELAY.1 - DELAY.0);
-    let mut flyers: Vec<Flyer> = game
-        .drones
-        .iter()
-        .enumerate()
-        .map(|(i, d)| Flyer {
-            team: d.team,
-            k: i % rules.drones,
-            at: d.at,
-            alt: 0.0,
-            heading: if d.team == Team::Blue { 0.0 } else { std::f32::consts::PI },
-            speed: CRUISE * (0.95 + 0.1 * rng.f32()),
-            flying: false,
-            order: None,
-            hold: d.at,
-        })
-        .collect();
-    // Orders on their way: (when the drone flies it, drone index, order).
-    let mut pending: Vec<(f32, usize, Order)> = vec![];
-    let mut next_decision = 0.0;
-    game.look();
-    while game.outcome.is_none() {
-        if game.time >= next_decision {
-            next_decision += DECIDE_EVERY;
+/// A game in progress: the referee, the drones flying their orders, and the orders on their way.
+pub struct Match {
+    pub game: Game,
+    pub flyers: Vec<Flyer>,
+    seed: u64,
+    wind: Vec2,
+    /// How long an order takes to reach its drone (s).
+    delay: f32,
+    /// Orders on their way: (when the drone flies it, drone index, order).
+    pending: Vec<(f32, usize, Order, Option<Standing>)>,
+    /// What each drone was told: its order and its standing order.
+    told: Vec<Instruction>,
+    next_decision: f32,
+    dark: [f32; 2],
+}
+
+impl Match {
+    /// The start of a game on `seed`: the drones on the ground, the wind and the delay drawn.
+    pub fn new(seed: u64) -> Match {
+        let rules = Rules::default();
+        let mut rng = fastrand::Rng::with_seed(seed);
+        let mut game = Game::new(rules);
+        let wind = {
+            let (speed, dir) = (rng.f32() * WIND_MAX, rng.f32() * std::f32::consts::TAU);
+            Vec2::new(dir.cos(), dir.sin()) * speed
+        };
+        let delay = DELAY.0 + rng.f32() * (DELAY.1 - DELAY.0);
+        let flyers = game
+            .drones
+            .iter()
+            .enumerate()
+            .map(|(i, d)| Flyer {
+                team: d.team,
+                k: i % rules.drones,
+                at: d.at,
+                alt: 0.0,
+                heading: if d.team == Team::Blue { 0.0 } else { std::f32::consts::PI },
+                speed: CRUISE * (0.95 + 0.1 * rng.f32()),
+                flying: false,
+                order: None,
+                hold: d.at,
+            })
+            .collect();
+        game.look();
+        Match {
+            game,
+            flyers,
+            seed,
+            wind,
+            delay,
+            pending: vec![],
+            told: vec![Instruction::default(); 2 * rules.drones],
+            next_decision: 0.0,
+            dark: [0.0; 2],
+        }
+    }
+
+    /// One step: the captains decide when it is time, the orders arrive, the drones fly, the
+    /// referee steps.
+    pub fn step(&mut self, blue: &mut dyn Captain, red: &mut dyn Captain) -> Result<(), String> {
+        let (game, flyers) = (&mut self.game, &mut self.flyers);
+        let drones = game.rules.drones;
+        if game.time >= self.next_decision {
+            self.next_decision += DECIDE_EVERY;
             for team in Team::BOTH {
                 let captain: &mut dyn Captain = if team == Team::Blue { &mut *blue } else { &mut *red };
-                for (k, order) in captain.decide(&game.view(team))? {
-                    if k < rules.drones {
-                        pending.push((game.time + delay, game.drone(team, k), order));
-                    }
+                let view = game.view(team);
+                let orders = captain.decide(&view)?;
+                let standing = captain.standing(&view, &orders);
+                for &(k, order) in orders.iter().filter(|(k, _)| *k < drones) {
+                    let s = standing.iter().find(|(j, _)| *j == k).map(|&(_, s)| s);
+                    self.pending.push((game.time + self.delay, game.drone(team, k), order, s));
                 }
             }
         }
-        pending.retain(|&(when, i, order)| {
+        // An order reaches a drone that is in contact when it arrives; one in a radio shadow
+        // never hears it.
+        self.pending.retain(|&(when, i, order, standing)| {
             if game.time < when {
                 return true;
             }
-            if flyers[i].order != Some(order) {
-                flyers[i].hold = flyers[i].at;
+            if !game.jammed[i] {
+                self.told[i].give(order, standing);
             }
-            flyers[i].order = Some(order);
             false
         });
+        for (i, told) in self.told.iter_mut().enumerate() {
+            // Out of contact long enough, a drone flies its standing order, or home.
+            told.tick(game.silent[i], game.rules.link_timeout);
+            if flyers[i].order != told.order {
+                flyers[i].hold = flyers[i].at;
+                flyers[i].order = told.order;
+            }
+        }
         for (i, f) in flyers.iter_mut().enumerate() {
-            f.step(&game, wind, TAKEOFF_APART * (i % rules.drones) as f32, DT);
+            f.step(game, self.wind, TAKEOFF_APART * (i % drones) as f32, DT);
             let d = &mut game.drones[i];
             d.at = f.at;
             d.alt = f.alt;
-            d.vel = Vec2::new(f.heading.cos(), f.heading.sin()) * f.speed + wind;
+            d.vel = Vec2::new(f.heading.cos(), f.heading.sin()) * f.speed + self.wind;
             d.phase = if f.flying { Phase::Flying } else { Phase::Ground };
         }
         game.step(DT);
+        for (_, d) in game.drones.iter().enumerate().filter(|(i, _)| game.jammed[*i]) {
+            self.dark[d.team.index()] += DT;
+        }
+        Ok(())
     }
-    let held = |team| game.towers.iter().filter(|t| t.holder == Some(team)).count();
-    Ok(TowersResult {
-        seed,
-        outcome: game.outcome.unwrap(),
-        score: game.score,
-        length: game.time,
-        flew: flyers.iter().filter(|f| f.flying).count(),
-        held: [held(Team::Blue), held(Team::Red)],
-    })
+
+    /// How it went, once it is over.
+    pub fn result(&self) -> Option<TowersResult> {
+        let outcome = self.game.outcome?;
+        let held = |team| self.game.towers.iter().filter(|t| t.holder == Some(team)).count();
+        Some(TowersResult {
+            seed: self.seed,
+            outcome,
+            score: self.game.score,
+            length: self.game.time,
+            flew: self.flyers.iter().filter(|f| f.flying).count(),
+            held: [held(Team::Blue), held(Team::Red)],
+            dark: self.dark,
+        })
+    }
+}
+
+/// Plays one game: `blue` against `red`, on `seed`.
+pub fn play(blue: &mut dyn Captain, red: &mut dyn Captain, seed: u64) -> Result<TowersResult, String> {
+    let mut m = Match::new(seed);
+    loop {
+        if let Some(result) = m.result() {
+            return Ok(result);
+        }
+        m.step(blue, red)?;
+    }
 }
 
 /// A captain in a process of its own: the seat's JSON lines on its stdin and stdout. It gets
@@ -398,8 +479,91 @@ mod tests {
             length: 300.0,
             flew: 6,
             held: [3, 1],
+            dark: [0.0; 2],
         };
         assert_eq!(r.score_for(Team::Blue, 500.0), 1.5);
         assert_eq!(r.score_for(Team::Red, 500.0), -1.5);
+    }
+
+    /// A captain that gives Blue's first drone the same order at every decision, in contact or
+    /// not, with a standing order.
+    struct First(Order, Option<Standing>);
+
+    impl Captain for First {
+        fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
+            Ok(if view.team == Team::Blue { vec![(0, self.0)] } else { vec![] })
+        }
+
+        fn standing(&mut self, _: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
+            orders.iter().filter_map(|&(k, _)| self.1.map(|s| (k, s))).collect()
+        }
+    }
+
+    struct Silent;
+
+    impl Captain for Silent {
+        fn decide(&mut self, _: &TeamView) -> Result<Vec<(usize, Order)>, String> {
+            Ok(vec![])
+        }
+    }
+
+    /// Where Blue's first drone circles: deep in the shadow of the Red home tower (a circle of 40 m
+    /// stays inside it), or outside it.
+    fn put_blue(m: &mut Match, shadow: bool) -> usize {
+        let i = m.game.drone(Team::Blue, 0);
+        let red = m.game.tower("Red home");
+        m.game.towers[red].holder = Some(Team::Red);
+        let at = m.game.towers[red].at + if shadow { Vec2::new(-30.0, 0.0) } else { Vec2::new(-300.0, 0.0) };
+        let f = &mut m.flyers[i];
+        (f.at, f.alt, f.flying, f.hold) = (at, 50.0, true, at);
+        m.game.drones[i].at = at;
+        m.game.drones[i].alt = 50.0;
+        m.game.drones[i].phase = Phase::Flying;
+        m.game.look();
+        i
+    }
+
+    fn run(m: &mut Match, secs: f32, blue: &mut dyn Captain) {
+        for _ in 0..(secs / DT).round() as usize {
+            m.step(blue, &mut Silent).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_drone_in_a_radio_shadow_hears_no_order() {
+        let mut m = Match::new(1);
+        let i = put_blue(&mut m, true);
+        let west = m.game.tower("west");
+        run(&mut m, 3.0, &mut First(Order::Take(west), None));
+        assert!(m.game.jammed[i], "the drone is in the shadow");
+        assert_eq!(m.flyers[i].order, None, "an order to a drone out of contact is lost");
+    }
+
+    #[test]
+    fn a_drone_that_loses_its_link_flies_home() {
+        // It holds where it is, in the shadow: the drone that flies out of the shadow is in contact.
+        let mut m = Match::new(1);
+        let i = put_blue(&mut m, true);
+        m.told[i].give(Order::Hold, None);
+        run(&mut m, 19.0, &mut Silent);
+        assert!(m.game.jammed[i], "it holds in the shadow");
+        assert_eq!(m.flyers[i].order, Some(Order::Hold));
+        run(&mut m, 2.0, &mut Silent);
+        assert_eq!(m.flyers[i].order, Some(Order::Home));
+    }
+
+    #[test]
+    fn a_standing_order_given_in_contact_is_flown_in_the_shadow() {
+        let mut m = Match::new(1);
+        let i = put_blue(&mut m, false);
+        let standing = Standing { after: 5.0, then: Order::Home };
+        let mut captain = First(Order::Hold, Some(standing));
+        run(&mut m, 3.0, &mut captain);
+        assert_eq!(m.flyers[i].order, Some(Order::Hold));
+        assert_eq!(m.told[i].standing, Some(standing));
+        // Into the shadow: out of contact. Not the failsafe's 20 s, but the standing order's 5 s.
+        put_blue(&mut m, true);
+        run(&mut m, 10.0, &mut Silent);
+        assert_eq!(m.flyers[i].order, Some(Order::Home));
     }
 }
