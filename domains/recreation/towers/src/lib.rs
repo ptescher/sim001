@@ -153,6 +153,20 @@ pub struct Rules {
     pub depot_jam_radius: f32,
     /// A drone out of contact this long has lost its link (s): it flies home by itself.
     pub link_timeout: f32,
+    /// The battery of a light, a standard and a heavy drone (s of flight); 0 for no battery.
+    pub light_battery: f32,
+    pub standard_battery: f32,
+    pub heavy_battery: f32,
+    /// A drone in a tower circle uses this much more battery each second (s) for each unit of
+    /// enemy weight in the circle.
+    pub contest_drain: f32,
+    /// A drone recharges this much each second (s) over its own base (within `pad_radius`, m
+    /// across), and in the circle of a depot its team holds, if the circle is not contested.
+    pub base_recharge: f32,
+    pub depot_recharge: f32,
+    pub pad_radius: f32,
+    /// A drone with an empty battery is back at its base after this long (s).
+    pub respawn_time: f32,
     /// The highest a drone flies (m): the AGENT ceiling. The mountains are higher.
     pub ceiling: f32,
     /// How far a team sees round a tower it holds, a drone and its base (m, across).
@@ -184,6 +198,15 @@ impl Default for Rules {
             spire_jam_radius: 200.0,
             depot_jam_radius: 120.0,
             link_timeout: 20.0,
+            // The battery is off until the host can put a drone down (see plans/towers-rules-v2.md).
+            light_battery: 0.0,
+            standard_battery: 0.0,
+            heavy_battery: 0.0,
+            contest_drain: 0.5,
+            base_recharge: 10.0,
+            depot_recharge: 3.0,
+            pad_radius: 60.0,
+            respawn_time: 100.0,
             ceiling: 100.0,
             tower_vision: 200.0,
             spire_vision: 250.0,
@@ -197,6 +220,15 @@ impl Rules {
     /// The class of a team's drone `k`.
     pub fn class(&self, k: usize) -> Class {
         self.squad[k]
+    }
+
+    /// The battery of a drone of this class (s of flight); 0 if the drones have none.
+    pub fn battery(&self, class: Class) -> f32 {
+        match class {
+            Class::Light => self.light_battery,
+            Class::Standard => self.standard_battery,
+            Class::Heavy => self.heavy_battery,
+        }
     }
 
     /// How far a held tower of this kind blocks the enemy's radio (m, across).
@@ -338,6 +370,11 @@ pub struct Game {
     pub jammed: Vec<bool>,
     /// How long each drone has been out of contact (s); 0 while it is in contact.
     pub silent: Vec<f32>,
+    /// What is left of each drone's battery (s), and what its team last heard of it.
+    pub battery: Vec<f32>,
+    pub reported: Vec<f32>,
+    /// How long each drone with an empty battery has been down (s); `None` while it is not.
+    pub down_for: Vec<Option<f32>>,
 }
 
 impl Game {
@@ -381,6 +418,7 @@ impl Game {
             drones: vec![None; drones.len()],
         };
         let n = drones.len();
+        let battery: Vec<f32> = drones.iter().map(|d| rules.battery(d.class)).collect();
         Game {
             rules,
             map,
@@ -392,7 +430,19 @@ impl Game {
             maps: [team_map.clone(), team_map],
             jammed: vec![false; n],
             silent: vec![0.0; n],
+            reported: battery.clone(),
+            battery,
+            down_for: vec![None; n],
         }
+    }
+
+    /// Every drone's battery full, as the rules have it now.
+    pub fn fill_batteries(&mut self) {
+        for (b, d) in self.battery.iter_mut().zip(&self.drones) {
+            *b = self.rules.battery(d.class);
+        }
+        self.reported = self.battery.clone();
+        self.down_for.fill(None);
     }
 
     pub fn tower(&self, name: &str) -> usize {
@@ -417,6 +467,7 @@ impl Game {
         let dt = dt.min(self.time_left());
         self.time += dt;
         self.capture(dt);
+        self.power(dt);
         self.jam(dt);
         self.score(dt);
         self.look();
@@ -445,6 +496,77 @@ impl Game {
             self.jammed[i] = jammed;
             self.silent[i] = if jammed { self.silent[i] + dt } else { 0.0 };
         }
+        // A drone in contact tells its team how much battery it has.
+        for i in (0..self.drones.len()).filter(|&i| !self.jammed[i]) {
+            self.reported[i] = self.battery[i];
+        }
+    }
+
+    /// The batteries: a flying drone uses a second a second, and more for each unit of enemy
+    /// weight in its circle; a drone recharges over its base, and in the circle of a depot its
+    /// team holds that is not contested. A drone with an empty battery is down, and back at its
+    /// base, full, after [`Rules::respawn_time`].
+    fn power(&mut self, dt: f32) {
+        let r = self.rules;
+        for i in 0..self.drones.len() {
+            let (d, full) = (self.drones[i], r.battery(self.drones[i].class));
+            if full <= 0.0 {
+                continue;
+            }
+            if let Some(down) = self.down_for[i] {
+                if down + dt >= r.respawn_time {
+                    self.respawn(i);
+                } else {
+                    self.down_for[i] = Some(down + dt);
+                }
+                continue;
+            }
+            if d.phase == Phase::Down {
+                continue;
+            }
+            let flying = d.phase == Phase::Flying;
+            let circle = self.towers.iter().find(|t| self.in_circle(&d, t.at));
+            let mut change = 0.0;
+            if flying {
+                let enemy: f32 = circle.map_or(0.0, |t| {
+                    self.drones
+                        .iter()
+                        .filter(|e| e.team != d.team && self.in_circle(e, t.at))
+                        .map(|e| e.class.weight())
+                        .sum()
+                });
+                change -= 1.0 + r.contest_drain * enemy;
+            }
+            if d.at.distance(r.base(d.team)) <= r.pad_radius {
+                change += r.base_recharge;
+            } else if let Some(t) = circle
+                && t.kind == Kind::Depot
+                && t.holder == Some(d.team)
+                && !t.contested
+            {
+                change += r.depot_recharge;
+            }
+            self.battery[i] = (self.battery[i] + change * dt).clamp(0.0, full);
+            if flying && self.battery[i] <= 0.0 {
+                self.drones[i].phase = Phase::Down;
+                self.down_for[i] = Some(0.0);
+            }
+        }
+    }
+
+    /// Drone `i` is on the ground at its base again, with a full battery.
+    fn respawn(&mut self, i: usize) {
+        let team = self.drones[i].team;
+        let k = i % self.rules.drones;
+        self.drones[i] = Drone {
+            at: self.rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0)),
+            alt: 0.0,
+            vel: Vec2::ZERO,
+            phase: Phase::Ground,
+            ..self.drones[i]
+        };
+        self.battery[i] = self.rules.battery(self.drones[i].class);
+        self.down_for[i] = None;
     }
 
     /// Is drone `d` in the circle of the tower at `at`?
@@ -686,6 +808,127 @@ mod tests {
             let s = g.maps[Team::Blue.index()].drones[red].map(|s| s.seen);
             assert_eq!(s.unwrap_or(false), seen, "{}", g.towers[tower].name);
         }
+    }
+
+    /// A game with the batteries on (150, 240 and 300 s), Blue's first drone (a standard one)
+    /// flying at `at`, with `left` s in its battery.
+    fn charged(at: Vec2, left: f32) -> (Game, usize) {
+        let rules = Rules { light_battery: 150.0, standard_battery: 240.0, heavy_battery: 300.0, ..Rules::default() };
+        let mut g = Game::new(rules);
+        fly(&mut g, Team::Blue, 0, at);
+        let i = g.drone(Team::Blue, 0);
+        g.battery[i] = left;
+        g.look();
+        (g, i)
+    }
+
+    const MID: Vec2 = Vec2::new(-220.0, 0.0);
+
+    #[test]
+    fn a_game_with_no_batteries_never_runs_one_down() {
+        let mut g = Game::new(Rules::default());
+        fly(&mut g, Team::Blue, 0, MID);
+        run(&mut g, 600.0);
+        let i = g.drone(Team::Blue, 0);
+        assert_eq!((g.drones[i].phase, g.battery[i]), (Phase::Flying, 0.0));
+    }
+
+    #[test]
+    fn a_flying_drone_uses_a_second_of_battery_each_second_and_a_drone_on_the_ground_none() {
+        let (mut g, i) = charged(MID, 100.0);
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 90.0).abs() < 0.01, "{}", g.battery[i]);
+        let j = g.drone(Team::Blue, 1);
+        g.battery[j] = 100.0;
+        // On the ground, away from the base's pad.
+        g.drones[j].at = Vec2::new(-100.0, 0.0);
+        run(&mut g, 10.0);
+        assert!((g.battery[j] - 100.0).abs() < 0.01, "{}", g.battery[j]);
+    }
+
+    #[test]
+    fn a_drone_recharges_10_s_each_second_over_its_base_and_never_over_the_full_battery() {
+        let (mut g, i) = charged(Vec2::new(-520.0, 0.0), 100.0);
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 190.0).abs() < 0.01, "flying uses 1: {}", g.battery[i]);
+        run(&mut g, 10.0);
+        assert_eq!(g.battery[i], 240.0, "the most a standard drone holds");
+    }
+
+    #[test]
+    fn enemy_weight_in_the_circle_makes_a_drone_use_more() {
+        // Enemy classes: standard 1, heavy 2, light 0.5. Red drone 0 is standard, 3 heavy, 4 light.
+        for (k, per_second) in [(0, 1.5), (3, 2.0), (4, 1.25)] {
+            let (mut g, i) = charged(Vec2::ZERO + Vec2::new(40.0, 0.0), 100.0);
+            fly(&mut g, Team::Red, k, Vec2::new(-40.0, 0.0));
+            run(&mut g, 10.0);
+            assert!((g.battery[i] - (100.0 - 10.0 * per_second)).abs() < 0.01, "enemy {k}: {}", g.battery[i]);
+        }
+    }
+
+    #[test]
+    fn a_depot_the_team_holds_recharges_unless_the_circle_is_contested_and_a_fort_never_does() {
+        let (mut g, i) = charged(Vec2::new(45.0, -390.0) + Vec2::new(40.0, 0.0), 100.0);
+        let west = g.tower("west");
+        g.towers[west].holder = Some(Team::Blue);
+        g.towers[west].control = 1.0;
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 120.0).abs() < 0.01, "+3 -1: {}", g.battery[i]);
+        // An enemy in the circle: contested, no recharge, and the drain is higher.
+        fly(&mut g, Team::Red, 0, Vec2::new(45.0, -390.0));
+        g.battery[i] = 100.0;
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 85.0).abs() < 0.01, "{}", g.battery[i]);
+        // A depot the enemy holds, a fort the team holds.
+        let (mut g, i) = charged(g.towers[g.tower("Blue home")].at + Vec2::new(40.0, 0.0), 100.0);
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 90.0).abs() < 0.01, "a fort: {}", g.battery[i]);
+    }
+
+    #[test]
+    fn a_drone_with_an_empty_battery_is_down_and_is_back_full_at_its_base_after_the_respawn_time() {
+        let (mut g, i) = charged(MID, 5.0);
+        run(&mut g, 5.5);
+        assert_eq!(g.drones[i].phase, Phase::Down);
+        run(&mut g, 99.0);
+        assert_eq!(g.drones[i].phase, Phase::Down, "100 s from the empty battery");
+        run(&mut g, 2.0);
+        let d = g.drones[i];
+        assert_eq!(d.phase, Phase::Ground);
+        assert_eq!(d.alt, 0.0);
+        assert!(d.at.distance(g.rules.base(Team::Blue)) < 30.0, "{:?}", d.at);
+        assert_eq!(g.battery[i], 240.0);
+    }
+
+    #[test]
+    fn a_drone_that_is_down_counts_for_no_circle_and_scores_no_points_for_the_enemy() {
+        let (mut g, i) = charged(Vec2::ZERO, 1.0);
+        let centre = g.tower("centre");
+        run(&mut g, 2.0);
+        assert_eq!(g.drones[i].phase, Phase::Down);
+        let control = g.towers[centre].control;
+        assert!(control > 0.0, "it moved the bar while it flew");
+        run(&mut g, 30.0);
+        assert_eq!(g.towers[centre].control, control, "a drone that is down moves nothing");
+        assert!((g.score[Team::Red.index()] - 32.0).abs() < 0.2, "only Red's home tower scores");
+    }
+
+    #[test]
+    fn the_team_knows_the_battery_a_drone_out_of_contact_last_reported() {
+        let (mut g, i) = charged(MID, 100.0);
+        let red = g.tower("Red home");
+        g.towers[red].holder = Some(Team::Red);
+        g.towers[red].control = -1.0;
+        run(&mut g, 5.0);
+        assert!((g.view(Team::Blue).drones[0].battery - 95.0).abs() < 0.2, "in contact");
+        let shadow = g.towers[red].at + Vec2::new(-30.0, 0.0);
+        fly(&mut g, Team::Blue, 0, shadow);
+        g.look();
+        run(&mut g, 10.0);
+        let seen = g.view(Team::Blue).drones[0];
+        assert!(!seen.linked);
+        assert!((seen.battery - 95.0).abs() < 0.2, "the last report, not the 85 s it has: {}", seen.battery);
+        assert!((g.battery[i] - 85.0).abs() < 0.2);
     }
 
     #[test]

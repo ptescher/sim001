@@ -440,6 +440,11 @@ Term: Spire
 Term: Depot
   In [[Towers]], the west tower and the east tower. A depot blocks the radio 120 m round it.
 
+Term: Battery
+  In [[Towers]], the seconds that a drone can still fly. A flying drone uses 1 s each second, and
+  more when enemy drones share its tower circle. A drone recharges over its base and in the
+  circle of a depot that its team holds. A drone with an empty battery is down for 100 s.
+
 Term: Standing order
   In [[Towers]], a plan that a commander gives to a drone with its order. It says what the drone
   does if it is out of contact for some seconds: for example, hold, or go home. The drone stays

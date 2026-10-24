@@ -58,6 +58,9 @@ pub struct OwnDrone {
     /// How long the team has not heard from it (s); 0 while it does.
     #[serde(default)]
     pub silent: f32,
+    /// What is left of its battery (s), as the drone last said (0 if the drones have none).
+    #[serde(default)]
+    pub battery: f32,
 }
 
 fn in_contact() -> bool {
@@ -125,7 +128,18 @@ impl Game {
                     Some(s) if !linked => (s.at, s.alt, s.vel, s.phase),
                     _ => (d.at, d.alt, d.vel, d.phase),
                 };
-                OwnDrone { k: j, at, alt, vel, phase, order: None, low: false, linked, silent: self.silent[i] }
+                OwnDrone {
+                    k: j,
+                    at,
+                    alt,
+                    vel,
+                    phase,
+                    order: None,
+                    low: false,
+                    linked,
+                    silent: self.silent[i],
+                    battery: self.reported[i],
+                }
             })
             .collect();
         let enemies = self

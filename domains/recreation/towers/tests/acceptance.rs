@@ -201,6 +201,8 @@ impl World {
                 ("low in the west lane, on the shore of the lake", self.shore(), Some(LOW))
             }
             "near the Red home tower" => ("near the Red home tower", self.shadow(), Some(ALT)),
+            "over its base" => ("over its base", m.bases[0], Some(ALT)),
+            "in the west circle" => ("in the west circle", m.towers[1] + Vec2::new(40.0, 0.0), Some(ALT)),
             other => match away_from(m, other) {
                 Some((name, at)) => (name, at, Some(ALT)),
                 None => ("at its base", m.bases[0], None),
@@ -420,6 +422,7 @@ fn bindings() -> Bindings<World> {
             s.seen = false;
         })
         .on("the game runs for 3 seconds", |w| w.run(3.0))
+        .on("the game runs for 110 seconds", |w| w.run(110.0))
         .on("the game runs for 10 seconds", |w| w.run(10.0))
         .on("the game runs for 20 seconds", |w| w.run(20.0))
         .on("the game runs for 1 minute", |w| w.run(60.0))
@@ -505,6 +508,29 @@ fn bindings() -> Bindings<World> {
         .observe("the age of the first Blue drone on the Blue map", |w| {
             let i = w.game.drone(Team::Blue, 0);
             w.game.maps[Team::Blue.index()].drones[i].map_or(0.0, |s| tenth(w.game.time - s.time))
+        })
+        // The battery.
+        .observe("the batteries", |w| if w.game.rules.standard_battery > 0.0 { "on" } else { "off" })
+        .arrange("the batteries", |w, v| {
+            let on = v.as_str() == Some("on");
+            let r = &mut w.game.rules;
+            (r.light_battery, r.standard_battery, r.heavy_battery) =
+                if on { (150.0, 240.0, 300.0) } else { (0.0, 0.0, 0.0) };
+            w.game.fill_batteries();
+        })
+        .observe("the battery of the first Blue drone", |w| tenth(w.game.battery[w.game.drone(Team::Blue, 0)]))
+        .arrange("the battery of the first Blue drone", |w, v| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.battery[i] = v.as_f64().unwrap() as f32;
+            w.game.reported[i] = w.game.battery[i];
+        })
+        .observe("the battery of the first Blue drone on the Blue map", |w| {
+            tenth(w.game.view(Team::Blue).drones[0].battery)
+        })
+        .observe("the condition of the first Blue drone", |w| match w.game.drones[w.game.drone(Team::Blue, 0)].phase {
+            Phase::Flying => "flying",
+            Phase::Ground => "on the ground",
+            Phase::Down => "down",
         })
         // Standing orders.
         .observe("the order that the first Blue drone flies", |w| w.say(w.told.order))
