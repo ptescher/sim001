@@ -210,6 +210,33 @@ impl AppDriver {
         }
     }
 
+    /// Where to start looking after a failed test: the app's state, the end of the server's log,
+    /// and the whole log saved beside it (the next test's server overwrites it).
+    fn debug(&self, title: &str) {
+        let state = self.call(|v, _, _| {
+            let s = v.seat.state();
+            let game = s.view.as_ref().map_or("no map yet".to_string(), |m| {
+                let orders: Vec<_> = m.drones.iter().map(|d| order_name(d.order, m)).collect();
+                format!("game time {:.0} s, outcome {:?}, orders {orders:?}", m.time, m.outcome)
+            });
+            format!("seat {:?}, selected {:?}, {game}", s.status, v.selected)
+        });
+        println!("expect:   app: {}", state.unwrap_or_else(|e| e));
+        let log = crate::server::root().join("logs/towers/server.log");
+        let Ok(text) = std::fs::read_to_string(&log) else {
+            println!("expect:   no server log at {}", log.display());
+            return;
+        };
+        let slug: String = title.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
+        let saved = log.with_file_name(format!("failed-{slug}.log"));
+        let kept = std::fs::write(&saved, &text).is_ok();
+        println!("expect:   server log ({}):", if kept { saved.display().to_string() } else { log.display().to_string() });
+        let lines: Vec<&str> = text.lines().collect();
+        for l in &lines[lines.len().saturating_sub(12)..] {
+            println!("expect:     {l}");
+        }
+    }
+
     /// Whether the game server has exited. The run cannot go on: the tests after this one stop.
     fn server_exited(&self) -> bool {
         self.dead.get() || self.server.lock().unwrap().as_mut().is_some_and(|s| s.exited().is_some())
@@ -512,7 +539,10 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
             let r = r.results.into_iter().next().unwrap();
             match r.status {
                 TestStatus::Passed => println!("expect: ✓ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32()),
-                _ => println!("expect: ✗ {} {:?} ({:.0} s)", plan.title, r.status, began.elapsed().as_secs_f32()),
+                _ => {
+                    println!("expect: ✗ {} {:?} ({:.0} s)", plan.title, r.status, began.elapsed().as_secs_f32());
+                    driver.debug(&plan.title);
+                }
             }
             report.results.push(r);
             if driver.dead.get() {
