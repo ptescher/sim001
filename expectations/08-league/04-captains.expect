@@ -23,7 +23,7 @@ Feature: Captains for Towers
 
   Expectation: A captain game in the fast arena is a game of Towers
     When the arena plays a game of Towers between two default captains
-    Then the drones that flew in the captain game are 6
+    Then the drones that flew in the captain game are 10
     And the captain game is won by Blue or won by Red or a draw
 
   Expectation: A captain playing itself from both sides scores nothing

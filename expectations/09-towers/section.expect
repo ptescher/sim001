@@ -5,7 +5,7 @@
 # ArduPlane SITL drones. The vocabulary here is shared by all three.
 
 Section: Towers
-  Launch: start the commander app on a practice game. Run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`. The app starts a game server with six ArduPilot drones, and takes the Blue seat. With `--red nobody`, nobody commands Red, and its drones circle over their base
+  Launch: start the commander app on a practice game. Run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`. The app starts a game server with ten ArduPilot drones, and takes the Blue seat. With `--red nobody`, nobody commands Red, and its drones circle over their base
   Towers is a game for two teams of drones, Blue and Red. Each team has three T1-S VTOL
   drones and a [[base]] at one end of the field. Five radio [[tower]]s stand on the field. At
   the start, each team holds its home tower. The centre tower and the two flank towers are
@@ -258,8 +258,8 @@ Vocabulary:
     Say: wait 15 seconds while the computer commander gives its orders, once each second
 
   # A whole game on the game server, with an ArduPlane SITL for each drone (the server's report).
-  State: the drones in AGENT mode are 0..6
-    Shows: 6: the report of the server says `RESULT in_agent=6`. All six drones flew the game in AGENT mode
+  State: the drones in AGENT mode are 0..10
+    Shows: 10: the report of the server says `RESULT in_agent=10`. All ten drones flew the game in AGENT mode
   State: the commands that the drones refused are 0..100000
     Shows: 0: the report of the server says `RESULT refused=0`. The drones accepted every plan and every mode change
   State: the drones that crashed are 0..100
