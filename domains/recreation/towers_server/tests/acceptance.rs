@@ -66,7 +66,7 @@ fn sees(rules: &Rules, truth: &Truth, team: Team, at: glam::Vec2) -> bool {
     let near = |from: glam::Vec2, range: f32| from.distance(at) <= range + 1e-3;
     near(rules.base(team), rules.base_vision)
         || truth.drones.iter().any(|d| d.team == team && d.phase != Phase::Down && near(d.at, rules.drone_vision))
-        || truth.towers.iter().any(|t| t.holder == Some(team) && near(t.at, rules.tower_vision))
+        || truth.towers.iter().any(|t| t.holder == Some(team) && near(t.at, rules.vision(t.kind)))
 }
 
 /// What in the Blue map `view` Blue does not see in `truth`: a Red drone shown as seen that Blue
@@ -237,6 +237,9 @@ const OBSERVED: &[&str] = &[
     "the towers that Red took",
     "the sightings from the fog on the Blue seat",
     "the Red drones that the Blue seat saw",
+    "the seconds that the first light drone took to leave its base",
+    "the top speed of the light drones",
+    "the light drones that fly low",
 ];
 
 fn is(v: &Variable, subject: &str) -> bool {
@@ -299,6 +302,9 @@ impl Driver for Server {
             "the towers that Red took" => result("taken_red")?,
             "the sightings from the fog on the Blue seat" => p.leaks as f64,
             "the Red drones that the Blue seat saw" => p.red_seen.len() as f64,
+            "the seconds that the first light drone took to leave its base" => result("light_away")?,
+            "the top speed of the light drones" => result("light_top_speed")?,
+            "the light drones that fly low" => result("light_low")?,
             s => return Err(format!("can't observe {s}")),
         };
         Ok(Value::from(n))

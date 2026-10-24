@@ -4,7 +4,8 @@ Feature: Playing Towers with ArduPilot drones
   model of the sim, and it is the referee.
 
   At GO, each drone arms at its base and climbs in QHOVER. At 15 m it changes to FBWA, and then
-  the server switches it to [[AGENT mode]]. From then on, the server sends each drone the plan
+  the server switches it to [[AGENT mode]]. A light drone is a quadcopter with no wing, so it
+  does not change to FBWA: at 3 m the server flies it in QLOITER, with the sticks of its radio. From then on, the server sends each drone the plan
   for its order about once each second. To take a tower, a drone circles it 40 m out, inside its
   circle.
 
@@ -46,3 +47,21 @@ Feature: Playing Towers with ArduPilot drones
   Expectation: No drone crashes in a game
     When two computer teams play a game of Towers
     Then the drones that crashed are 0
+
+  Expectation: A light drone is the first to leave its base
+    A light drone has no wing, so it does not wait for a transition. In QLOITER it flies along
+    the lanes at 18 m/s, which is faster than the 15 m/s cruise of the T1-S. It used to wait 30 s and
+    fly at 5 m/s.
+
+    When two computer teams play a game of Towers
+    Then the seconds that the first light drone took to leave its base are at most 15
+    And the top speed of the light drones is at least 14 m/s
+
+  Expectation: A light drone flies low
+    A light drone is small and quick. Its commander flies it [[low]] along the lanes, below the
+    treetops, where the trees hide it. The lanes are 60 m wide, so it slows for the corners and
+    does not hit the trees.
+
+    When two computer teams play a game of Towers
+    Then the light drones that fly low are 2
+    And the drones that crashed are 0
