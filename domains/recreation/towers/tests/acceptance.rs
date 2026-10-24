@@ -72,7 +72,12 @@ impl World {
         let blue = self.game.drone(Team::Blue, 0);
         for _ in 0..(secs / DT).round() as usize {
             self.game.step(DT);
-            self.told.tick(self.game.silent[blue], self.game.rules.link_timeout);
+            self.told.tick(
+                self.game.silent[blue],
+                self.game.rules.link_timeout,
+                self.game.charge(blue),
+                self.game.rules.bingo,
+            );
         }
     }
 
@@ -212,6 +217,16 @@ impl World {
         self.blue_place = Some((name, at));
     }
 
+    /// The second Blue drone, flying that far east of the Red home tower, or at its base.
+    fn place_second(&mut self, v: &Value) {
+        let i = self.game.drone(Team::Blue, 1);
+        let words = v.as_str().unwrap_or_default();
+        match away_from(&self.game.map, words) {
+            Some((_, at)) => self.put(i, at, Some(ALT)),
+            None => self.home(i),
+        }
+    }
+
     fn place_scout(&mut self, v: &Value) {
         let i = self.scout();
         let blue = self.game.drone(Team::Blue, 0);
@@ -301,7 +316,10 @@ impl World {
 
 /// "150 m from the Red home tower": that far east of the tower, and the words.
 fn away_from(m: &recreation_towers::Map, words: &str) -> Option<(&'static str, Vec2)> {
-    const PLACES: [(&str, f32, usize); 6] = [
+    const PLACES: [(&str, f32, usize); 9] = [
+        ("130 m from the Red home tower", 130.0, 4),
+        ("210 m from the Red home tower", 210.0, 4),
+        ("230 m from the Red home tower", 230.0, 4),
         ("150 m from the Red home tower", 150.0, 4),
         ("170 m from the Red home tower", 170.0, 4),
         ("190 m from the centre tower", 190.0, 2),
@@ -424,6 +442,7 @@ fn bindings() -> Bindings<World> {
         .on("the game runs for 3 seconds", |w| w.run(3.0))
         .on("the game runs for 110 seconds", |w| w.run(110.0))
         .on("the game runs for 10 seconds", |w| w.run(10.0))
+        .on("the game runs for 15 seconds", |w| w.run(15.0))
         .on("the game runs for 20 seconds", |w| w.run(20.0))
         .on("the game runs for 1 minute", |w| w.run(60.0))
         .on("the Red scout flies into the fog for 10 seconds", |w| {
@@ -486,6 +505,16 @@ fn bindings() -> Bindings<World> {
         // The radio shadows.
         .observe("the Red home tower", |w| holder_name(w.tower("Red home").holder))
         .arrange("the Red home tower", |w, v| w.hold("Red home", v))
+        .observe("the second Blue drone", |w| {
+            let d = w.game.drones[w.game.drone(Team::Blue, 1)];
+            if d.phase != Phase::Flying {
+                return "at its base".to_string();
+            }
+            let m = &w.game.map;
+            let d_red = (d.at - m.towers[4]).length().round();
+            format!("{d_red} m from the Red home tower")
+        })
+        .arrange("the second Blue drone", |w, v| w.place_second(v))
         .observe("the link of the first Blue drone", |w| w.blue_link())
         .on("the first Blue drone flies out of the radio shadow", |w| {
             w.place_blue(&Value::from("at the Blue home tower"))
@@ -551,6 +580,7 @@ fn bindings() -> Bindings<World> {
             w.told.standing = match v.as_str() {
                 Some("hold after 5 s") => Some(Standing { after: 5.0, then: Order::Hold }),
                 Some("go home after 5 s") => Some(Standing { after: 5.0, then: Order::Home }),
+                Some("hold after 30 s") => Some(Standing { after: 30.0, then: Order::Hold }),
                 _ => None,
             };
         })

@@ -21,16 +21,26 @@ Feature: Fighting for a tower
     Then the control of the west tower is 50 %
     And the circle of the west tower is contested
 
-  Expectation: An empty circle keeps its control
-    A team does not have to stay at a tower to keep the work that it did. It can come back
-    later and finish.
+  Expectation: An empty circle drifts back 1 % each second
+    A team has to stay at a tower to keep the work that it did. If it leaves, the control goes
+    back to 0.
 
-    Given the control of the west tower is 50 %
+    Given the west tower is neutral
+    And the control of the west tower is 50 %
     And the Blue drones in the west circle are 0
     And the Red drones in the west circle are 0
-    When the game runs for 1 minute
-    Then the control of the west tower is 50 %
+    When the game runs for 10 seconds
+    Then the control of the west tower is 40 %
     And the circle of the west tower is quiet
+
+  Expectation: An empty circle of a held tower drifts back to the end of its holder
+    Given the west tower is held by Red
+    And the control of the west tower is -50 %
+    And the Blue drones in the west circle are 0
+    And the Red drones in the west circle are 0
+    When the game runs for 10 seconds
+    Then the control of the west tower is -60 %
+    And the west tower is held by Red
 
   Expectation: A team keeps a tower while the control is on its side
     Given the west tower is held by Red

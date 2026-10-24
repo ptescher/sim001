@@ -244,7 +244,7 @@ impl Match {
         });
         for (i, told) in self.told.iter_mut().enumerate() {
             // Out of contact long enough, a drone flies its standing order, or home.
-            told.tick(game.silent[i], game.rules.link_timeout);
+            told.tick(game.silent[i], game.rules.link_timeout, game.charge(i), game.rules.bingo);
             if flyers[i].order != told.order {
                 flyers[i].hold = flyers[i].at;
                 flyers[i].order = told.order;

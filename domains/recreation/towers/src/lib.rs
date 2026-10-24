@@ -139,6 +139,8 @@ pub struct Rules {
     pub circle_ceiling: f32,
     /// One drone more in the circle takes the control from 0 to its end in this time (s).
     pub capture_time: f32,
+    /// A circle with nobody in it drifts back across the whole bar in this time (s); 0 for no drift.
+    pub decay_time: f32,
     /// The score that wins.
     pub win_score: f32,
     /// The points each second for a held tower: a fort or a depot, and the spire.
@@ -151,6 +153,9 @@ pub struct Rules {
     pub jam_radius: f32,
     pub spire_jam_radius: f32,
     pub depot_jam_radius: f32,
+    /// A drone in a radio shadow is in contact if a friend in contact is this near (m, across); 0 for
+    /// no relay.
+    pub mesh_range: f32,
     /// A drone out of contact this long has lost its link (s): it flies home by itself.
     pub link_timeout: f32,
     /// The battery of a light, a standard and a heavy drone (s of flight); 0 for no battery.
@@ -167,6 +172,8 @@ pub struct Rules {
     pub pad_radius: f32,
     /// A drone with an empty battery is back at its base after this long (s).
     pub respawn_time: f32,
+    /// A drone out of contact with no standing order flies home when its battery gets to this (s).
+    pub bingo: f32,
     /// The highest a drone flies (m): the AGENT ceiling. The mountains are higher.
     pub ceiling: f32,
     /// How far a team sees round a tower it holds, a drone and its base (m, across).
@@ -190,6 +197,7 @@ impl Default for Rules {
             circle_radius: 60.0,
             circle_ceiling: 120.0,
             capture_time: 20.0,
+            decay_time: 100.0,
             win_score: 600.0,
             tower_score: 1.0,
             spire_score: 2.0,
@@ -197,6 +205,7 @@ impl Default for Rules {
             jam_radius: 160.0,
             spire_jam_radius: 200.0,
             depot_jam_radius: 120.0,
+            mesh_range: 70.0,
             link_timeout: 20.0,
             // The battery is off until the host can put a drone down (see plans/towers-rules-v2.md).
             light_battery: 0.0,
@@ -207,6 +216,7 @@ impl Default for Rules {
             depot_recharge: 3.0,
             pad_radius: 60.0,
             respawn_time: 100.0,
+            bingo: 60.0,
             ceiling: 100.0,
             tower_vision: 200.0,
             spire_vision: 250.0,
@@ -436,6 +446,11 @@ impl Game {
         }
     }
 
+    /// What is left of drone `i`'s battery (s); `None` if the drones have none.
+    pub fn charge(&self, i: usize) -> Option<f32> {
+        (self.rules.battery(self.drones[i].class) > 0.0).then_some(self.battery[i])
+    }
+
     /// Every drone's battery full, as the rules have it now.
     pub fn fill_batteries(&mut self) {
         for (b, d) in self.battery.iter_mut().zip(&self.drones) {
@@ -484,15 +499,32 @@ impl Game {
         }
     }
 
-    /// Which drones are in the radio shadow of a tower of the enemy, and for how long. A drone
-    /// that is down is not.
+    /// Which drones are out of contact, and for how long. A drone in the radio shadow of a tower
+    /// of the enemy is, unless a friend that flies, and is in contact on its own, is within
+    /// [`Rules::mesh_range`] of it (one hop: a relayed drone does not relay). A drone that is
+    /// down is not.
     fn jam(&mut self, dt: f32) {
+        let shadow: Vec<bool> =
+            self.drones
+                .iter()
+                .map(|d| {
+                    d.phase != Phase::Down
+                        && self.towers.iter().any(|t| {
+                            t.holder == Some(d.team.other()) && t.at.distance(d.at) <= self.rules.shadow(t.kind)
+                        })
+                })
+                .collect();
         for (i, d) in self.drones.iter().enumerate() {
-            let jammed = d.phase != Phase::Down
-                && self
-                    .towers
-                    .iter()
-                    .any(|t| t.holder == Some(d.team.other()) && t.at.distance(d.at) <= self.rules.shadow(t.kind));
+            let relayed = shadow[i]
+                && self.rules.mesh_range > 0.0
+                && self.drones.iter().enumerate().any(|(j, f)| {
+                    f.team == d.team
+                        && j != i
+                        && !shadow[j]
+                        && f.phase == Phase::Flying
+                        && f.at.distance(d.at) <= self.rules.mesh_range
+                });
+            let jammed = shadow[i] && !relayed;
             self.jammed[i] = jammed;
             self.silent[i] = if jammed { self.silent[i] + dt } else { 0.0 };
         }
@@ -587,7 +619,13 @@ impl Game {
             let t = &mut self.towers[i];
             t.contested = present[0] > 0 && present[1] > 0;
             let before = t.control;
-            t.control = (t.control + (count[0] - count[1]) * dt / self.rules.capture_time).clamp(-1.0, 1.0);
+            let mut change = (count[0] - count[1]) * dt / self.rules.capture_time;
+            // A circle with nobody in it drifts back: towards its holder's end, or towards 0.
+            if present == [0, 0] && self.rules.decay_time > 0.0 {
+                let end = t.holder.map_or(0.0, Team::sign);
+                change = (end - t.control).clamp(-dt / self.rules.decay_time, dt / self.rules.decay_time);
+            }
+            t.control = (t.control + change).clamp(-1.0, 1.0);
             // The control is summed in floats: an end or the middle within a hair is reached.
             if (1.0 - t.control.abs()) < ENDS {
                 t.control = t.control.signum();
@@ -909,7 +947,10 @@ mod tests {
         let control = g.towers[centre].control;
         assert!(control > 0.0, "it moved the bar while it flew");
         run(&mut g, 30.0);
-        assert_eq!(g.towers[centre].control, control, "a drone that is down moves nothing");
+        assert_eq!(
+            g.towers[centre].control, 0.0,
+            "a drone that is down moves nothing up: the empty circle drifts back"
+        );
         assert!((g.score[Team::Red.index()] - 32.0).abs() < 0.2, "only Red's home tower scores");
     }
 
@@ -929,6 +970,90 @@ mod tests {
         assert!(!seen.linked);
         assert!((seen.battery - 95.0).abs() < 0.2, "the last report, not the 85 s it has: {}", seen.battery);
         assert!((g.battery[i] - 85.0).abs() < 0.2);
+    }
+
+    #[test]
+    fn an_empty_circle_drifts_back_towards_0_and_a_held_tower_towards_its_holders_end() {
+        let mut g = Game::new(Rules::default());
+        let west = g.tower("west");
+        g.towers[west].control = 0.5;
+        run(&mut g, 10.0);
+        assert!((g.towers[west].control - 0.4).abs() < 1e-3, "{}", g.towers[west].control);
+        run(&mut g, 100.0);
+        assert_eq!(g.towers[west].control, 0.0, "it stops at 0");
+        // Held by Red, half taken back by Blue, then left: back to Red's end, and no further.
+        g.towers[west].holder = Some(Team::Red);
+        g.towers[west].control = -0.5;
+        run(&mut g, 10.0);
+        assert!((g.towers[west].control + 0.6).abs() < 1e-3, "{}", g.towers[west].control);
+        run(&mut g, 100.0);
+        assert_eq!((g.towers[west].control, g.towers[west].holder), (-1.0, Some(Team::Red)));
+    }
+
+    #[test]
+    fn a_circle_with_a_drone_in_it_does_not_drift() {
+        let mut g = Game::new(Rules::default());
+        let west = g.tower("west");
+        g.towers[west].control = 0.5;
+        let at = g.towers[west].at;
+        // One Blue and one Red: contested, nothing moves.
+        fly(&mut g, Team::Blue, 0, at + Vec2::new(40.0, 0.0));
+        fly(&mut g, Team::Red, 1, at + Vec2::new(-40.0, 0.0));
+        run(&mut g, 10.0);
+        assert_eq!(g.towers[west].control, 0.5);
+    }
+
+    /// Blue's first and second drones, `first` and `second` m east of the Red home tower (a fort
+    /// held by Red, with a shadow of 160 m).
+    fn pickets(first: f32, second: f32) -> Game {
+        let mut g = Game::new(Rules::default());
+        let red = g.towers[g.tower("Red home")].at;
+        fly(&mut g, Team::Blue, 0, red + Vec2::new(0.0, first));
+        fly(&mut g, Team::Blue, 1, red + Vec2::new(0.0, second));
+        g.look();
+        g
+    }
+
+    #[test]
+    fn a_drone_in_a_shadow_is_in_contact_through_a_friend_in_contact_within_70_m() {
+        // 150 m is in the shadow; 210 m is not, and is 60 m away.
+        let g = pickets(150.0, 210.0);
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Up);
+        assert_eq!(g.silent[g.drone(Team::Blue, 0)], 0.0);
+        assert_eq!(link_of(&g, Team::Blue, 1), Link::Up);
+    }
+
+    #[test]
+    fn a_friend_that_is_too_far_in_a_shadow_on_the_ground_or_down_does_not_relay() {
+        assert_eq!(link_of(&pickets(150.0, 230.0), Team::Blue, 0), Link::Cut, "80 m");
+        assert_eq!(link_of(&pickets(150.0, 130.0), Team::Blue, 0), Link::Cut, "in the shadow too");
+        for phase in [Phase::Ground, Phase::Down] {
+            let mut g = pickets(150.0, 210.0);
+            let j = g.drone(Team::Blue, 1);
+            g.drones[j].phase = phase;
+            g.look();
+            assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut, "{phase:?}");
+        }
+    }
+
+    #[test]
+    fn a_relayed_drone_does_not_relay_and_the_mesh_has_one_hop() {
+        // B1 in the shadow at 150, B2 relays from 210 (60 m); B3 at 100 (deep in the shadow) is 50 m
+        // from B1, which is itself relayed: it does not relay B3.
+        let mut g = pickets(150.0, 210.0);
+        let red = g.towers[g.tower("Red home")].at;
+        fly(&mut g, Team::Blue, 2, red + Vec2::new(0.0, 100.0));
+        g.look();
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Up);
+        assert_eq!(link_of(&g, Team::Blue, 2), Link::Cut);
+    }
+
+    #[test]
+    fn a_game_with_no_mesh_range_has_no_relay() {
+        let mut g = pickets(150.0, 210.0);
+        g.rules.mesh_range = 0.0;
+        g.look();
+        assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
     }
 
     #[test]

@@ -10,6 +10,7 @@ Feature: Kinds of tower
   Expectation: A fort blocks the radio 160 m round it
     Given the Red home tower is held by Red
     And the first Blue drone is 150 m from the Red home tower
+    And the second Blue drone is at its base
     Then the link of the first Blue drone is cut
 
   Expectation: A fort does not block the radio more than 160 m away
@@ -18,11 +19,13 @@ Feature: Kinds of tower
 
     Given the Red home tower is held by Red
     And the first Blue drone is 170 m from the Red home tower
+    And the second Blue drone is at its base
     Then the link of the first Blue drone is in contact
 
   Expectation: The spire blocks the radio 200 m round it
     Given the centre tower is held by Red
     And the first Blue drone is 190 m from the centre tower
+    And the second Blue drone is at its base
     Then the link of the first Blue drone is cut
 
   Expectation: The spire does not block the radio more than 200 m away
@@ -31,11 +34,13 @@ Feature: Kinds of tower
 
     Given the centre tower is held by Red
     And the first Blue drone is 210 m from the centre tower
+    And the second Blue drone is at its base
     Then the link of the first Blue drone is in contact
 
   Expectation: A depot blocks the radio 120 m round it
     Given the west tower is held by Red
     And the first Blue drone is 110 m from the west tower
+    And the second Blue drone is at its base
     Then the link of the first Blue drone is cut
 
   Expectation: A depot does not block the radio more than 120 m away
@@ -44,4 +49,5 @@ Feature: Kinds of tower
 
     Given the west tower is held by Red
     And the first Blue drone is 130 m from the west tower
+    And the second Blue drone is at its base
     Then the link of the first Blue drone is in contact

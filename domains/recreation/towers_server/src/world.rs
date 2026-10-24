@@ -260,7 +260,7 @@ impl World {
                 continue;
             }
             let mut flown = Instruction { order: self.orders[i], standing: self.standing[i] };
-            flown.tick(self.game.silent[i], self.game.rules.link_timeout);
+            flown.tick(self.game.silent[i], self.game.rules.link_timeout, self.game.charge(i), self.game.rules.bingo);
             if flown.order != self.orders[i] {
                 println!("failsafe: drone {i} out of contact, and flies {:?}", flown.order);
                 self.orders[i] = flown.order;
