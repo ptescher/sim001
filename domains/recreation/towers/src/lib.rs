@@ -576,8 +576,8 @@ impl Game {
                 }
             }
         }
-        for i in 0..self.drones.len() {
-            let jammed = hops[i].is_none();
+        for (i, hop) in hops.iter().enumerate() {
+            let jammed = hop.is_none();
             self.jammed[i] = jammed;
             self.silent[i] = if jammed { self.silent[i] + dt } else { 0.0 };
         }
