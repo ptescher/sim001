@@ -208,6 +208,23 @@ Vocabulary:
     Shows: the second Blue drone gets the order to {value}
   State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
     Shows: the third Blue drone gets the order to {value}
+  # The advisor of a team (recreation_towers::Advisor): what it says to a person who commands.
+  Event: the advisor of Blue looks
+    Say: wait for the advisor to look at the map. It looks once each second
+  Event: the advisor of Blue looks twice
+    Say: wait for the advisor to look at the map two times, one second apart
+  Event: the advisor of Blue looks, and again 31 seconds later
+    Say: wait for the advisor to look at the map. Wait 31 seconds. Wait for the advisor to look again
+  Event: the advisor of Blue looks after 10 seconds of play
+    Say: wait 10 seconds. Then wait for the advisor to look at the map
+  Event: Red takes the west tower while the advisor of Blue watches
+    Say: wait for the advisor to look at the map. Wait until Red takes the west tower. Wait for the advisor to look again
+  State: the advice of Blue is none | a tower is in danger | a tower is lost | a drone is down | the team is behind
+    Shows: a tower is in danger: the app shows an ADVISOR line that names the tower and says that an enemy drone is near
+    Shows: a tower is lost: the app shows an ADVISOR line that names the tower that the team lost
+    Shows: a drone is down: the app shows an ADVISOR line that names the drone that is down
+    Shows: the team is behind: the app shows an ADVISOR line with the score and the time left
+    Shows: none: the ADVISOR line says nothing new
   # The commander app (domains/teleoperation/command), in the Blue seat of a game on the server.
   State: the seat of the app is none | Blue | refused
     Shows: Blue: the top bar of the app says BLUE COMMANDER

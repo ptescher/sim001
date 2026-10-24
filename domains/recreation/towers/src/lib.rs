@@ -13,6 +13,7 @@
 //! The referee only needs where each drone is and whether it flies; the host moves the drones.
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
 
+mod advisor;
 mod commander;
 pub mod flight;
 mod instruction;
@@ -21,6 +22,7 @@ pub mod seat;
 pub mod svg;
 mod view;
 
+pub use advisor::{Advice, AdviceKind, Advisor};
 pub use commander::{Commander, CommanderTuning};
 pub use instruction::{Instruction, Standing};
 pub use map::Map;

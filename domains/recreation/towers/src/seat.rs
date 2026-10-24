@@ -1,12 +1,13 @@
 //! The seat protocol: what passes between a seat and the game server. One JSON message a line,
 //! on TCP. A seat first says what it is ([`Join`]); the server answers with [`ToSeat::Welcome`]
-//! and then sends what the seat may know four times a second. A seat that commands a team sends
+//! and then sends what the seat may know four times a second, and, to a seat that commands, the
+//! advice of its advisor when something matters. A seat that commands a team sends
 //! orders for its drones.
 //!
 //! The fog is the server's: a seat that commands or watches a team gets only that team's map
 //! ([`ToSeat::View`]). Only a spectator gets the whole game ([`ToSeat::Truth`]).
 
-use crate::{Drone, Game, Order, Outcome, Rules, Standing, Team, TeamView, Tower};
+use crate::{Advice, Drone, Game, Order, Outcome, Rules, Standing, Team, TeamView, Tower};
 use serde::{Deserialize, Serialize};
 
 /// The game server's port for seats: never a SITL port (those end in 0, 2 or 3).
@@ -84,6 +85,8 @@ pub enum ToSeat {
     Refused(String),
     View(TeamView),
     Truth(Truth),
+    /// The advisor of the team speaks, to a seat that commands it, when something matters.
+    Advice(Advice),
 }
 
 /// A message as a line (without its newline).

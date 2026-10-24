@@ -612,6 +612,9 @@ fn camera_tile(
         )
 }
 
+/// How long the app shows a piece of the advisor's advice.
+const ADVICE_SHOWN: Duration = Duration::from_secs(20);
+
 impl Render for CommanderView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (status, rules, view) = {
@@ -785,6 +788,23 @@ impl Render for CommanderView {
             .child(scrolling("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)));
         if let Some(unit) = unit {
             right = right.child(screen("UNIT", unit));
+        }
+        // The advisor speaks when something matters, and its words stay a while.
+        let advice: Vec<_> = self
+            .seat
+            .state()
+            .advice
+            .iter()
+            .rev()
+            .filter(|(_, at)| at.elapsed() < ADVICE_SHOWN)
+            .map(|(a, _)| a.text.clone())
+            .collect();
+        if !advice.is_empty() {
+            let mut lines = div().flex().flex_col().gap(px(4.0)).p_2().text_sm().text_color(c(AMBER));
+            for text in advice {
+                lines = lines.child(text);
+            }
+            right = right.child(screen("ADVISOR", lines));
         }
         let right = right.child(scrolling("TOWERS", towers)).child(scrolling("CAMERAS", cameras));
 

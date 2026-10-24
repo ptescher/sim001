@@ -3,13 +3,13 @@
 //! the server is not up yet, it tries again.
 
 use recreation_towers::seat::{self, Join, ToSeat, ToServer};
-use recreation_towers::{Order, Rules, TeamView};
+use recreation_towers::{Advice, Order, Rules, TeamView};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Status {
@@ -23,7 +23,12 @@ pub struct State {
     pub status: Status,
     pub rules: Option<Rules>,
     pub view: Option<TeamView>,
+    /// What the advisor said lately, and when (the last few).
+    pub advice: Vec<(Advice, Instant)>,
 }
+
+/// How many pieces of advice the seat keeps.
+const ADVICE_KEPT: usize = 3;
 
 pub struct Seat {
     addr: String,
@@ -40,7 +45,7 @@ impl Seat {
         let seat = Arc::new(Seat {
             addr: addr.to_string(),
             join,
-            state: Arc::new(Mutex::new(State { status: Status::Connecting, rules: None, view: None })),
+            state: Arc::new(Mutex::new(State { status: Status::Connecting, rules: None, view: None, advice: vec![] })),
             orders: Mutex::new(tx),
             generation: Arc::new(AtomicU64::new(0)),
         });
@@ -70,7 +75,7 @@ impl Seat {
     /// Forgets the game and connects again (to a new game on the same server address).
     pub fn reconnect(&self) {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        *self.state() = State { status: Status::Connecting, rules: None, view: None };
+        *self.state() = State { status: Status::Connecting, rules: None, view: None, advice: vec![] };
         let (tx, rx) = channel();
         *self.orders.lock().unwrap() = tx;
         let (addr, join, state, current) = (self.addr.clone(), self.join, self.state.clone(), self.generation.clone());
@@ -118,6 +123,11 @@ fn run(addr: &str, join: Join, state: &Mutex<State>, orders: Receiver<ToServer>,
                 ToSeat::Refused(why) => s.status = Status::Refused(why),
                 ToSeat::View(v) => s.view = Some(v),
                 ToSeat::Truth(_) => {}
+                ToSeat::Advice(a) => {
+                    s.advice.push((a, Instant::now()));
+                    let extra = s.advice.len().saturating_sub(ADVICE_KEPT);
+                    s.advice.drain(..extra);
+                }
             }
         }
         *out.lock().unwrap() = None;

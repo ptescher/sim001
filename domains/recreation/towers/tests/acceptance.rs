@@ -9,7 +9,9 @@ use expectation_story::Status;
 use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
-use recreation_towers::{Commander, Game, Instruction, Link, Order, Outcome, Phase, Rules, Standing, Team};
+use recreation_towers::{
+    Advice, AdviceKind, Advisor, Commander, Game, Instruction, Link, Order, Outcome, Phase, Rules, Standing, Team,
+};
 use std::path::Path;
 
 /// The referee's step (s): the host steps it with the physics, faster than this.
@@ -25,6 +27,9 @@ struct World {
     game: Game,
     /// Blue's computer commander.
     blue: Commander,
+    /// Blue's advisor, and what it said at its last look.
+    advisor: Advisor,
+    advice: Vec<Advice>,
     /// Where the steps put the first Blue drone and the Red scout, by the spec's words, and the
     /// place they put each at.
     blue_place: Option<(&'static str, Vec2)>,
@@ -41,6 +46,8 @@ impl World {
         World {
             game: Game::new(rules),
             blue: Commander::new(rules),
+            advisor: Advisor::new(rules),
+            advice: vec![],
             blue_place: None,
             scout_place: None,
             plan: None,
@@ -74,6 +81,23 @@ impl World {
                 self.game.charge(blue),
                 self.game.rules.bingo,
             );
+        }
+    }
+
+    /// The advisor looks at the Blue map.
+    fn look(&mut self) {
+        let view = self.game.view(Team::Blue);
+        self.advice = self.advisor.look(&view);
+    }
+
+    /// What the advisor said at its last look, in the spec's words.
+    fn advice_said(&self) -> &'static str {
+        match self.advice.first().map(|a| a.kind) {
+            None => "none",
+            Some(AdviceKind::TowerInDanger) => "a tower is in danger",
+            Some(AdviceKind::TowerLost) => "a tower is lost",
+            Some(AdviceKind::DroneDown) => "a drone is down",
+            Some(AdviceKind::Behind) => "the team is behind",
         }
     }
 
@@ -374,6 +398,7 @@ fn bindings() -> Bindings<World> {
             w.game.towers.iter().filter(|t| t.holder == Some(Team::Blue)).count() as f64
         })
         .set("the towers held by Blue", move |w, v| w.blue_holds(count(v)))
+        .arrange("the towers held by Blue", move |w, v| w.blue_holds(count(v)))
         // The flank towers and their circles.
         .observe("the west tower", |w| holder_name(w.tower("west").holder))
         .arrange("the west tower", |w, v| w.hold("west", v))
@@ -474,6 +499,28 @@ fn bindings() -> Bindings<World> {
             }
             let view = w.game.view(Team::Blue);
             w.blue.decide(&view);
+        })
+        // Blue's advisor.
+        .observe("the advice of Blue", |w| w.advice_said())
+        .on("the advisor of Blue looks", |w| w.look())
+        .on("the advisor of Blue looks twice", |w| {
+            w.look();
+            w.run(1.0);
+            w.look();
+        })
+        .on("the advisor of Blue looks, and again 31 seconds later", |w| {
+            w.look();
+            w.run(31.0);
+            w.look();
+        })
+        .on("the advisor of Blue looks after 10 seconds of play", |w| {
+            w.run(10.0);
+            w.look();
+        })
+        .on("Red takes the west tower while the advisor of Blue watches", |w| {
+            w.look();
+            w.hold("west", &Value::from("held by Red"));
+            w.look();
         })
         // The lanes: where the first Blue drone is, and the way it is sent.
         .observe("the first Blue drone", |w| {
