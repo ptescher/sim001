@@ -335,7 +335,7 @@ mod tests {
     use super::*;
 
     fn world() -> World {
-        World::new(Rules::default(), 0.0)
+        World::new(Rules::default().without_batteries(), 0.0)
     }
 
     #[test]
@@ -482,11 +482,11 @@ mod tests {
         assert_eq!(w.told[i], (Some(Order::Take(west)), false));
         // ...then the shadow: it flies on for the timeout, and then the failsafe takes it home.
         w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
-        for _ in 0..199 {
+        for _ in 0..299 {
             w.game.step(0.1);
             w.link_up();
         }
-        assert_eq!(w.orders[i], Some(Order::Take(west)), "19.9 s");
+        assert_eq!(w.orders[i], Some(Order::Take(west)), "29.9 s");
         w.game.step(0.1);
         w.link_up();
         assert_eq!(w.orders[i], Some(Order::Home));

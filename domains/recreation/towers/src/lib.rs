@@ -201,16 +201,15 @@ impl Default for Rules {
             win_score: 600.0,
             tower_score: 1.0,
             spire_score: 2.0,
-            duration: 480.0,
+            duration: 600.0,
             jam_radius: 160.0,
             spire_jam_radius: 200.0,
             depot_jam_radius: 120.0,
             mesh_range: 70.0,
-            link_timeout: 20.0,
-            // The battery is off until the host can put a drone down (see plans/towers-rules-v2.md).
-            light_battery: 0.0,
-            standard_battery: 0.0,
-            heavy_battery: 0.0,
+            link_timeout: 30.0,
+            light_battery: 150.0,
+            standard_battery: 240.0,
+            heavy_battery: 300.0,
             contest_drain: 0.5,
             base_recharge: 10.0,
             depot_recharge: 3.0,
@@ -227,6 +226,31 @@ impl Default for Rules {
 }
 
 impl Rules {
+    /// The rules as they were before v2 (plans/towers-rules-v1.md): one shadow of 140 m for every
+    /// tower, one point for every tower, 500 points in 8 minutes, a link lost after 20 s, no
+    /// drift, no mesh and no batteries. For measurements to compare with.
+    pub fn v1() -> Rules {
+        let d = Rules::default();
+        Rules {
+            jam_radius: 140.0,
+            spire_jam_radius: 140.0,
+            depot_jam_radius: 140.0,
+            spire_vision: d.tower_vision,
+            spire_score: 1.0,
+            win_score: 500.0,
+            duration: 480.0,
+            link_timeout: 20.0,
+            decay_time: 0.0,
+            mesh_range: 0.0,
+            ..d.without_batteries()
+        }
+    }
+
+    /// The same rules with no batteries: for a host that cannot put a drone down.
+    pub fn without_batteries(self) -> Rules {
+        Rules { light_battery: 0.0, standard_battery: 0.0, heavy_battery: 0.0, ..self }
+    }
+
     /// The class of a team's drone `k`.
     pub fn class(&self, k: usize) -> Class {
         self.squad[k]
@@ -864,7 +888,7 @@ mod tests {
 
     #[test]
     fn a_game_with_no_batteries_never_runs_one_down() {
-        let mut g = Game::new(Rules::default());
+        let mut g = Game::new(Rules::default().without_batteries());
         fly(&mut g, Team::Blue, 0, MID);
         run(&mut g, 600.0);
         let i = g.drone(Team::Blue, 0);
@@ -1206,7 +1230,7 @@ mod tests {
         fly(&mut g, Team::Blue, 0, red_home + Vec2::new(-159.0, 0.0));
         g.look();
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
-        run(&mut g, 19.9);
+        run(&mut g, 29.9);
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
         run(&mut g, 0.1);
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Lost);

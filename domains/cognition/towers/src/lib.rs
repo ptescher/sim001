@@ -9,7 +9,7 @@
 
 mod autonomy;
 
-pub use autonomy::{After, Autonomy, Comparison, Failsafe, Persist, Prepared, compare, compare_with};
+pub use autonomy::{After, Autonomy, Comparison, Failsafe, Persist, Prepared, Surface, compare, compare_with};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
@@ -587,7 +587,7 @@ mod tests {
         let mut m = Match::new(1);
         let i = put_blue(&mut m, true);
         m.told[i].give(Order::Hold, None);
-        run(&mut m, 19.0, &mut Silent);
+        run(&mut m, 29.0, &mut Silent);
         assert!(m.game.jammed[i], "it holds in the shadow");
         assert_eq!(m.flyers[i].order, Some(Order::Hold));
         run(&mut m, 2.0, &mut Silent);

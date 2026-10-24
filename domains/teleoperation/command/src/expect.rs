@@ -54,7 +54,7 @@ const DRONES: [&str; 3] = ["the first Blue drone", "the second Blue drone", "the
 /// The states a fresh game starts in: the section's start, the only one the app can arrange.
 const START: &[(&str, &str)] = &[
     ("the game of Towers", "in play"),
-    ("the time left", "480"),
+    ("the time left", "600"),
     ("the score of Blue", "0"),
     ("the score of Red", "0"),
     ("the towers held by Blue", "1"),

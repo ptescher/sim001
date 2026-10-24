@@ -470,7 +470,7 @@ mod tests {
     fn a_game_with_no_batteries_never_sends_a_drone_to_charge() {
         let g = tired_game(Vec2::new(-220.0, 0.0), 0.0);
         let mut g = g;
-        g.rules = Rules::default();
+        g.rules = Rules::default().without_batteries();
         let mut c = Commander::new(g.rules);
         assert_ne!(decide(&mut c, &g)[0], Some(Order::Home));
     }

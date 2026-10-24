@@ -440,6 +440,7 @@ fn bindings() -> Bindings<World> {
         .on("the game runs for 10 seconds", |w| w.run(10.0))
         .on("the game runs for 15 seconds", |w| w.run(15.0))
         .on("the game runs for 20 seconds", |w| w.run(20.0))
+        .on("the game runs for 30 seconds", |w| w.run(30.0))
         .on("the game runs for 1 minute", |w| w.run(60.0))
         .on("the Red scout flies into the fog for 10 seconds", |w| {
             let i = w.scout();

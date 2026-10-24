@@ -145,7 +145,9 @@ fn name(rules: &Rules, i: usize) -> String {
 fn main() {
     let a = args();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root");
-    let rules = Rules::default();
+    // The server cannot put a drone down when its battery is empty yet (plans/towers-rules-v2.md,
+    // step 11): the drones fly with no battery.
+    let rules = Rules::default().without_batteries();
     let world = Arc::new(Mutex::new(World::new(rules, a.warmup)));
     let n = 2 * rules.drones;
 

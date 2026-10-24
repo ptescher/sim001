@@ -5,7 +5,7 @@ Feature: Radio shadows
   own team, block no radio.
 
   A drone out of contact sends no telemetry and no camera picture. It gets no new order. It
-  flies the order that it had. If it is out of contact for 20 s, its link is lost. It then flies
+  flies the order that it had. If it is out of contact for 30 s, its link is lost. It then flies
   home by itself, and it stays on that order until the team can give it a new one.
 
   Expectation: A tower that a team holds blocks the radio of the enemy
@@ -37,13 +37,13 @@ Feature: Radio shadows
     When the game runs for 10 seconds
     Then the link of the first Blue drone is cut
 
-  Expectation: A drone that stays in the radio shadow for 20 s loses its link
+  Expectation: A drone that stays in the radio shadow for 30 s loses its link
     Overrides: A tower that a team holds blocks the radio of the enemy
-    After 20 s the link is lost, and not only cut.
+    After 30 s the link is lost, and not only cut.
 
     Given the Red home tower is held by Red
     And the first Blue drone is near the Red home tower
-    When the game runs for 20 seconds
+    When the game runs for 30 seconds
     Then the link of the first Blue drone is lost
 
   Expectation: The map keeps a drone out of contact where its team last heard from it

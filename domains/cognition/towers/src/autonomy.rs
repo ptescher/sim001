@@ -69,6 +69,30 @@ impl Autonomy for After {
     }
 }
 
+/// A drone out of contact for `after` s flies to the edge of the radio shadow it is in or heads
+/// for, to be heard again: the nearest point 10 m outside the shadow of the enemy tower that its
+/// order takes it to, on the side of its own base. For an order that goes to no enemy tower it
+/// does what the failsafe does.
+pub struct Surface {
+    pub after: f32,
+    pub rules: Rules,
+}
+
+impl Autonomy for Surface {
+    fn name(&self) -> String {
+        format!("surface after {} s", self.after)
+    }
+
+    fn standing(&self, view: &TeamView, _: usize, order: Order) -> Option<Standing> {
+        let Order::Take(t) = order else { return None };
+        let tower = view.towers.get(t)?;
+        (tower.holder == Some(view.team.other())).then_some(())?;
+        let out = (self.rules.base(view.team) - tower.at).normalize_or_zero();
+        let at = tower.at + out * (self.rules.shadow(tower.kind) + 10.0);
+        Some(Standing { after: self.after, then: Order::Goto(at) })
+    }
+}
+
 /// A captain with an autonomy: its orders go out with the autonomy's standing orders.
 pub struct Prepared<C, A> {
     pub captain: C,
@@ -180,14 +204,24 @@ mod tests {
         assert!(c.dark[0] > 0.0, "no drone ever went dark: {c:?}");
     }
 
-    /// The baseline a learned autonomy has to beat. Measured on 100 seeds (200 games): persist
-    /// +0.74 ± 0.08 against the failsafe, and 76 % of the games won. An attacker is always in the
-    /// shadow of the tower it takes (the shadow is wider than the circle), so a failsafe that
-    /// sends it home after 20 s, as long as the capture takes, pulls it off the tower.
+    /// The baseline in v1 (plans/edge.md): measured on 200 seeds, persist +0.73 +- 0.06
+    /// against the failsafe. An attacker is always in the shadow of the tower it takes (the shadow
+    /// is wider than the circle), so a failsafe that sends it home after 20 s, as long as the
+    /// capture takes, pulls it off the tower.
     #[test]
-    fn flying_the_order_on_beats_the_failsafe_by_a_clear_margin() {
-        let c = compare(&Persist, &Failsafe, &seeds(30)).unwrap();
+    fn in_v1_flying_the_order_on_beats_the_failsafe_by_a_clear_margin() {
+        let c = compare_with(Rules::v1(), &Persist, &Failsafe, &seeds(30)).unwrap();
         assert!(c.margin > 3.0 * c.error, "{c:?}");
         assert!(c.dark[0] < c.dark[1], "persisting ends the shadows sooner: {c:?}");
+    }
+
+    /// In v2 as proposed, persisting still wins but by less: +0.34 +- 0.07 on 200 seeds (v1 +0.73).
+    /// The test says it stays a clear win and not a landslide, so a rule change that undoes the
+    /// battery, or one that makes the failsafe hopeless again, shows.
+    #[test]
+    fn in_v2_flying_the_order_on_still_wins_but_by_less() {
+        let v1 = compare_with(Rules::v1(), &Persist, &Failsafe, &seeds(60)).unwrap();
+        let v2 = compare(&Persist, &Failsafe, &seeds(60)).unwrap();
+        assert!(v2.margin > 0.0 && v2.margin < v1.margin - 2.0 * (v1.error + v2.error), "{v1:?} {v2:?}");
     }
 }

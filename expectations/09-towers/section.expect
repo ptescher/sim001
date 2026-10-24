@@ -18,7 +18,7 @@ Section: Towers
   You do not fly the drones with sticks. You command your team from the commander app: you
   give each drone an order, and the drone flies it by plan in [[AGENT mode]]. To take a tower,
   send drones to circle it. Each tower that your team holds gives you one point each second. The centre tower gives two.
-  The first team to 600 points wins. If no team has 600 points after 8 minutes, the team with
+  The first team to 600 points wins. If no team has 600 points after 10 minutes, the team with
   more points wins.
 
   A team does not see the whole field. It sees round its drones, its base and the towers that
@@ -35,7 +35,7 @@ Vocabulary:
     Shows: won by Blue: the game stops, and it says BLUE WINS
     Shows: won by Red: the game stops, and it says RED WINS
     Shows: a draw: the game stops, and it says DRAW
-  State: the time left is 0..480 s
+  State: the time left is 0..600 s
     Set: wait until the clock shows {value}
     Shows: the clock shows {value} left
   State: the score of Blue is 0..1000 points
@@ -127,6 +127,8 @@ Vocabulary:
     Say: wait 110 seconds
   Event: the game runs for 15 seconds
     Say: wait 15 seconds
+  Event: the game runs for 30 seconds
+    Say: wait 30 seconds
   Event: the game runs for 20 seconds
     Say: wait 20 seconds
   Event: the game runs for 1 minute
@@ -267,9 +269,9 @@ Vocabulary:
     Say: wait for the end of the game. The server flies the drones with a computer commander for each team
 
   Phrase: a game of Towers is in play
-    Say: wait until all the drones stand at their bases, and the clock shows 480 s
+    Say: wait until all the drones stand at their bases, and the clock shows 600 s
     Given the game of Towers is in play
-    And the time left is 480 s
+    And the time left is 600 s
     And the score of Blue is 0 points
     And the score of Red is 0 points
     And the towers held by Blue are 1

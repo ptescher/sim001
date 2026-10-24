@@ -33,7 +33,7 @@ Feature: Standing orders
     And the order that the first Blue drone flies is take the west tower
     And the standing order of the first Blue drone is none
     And the first Blue drone is near the Red home tower
-    When the game runs for 20 seconds
+    When the game runs for 30 seconds
     Then the order that the first Blue drone flies is go home
 
   Expectation: A drone with a standing order does not fly home when its link is lost
@@ -44,7 +44,7 @@ Feature: Standing orders
     And the order that the first Blue drone flies is take the west tower
     And the standing order of the first Blue drone is hold after 5 s
     And the first Blue drone is near the Red home tower
-    When the game runs for 20 seconds
+    When the game runs for 30 seconds
     Then the order that the first Blue drone flies is hold
 
   Expectation: A drone stays on its standing order when it is in contact again
