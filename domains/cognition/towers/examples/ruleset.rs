@@ -20,6 +20,7 @@ fn main() -> Result<(), String> {
             "contest_drain" => rules.contest_drain = v,
             "link_timeout" => rules.link_timeout = v,
             "mesh_range" => rules.mesh_range = v,
+            "mesh_hops" => rules.mesh_hops = v as u32,
             "decay_time" => rules.decay_time = v,
             "capture_time" => rules.capture_time = v,
             "win_score" => rules.win_score = v,
