@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
+use std::cell::Cell;
 use std::time::{Duration, Instant};
 
 /// The process exit code once the run is over (0 when everything that could run passed).
@@ -86,6 +87,9 @@ const OBSERVED: &[&str] = &[
     "the seat of the app",
     "the towers on the app's map",
     "the selected drone",
+    "the unit panel of the app",
+    "the class in the unit panel",
+    "the mass in the unit panel",
     "the west tower on the Blue map",
     "the order of the first Blue drone",
     "the order of the second Blue drone",
@@ -153,6 +157,8 @@ struct AppDriver {
     cameras: bool,
     /// The game has been used: the next test needs a fresh one.
     used: bool,
+    /// The game server died: no test can run, so the run stops.
+    dead: Cell<bool>,
 }
 
 impl AppDriver {
@@ -204,6 +210,16 @@ impl AppDriver {
         }
     }
 
+    /// Whether the game server has exited. The run cannot go on: the tests after this one stop.
+    fn server_exited(&self) -> bool {
+        self.dead.get() || self.server.lock().unwrap().as_mut().is_some_and(|s| s.exited().is_some())
+    }
+
+    fn died(&self) -> String {
+        self.dead.set(true);
+        self.server.lock().unwrap().as_mut().and_then(Server::exited).unwrap_or_else(|| "the game server exited".into())
+    }
+
     fn seated(&self) -> Result<(), String> {
         let end = Instant::now() + SEATED;
         loop {
@@ -214,6 +230,7 @@ impl AppDriver {
             match status {
                 Status::Seated(_) if view => return Ok(()),
                 Status::Refused(why) => return Err(format!("the server refused the seat: {why}")),
+                _ if self.server_exited() => return Err(self.died()),
                 _ if Instant::now() > end => return Err("the app got no seat on the game server".into()),
                 _ => std::thread::sleep(Duration::from_millis(200)),
             }
@@ -393,6 +410,15 @@ impl Driver for AppDriver {
             return Ok(Value::from(selected.map_or("none", |k| DRONES[k])));
         }
         let view = view.ok_or("the app has no map yet")?;
+        if lower.starts_with("the unit panel") || lower.ends_with("in the unit panel") {
+            let rules = self.call(|v, _, _| v.seat.state().rules)?.ok_or("the app has no rules yet")?;
+            let class = selected.filter(|&k| k < view.drones.len()).map(|k| rules.class(k));
+            return Ok(match lower.as_str() {
+                "the unit panel of the app" => Value::from(if class.is_some() { "shown" } else { "hidden" }),
+                "the class in the unit panel" => Value::from(class.map_or("none", |c| c.name())),
+                _ => Value::from(class.map_or(0.0, |c| (c.mass_kg() * 100.0).round() as f64 / 100.0)),
+            });
+        }
         if lower == "the towers on the app's map" {
             return Ok(Value::from(view.towers.len() as f64));
         }
@@ -468,7 +494,7 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     })
     .detach();
     std::thread::spawn(move || {
-        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false };
+        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false, dead: Cell::new(false) };
         // The section's tests of the rules (with no window) and of the server are not the app's.
         let all = acceptance.plans.len();
         let plans: Vec<_> =
@@ -489,6 +515,10 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
                 _ => println!("expect: ✗ {} {:?} ({:.0} s)", plan.title, r.status, began.elapsed().as_secs_f32()),
             }
             report.results.push(r);
+            if driver.dead.get() {
+                println!("expect: stopping, the remaining tests need the game server");
+                break;
+            }
         }
         let acceptance = Acceptance { plans, ..acceptance };
         if let Some(dir) = &docs {

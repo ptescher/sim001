@@ -77,6 +77,14 @@ impl Server {
         Ok(Server { child, stdin, view })
     }
 
+    /// If the server has exited: why, from the end of its log.
+    pub fn exited(&mut self) -> Option<String> {
+        let status = self.child.try_wait().ok().flatten()?;
+        let log = std::fs::read_to_string(root().join("logs/towers/server.log")).unwrap_or_default();
+        let tail: Vec<&str> = log.lines().rev().take(3).collect();
+        Some(format!("the game server exited ({status}): {}", tail.into_iter().rev().collect::<Vec<_>>().join(" / ")))
+    }
+
     /// Stops the game: the server stops its drones and exits.
     pub fn stop(&mut self) {
         self.stdin = None;
