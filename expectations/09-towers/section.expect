@@ -270,8 +270,14 @@ Vocabulary:
     Shows: at least 1: the report of the server says `RESULT taken_red=` with 1 or more
   State: the sightings from the fog on the Blue seat are 0..100000
     Shows: 0: a seat that watches Blue never gets a Red drone that Blue does not see, or the place of a Red drone that Blue does not see now
-  State: the Red drones that the Blue seat saw are 0..3
+  State: the Red drones that the Blue seat saw are 0..5
     Shows: at least 1: a seat that watches Blue gets Red drones when Blue sees them
+  State: the seconds that the first light drone took to leave its base are 0..600
+    Shows: at most 15: the report of the server says `RESULT light_away=` with 15 or less. It is the time from GO until a light drone is 100 m from where it started
+  State: the top speed of the light drones is 0..60 m/s
+    Shows: at least 14 m/s: the report of the server says `RESULT light_top_speed=` with 14 or more
+  State: the light drones that fly low are 0..2
+    Shows: 2: the report of the server says `RESULT light_low=2`. At the end of the game, the orders of both light drones are flown low
   Event: two computer teams play a game of Towers
     Say: wait for the end of the game. The server flies the drones with a computer commander for each team
 

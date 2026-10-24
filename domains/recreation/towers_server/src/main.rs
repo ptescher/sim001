@@ -286,7 +286,8 @@ fn main() {
                     let view = w.game.view(*team);
                     for (k, order) in c.decide(&view) {
                         let i = w.game.drone(*team, k);
-                        w.command(i, order, false);
+                        let low = w.low_by_default(i);
+                        w.command(i, order, low);
                     }
                 }
             }
@@ -356,6 +357,11 @@ fn main() {
             println!("RESULT crashes={}", w.crashes);
             println!("RESULT taken_blue={}", w.taken[0]);
             println!("RESULT taken_red={}", w.taken[1]);
+            let light: Vec<usize> = w.of_class(Class::Light).collect();
+            let away = light.iter().filter_map(|&i| w.away[i]).reduce(f32::min).unwrap_or(f32::MAX);
+            println!("RESULT light_away={away:.1}");
+            println!("RESULT light_top_speed={:.1}", light.iter().map(|&i| w.top_speed[i]).fold(0.0, f32::max));
+            println!("RESULT light_low={}", light.iter().filter(|&&i| w.lows[i]).count());
             drop(w);
             std::thread::sleep(Duration::from_millis(500));
             drop(fleet);
