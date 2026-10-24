@@ -2,7 +2,10 @@
 # as a quadplane with a quad frame and no wing. Motor 1 front right, 2 rear left, 3 front left, 4
 # rear right (ArduPilot's quad X) on SERVO1 to SERVO4. In the Towers game the ground flies it in
 # GUIDED, which hovers (Q_GUIDED_MODE), so there is no forward flight and no AGENT mode.
-Q_ENABLE 1
+# 2 is QuadPlane with the VTOL AUTO: a mission flies its waypoints as a multicopter does. With 1 the
+# plane flies them as a plane (it banks to turn and waits for an airspeed that a wingless quad never
+# has), and the quad drifts away with the wind.
+Q_ENABLE 2
 Q_FRAME_CLASS 1
 Q_FRAME_TYPE 1
 SERVO1_FUNCTION 33
