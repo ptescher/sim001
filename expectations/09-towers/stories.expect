@@ -12,6 +12,7 @@ Story: Your first tower
     And the towers on the app's map are 5
     When the commander selects the first Blue drone
     Then the selected drone is the first Blue drone
+    And the unit panel of the app is shown
     When the commander sends the selected drone to the west tower
     Then the order of the first Blue drone is take the west tower
     When the game runs for 2 minutes

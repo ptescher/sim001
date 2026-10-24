@@ -11,6 +11,11 @@ Feature: Commanding from the app
   The list of drones shows the order that the server has for each drone. Until you give a drone
   an order, it circles over its base: HOME.
 
+  When a drone is selected, the UNIT panel shows its details: a small icon of the drone and its
+  basic numbers. They are its class, its weight on a tower, its mass, its speed, its altitude
+  and its state. The icon is a quadcopter for a light drone, and a plane for a standard or a
+  heavy drone.
+
   LOW makes the selected drone fly [[low]], along the lanes and below the treetops. Click LOW
   again, and the drone flies high. CAMERAS shows the picture from the camera of each of your
   drones, the same [[sensor feed]] that the ground station shows. Click a picture to select
@@ -24,6 +29,16 @@ Feature: Commanding from the app
   Expectation: A click on a drone selects it
     When the commander selects the first Blue drone
     Then the selected drone is the first Blue drone
+
+  Expectation: With no drone selected, there is no UNIT panel
+    Given the selected drone is none
+    Then the unit panel of the app is hidden
+
+  Expectation: The UNIT panel shows the details of the selected drone
+    Given the selected drone is the first Blue drone
+    Then the unit panel of the app is shown
+    And the class in the unit panel is standard
+    And the mass in the unit panel is 1.1 kg
 
   Expectation: A right-click on a tower sends the selected drone to take it
     Given the selected drone is the first Blue drone

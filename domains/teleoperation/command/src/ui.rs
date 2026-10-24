@@ -21,7 +21,7 @@ use gpui::{
 };
 use recreation_towers::map::{LANE_HALF_WIDTH, Map};
 use recreation_towers::seat::Join;
-use recreation_towers::{Kind, Order, Outcome, Phase, Rules, Team, TeamView};
+use recreation_towers::{Class, Kind, Order, Outcome, Phase, Rules, Team, TeamView};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -384,6 +384,59 @@ fn screen_with(title: &'static str, body: impl IntoElement, scroll: bool) -> Div
 }
 
 impl CommanderView {
+    /// The details of the first selected drone: its icon and basic stats.
+    fn unit_panel(&self, view: &Option<TeamView>, rules: Option<&Rules>) -> Option<Div> {
+        let (v, r) = (view.as_ref()?, rules?);
+        let k = *self.selected.first()?;
+        let d = v.drones.iter().find(|d| d.k == k)?;
+        let class = r.class(k);
+        let tint = theme_team(v.team);
+        let state = match d.phase {
+            Phase::Flying => "FLYING",
+            Phase::Ground => "GROUND",
+            Phase::Down => "DOWN",
+        };
+        let more = if self.selected.len() > 1 { format!("  (+{} more)", self.selected.len() - 1) } else { String::new() };
+        let rows = [
+            ("CLASS", class.name().to_uppercase()),
+            ("WEIGHT", format!("{} on a tower", class.weight())),
+            ("MASS", format!("{:.2} kg", class.mass_kg())),
+            ("SPEED", format!("{:.0} m/s", d.vel.length())),
+            ("ALTITUDE", format!("{:.0} m", d.alt)),
+            ("STATE", format!("{state}{}", if d.low { " LOW" } else { "" })),
+        ];
+        let mut stats = div().flex().flex_col().flex_1().text_sm();
+        stats = stats.child(
+            div().text_color(c(tint)).child(format!("{}{}{more}", &team_name(v.team)[..1], k + 1)),
+        );
+        for (name, value) in rows {
+            stats = stats.child(
+                div()
+                    .flex()
+                    .gap(px(8.0))
+                    .child(div().w(px(70.0)).text_color(c(GREY)).child(name))
+                    .child(div().text_color(c(WHITE)).child(value)),
+            );
+        }
+        let icon = canvas(
+            |_, _, _| {},
+            move |b, _, window, _| {
+                let (x, y, w, h) = rect(b);
+                fill_rect(window, x, y, w, h, c(0x000000));
+                unit_icon(window, x + w * 0.5, y + h * 0.5, class, c(tint));
+            },
+        )
+        .size_full();
+        Some(
+            div()
+                .flex()
+                .gap(px(8.0))
+                .p_2()
+                .child(div().w(px(84.0)).h(px(84.0)).flex_none().border_1().border_color(c(BEZEL_EDGE)).child(icon))
+                .child(stats),
+        )
+    }
+
     /// The camera of each drone beside its name, and the selected drone's (else the first's) larger.
     fn cameras_panel(&mut self, window: &mut Window, view: &Option<TeamView>, cx: &mut Context<Self>) -> Div {
         // The newest pictures; the ones the window had are freed from its atlas.
@@ -631,15 +684,18 @@ impl Render for CommanderView {
             }
         }
         let cameras = self.cameras_panel(window, &view, cx);
-        let right = div()
+        let unit = self.unit_panel(&view, rules.as_ref());
+        let mut right = div()
             .flex()
             .flex_col()
             .gap(px(GAP))
             .w(px(340.0))
             .flex_none()
-            .child(scrolling("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)))
-            .child(scrolling("TOWERS", towers))
-            .child(scrolling("CAMERAS", cameras));
+            .child(scrolling("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)));
+        if let Some(unit) = unit {
+            right = right.child(screen("UNIT", unit));
+        }
+        let right = right.child(scrolling("TOWERS", towers)).child(scrolling("CAMERAS", cameras));
 
         div()
             .track_focus(&self.focus)
@@ -862,5 +918,31 @@ fn drone_mark(window: &mut Window, x: f32, y: f32, vel: Vec2, colour: gpui::Hsla
         fill_poly(window, &pts, colour);
     } else {
         polyline(window, &[pts[0], pts[1], pts[2], pts[0]], 1.2, colour);
+    }
+}
+
+/// A top-down silhouette of a drone of `class`, nose up, centred on (`x`, `y`) in an 84 pixel square.
+fn unit_icon(window: &mut Window, x: f32, y: f32, class: Class, colour: gpui::Hsla) {
+    match class {
+        Class::Light => {
+            // A quadcopter: two arms crossed, a rotor at each end.
+            for (dx, dy) in [(-1.0, -1.0), (1.0, -1.0)] {
+                polyline(window, &[(x - dx * 24.0, y - dy * 24.0), (x + dx * 24.0, y + dy * 24.0)], 3.0, colour);
+            }
+            for (dx, dy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+                circle(window, x + dx * 24.0, y + dy * 24.0, 11.0, 1.5, colour);
+            }
+            fill_rect(window, x - 6.0, y - 6.0, 12.0, 12.0, colour);
+        }
+        Class::Standard | Class::Heavy => {
+            // A VTOL aeroplane: fuselage, wing, tailplane; the heavy one is bigger.
+            let s = if class == Class::Heavy { 1.0 } else { 0.8 };
+            fill_poly(window, &[(x, y - 36.0 * s), (x + 4.0 * s, y - 24.0 * s), (x + 4.0 * s, y + 32.0 * s), (x - 4.0 * s, y + 32.0 * s), (x - 4.0 * s, y - 24.0 * s)], colour);
+            fill_poly(window, &[(x - 36.0 * s, y - 2.0 * s), (x + 36.0 * s, y - 2.0 * s), (x + 36.0 * s, y + 8.0 * s), (x - 36.0 * s, y + 8.0 * s)], colour);
+            fill_poly(window, &[(x - 14.0 * s, y + 24.0 * s), (x + 14.0 * s, y + 24.0 * s), (x + 14.0 * s, y + 32.0 * s), (x - 14.0 * s, y + 32.0 * s)], colour);
+            for dx in [-22.0, 22.0] {
+                circle(window, x + dx * s, y - 14.0 * s, 8.0 * s, 1.5, colour);
+            }
+        }
     }
 }

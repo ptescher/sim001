@@ -23,7 +23,7 @@ use glam::Vec3;
 use recreation_games::Radio;
 use recreation_towers::{Class, Commander, Outcome, Rules, Team};
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
-use std::net::UdpSocket;
+use std::net::{TcpListener, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -66,6 +66,20 @@ fn args() -> Args {
         nobody: [nobody("--blue"), nobody("--red")],
         stop_with_stdin: args.iter().any(|a| a == "--stop-with-stdin"),
     }
+}
+
+/// The last instance number a block may reach (the MAVLink ports go up 10 a time from 5760).
+const MAX_INSTANCE: u16 = 500;
+
+/// Binds the physics port of each of instances `first..first + n`, and checks that their MAVLink
+/// ports are free too; all or none.
+fn bind_physics(first: u16, n: usize) -> std::io::Result<Vec<UdpSocket>> {
+    (0..n as u16)
+        .map(|i| {
+            drop(TcpListener::bind(("0.0.0.0", simulation_sitl::mavlink_port(first + i)))?);
+            UdpSocket::bind(("0.0.0.0", port_for(BASE_PORT, first + i)))
+        })
+        .collect()
 }
 
 /// The drones' SITL processes, stopped when dropped.
@@ -145,7 +159,7 @@ fn name(rules: &Rules, i: usize) -> String {
 }
 
 fn main() {
-    let a = args();
+    let mut a = args();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root");
     // The server cannot put a drone down when its battery is empty yet (plans/towers-rules-v2.md,
     // step 11): the drones fly with no battery.
@@ -153,9 +167,25 @@ fn main() {
     let world = Arc::new(Mutex::new(World::new(rules, a.warmup)));
     let n = 2 * rules.drones;
 
-    for i in 0..n {
-        let sock = UdpSocket::bind(("0.0.0.0", port_for(BASE_PORT, a.first_instance + i as u16)))
-            .expect("bind a physics port (is a sim or another game running?)");
+    // A sim or another game may hold the ports of the instances: take the next free block.
+    let socks = loop {
+        match bind_physics(a.first_instance, n) {
+            Ok(socks) => break socks,
+            Err(e) if a.first_instance + 2 * n as u16 <= MAX_INSTANCE => {
+                eprintln!(
+                    "instances {} to {}: {e}; trying the next block",
+                    a.first_instance,
+                    a.first_instance + n as u16 - 1
+                );
+                a.first_instance += n as u16;
+            }
+            Err(e) => {
+                eprintln!("no free physics ports: {e}");
+                std::process::exit(2);
+            }
+        }
+    };
+    for (i, sock) in socks.into_iter().enumerate() {
         let w = world.clone();
         std::thread::Builder::new()
             .name(format!("sitl-{}", i + 1))
@@ -172,13 +202,17 @@ fn main() {
             })
             .unwrap();
     }
-    let seats = match seats::Seats::listen(a.seat_port, world.clone(), a.people) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("can't take the seat port {}: {e}", a.seat_port);
+    // Clients find the seats at the port printed below (the next one up if this one is taken).
+    let seats = (a.seat_port..=a.seat_port.saturating_add(20))
+        .find_map(|port| {
+            let seats = seats::Seats::listen(port, world.clone(), a.people).ok()?;
+            a.seat_port = port;
+            Some(seats)
+        })
+        .unwrap_or_else(|| {
+            eprintln!("can't take a seat port from {} up", a.seat_port);
             std::process::exit(2);
-        }
-    };
+        });
     let fleet = match start_fleet(
         &root,
         &std::env::temp_dir().join("sim001-towers"),
@@ -193,7 +227,14 @@ fn main() {
             std::process::exit(2);
         }
     };
-    println!("{n} SITL drones starting at {}x; seats on tcp {}", a.speedup, a.seat_port);
+    println!(
+        "{n} SITL drones (instances {} to {}) starting at {}x; seats on tcp {} (connect with --connect 127.0.0.1:{})",
+        a.first_instance,
+        a.first_instance + n as u16 - 1,
+        a.speedup,
+        a.seat_port,
+        a.seat_port
+    );
     let names: Vec<String> = (0..n).map(|i| name(&rules, i)).collect();
     let ports: Vec<u16> = (0..n as u16).map(|i| launch::MAVLINK_PORT + 10 * (a.first_instance + i)).collect();
     // Light drones have no wing for AGENT to fly: they are flown by the radio, in QLOITER.
