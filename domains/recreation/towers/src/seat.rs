@@ -4,10 +4,12 @@
 //! advice of its advisor when something matters. A seat that commands a team sends
 //! orders for its drones.
 //!
-//! The fog is the server's: a seat that commands or watches a team gets only that team's map
-//! ([`ToSeat::View`]). Only a spectator gets the whole game ([`ToSeat::Truth`]).
+//! The fog is the server's: a seat that watches a team gets only that team's map
+//! ([`ToSeat::View`]). A seat that commands is the team's ground station and makes its own map: the
+//! server tells it only the umpire's word ([`ToSeat::Umpire`]) and what its towers and base see
+//! ([`ToSeat::Sites`]). Only a spectator gets the whole game ([`ToSeat::Truth`]).
 
-use crate::{Advice, Drone, Game, Order, Outcome, Rules, Standing, Team, TeamView, Tower};
+use crate::{Advice, Drone, Game, Order, Outcome, Rules, Sites, Standing, Team, TeamView, Tower, Umpire};
 use serde::{Deserialize, Serialize};
 
 /// The game server's port for seats: never a SITL port (those end in 0, 2 or 3).
@@ -88,7 +90,13 @@ pub enum ToSeat {
     },
     /// The seat may not have what it asked for (the team's seat is a computer's, or taken).
     Refused(String),
+    /// The map of a team, for a seat that watches it.
     View(TeamView),
+    /// The umpire's word (the clock, the scores, the outcome): to a seat that commands, which makes its
+    /// own map from it, the reports of its sites and the telemetry of its drones.
+    Umpire(Umpire),
+    /// What the team's towers and base report, to a seat that commands.
+    Sites(Sites),
     Truth(Truth),
     /// The advisor of the team speaks, to a seat that commands it, when something matters.
     Advice(Advice),

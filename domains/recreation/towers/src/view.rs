@@ -97,7 +97,40 @@ pub struct TeamView {
     pub enemies: Vec<EnemyDrone>,
 }
 
+/// The umpire's word: the clock, the scores and the outcome. The same for every seat. (In the
+/// field, a service that reads the drones' positions says it.)
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Umpire {
+    /// Since the start (s).
+    pub time: f32,
+    pub time_left: f32,
+    /// Blue's, Red's.
+    pub score: [f32; 2],
+    pub outcome: Option<Outcome>,
+}
+
+/// What the sites of a team, its towers and its base, report to it: the towers as the team knows them,
+/// and the enemy drones that the sites see. The drones' own reports are not here: a ground station
+/// makes those part of its map from its drones' telemetry.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Sites {
+    pub team: Team,
+    pub towers: Vec<TowerView>,
+    pub enemies: Vec<EnemyDrone>,
+}
+
 impl Game {
+    /// The umpire's word now.
+    pub fn umpire(&self) -> Umpire {
+        Umpire { time: self.time, time_left: self.time_left(), score: self.score, outcome: self.outcome }
+    }
+
+    /// What the sites of `team` report.
+    pub fn sites(&self, team: Team) -> Sites {
+        let v = self.site_view(team);
+        Sites { team, towers: v.towers, enemies: v.enemies }
+    }
+
     /// What `team` knows.
     pub fn view(&self, team: Team) -> TeamView {
         self.view_from(team, &self.maps[team.index()].drones)

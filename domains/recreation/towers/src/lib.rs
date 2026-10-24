@@ -26,7 +26,7 @@ pub use advisor::{Advice, AdviceKind, Advisor};
 pub use commander::{Commander, CommanderTuning};
 pub use instruction::{Instruction, Standing};
 pub use map::Map;
-pub use view::{EnemyDrone, Order, OwnDrone, TeamView, TowerView};
+pub use view::{EnemyDrone, Order, OwnDrone, Sites, TeamView, TowerView, Umpire};
 
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
