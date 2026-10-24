@@ -127,8 +127,8 @@ Vocabulary:
     Say: wait 110 seconds
   Event: the game runs for 15 seconds
     Say: wait 15 seconds
-  Event: the game runs for 30 seconds
-    Say: wait 30 seconds
+  Event: the game runs for 45 seconds
+    Say: wait 45 seconds
   Event: the game runs for 20 seconds
     Say: wait 20 seconds
   Event: the game runs for 1 minute

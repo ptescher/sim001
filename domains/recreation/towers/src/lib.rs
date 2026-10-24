@@ -206,11 +206,11 @@ impl Default for Rules {
             spire_jam_radius: 200.0,
             depot_jam_radius: 120.0,
             mesh_range: 70.0,
-            link_timeout: 30.0,
+            link_timeout: 45.0,
             light_battery: 150.0,
             standard_battery: 240.0,
             heavy_battery: 300.0,
-            contest_drain: 0.5,
+            contest_drain: 1.5,
             base_recharge: 10.0,
             depot_recharge: 3.0,
             pad_radius: 60.0,
@@ -516,7 +516,7 @@ impl Game {
     pub fn link(&self, i: usize) -> Link {
         if !self.jammed[i] {
             Link::Up
-        } else if self.silent[i] >= self.rules.link_timeout - ENDS {
+        } else if link_lost(self.silent[i], self.rules.link_timeout) {
             Link::Lost
         } else {
             Link::Cut
@@ -772,6 +772,12 @@ struct Eye {
 /// How near (in control, or in seconds of the clock) counts as there: the referee sums in floats.
 const ENDS: f32 = 1e-4;
 
+/// A drone that has been out of contact for `silent` s has lost its link at `timeout` s. The time is
+/// summed in floats, many small steps: a hair under the timeout counts.
+pub(crate) fn link_lost(silent: f32, timeout: f32) -> bool {
+    silent >= timeout * (1.0 - 1e-4)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -920,7 +926,7 @@ mod tests {
     #[test]
     fn enemy_weight_in_the_circle_makes_a_drone_use_more() {
         // Enemy classes: standard 1, heavy 2, light 0.5. Red drone 0 is standard, 3 heavy, 4 light.
-        for (k, per_second) in [(0, 1.5), (3, 2.0), (4, 1.25)] {
+        for (k, per_second) in [(0, 2.5), (3, 4.0), (4, 1.75)] {
             let (mut g, i) = charged(Vec2::ZERO + Vec2::new(40.0, 0.0), 100.0);
             fly(&mut g, Team::Red, k, Vec2::new(-40.0, 0.0));
             run(&mut g, 10.0);
@@ -940,7 +946,7 @@ mod tests {
         fly(&mut g, Team::Red, 0, Vec2::new(45.0, -390.0));
         g.battery[i] = 100.0;
         run(&mut g, 10.0);
-        assert!((g.battery[i] - 85.0).abs() < 0.01, "{}", g.battery[i]);
+        assert!((g.battery[i] - 75.0).abs() < 0.01, "{}", g.battery[i]);
         // A depot the enemy holds, a fort the team holds.
         let (mut g, i) = charged(g.towers[g.tower("Blue home")].at + Vec2::new(40.0, 0.0), 100.0);
         run(&mut g, 10.0);
@@ -1230,7 +1236,7 @@ mod tests {
         fly(&mut g, Team::Blue, 0, red_home + Vec2::new(-159.0, 0.0));
         g.look();
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
-        run(&mut g, 29.9);
+        run(&mut g, 44.9);
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Cut);
         run(&mut g, 0.1);
         assert_eq!(link_of(&g, Team::Blue, 0), Link::Lost);

@@ -3,7 +3,7 @@ Feature: The battery
   drone has 150 s, a standard drone 240 s and a heavy drone 300 s. A drone that flies uses 1 s
   of battery each second. A drone on the ground uses none.
 
-  When a drone flies in a tower circle that holds enemy drones, it uses more: 0.5 s each second
+  When a drone flies in a tower circle that holds enemy drones, it uses more: 1.5 s each second
   for each unit of enemy weight in the circle. A drone recharges over its own base, 10 s each
   second. It also recharges in the circle of a depot that its team holds, 3 s each second, if the
   circle is not contested. A fort and the spire do not recharge a drone.
@@ -33,7 +33,7 @@ Feature: The battery
     And the first Blue drone is in the west circle
     And the Red drones in the west circle are 1
     When the game runs for 10 seconds
-    Then the battery of the first Blue drone is 85 s
+    Then the battery of the first Blue drone is 75 s
 
   Expectation: A depot that the team holds recharges a drone in its circle
     Given the batteries are on
@@ -54,7 +54,7 @@ Feature: The battery
     And the first Blue drone is in the west circle
     And the Red drones in the west circle are 1
     When the game runs for 10 seconds
-    Then the battery of the first Blue drone is 85 s
+    Then the battery of the first Blue drone is 75 s
 
   Expectation: A fort does not recharge a drone
     Given the batteries are on

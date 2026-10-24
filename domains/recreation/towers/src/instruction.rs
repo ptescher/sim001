@@ -36,7 +36,7 @@ impl Instruction {
         }
         match self.standing {
             Some(s) if silent >= s.after => self.order = Some(s.then),
-            None if silent >= timeout - crate::ENDS || battery.is_some_and(|b| b <= bingo) => {
+            None if crate::link_lost(silent, timeout) || battery.is_some_and(|b| b <= bingo) => {
                 self.order = Some(Order::Home)
             }
             _ => {}

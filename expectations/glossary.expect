@@ -428,7 +428,7 @@ Term: Clearing
 Term: Radio shadow
   In [[Towers]], the ground and the air within 160 m of a fort, 200 m of a spire, or 120 m of a depot, when the enemy holds it. A
   drone in a radio shadow is out of contact with its team. It sends no telemetry and no camera
-  picture, and it gets no new order. After 30 s out of contact, it flies home by itself.
+  picture, and it gets no new order. After 45 s out of contact, it flies home by itself.
 
 Term: Fort
   In [[Towers]], a home tower. It blocks the radio of the enemy 160 m round it.

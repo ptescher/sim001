@@ -176,6 +176,8 @@ pub struct Match {
     /// Each drone is down now, and how many times each team's drones went down.
     down: Vec<bool>,
     downs: [usize; 2],
+    /// Each drone has taken off.
+    took_off: Vec<bool>,
 }
 
 impl Match {
@@ -222,6 +224,7 @@ impl Match {
             dark: [0.0; 2],
             down: vec![false; 2 * rules.drones],
             downs: [0; 2],
+            took_off: vec![false; 2 * rules.drones],
         }
     }
 
@@ -282,6 +285,7 @@ impl Match {
                 self.told[i] = Instruction::default();
             }
             f.step(game, self.wind, TAKEOFF_APART * (i % drones) as f32, DT);
+            self.took_off[i] |= f.flying;
             let d = &mut game.drones[i];
             d.at = f.at;
             d.alt = f.alt;
@@ -304,7 +308,7 @@ impl Match {
             outcome,
             score: self.game.score,
             length: self.game.time,
-            flew: self.flyers.iter().filter(|f| f.flying).count(),
+            flew: self.took_off.iter().filter(|&&t| t).count(),
             held: [held(Team::Blue), held(Team::Red)],
             dark: self.dark,
             downs: self.downs,
@@ -459,7 +463,7 @@ mod tests {
     fn a_game_between_two_captains_ends_with_every_drone_flown() {
         let r = play(&mut default(), &mut default(), 1).unwrap();
         assert_eq!(r.flew, 2 * Rules::default().drones);
-        assert!(r.length <= 480.0 + DT && r.length > 60.0, "{r:?}");
+        assert!(r.length <= Rules::default().duration + DT && r.length > 60.0, "{r:?}");
         assert!(r.score.iter().any(|s| *s > 0.0), "{r:?}");
     }
 
@@ -587,7 +591,7 @@ mod tests {
         let mut m = Match::new(1);
         let i = put_blue(&mut m, true);
         m.told[i].give(Order::Hold, None);
-        run(&mut m, 29.0, &mut Silent);
+        run(&mut m, 44.0, &mut Silent);
         assert!(m.game.jammed[i], "it holds in the shadow");
         assert_eq!(m.flyers[i].order, Some(Order::Hold));
         run(&mut m, 2.0, &mut Silent);

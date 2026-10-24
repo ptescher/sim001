@@ -45,3 +45,20 @@ Reading it:
 - Fixed policies are the wrong judge of the goal. The aim is that the information on the drone
   matters, and a fixed policy cannot read it. The next step is the `Edge` policies; these numbers
   say only that no fixed policy is a landslide under `contest_drain 1.5, link_timeout 45`.
+
+## Adopted (your choice): contest_drain 1.5, link_timeout 45, 600 points
+
+`Rules::default()` is now this. 200 seeds, 400 games a pair:
+
+| Check | Result | Target |
+| --- | --- | --- |
+| persist against failsafe | +0.11 ± 0.06 | < +0.30: met |
+| best fixed policy's lead | 0.11 | < 0.15: met |
+| policies that beat every other at 3 standard errors | 0 | 0: met |
+| drones down, per team and game | 0.68 | 0.5 to 3: met |
+| Blue wins, default against default | 53 % | 45 to 55 %: met |
+| a game lasts | 270 s of 600 (45 %) | at least 60 %: **not met** |
+
+Not measured: headroom of an on-board policy over the best fixed one, and the value of its
+information (criteria 3 and 4). That needs the `Edge` policies. Not yet built either: the
+turtle-captain check and P(win | first to hold the spire).
