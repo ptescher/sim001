@@ -291,9 +291,11 @@ Vocabulary:
     Shows: at least 1: the report of the server says `RESULT taken_blue=` with 1 or more
   State: the towers that Red took are 0..100
     Shows: at least 1: the report of the server says `RESULT taken_red=` with 1 or more
+  State: the frames that the air carried between the ground and the drones are 0..100000000
+    Shows: at least 1: the report of the server says `RESULT air_carried=` with 1 or more. Every order, plan and telemetry frame went through the simulated air
   State: the sightings from the fog on the Blue seat are 0..100000
     Shows: 0: a seat that watches Blue never gets a Red drone that Blue does not see, or the place of a Red drone that Blue does not see now
-  State: the Red drones that the Blue seat saw are 0..3
+  State: the Red drones that the Blue seat saw are 0..5
     Shows: at least 1: a seat that watches Blue gets Red drones when Blue sees them
   Event: two computer teams play a game of Towers
     Say: wait for the end of the game. The server flies the drones with a computer commander for each team

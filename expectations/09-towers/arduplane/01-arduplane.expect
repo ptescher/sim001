@@ -27,6 +27,14 @@ Feature: Playing Towers with ArduPilot drones
     Then the sightings from the fog on the Blue seat are 0
     And the Red drones that the Blue seat saw are at least 1
 
+  Expectation: The ground reaches every drone through the air
+    The ground does not talk to a drone's flight controller directly. Each frame goes through the
+    simulated air, which drops it if the radio does not reach the drone: a drone in a radio
+    shadow hears nothing from the ground and the ground hears nothing from it.
+
+    When two computer teams play a game of Towers
+    Then the frames that the air carried between the ground and the drones are at least 1
+
   Expectation: No drone crashes in a game
     When two computer teams play a game of Towers
     Then the drones that crashed are 0

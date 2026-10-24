@@ -13,6 +13,7 @@
 //! which needs about a minute of its own time before it arms (`--warmup`). Needs the AGENT build:
 //! `SIM001_BIN`, else `.ardupilot-agent/build/sitl/bin`.
 
+mod air;
 mod ground;
 mod seats;
 mod terrain;
@@ -236,7 +237,15 @@ fn main() {
         a.seat_port
     );
     let names: Vec<String> = (0..n).map(|i| name(&rules, i)).collect();
-    let ports: Vec<u16> = (0..n as u16).map(|i| launch::MAVLINK_PORT + 10 * (a.first_instance + i)).collect();
+    // The ground reaches each drone through the air: a frame goes only while the radio reaches it.
+    let air: Vec<air::Channel> = (0..n)
+        .map(|i| {
+            let sitl = launch::MAVLINK_PORT + 10 * (a.first_instance + i as u16);
+            let w = world.clone();
+            air::open(sitl, Arc::new(move || w.lock().unwrap().in_reach(i))).expect("the air for a drone")
+        })
+        .collect();
+    let ports: Vec<u16> = air.iter().map(|c| c.port).collect();
     // Light drones have no wing for AGENT to fly: they are flown by the radio, in QLOITER.
     let modes: Vec<u32> = (0..n)
         .map(|i| if rules.class(i % rules.drones) == Class::Light { ground::QLOITER_MODE } else { ground::AGENT_MODE })
@@ -319,6 +328,10 @@ fn main() {
                 .map(|t| format!("{} {:+.0}%{}", t.name, 100.0 * t.control, if t.contested { "!" } else { "" }))
                 .collect();
             println!(
+                "        air {:?}",
+                air.iter().map(|c| (c.counts.carried(), c.counts.dropped())).collect::<Vec<_>>()
+            );
+            println!(
                 "[{:>3}s] t {:.0}s ({}) | Blue {:.0} Red {:.0} | {} | packets {:?}",
                 start.elapsed().as_secs(),
                 g.time,
@@ -365,6 +378,8 @@ fn main() {
             println!("RESULT crashes={}", w.crashes);
             println!("RESULT taken_blue={}", w.taken[0]);
             println!("RESULT taken_red={}", w.taken[1]);
+            println!("RESULT air_carried={}", air.iter().map(|c| c.counts.carried()).sum::<u64>());
+            println!("RESULT air_dropped={}", air.iter().map(|c| c.counts.dropped()).sum::<u64>());
             drop(w);
             std::thread::sleep(Duration::from_millis(500));
             drop(fleet);
