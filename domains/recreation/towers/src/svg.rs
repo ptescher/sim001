@@ -2,7 +2,7 @@
 //! sees, the towers with their circles and control bars, the drones and their orders, and the
 //! clock and the scores along the top. The tests with no window put it in the docs.
 
-use crate::map::{LANE_HALF_WIDTH, Map};
+use crate::map::{LANE_HALF_WIDTH, MOUNTAIN_HEIGHT, Map};
 use crate::{Order, Outcome, Phase, Rules, Team, TeamView};
 use glam::Vec2;
 use illustration_theme::NIGHT as P;
@@ -36,11 +36,14 @@ fn team_name(t: Team) -> &'static str {
 
 const LANE: &str = "#33463a";
 const LAKE: &str = "#1d3b52";
+const ROCK: &str = "#6b7078";
+/// The mountains are drawn in cells this big (m).
+const ROCK_CELL: f32 = 15.0;
 
 /// The valley under the fog: the lake, the lanes and the clearings. A team knows the ground, so the
 /// map shows it everywhere, dim in the fog.
 fn valley_svg(map: &Map, scale: f32, at: &dyn Fn(Vec2) -> (f32, f32)) -> String {
-    let mut s = String::new();
+    let mut s = mountains_svg(map, scale, at);
     let (lx, ly) = at(map.lake.at);
     let _ = write!(
         s,
@@ -67,6 +70,42 @@ fn valley_svg(map: &Map, scale: f32, at: &dyn Fn(Vec2) -> (f32, f32)) -> String 
     s
 }
 
+/// The mountains: grey, the darker the taller. Runs of cells along a row are one rectangle.
+fn mountains_svg(map: &Map, scale: f32, at: &dyn Fn(Vec2) -> (f32, f32)) -> String {
+    let mut s = String::new();
+    let n = (map.field_radius * 1.1 / ROCK_CELL).ceil() as i32;
+    // Four steps of height: 1/8, 1/4, 1/2 and 3/4 of the tallest.
+    let level = |p: Vec2| (map.mountain_height(p) / MOUNTAIN_HEIGHT * 8.0).log2().floor().clamp(-1.0, 2.0) as i32;
+    for row in -n..=n {
+        let north = row as f32 * ROCK_CELL;
+        let mut run: Option<(i32, i32, i32)> = None;
+        for col in -n..=n + 1 {
+            let l = if col <= n { level(Vec2::new(north, col as f32 * ROCK_CELL)) } else { -1 };
+            if let Some((from, to, l0)) = run
+                && (l != l0 || col > n)
+            {
+                if l0 >= 0 {
+                    let (x, y) = at(Vec2::new(north + ROCK_CELL * 0.5, (from as f32 - 0.5) * ROCK_CELL));
+                    let _ = write!(
+                        s,
+                        r##"<rect x="{x:.1}" y="{y:.1}" width="{:.1}" height="{:.1}" fill="{ROCK}" fill-opacity="{:.2}"/>"##,
+                        (to - from + 1) as f32 * ROCK_CELL * scale,
+                        ROCK_CELL * scale + 0.5,
+                        0.3 + 0.2 * l0 as f32
+                    );
+                }
+                run = None;
+            }
+            match run {
+                Some((from, _, l0)) => run = Some((from, col, l0)),
+                None if l >= 0 => run = Some((col, col, l)),
+                None => {}
+            }
+        }
+    }
+    s
+}
+
 /// `view` as `view.team` sees it, the whole field fitted under the top bar, north up.
 pub fn map_svg(view: &TeamView, rules: &Rules) -> String {
     map_with_valley_svg(view, rules, &Map::new(rules))
@@ -85,7 +124,8 @@ pub fn map_with_valley_svg(view: &TeamView, rules: &Rules, map: &Map) -> String 
     );
     // What the team sees: round its base, its drones and the towers it holds.
     let mut eyes = vec![(rules.base(view.team), rules.base_vision)];
-    eyes.extend(view.drones.iter().filter(|d| d.phase != Phase::Down).map(|d| (d.at, rules.drone_vision)));
+    // A drone out of contact sends no picture.
+    eyes.extend(view.drones.iter().filter(|d| d.phase != Phase::Down && d.linked).map(|d| (d.at, rules.drone_vision)));
     eyes.extend(view.towers.iter().filter(|t| t.holder == Some(view.team)).map(|t| (t.at, rules.tower_vision)));
     for (p, range) in eyes {
         let (x, y) = at(p);
@@ -116,6 +156,17 @@ pub fn map_with_valley_svg(view: &TeamView, rules: &Rules, map: &Map) -> String 
         let colour = t.holder.map_or(grey.clone(), team_colour);
         let alpha = if t.seen { 1.0 } else { 0.55 };
         let r = rules.circle_radius * scale;
+        // The radio shadow of a tower that the enemy holds.
+        if t.holder == Some(view.team.other()) {
+            let _ = write!(
+                s,
+                r##"<circle cx="{x:.1}" cy="{y:.1}" r="{:.1}" fill="{}" fill-opacity="0.12" stroke="{}" stroke-opacity="{:.2}" stroke-dasharray="2 3"/>"##,
+                rules.jam_radius * scale,
+                team_colour(view.team.other()),
+                team_colour(view.team.other()),
+                0.6 * alpha
+            );
+        }
         if t.contested {
             let _ = write!(
                 s,
@@ -178,16 +229,18 @@ pub fn map_with_valley_svg(view: &TeamView, rules: &Rules, map: &Map) -> String 
         let (x, y) = at(d.at);
         let (colour, fill) =
             if d.phase == Phase::Down { (grey.as_str(), true) } else { (tint.as_str(), d.phase == Phase::Flying) };
-        s += &drone(x, y, d.vel, colour, fill, 1.0);
+        let alpha = if d.linked { 1.0 } else { 0.5 };
+        s += &drone(x, y, d.vel, colour, fill, alpha);
         // Drones on top of each other (at the base) get their labels one under the other.
         let below = view.drones[..j].iter().filter(|o| (at(o.at).0 - x).hypot(at(o.at).1 - y) < 16.0).count();
         let _ = write!(
             s,
-            r##"<text x="{:.1}" y="{:.1}" fill="{colour}">{}{}</text>"##,
+            r##"<text x="{:.1}" y="{:.1}" fill="{colour}" fill-opacity="{alpha}">{}{}{}</text>"##,
             x + 12.0,
             y - 8.0 + 11.0 * below as f32,
             letter(view.team),
-            if d.low { format!("{} LOW", d.k + 1) } else { (d.k + 1).to_string() }
+            if d.low { format!("{} LOW", d.k + 1) } else { (d.k + 1).to_string() },
+            if d.linked { String::new() } else { format!(" NO LINK {:.0} s", d.silent) }
         );
     }
     // The enemy drones the team sees, and where it last saw the others.
@@ -264,6 +317,27 @@ fn drone(x: f32, y: f32, vel: Vec2, colour: &str, filled: bool, alpha: f32) -> S
 mod tests {
     use super::*;
     use crate::Game;
+
+    #[test]
+    fn the_map_shows_mountains_radio_shadows_and_a_drone_out_of_contact() {
+        use crate::Game;
+        let mut g = Game::new(Rules::default());
+        let i = g.drone(Team::Blue, 1);
+        g.drones[i].at = g.towers[4].at - Vec2::new(100.0, 0.0);
+        g.drones[i].alt = 50.0;
+        g.drones[i].phase = Phase::Flying;
+        for _ in 0..70 {
+            g.step(0.1);
+        }
+        let svg = map_svg(&g.view(Team::Blue), &g.rules);
+        assert!(svg.contains(ROCK), "the mountains");
+        assert!(
+            svg.contains("B2 NO LINK 7 s"),
+            "{}",
+            svg.split("<text").filter(|t| t.contains("B2")).collect::<String>()
+        );
+        assert!(svg.contains("stroke-dasharray=\"2 3\""), "the radio shadow of the Red home tower");
+    }
 
     #[test]
     fn the_map_shows_the_clock_the_scores_and_the_five_towers() {

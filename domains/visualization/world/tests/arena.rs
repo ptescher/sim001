@@ -13,6 +13,8 @@ fn arena() -> Arena {
         trees,
         // Open ground: a lane along the x axis.
         open_distance: Box::new(|_, z| z.abs() - 30.0),
+        // A wall of mountains past 650 m.
+        mountains: Box::new(|x, z| if x.hypot(z) > 650.0 { 300.0 } else { 0.0 }),
     }
 }
 
@@ -37,6 +39,8 @@ fn the_ground_is_flat_over_the_field_with_a_lake_in_it_and_a_forest_cut_open_by_
     assert_eq!(terrain::trees().len(), 1);
     // Forest where it is not open.
     assert!(terrain::forest_density(100.0, 200.0) > 0.0 && terrain::forest_density(100.0, 0.0) < 0.0);
+    // The mountains that the arena has stand on the ground.
+    assert!(terrain::ground_height(0.0, 700.0) >= 300.0 && terrain::ground_height(0.0, 640.0) < 1.0);
     // The hills start past the field.
     assert!(terrain::ground_height(1500.0, 0.0).abs() > 1.0 || terrain::ground_height(0.0, 1500.0).abs() > 1.0);
 }

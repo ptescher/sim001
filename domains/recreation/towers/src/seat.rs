@@ -50,6 +50,9 @@ pub struct Truth {
     /// x east, y up, z south), when the host knows. For a view of the game.
     #[serde(default)]
     pub attitudes: Vec<[f32; 4]>,
+    /// Which drones are out of contact, in the radio shadow of an enemy tower (same order).
+    #[serde(default)]
+    pub jammed: Vec<bool>,
 }
 
 impl Truth {
@@ -62,6 +65,7 @@ impl Truth {
             towers: game.towers.clone(),
             drones: game.drones.clone(),
             attitudes: vec![],
+            jammed: game.jammed.clone(),
         }
     }
 }

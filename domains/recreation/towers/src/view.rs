@@ -48,6 +48,18 @@ pub struct OwnDrone {
     /// The order is flown low (along the lanes, below the treetops).
     #[serde(default)]
     pub low: bool,
+    /// The team hears from the drone. If not, it is in the radio shadow of an enemy tower: the
+    /// position, height, speed and phase are from when the team last heard from it, it gets no
+    /// order, and it sends no picture.
+    #[serde(default = "in_contact")]
+    pub linked: bool,
+    /// How long the team has not heard from it (s); 0 while it does.
+    #[serde(default)]
+    pub silent: f32,
+}
+
+fn in_contact() -> bool {
+    true
 }
 
 /// An enemy drone the team sees, or has seen.
@@ -102,8 +114,15 @@ impl Game {
         let k = |i: usize| i % n;
         let drones = (0..n)
             .map(|j| {
-                let d = &self.drones[self.drone(team, j)];
-                OwnDrone { k: j, at: d.at, alt: d.alt, vel: d.vel, phase: d.phase, order: None, low: false }
+                let i = self.drone(team, j);
+                let d = &self.drones[i];
+                let linked = !self.jammed[i];
+                // Out of contact, the team has only what the drone last sent.
+                let (at, alt, vel, phase) = match map.drones[i] {
+                    Some(s) if !linked => (s.at, s.alt, s.vel, s.phase),
+                    _ => (d.at, d.alt, d.vel, d.phase),
+                };
+                OwnDrone { k: j, at, alt, vel, phase, order: None, low: false, linked, silent: self.silent[i] }
             })
             .collect();
         let enemies = self

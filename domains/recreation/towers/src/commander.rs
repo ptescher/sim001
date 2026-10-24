@@ -141,10 +141,14 @@ impl Commander {
         let ours = |t: usize| view.towers[t].holder == Some(view.team);
         let threatened =
             |t: usize| ours(t) && view.enemies.iter().any(|e| e.seen && e.at.distance(view.towers[t].at) <= near);
-        let up: Vec<bool> = view.drones.iter().map(|d| d.phase != Phase::Down).collect();
+        // A drone out of contact gets no order: it flies the one it has, and stays out of the
+        // sums below.
+        let linked: Vec<bool> = view.drones.iter().map(|d| d.linked).collect();
+        let up: Vec<bool> = view.drones.iter().map(|d| d.phase != Phase::Down && d.linked).collect();
         // Keep the orders that still make sense.
         for (k, o) in self.orders.iter_mut().enumerate() {
             let keep = match *o {
+                _ if !linked[k] => true,
                 Some(Order::Take(t)) => up[k] && (!ours(t) || threatened(t)),
                 _ => false,
             };
@@ -184,7 +188,7 @@ impl Commander {
                 .min_by(|&&a, &&b| view.towers[a].at.distance(at).total_cmp(&view.towers[b].at.distance(at)));
             *order = spare.map(|&t| Order::Take(t));
         }
-        self.orders.iter().enumerate().filter_map(|(k, o)| o.map(|o| (k, o))).collect()
+        self.orders.iter().enumerate().filter(|(k, _)| linked[*k]).filter_map(|(k, o)| o.map(|o| (k, o))).collect()
     }
 }
 

@@ -50,8 +50,7 @@ impl Seats {
         let views = [game.view(Team::Blue), game.view(Team::Red)].map(|mut v| {
             for d in &mut v.drones {
                 let i = game.drone(v.team, d.k);
-                d.order = world.orders[i];
-                d.low = world.lows[i];
+                (d.order, d.low) = world.told[i];
             }
             seat::encode(&ToSeat::View(v))
         });
@@ -102,8 +101,8 @@ fn seat(stream: TcpStream, clients: Arc<Mutex<Vec<Client>>>, world: Arc<Mutex<Wo
         {
             let mut w = world.lock().unwrap();
             let i = w.game.drone(team, drone);
-            w.orders[i] = Some(order);
-            w.lows[i] = low;
+            // A drone out of contact does not hear it.
+            w.command(i, order, low);
         }
     }
     // The commander has gone: its seat is free again.

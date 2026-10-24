@@ -1,0 +1,76 @@
+Feature: Radio shadows
+  A tower that a team holds blocks the radio of the enemy. The [[radio shadow]] of a tower is
+  all the ground and the air within 140 m of it, at all heights. A drone in the radio shadow of
+  an enemy tower is out of contact with its team. A tower that nobody holds, and a tower of the
+  own team, block no radio.
+
+  A drone out of contact sends no telemetry and no camera picture. It gets no new order. It
+  flies the order that it had. If it is out of contact for 20 s, its link is lost. It then flies
+  home by itself, and it stays on that order until the team can give it a new one.
+
+  Expectation: A tower that a team holds blocks the radio of the enemy
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    Then the link of the first Blue drone is cut
+
+  Expectation: A tower that nobody holds blocks no radio
+    Given the Red home tower is neutral
+    And the first Blue drone is near the Red home tower
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A tower does not block the radio of its own team
+    Given the first Blue drone is at the Blue home tower
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A drone that leaves the radio shadow is in contact again
+    Overrides: A tower that a team holds blocks the radio of the enemy
+    The tower still blocks the radio, but the drone is not in its shadow now.
+
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    When the first Blue drone flies out of the radio shadow
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A drone that stays in the radio shadow for a short time is out of contact
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    When the game runs for 10 seconds
+    Then the link of the first Blue drone is cut
+
+  Expectation: A drone that stays in the radio shadow for 20 s loses its link
+    Overrides: A tower that a team holds blocks the radio of the enemy
+    After 20 s the link is lost, and not only cut.
+
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    When the game runs for 20 seconds
+    Then the link of the first Blue drone is lost
+
+  Expectation: The map keeps a drone out of contact where its team last heard from it
+    Given the first Blue drone is low in the mid lane
+    When the first Blue drone flies into the radio shadow for 10 seconds
+    Then the first Blue drone on the Blue map is last in contact
+    And the age of the first Blue drone on the Blue map is 10 s
+
+  Expectation: A drone out of contact shows nothing of the enemy to its team
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    And the Red scout is 50 m from the first Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is unknown
+
+  Expectation: A drone in contact shows the enemy near it to its team
+    Given the Red home tower is neutral
+    And the first Blue drone is near the Red home tower
+    And the Red scout is 50 m from the first Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+
+  Expectation: The computer commander gives no order to a drone out of contact
+    Overrides: At the start, the commander sends a drone to each neutral tower
+    The other drones get their orders as before.
+
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    When the computer commander of Blue decides
+    Then the order of the first Blue drone is none

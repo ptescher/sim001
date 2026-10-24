@@ -25,6 +25,7 @@ pub fn set(rules: &Rules) -> Result<(), String> {
             dead: false,
         })
         .collect();
+    let mountains = map.clone();
     let lake = world(map.lake.at);
     let lake_radius = map.lake.radius;
     terrain::set_arena(Arena {
@@ -33,6 +34,7 @@ pub fn set(rules: &Rules) -> Result<(), String> {
         lake_radius,
         trees,
         open_distance: Box::new(move |x, z| map.open_distance(glam::Vec2::new(-z, x))),
+        mountains: Box::new(move |x, z| mountains.mountain_height(glam::Vec2::new(-z, x))),
     })
 }
 

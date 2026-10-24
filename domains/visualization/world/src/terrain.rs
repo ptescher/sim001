@@ -23,6 +23,8 @@ pub struct Arena {
     /// How far a point is from the nearest open ground (a lane, a clearing, the lake): below 0 on
     /// it, above 0 in the forest (m).
     pub open_distance: Box<dyn Fn(f32, f32) -> f32 + Send + Sync>,
+    /// How tall the mountains round the field are at a point (x, z; m): 0 on the field.
+    pub mountains: Box<dyn Fn(f32, f32) -> f32 + Send + Sync>,
 }
 
 /// Fills in the valley of Towers in place of the Alpine Valley. Call once, before anything asks
@@ -224,6 +226,10 @@ pub fn ground_height(x: f32, z: f32) -> f32 {
     let runway_mask = smoothstep(0.0, 4.0, rw.max(rl));
     let micro = if arena().is_some() { 0.0 } else { (fbm(x / 25.0, z / 25.0, 2) - 0.5) * 0.25 * runway_mask };
     let mut h = (hills.max(-4.0) + mountains) * (1.0 - flat) + micro;
+    // The mountains of the valley of Towers, round the edge of the field.
+    if let Some(a) = arena() {
+        h += (a.mountains)(x, z);
+    }
 
     let lf = lake_factor(x, z);
     let bed = WATER_LEVEL - 5.0 * (1.0 - lf.min(1.0)).sqrt() - 0.3;
