@@ -34,7 +34,10 @@ use math::*;
 pub use cognition_plan::{Demand, Fallback, Limits, MAX_TRACKS, Plan, Primitive, State, Track};
 
 /// Bumped when the C ABI changes, so the C++ side can refuse a library that does not match.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
+
+/// How long a standing plan is good for once it has taken over (s): until the ground speaks again.
+const STANDING_TTL: f32 = 1.0e6;
 
 /// The numbers that shape how the executor flies (see the module's own docs).
 pub mod tuning;
@@ -372,6 +375,13 @@ fn plan_ok(p: &Plan) -> bool {
 #[derive(Clone, Copy, Debug)]
 pub struct Executor {
     plan: Option<Plan>,
+    /// The id of the plan last offered (adopted or not): a repeated one is ignored.
+    offered: Option<u16>,
+    /// The standing plan (its `ttl` is the silence, s, after which it is flown) and whether it took over.
+    standing: Option<Plan>,
+    standing_taken: bool,
+    /// Seconds since the ground last offered a new plan.
+    silent: f32,
     /// Seconds since the plan was adopted (the sum of `dt`).
     since: f32,
     /// The plan's circle and height, set on the first step after adoption (`None` until then).
@@ -408,6 +418,10 @@ impl Executor {
     pub const fn new() -> Executor {
         Executor {
             plan: None,
+            offered: None,
+            standing: None,
+            standing_taken: false,
+            silent: 0.0,
             since: 0.0,
             anchor: None,
             fallback: None,
@@ -439,6 +453,25 @@ impl Executor {
     /// Forget the plan and all memory, but not the tuning.
     pub fn reset(&mut self) {
         *self = Executor::with_tuning(self.tuning);
+    }
+
+    fn adopt(&mut self, p: Plan) {
+        self.plan = Some(p);
+        self.since = 0.0;
+        self.anchor = None;
+        self.fallback = None;
+        self.goto_dir = 0.0;
+    }
+
+    /// Gives the executor a standing plan, or takes it away. Its `ttl` is the seconds without a new
+    /// plan after which it is flown. The same id again changes nothing; a plan the ground sends
+    /// later ends it, and the clock starts again.
+    pub fn set_standing(&mut self, standing: Option<&Plan>) {
+        let standing = standing.filter(|p| plan_ok(p)).copied();
+        if standing.map(|p| p.id) != self.standing.map(|p| p.id) {
+            self.standing_taken = false;
+        }
+        self.standing = standing;
     }
 
     /// The plan held (the last adopted), expired or not.
@@ -477,14 +510,24 @@ impl Executor {
         lims.wind = norm2(self.wind);
 
         match plan {
-            Some(p) if plan_ok(p) && self.plan.map(|h| h.id) != Some(p.id) => {
-                self.plan = Some(*p);
-                self.since = 0.0;
-                self.anchor = None;
-                self.fallback = None;
-                self.goto_dir = 0.0;
+            Some(p) if plan_ok(p) && self.offered != Some(p.id) => {
+                self.offered = Some(p.id);
+                self.standing_taken = false;
+                self.silent = 0.0;
+                self.adopt(*p);
             }
-            _ => self.since += s.dt,
+            _ => {
+                self.since += s.dt;
+                self.silent += s.dt;
+            }
+        }
+        // No new plan for the standing plan's time: the plane flies it by itself.
+        if let Some(st) = self.standing
+            && !self.standing_taken
+            && self.silent >= st.ttl
+        {
+            self.standing_taken = true;
+            self.adopt(Plan { ttl: STANDING_TTL, ..st });
         }
         if self.anchor.is_none() {
             self.anchor = Some(self.make_anchor(&c, &lims));
@@ -1002,6 +1045,23 @@ pub extern "C" fn agent_exec_abi_version() -> u32 {
 pub extern "C" fn agent_exec_reset() {
     // SAFETY: single-threaded caller, no other reference is live.
     unsafe { (*EXECUTOR.0.get()).reset() };
+}
+
+/// The standing plan: flown by itself after `ttl` seconds with no new plan. Null takes it away.
+///
+/// # Safety
+/// `plan` must be null or valid. Not reentrant: call from one thread only.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn agent_exec_set_standing(plan: *const Plan) {
+    // SAFETY: the caller promises a valid pointer; the global is touched from one thread only.
+    unsafe { (*EXECUTOR.0.get()).set_standing(plan.as_ref()) };
+}
+
+/// The primitive flown on the last step (`Primitive as u8`).
+#[unsafe(no_mangle)]
+pub extern "C" fn agent_exec_flown() -> u8 {
+    // SAFETY: single-threaded caller, no other reference is live.
+    unsafe { (*EXECUTOR.0.get()).flown() as u8 }
 }
 
 /// # Safety

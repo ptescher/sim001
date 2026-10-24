@@ -35,7 +35,7 @@ fn assert_within(d: &Demand, l: &Limits) {
 /// All the tests of the global executor are in this one, as tests run on several threads.
 #[test]
 fn the_c_abi_steps_and_resets_the_global_executor() {
-    assert_eq!(agent_exec_abi_version(), 2);
+    assert_eq!(agent_exec_abi_version(), 3);
     use core::ptr::{null, null_mut};
     assert_eq!(unsafe { agent_exec_step(null(), null(), null(), null(), null_mut()) }, -1);
 
@@ -959,4 +959,69 @@ fn a_tuned_executor_flies_its_tuning_and_keeps_it_through_a_reset() {
     assert!(k.abs() < d.abs(), "6 m asks a gentler climb or dive than 20 m: {k} vs {d}");
     tuned.reset();
     assert_eq!(tuned.tuning(), &t);
+}
+
+// ---- The standing plan ------------------------------------------------------------------------
+
+fn run_for(e: &mut Executor, seconds: f32, offered: Option<&Plan>) -> Demand {
+    let (s, l) = (cruise_state(), Limits::default());
+    let mut d = Demand::default();
+    for k in 0..(seconds / DT).round() as usize {
+        d = e.step(&s, if k == 0 { offered } else { None }, &[], &l);
+    }
+    d
+}
+
+fn standing(id: u16, after: f32, primitive: Primitive) -> Plan {
+    Plan { id, ttl: after, point: [0.0, 300.0, -30.0], radius: 50.0, ..plan(id, primitive) }
+}
+
+#[test]
+fn a_standing_plan_is_flown_when_no_plan_comes_for_its_time() {
+    let mut e = Executor::new();
+    e.set_standing(Some(&standing(100, 20.0, Primitive::Orbit)));
+    run_for(&mut e, 10.0, Some(&plan(1, Primitive::Goto)));
+    assert_eq!(e.flown(), Primitive::Goto, "not yet");
+    run_for(&mut e, 11.0, None);
+    assert_eq!(e.flown(), Primitive::Orbit);
+    assert_eq!(e.plan().map(|p| p.id), Some(100));
+}
+
+#[test]
+fn a_new_plan_starts_the_standing_plans_time_again_and_ends_it() {
+    let mut e = Executor::new();
+    e.set_standing(Some(&standing(100, 20.0, Primitive::Orbit)));
+    run_for(&mut e, 15.0, Some(&plan(1, Primitive::Goto)));
+    run_for(&mut e, 15.0, Some(&plan(2, Primitive::Goto)));
+    assert_eq!(e.flown(), Primitive::Goto, "20 s after the second plan, not the first");
+    run_for(&mut e, 6.0, None);
+    assert_eq!(e.flown(), Primitive::Orbit);
+    run_for(&mut e, 1.0, Some(&plan(3, Primitive::Goto)));
+    assert_eq!(e.flown(), Primitive::Goto, "a plan from the ground replaces it");
+}
+
+#[test]
+fn the_ground_offering_the_old_plan_again_does_not_bring_it_back_over_a_standing_plan() {
+    let mut e = Executor::new();
+    e.set_standing(Some(&standing(100, 5.0, Primitive::Orbit)));
+    let old = plan(1, Primitive::Goto);
+    let (s, l) = (cruise_state(), Limits::default());
+    for _ in 0..(8.0 / DT) as usize {
+        e.step(&s, Some(&old), &[], &l);
+    }
+    assert_eq!(e.flown(), Primitive::Orbit, "the C side offers the last plan on every step");
+}
+
+#[test]
+fn the_same_standing_plan_again_changes_nothing_and_a_new_one_replaces_it() {
+    let mut e = Executor::new();
+    e.set_standing(Some(&standing(100, 5.0, Primitive::Orbit)));
+    run_for(&mut e, 6.0, Some(&plan(1, Primitive::Goto)));
+    e.set_standing(Some(&standing(100, 5.0, Primitive::Orbit)));
+    run_for(&mut e, 1.0, None);
+    assert_eq!(e.plan().map(|p| p.id), Some(100), "still the same flight");
+    e.set_standing(Some(&standing(101, 5.0, Primitive::Loiter)));
+    run_for(&mut e, 1.0, None);
+    assert_eq!(e.plan().map(|p| (p.id, p.primitive)), Some((101, Primitive::Loiter as u8)));
+    e.set_standing(None);
 }

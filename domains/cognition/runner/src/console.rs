@@ -42,13 +42,15 @@ pub struct Console<'a> {
     home: (f64, f64),
     /// `texts_heard` at the last reset: the messages since then.
     texts_from: u64,
+    /// The id of the last standing plan.
+    standing_id: u16,
     recoveries: u32,
 }
 
 impl<'a> Console<'a> {
     pub fn new(link: &'a Link, home: (f64, f64), uplink: &'a AtomicBool, now: impl Fn() -> f64 + 'a) -> Console<'a> {
         let texts_from = link.state().texts_heard;
-        Console { link, uplink, now: Box::new(now), home, texts_from, recoveries: 0 }
+        Console { link, uplink, now: Box::new(now), home, texts_from, standing_id: 0, recoveries: 0 }
     }
 
     /// Reads commands until `quit` or the end of the input.
@@ -71,6 +73,7 @@ impl<'a> Console<'a> {
                     vec![]
                 }),
                 "plan" | "again" => self.plan(&words[1..], command == "again"),
+                "standing" => self.standing(&words[1..]),
                 "wait" | "watch" => match words.get(1).and_then(|s| s.parse::<f64>().ok()) {
                     Some(secs) => {
                         let before = self.link.state().status_reports;
@@ -164,6 +167,24 @@ impl<'a> Console<'a> {
         };
         self.wait(STATUS_WAIT);
         Ok(ack.map(|a| format!("ack id={id} result={} reason={}", a.result, a.result_param2)).into_iter().collect())
+    }
+
+    /// `standing PRIMITIVE NORTH EAST ALT RADIUS AFTER`: a plan for the plane to fly by itself if no
+    /// new plan comes for AFTER s. Each one has a new id.
+    fn standing(&mut self, args: &[&str]) -> Result<Vec<String>, String> {
+        let usage = "say `standing PRIMITIVE NORTH EAST ALT RADIUS AFTER`";
+        let primitive = args.first().and_then(|a| primitive_number(a)).and_then(Primitive::from_u8).ok_or(usage)?;
+        let num = |i: usize| args.get(i).and_then(|s| s.parse::<f32>().ok());
+        let (Some(north), Some(east), Some(alt), Some(radius), Some(after)) = (num(1), num(2), num(3), num(4), num(5))
+        else {
+            return Err(usage.into());
+        };
+        self.standing_id = self.standing_id.wrapping_add(1);
+        let (lat, lon) = to_global(self.home.0, self.home.1, north, east);
+        let plan = WirePlan { id: self.standing_id, primitive, target: 0, lat, lon, alt, radius, ttl: after };
+        self.link.send_standing(&plan).map_err(|e| e.to_string())?;
+        self.wait(STATUS_WAIT);
+        Ok(vec![format!("standing id={} after={after}", self.standing_id)])
     }
 
     /// `status mode=… plan=… prim=… env=… fall=… recoveries=…`.

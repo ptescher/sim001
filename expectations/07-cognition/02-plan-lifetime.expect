@@ -3,6 +3,11 @@ Feature: Replacing and ending a plan
   flies the newest plan. If no new plan comes before the time to live ends, the plane circles
   where it is. Thus a plane that loses the ground does not fly away.
 
+  The ground can also give the plane a [[standing plan]] and a time. If no new plan comes for that
+  long, the plane flies the standing plan on its own: it holds, or it flies home, whatever the
+  ground told it before it lost the link. A new plan from the ground stops the clock and starts it
+  again. The plane keeps the standing plan until the ground gives it another.
+
   Expectation: A new plan id replaces the plan
     The plane does not finish the old plan first. It turns to the new plan at once.
 
@@ -43,3 +48,31 @@ Feature: Replacing and ending a plan
     Given the time to live of the plan is 5 s
     When the ground sends a go-to plan
     Then the reported fallback is none or recovery
+
+  Expectation: A standing plan takes over when the plans stop
+    Given the flight mode of the plane is AGENT
+    When the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 30 seconds
+    Then the primitive that the plane flies is orbit
+
+  Expectation: A standing plan waits for its time
+    Overrides: A standing plan takes over when the plans stop
+    The plane flies the plan that it has until the time of the standing plan is out.
+
+    Given the flight mode of the plane is AGENT
+    When the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 10 seconds
+    Then the primitive that the plane flies is go to
+
+  Expectation: A new plan starts the time again
+    Overrides: A standing plan takes over when the plans stop
+    The second plan comes 15 s after the first, and the standing plan is due 20 s after the
+    second, not the first.
+
+    Given the flight mode of the plane is AGENT
+    When the ground sends a go-to plan and a standing orbit plan for 20 s, and again a go-to plan after 15 seconds, and the plane flies on for 15 seconds
+    Then the primitive that the plane flies is go to
+
+  Expectation: A new plan replaces a standing plan that took over
+    Overrides: A standing plan takes over when the plans stop
+    Given the flight mode of the plane is AGENT
+    When the ground sends a go-to plan and a standing orbit plan for 20 s, and a go-to plan after 30 seconds
+    Then the primitive that the plane flies is go to

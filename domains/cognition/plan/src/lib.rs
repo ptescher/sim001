@@ -17,6 +17,9 @@
 pub const CMD_PLAN: u16 = 31010;
 /// `MAV_CMD_USER_2`: the state of the game.
 pub const CMD_GAME: u16 = 31011;
+/// `MAV_CMD_USER_3`: a standing plan. It has the fields of a plan; its `param4` is not a time to
+/// live but the seconds without a new plan after which the plane flies it by itself.
+pub const CMD_STANDING: u16 = 31012;
 
 /// Names of the `NAMED_VALUE_INT` / `NAMED_VALUE_FLOAT` messages the plane reports with.
 pub mod status_names {
@@ -24,6 +27,9 @@ pub mod status_names {
     pub const PLAN: &str = "AG_PLAN";
     /// The primitive being flown (`Primitive as i32`).
     pub const PRIMITIVE: &str = "AG_PRIM";
+    /// The primitive the executor flew on its last step (`Primitive as i32`): a plan that ran
+    /// out, or a standing plan that took over, shows here.
+    pub const FLOWN: &str = "AG_FLY";
     /// Interventions by the safety envelope since AGENT mode was entered.
     pub const INTERVENTIONS: &str = "AG_ENV";
     /// Why the executor fell back (`Fallback as i32`), 0 for not at all.
@@ -255,6 +261,19 @@ pub mod wire {
             }
         }
 
+        /// A standing plan: the plan's fields, and `after` (s, in `ttl`) of silence from the ground
+        /// before the plane flies it.
+        pub fn to_standing_command(&self) -> CommandInt {
+            CommandInt { command: CMD_STANDING, ..self.to_command() }
+        }
+
+        pub fn from_standing_command(c: &CommandInt) -> Option<WirePlan> {
+            if c.command != CMD_STANDING {
+                return None;
+            }
+            WirePlan::from_command(&CommandInt { command: CMD_PLAN, ..*c })
+        }
+
         pub fn from_command(c: &CommandInt) -> Option<WirePlan> {
             if c.command != CMD_PLAN {
                 return None;
@@ -374,6 +393,26 @@ pub mod wire {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn a_standing_plan_survives_the_wire_as_its_own_command() {
+            let p = WirePlan {
+                id: 9,
+                primitive: Primitive::Loiter,
+                target: 0,
+                lat: -35.363261,
+                lon: 149.16523,
+                alt: 55.0,
+                radius: 0.0,
+                ttl: 45.0,
+            };
+            let c = p.to_standing_command();
+            assert_eq!(c.command, CMD_STANDING);
+            assert_eq!(WirePlan::from_command(&c), None, "a standing plan is not a plan");
+            let back = WirePlan::from_standing_command(&c).unwrap();
+            assert_eq!((back.id, back.primitive, back.alt, back.ttl), (9, Primitive::Loiter, 55.0, 45.0));
+            assert_eq!(WirePlan::from_standing_command(&p.to_command()), None);
+        }
 
         #[test]
         fn a_plan_survives_the_wire() {

@@ -43,7 +43,23 @@ struct Drone {
     in_agent: bool,
     plan_id: u16,
     plan: Option<WirePlan>,
+    /// The standing plan the drone has: its id, and what it is (a new id when it changes).
+    standing_id: u16,
+    standing: Option<WirePlan>,
     send_errors: u32,
+}
+
+/// The standing plan is the one the drone has already: the same primitive, place, height and time.
+/// (A loiter circles where the drone is, whatever its point.)
+fn same_standing(had: Option<&WirePlan>, now: &WirePlan) -> bool {
+    use cognition_plan::Primitive;
+    had.is_some_and(|h| {
+        h.primitive == now.primitive
+            && h.alt == now.alt
+            && h.radius == now.radius
+            && h.ttl == now.ttl
+            && (now.primitive == Primitive::Loiter || (h.lat == now.lat && h.lon == now.lon))
+    })
 }
 
 pub struct Ground {
@@ -59,6 +75,7 @@ pub struct Ground {
 struct Sends {
     modes: Vec<usize>,
     plans: Vec<(usize, WirePlan)>,
+    standings: Vec<(usize, WirePlan)>,
     floors: Vec<(usize, f32)>,
     traffic: Vec<(usize, Traffic)>,
 }
@@ -86,6 +103,8 @@ impl Ground {
                     in_agent: false,
                     plan_id: 0,
                     plan: None,
+                    standing_id: 0,
+                    standing: None,
                     send_errors: 0,
                 }
             })
@@ -122,6 +141,15 @@ impl Ground {
                     d.send_errors += 1;
                 }
                 d.plan = Some(plan);
+            }
+        }
+        for (i, standing) in sends.standings {
+            let d = &mut self.drones[i];
+            if let Some(link) = &d.link {
+                if link.send_standing(&standing).is_err() {
+                    d.send_errors += 1;
+                }
+                d.standing = Some(standing);
             }
         }
         for (i, t) in sends.traffic {
@@ -172,6 +200,21 @@ impl Ground {
                     sends.floors.push((i, floor));
                 }
                 sends.plans.push((i, plan));
+                // What the drone does on its own if the plans stop: the team's standing order after
+                // its time, or home when the link is lost. The drone flies it itself, so the ground
+                // does not have to be heard for it to happen.
+                let (then, after) = match w.standing[i] {
+                    Some(s) => (s.then, s.after),
+                    None => (Order::Home, w.game.rules.link_timeout),
+                };
+                d.standing_id = d.standing_id.wrapping_add(1).max(1);
+                let mut standing = plan_for(&w.game, i, then, false, (self.home.0, self.home.1), d.standing_id);
+                standing.ttl = after;
+                if !same_standing(d.standing.as_ref(), &standing) {
+                    sends.standings.push((i, standing));
+                } else {
+                    d.standing_id = d.standing_id.wrapping_sub(1).max(1);
+                }
             }
         }
         if now >= self.next_traffic {
