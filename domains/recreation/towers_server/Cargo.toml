@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 recreation_towers = { path = "../towers" }
 recreation_games = { path = "../games" }
+recreation_towers_ground = { path = "../towers_ground" }
 communication_radio = { path = "../../communication/radio" }
 communication_air = { path = "../../communication/air" }
 simulation_aircraft = { path = "../../simulation/aircraft" }

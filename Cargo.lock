@@ -8031,6 +8031,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "recreation_towers_ground"
+version = "0.1.0"
+dependencies = [
+ "cognition_agent",
+ "cognition_plan",
+ "glam",
+ "recreation_towers",
+ "simulation_sitl",
+]
+
+[[package]]
 name = "recreation_towers_server"
 version = "0.1.0"
 dependencies = [
@@ -8044,6 +8055,7 @@ dependencies = [
  "glam",
  "recreation_games",
  "recreation_towers",
+ "recreation_towers_ground",
  "simulation_aircraft",
  "simulation_physics",
  "simulation_sitl",
@@ -9388,6 +9400,7 @@ dependencies = [
  "illustration_theme",
  "image",
  "recreation_towers",
+ "recreation_towers_ground",
  "suite_budget",
  "teleoperation_shared",
 ]

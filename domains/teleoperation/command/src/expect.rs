@@ -96,6 +96,7 @@ const OBSERVED: &[&str] = &[
     "the order of the third Blue drone",
     "the flight of the first Blue drone",
     "the camera feeds in the app",
+    "the drones that the app flies in AGENT mode",
 ];
 
 /// The cameras need the 3D view to load the valley first.
@@ -436,6 +437,10 @@ impl Driver for AppDriver {
             return Ok(v.parse::<f64>().map_or_else(|_| Value::from(*v), Value::from));
         }
         let lower = subject.to_lowercase();
+        if lower == "the drones that the app flies in agent mode" {
+            let flown = self.call(|v, _, _| v.seat.flown.load(std::sync::atomic::Ordering::SeqCst))?;
+            return Ok(Value::from(flown as f64));
+        }
         if lower == "the camera feeds in the app" {
             // The 3D view loads the valley first, which takes a while.
             let end = Instant::now() + self.suite.cap(FEEDS);

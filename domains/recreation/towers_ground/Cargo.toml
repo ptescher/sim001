@@ -1,0 +1,12 @@
+[package]
+name = "recreation_towers_ground"
+version = "0.1.0"
+edition = "2024"
+description = "Recreation domain: the ground of Towers: the MAVLink side of a team's drones (AGENT mode, plans, standing orders, traffic) behind a Transport, as the commander app runs it and as the game server runs it for a computer team"
+
+[dependencies]
+recreation_towers = { path = "../towers" }
+simulation_sitl = { path = "../../simulation/sitl" }
+cognition_agent = { path = "../../cognition/agent" }
+cognition_plan = { path = "../../cognition/plan" }
+glam.workspace = true
