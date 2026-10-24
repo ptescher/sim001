@@ -49,6 +49,13 @@ pub fn ensure_map(dir: &Path) -> Result<(), String> {
     if ok { Ok(()) } else { Err("the map did not export".into()) }
 }
 
+/// The first port from `preferred` up that nothing listens on.
+pub fn free_port(preferred: u16) -> u16 {
+    (preferred..=preferred.saturating_add(100))
+        .find(|&p| std::net::TcpListener::bind(("0.0.0.0", p)).is_ok())
+        .unwrap_or(preferred)
+}
+
 /// The ArduPlane with the AGENT mode: `SIM001_BIN`, else the checkout's AGENT build.
 fn agent_bin() -> PathBuf {
     std::env::var_os("SIM001_BIN").map(PathBuf::from).unwrap_or_else(|| root().join(".ardupilot-agent/build/sitl/bin"))
@@ -73,7 +80,8 @@ impl Server {
             .spawn()
             .map_err(|e| format!("can't start {}: {e}", program.display()))?;
         let stdin = child.stdin.take();
-        let view = if cameras { Some(start_view(&logs)?) } else { None };
+        let seat_port = args.iter().position(|a| a == "--seat-port").and_then(|i| args.get(i + 1));
+        let view = if cameras { Some(start_view(&logs, seat_port)?) } else { None };
         Ok(Server { child, stdin, view })
     }
 
@@ -104,12 +112,16 @@ impl Server {
 
 /// Starts the 3D view of the game, which takes a spectator's seat on the server and serves the
 /// drones' cameras (it stops when its input closes).
-fn start_view(logs: &Path) -> Result<(Child, ChildStdin), String> {
+fn start_view(logs: &Path, seat_port: Option<&String>) -> Result<(Child, ChildStdin), String> {
     let program = root().join("target/release/towers_view");
     let log = std::fs::File::create(logs.join("view.log")).map_err(|e| e.to_string())?;
     let err = log.try_clone().map_err(|e| e.to_string())?;
-    let mut child = Command::new(&program)
-        .arg("--stop-with-stdin")
+    let mut command = Command::new(&program);
+    command.arg("--stop-with-stdin");
+    if let Some(port) = seat_port {
+        command.arg("--server").arg(format!("127.0.0.1:{port}"));
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(err))
