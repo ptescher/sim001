@@ -15,8 +15,21 @@ use std::time::Duration;
 
 /// How long one suite may run (`SIM001_SUITE_BUDGET`): every runner stops starting tests when it is
 /// spent and marks the rest failed, so that the suites can run side by side on a big box and all be
-/// over in two minutes.
+/// over in two minutes (the league excepted: see [`LEAGUE_SECS`]).
 pub const SUITE_SECS: u64 = 120;
+/// What the league gets instead: the one suite that cannot be done in two minutes.
+///
+/// The league does not play a few games, it measures. Its «The evolution strategy improves on a
+/// slow start» plays 5 generations; a generation is the champion and 8 challengers, 256 games
+/// each (2304 games), and then the champion and the slow executor play 512 games each on new
+/// seeds: about 12 500 games of 120 s of flight in the fast arena. That is ~190 s on a 10-core
+/// laptop, and the plan runs twice (as «Reaching» and as «Visiting the state after»), so those two
+/// plans are ~380 s of the suite's ~635 s. The games are CPU-bound and already use every core, so
+/// splitting the suite into tests that run side by side does not shorten it (it made it slower).
+/// Fewer games would measure a smaller difference from noise: the 0.05 the plan wants is only a
+/// few standard errors at 512 games. 720 s is the measured time and about 15% for a slower box.
+/// Revisit this when the games get cheaper, or the plan can use fewer of them.
+pub const LEAGUE_SECS: u64 = 720;
 /// What a suite gets on top, to write its results and shut down; past it the runner is killed.
 const GRACE_SECS: u64 = 30;
 
@@ -51,9 +64,14 @@ fn cargo(name: &'static str, root: &Path, args: &[&str], secs: u64) -> Step {
 }
 
 /// A suite: it gets the budget and the grace, and its failures are tests that failed.
-fn suite(mut step: Step) -> Step {
-    step.env.push(("SIM001_SUITE_BUDGET".into(), SUITE_SECS.to_string()));
-    step.limit = Duration::from_secs(SUITE_SECS + GRACE_SECS);
+fn suite(step: Step) -> Step {
+    suite_for(step, SUITE_SECS)
+}
+
+/// A suite with a budget of its own (see [`LEAGUE_SECS`]).
+fn suite_for(mut step: Step, secs: u64) -> Step {
+    step.env.push(("SIM001_SUITE_BUDGET".into(), secs.to_string()));
+    step.limit = Duration::from_secs(secs + GRACE_SECS);
     step.may_fail = true;
     step
 }
@@ -62,7 +80,7 @@ fn suite(mut step: Step) -> Step {
 const WINDOWLESS: &[&str] =
     &["communication_radio", "aviation_computer", "visualization_telemetry", "cognition_executor", "recreation_towers"];
 
-fn acceptance(name: &'static str, root: &Path, docs_env: &(String, String), packages: &[&str]) -> Step {
+fn acceptance(name: &'static str, root: &Path, docs_env: &(String, String), packages: &[&str], secs: u64) -> Step {
     let mut args = vec!["test", "--release"];
     for p in packages {
         args.extend(["-p", p]);
@@ -70,7 +88,7 @@ fn acceptance(name: &'static str, root: &Path, docs_env: &(String, String), pack
     args.extend(["--test", "acceptance"]);
     let mut step = cargo(name, root, &args, 0);
     step.env.push(docs_env.clone());
-    suite(step)
+    suite_for(step, secs)
 }
 
 /// The steps of `tasks docs`: everything is built first, so that each suite's clock runs on the
@@ -100,12 +118,12 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
         out.push(cargo(name, &root.join("domains/teleoperation").join(dir), &["build", "--release"], 3600));
     }
 
-    out.push(acceptance("the domains with no window", root, &docs_env, WINDOWLESS));
-    // The league plays its games in the fast arena, as many as the budget lets it.
-    out.push(acceptance("the league", root, &docs_env, &["cognition_league"]));
-    out.push(acceptance("the AGENT mode in ArduPilot SITL", root, &docs_env, &["cognition_runner"]));
+    out.push(acceptance("the domains with no window", root, &docs_env, WINDOWLESS, SUITE_SECS));
+    // The league plays its games in the fast arena: it is the one suite with a budget of its own.
+    out.push(acceptance("the league", root, &docs_env, &["cognition_league"], LEAGUE_SECS));
+    out.push(acceptance("the AGENT mode in ArduPilot SITL", root, &docs_env, &["cognition_runner"], SUITE_SECS));
     // A whole game of Towers between two computer teams, six ArduPlane SITL drones.
-    out.push(acceptance("the Towers game server", root, &docs_env, &["recreation_towers_server"]));
+    out.push(acceptance("the Towers game server", root, &docs_env, &["recreation_towers_server"], SUITE_SECS));
 
     let sim_step = |name: &'static str, extra: &[&str]| {
         let mut args = s(extra);
@@ -286,12 +304,14 @@ mod tests {
         assert!(beside.args.contains(&"--direct".to_string()));
     }
 
-    /// Every suite has the same budget, and is killed a little after it.
+    /// Every suite has the same budget, and is killed a little after it, except the league, which
+    /// has the longer one that LEAGUE_SECS explains.
     #[test]
     fn every_suite_has_two_minutes_and_a_grace() {
         for step in steps(&root(), false).iter().filter(|s| s.may_fail) {
-            assert!(step.env.contains(&("SIM001_SUITE_BUDGET".to_string(), "120".to_string())), "{}", step.name);
-            assert_eq!(step.limit, Duration::from_secs(150), "{}", step.name);
+            let secs = if step.name == "the league" { LEAGUE_SECS } else { SUITE_SECS };
+            assert!(step.env.contains(&("SIM001_SUITE_BUDGET".to_string(), secs.to_string())), "{}", step.name);
+            assert_eq!(step.limit, Duration::from_secs(secs + GRACE_SECS), "{}", step.name);
         }
     }
 
