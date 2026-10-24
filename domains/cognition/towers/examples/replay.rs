@@ -96,7 +96,7 @@ fn main() -> Result<(), String> {
             "shadow": g.rules.shadow(t.kind), "points": g.rules.points(t.kind),
         })).collect::<Vec<_>>(),
         "rules": {
-            "mesh": g.rules.mesh_range, "timeout": g.rules.link_timeout, "contest": g.rules.contest_drain,
+            "mesh": g.rules.mesh_range, "hops": g.rules.mesh_hops, "timeout": g.rules.link_timeout, "contest": g.rules.contest_drain,
             "decay": g.rules.decay_time, "respawn": g.rules.respawn_time,
         },
         "result": {

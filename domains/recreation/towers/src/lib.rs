@@ -165,6 +165,9 @@ pub struct Rules {
     /// A drone in a radio shadow is in contact if a friend in contact is this near (m, across); 0 for
     /// no relay.
     pub mesh_range: f32,
+    /// A relay may be a chain: a drone is in contact through at most this many friends in a row (1:
+    /// only a friend that is in contact on its own relays).
+    pub mesh_hops: u32,
     /// A drone out of contact this long has lost its link (s): it flies home by itself.
     pub link_timeout: f32,
     /// The battery of a light, a standard and a heavy drone (s of flight); 0 for no battery.
@@ -215,6 +218,7 @@ impl Default for Rules {
             spire_jam_radius: 200.0,
             depot_jam_radius: 120.0,
             mesh_range: 70.0,
+            mesh_hops: 3,
             link_timeout: 45.0,
             light_battery: 150.0,
             standard_battery: 240.0,
@@ -251,6 +255,7 @@ impl Rules {
             link_timeout: 20.0,
             decay_time: 0.0,
             mesh_range: 0.0,
+            mesh_hops: 1,
             ..d.without_batteries()
         }
     }
@@ -534,8 +539,8 @@ impl Game {
 
     /// Which drones are out of contact, and for how long. A drone in the radio shadow of a tower
     /// of the enemy is, unless a friend that flies, and is in contact on its own, is within
-    /// [`Rules::mesh_range`] of it (one hop: a relayed drone does not relay). A drone that is
-    /// down is not.
+    /// [`Rules::mesh_range`] of it, or of a chain of such friends at most [`Rules::mesh_hops`] long (a
+    /// relayed drone relays for the next). A drone that is down is not.
     fn jam(&mut self, dt: f32) {
         let shadow: Vec<bool> =
             self.drones
@@ -547,17 +552,32 @@ impl Game {
                         })
                 })
                 .collect();
-        for (i, d) in self.drones.iter().enumerate() {
-            let relayed = shadow[i]
-                && self.rules.mesh_range > 0.0
-                && self.drones.iter().enumerate().any(|(j, f)| {
-                    f.team == d.team
-                        && j != i
-                        && !shadow[j]
-                        && f.phase == Phase::Flying
-                        && f.at.distance(d.at) <= self.rules.mesh_range
-                });
-            let jammed = shadow[i] && !relayed;
+        // Hop by hop: a drone out of any shadow is in contact on its own (0 hops); each pass lets a
+        // drone in a shadow join if a flying friend that joined the pass before is in range.
+        let mut hops: Vec<Option<u32>> = shadow.iter().map(|&s| (!s).then_some(0)).collect();
+        if self.rules.mesh_range > 0.0 {
+            for hop in 1..=self.rules.mesh_hops {
+                let joined: Vec<usize> = (0..self.drones.len())
+                    .filter(|&i| hops[i].is_none())
+                    .filter(|&i| {
+                        self.drones.iter().enumerate().any(|(j, f)| {
+                            f.team == self.drones[i].team
+                                && hops[j] == Some(hop - 1)
+                                && f.phase == Phase::Flying
+                                && f.at.distance(self.drones[i].at) <= self.rules.mesh_range
+                        })
+                    })
+                    .collect();
+                if joined.is_empty() {
+                    break;
+                }
+                for i in joined {
+                    hops[i] = Some(hop);
+                }
+            }
+        }
+        for (i, hop) in hops.iter().enumerate() {
+            let jammed = hop.is_none();
             self.jammed[i] = jammed;
             self.silent[i] = if jammed { self.silent[i] + dt } else { 0.0 };
         }
@@ -1075,16 +1095,44 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_relayed_drone_does_not_relay_and_the_mesh_has_one_hop() {
-        // B1 in the shadow at 150, B2 relays from 210 (60 m); B3 at 100 (deep in the shadow) is 50 m
-        // from B1, which is itself relayed: it does not relay B3.
-        let mut g = pickets(150.0, 210.0);
+    /// A chain of Blue drones from the edge of the Red home shadow inwards, 60 m apart, at 210 m,
+    /// 150 m, 90 m and 30 m: the first is out of the shadow, the rest are in it.
+    fn chain(hops: u32) -> Game {
+        let mut g = Game::new(Rules { mesh_hops: hops, ..Rules::default() });
         let red = g.towers[g.tower("Red home")].at;
-        fly(&mut g, Team::Blue, 2, red + Vec2::new(0.0, 100.0));
+        for (i, d) in [210.0, 150.0, 90.0, 30.0].into_iter().enumerate() {
+            fly(&mut g, Team::Blue, i, red + Vec2::new(0.0, d));
+        }
         g.look();
-        assert_eq!(link_of(&g, Team::Blue, 0), Link::Up);
+        g
+    }
+
+    #[test]
+    fn a_relayed_drone_relays_for_the_next_in_a_chain() {
+        let g = chain(3);
+        for i in 0..4 {
+            assert_eq!(link_of(&g, Team::Blue, i), Link::Up, "drone {i}");
+        }
+    }
+
+    #[test]
+    fn a_chain_is_as_long_as_the_hops_and_no_longer() {
+        let g = chain(2);
+        assert_eq!(link_of(&g, Team::Blue, 2), Link::Up);
+        assert_eq!(link_of(&g, Team::Blue, 3), Link::Cut, "three hops from contact");
+        let g = chain(1);
+        assert_eq!(link_of(&g, Team::Blue, 1), Link::Up);
+        assert_eq!(link_of(&g, Team::Blue, 2), Link::Cut, "one hop: a relayed drone does not relay");
+    }
+
+    #[test]
+    fn a_chain_breaks_where_a_link_is_down_or_too_far() {
+        let mut g = chain(3);
+        let j = g.drone(Team::Blue, 1);
+        g.drones[j].phase = Phase::Down;
+        g.look();
         assert_eq!(link_of(&g, Team::Blue, 2), Link::Cut);
+        assert_eq!(link_of(&g, Team::Blue, 3), Link::Cut);
     }
 
     #[test]

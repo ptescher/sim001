@@ -1,7 +1,10 @@
 Feature: The mesh
   A drone in a radio shadow can reach its team through a friend. A drone in a shadow is in
   contact if a drone of its team is within 70 m of it, flies, and is in contact itself. One drone
-  can relay only for a drone that is in a shadow. A relayed drone does not relay for another.
+  can relay only for a drone that is in a shadow. A relayed drone relays for the next drone in
+  the same way, so a chain of drones, each within 70 m of the one before, carries the radio into
+  a shadow. The chain is at most 3 drones long, and it breaks where a drone is down, on the
+  ground or out of range.
 
   Thus a drone at the edge of a shadow is a [[picket]]. A drone that circles a tower can never
   be relayed from outside the shadow, because the circle is wider than the gap. It must leave
