@@ -521,7 +521,7 @@ impl Driver for AppDriver {
 /// Loads the suite, then runs the section's tests on a thread of their own and quits.
 pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     let Config { suite, only, docs, server, server_args, cameras } = config;
-    let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
+    let mut acceptance = match Acceptance::load_for(&suite, "sim") {
         Ok(a) => a.with_coverage(),
         Err(e) => {
             eprint!("{e}");

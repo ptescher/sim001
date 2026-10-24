@@ -8036,6 +8036,8 @@ version = "0.1.0"
 dependencies = [
  "cognition_agent",
  "cognition_plan",
+ "communication_air",
+ "communication_radio",
  "expectation_harness",
  "expectation_model",
  "expectation_story",

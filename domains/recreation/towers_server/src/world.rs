@@ -281,25 +281,25 @@ impl World {
         radio
     }
 
-    /// The seats may give drone `i` an order: it is in contact.
-    pub fn can_command(&self, i: usize) -> bool {
+    /// The radio reaches drone `i` now: the air carries its frames. A drone in a radio shadow, or
+    /// out of the radio's range of its team's base, is out of reach.
+    pub fn in_reach(&self, i: usize) -> bool {
+        let d = &self.game.drones[i];
         !self.game.jammed[i]
+            && d.at.distance(self.game.rules.base(d.team)) < communication_air::Technology::MavlinkNetwork.range()
     }
 
-    /// Gives drone `i` an order, if it is in contact. Whether it was heard.
-    pub fn command(&mut self, i: usize, order: Order, low: bool) -> bool {
+    /// The team gives drone `i` an order. The team does not know whether it is heard: the order is
+    /// the team's, and the air carries it to the drone, or drops it (see `air`).
+    pub fn command(&mut self, i: usize, order: Order, low: bool) {
         self.command_standing(i, order, low, None)
     }
 
-    /// Gives drone `i` an order and a standing order, if it is in contact. Whether it was heard.
-    pub fn command_standing(&mut self, i: usize, order: Order, low: bool, standing: Option<Standing>) -> bool {
-        if !self.can_command(i) {
-            return false;
-        }
+    /// The team gives drone `i` an order and a standing order.
+    pub fn command_standing(&mut self, i: usize, order: Order, low: bool, standing: Option<Standing>) {
         self.orders[i] = Some(order);
         self.lows[i] = low;
         self.standing[i] = standing;
-        true
     }
 
     /// What the drones' radios do after a step of the referee: a drone in contact tells its team
@@ -577,14 +577,24 @@ mod tests {
     }
 
     #[test]
-    fn a_drone_in_the_radio_shadow_does_not_hear_an_order_and_one_in_contact_does() {
+    fn the_air_carries_to_a_drone_in_contact_and_not_to_one_in_a_radio_shadow() {
+        let (mut w, i) = shadowed();
+        assert!(!w.in_reach(i));
+        let j = w.game.drone(Team::Blue, 0);
+        assert!(w.in_reach(j));
+        // Out of the radio's range, a drone in no shadow is out of reach too.
+        w.game.drones[j].at = Vec2::new(-10_000.0, 0.0);
+        w.game.look();
+        assert!(!w.in_reach(j));
+    }
+
+    #[test]
+    fn an_order_is_the_teams_whether_or_not_the_drone_hears_it() {
         let (mut w, i) = shadowed();
         let west = w.game.tower("west");
-        assert!(!w.command(i, Order::Take(west), true));
-        assert_eq!((w.orders[i], w.lows[i]), (Some(Order::Home), false));
-        let j = w.game.drone(Team::Blue, 0);
-        assert!(w.command(j, Order::Take(west), true));
-        assert_eq!((w.orders[j], w.lows[j]), (Some(Order::Take(west)), true));
+        w.command(i, Order::Take(west), true);
+        assert_eq!((w.orders[i], w.lows[i]), (Some(Order::Take(west)), true));
+        assert_eq!(w.told[i].0, Some(Order::Home), "its team is told only what the drone heard");
     }
 
     #[test]
@@ -594,7 +604,7 @@ mod tests {
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
         w.game.look();
         let standing = Standing { after: 5.0, then: Order::Hold };
-        assert!(w.command_standing(i, Order::Take(west), false, Some(standing)));
+        w.command_standing(i, Order::Take(west), false, Some(standing));
         w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
         for _ in 0..49 {
             w.game.step(0.1);
@@ -615,7 +625,7 @@ mod tests {
         // Told while it was in contact...
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
         w.game.look();
-        assert!(w.command(i, Order::Take(west), false));
+        w.command(i, Order::Take(west), false);
         w.link_up();
         assert_eq!(w.told[i], (Some(Order::Take(west)), false));
         // ...then the shadow: it flies on for the timeout, and then the failsafe takes it home.
@@ -633,7 +643,7 @@ mod tests {
         // Out of the shadow, it hears the team again and gets its order back.
         w.game.drones[i].at = Vec2::new(-300.0, 0.0);
         w.game.step(0.1);
-        assert!(w.command(i, Order::Take(west), false));
+        w.command(i, Order::Take(west), false);
     }
 
     #[test]
