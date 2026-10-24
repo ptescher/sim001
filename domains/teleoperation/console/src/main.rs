@@ -13,12 +13,12 @@ mod station;
 mod tx15_screen;
 mod ui;
 // The screenless half of the station lives in teleoperation_core; keep the old paths.
-use teleoperation_core::{debug, geo, link, vehicle};
+use teleoperation_core::{geo, link, vehicle};
 
 use geo::{Origin, TerrainMap};
 use gpui::{
-    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions,
-    WindowBounds, WindowOptions, actions, point, px, size,
+    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds, WindowOptions,
+    actions, point, px, size,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -64,12 +64,7 @@ fn main() {
     suite_budget::begin();
     let args: Vec<String> = std::env::args().collect();
     let flag = |f: &str| args.iter().any(|a| a == f);
-    let arg = |name: &str| {
-        args.iter()
-            .position(|a| a == name)
-            .and_then(|i| args.get(i + 1))
-            .cloned()
-    };
+    let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     if flag("-h") || flag("--help") {
         println!("{HELP}");
         return;
@@ -87,21 +82,13 @@ fn main() {
         None => format!("tcpout:127.0.0.1:{}", ports.mavlink()),
     });
     let map = arg("--map");
-    let mut origin = arg("--origin")
-        .and_then(|s| Origin::parse(&s))
-        .unwrap_or(Origin::SITL_DEFAULT);
+    let mut origin = arg("--origin").and_then(|s| Origin::parse(&s)).unwrap_or(Origin::SITL_DEFAULT);
     // A real place's map lives in domains/teleoperation/console/assets/<name>; the Alpine Valley's in domains/teleoperation/console/assets.
-    let assets = arg("--assets")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| match &map {
-            Some(m) => default_assets().join(m),
-            None => default_assets(),
-        });
-    let layout_mode = if arg("--layout").as_deref() == Some("single") {
-        Mode::Single
-    } else {
-        Mode::Auto
-    };
+    let assets = arg("--assets").map(PathBuf::from).unwrap_or_else(|| match &map {
+        Some(m) => default_assets().join(m),
+        None => default_assets(),
+    });
+    let layout_mode = if arg("--layout").as_deref() == Some("single") { Mode::Single } else { Mode::Auto };
     // The tests' TX15 is the console's own, on the flight computer's serial line.
     let hosted = (radio_port.is_some() && flag("--expect") && arg("--tx15-serial").is_none()).then(|| {
         aviation_line::Hosted::host(&format!("127.0.0.1:{}", ports.uart())).unwrap_or_else(|e| {
@@ -109,15 +96,10 @@ fn main() {
             std::process::exit(1);
         })
     });
-    let feed_addr =
-        arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", ports.feed()));
+    let feed_addr = arg("--feed").unwrap_or_else(|| format!("127.0.0.1:{}", ports.feed()));
     let opts = station::Options {
         raytrace: flag("--raytrace"),
-        feed_port: feed_addr
-            .rsplit(':')
-            .next()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(ports.feed()),
+        feed_port: feed_addr.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(ports.feed()),
         no_build: flag("--no-build"),
         direct: flag("--direct"),
         map: map.clone(),
@@ -134,10 +116,7 @@ fn main() {
     let aircraft = match &opts.aircraft {
         None => simulation_aircraft::default(),
         Some(id) => simulation_aircraft::find(id).unwrap_or_else(|| {
-            eprintln!(
-                "--aircraft {id}: no such plane. Available: {}",
-                simulation_aircraft::ids().join(", ")
-            );
+            eprintln!("--aircraft {id}: no such plane. Available: {}", simulation_aircraft::ids().join(", "));
             std::process::exit(1);
         }),
     };
@@ -149,23 +128,15 @@ fn main() {
         );
         std::process::exit(1);
     }
-    if station_mode {
-        if let Err(e) = station::prepare(&opts, &assets) {
-            eprintln!("\x1b[1;31mstation: {e}\x1b[0m");
-            std::process::exit(1);
-        }
+    if station_mode && let Err(e) = station::prepare(&opts, &assets) {
+        eprintln!("\x1b[1;31mstation: {e}\x1b[0m");
+        std::process::exit(1);
     }
 
     // The map's home is ArduPilot's home and the sim's pilot box: everything is relative to it.
     if let Some(m) = &map {
         match station::pack_meta(m) {
-            Some(meta) => {
-                origin = Origin {
-                    lat: meta.home_lat,
-                    lon: meta.home_lon,
-                    alt: meta.home_alt,
-                }
-            }
+            Some(meta) => origin = Origin { lat: meta.home_lat, lon: meta.home_lon, alt: meta.home_alt },
             None => eprintln!("map {m} isn't built yet (run with --station, or domains/visualization/mapbuild)"),
         }
     }
@@ -188,26 +159,16 @@ fn main() {
     if flag("--autotest") {
         autotest::spawn(vehicle.clone(), tx.clone(), origin);
     }
-    let sensor = (station_mode || flag("--sensor")).then(|| {
-        feed::spawn(
-            feed_addr,
-            vehicle.clone(),
-            tx.clone(),
-            origin,
-            terrain.clone(),
-        )
-    });
+    let sensor = (station_mode || flag("--sensor"))
+        .then(|| feed::spawn(feed_addr, vehicle.clone(), tx.clone(), origin, terrain.clone()));
 
     let expect = flag("--expect").then(|| {
-        let suite = args
-            .iter()
-            .position(|a| a == "--expect")
-            .and_then(|i| args.get(i + 1))
-            .filter(|a| !a.starts_with("--"));
+        let suite =
+            args.iter().position(|a| a == "--expect").and_then(|i| args.get(i + 1)).filter(|a| !a.starts_with("--"));
         expect::Config {
-            suite: suite.map(PathBuf::from).unwrap_or_else(|| {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../expectations")
-            }),
+            suite: suite
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../expectations")),
             docs: arg("--docs").map(PathBuf::from),
             only: arg("--only"),
             vtol,
@@ -219,40 +180,21 @@ fn main() {
     Application::new().run(move |cx: &mut App| {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
-        cx.set_menus(vec![Menu {
-            name: "SIM001 Ground Control".into(),
-            items: vec![MenuItem::action("Quit", Quit)],
-        }]);
+        cx.set_menus(vec![Menu { name: "SIM001 Ground Control".into(), items: vec![MenuItem::action("Quit", Quit)] }]);
         let displays = screens::displays(cx);
         // The windows are frameless (content under a transparent title bar), so a layout
         // rectangle is the content rectangle.
-        let gpui_bounds = |r: Rect| Bounds {
-            origin: point(px(r.x), px(r.y)),
-            size: size(px(r.w), px(r.h)),
-        };
-        let plan = if station_mode {
-            layout::plan(&displays, layout_mode)
-        } else {
-            vec![]
-        };
+        let gpui_bounds = |r: Rect| Bounds { origin: point(px(r.x), px(r.y)), size: size(px(r.w), px(r.h)) };
+        let plan = if station_mode { layout::plan(&displays, layout_mode) } else { vec![] };
         let rect_of = |pane: Pane| plan.iter().find(|p| p.pane == pane).map(|p| p.rect);
         if station_mode {
             println!("station: {} display(s)", displays.len());
             // With no display given, GPUI places a frame's top-left relative to the main
             // display, so global coordinates reach every display.
             for p in &plan {
-                println!(
-                    "  {:?} on display {} at {}",
-                    p.pane,
-                    p.display,
-                    p.rect.to_arg()
-                );
+                println!("  {:?} on display {} at {}", p.pane, p.display, p.rect.to_arg());
             }
-            match station::start_sim(
-                &opts,
-                rect_of(Pane::Sim),
-                (origin.lat, origin.lon, origin.alt),
-            ) {
+            match station::start_sim(&opts, rect_of(Pane::Sim), (origin.lat, origin.lon, origin.alt)) {
                 Ok(child) => station::keep_sim(child),
                 Err(e) => {
                     eprintln!("station: {e}");
@@ -265,23 +207,10 @@ fn main() {
             .map(gpui_bounds)
             .unwrap_or_else(|| Bounds::centered(None, size(px(1840.0), px(1080.0)), cx));
         let console = cx
-            .open_window(
-                window_options("SIM001 Ground Control", console_bounds, (800.0, 540.0)),
-                |window, cx| {
-                    screens::hide_window_buttons(window);
-                    cx.new(|cx| {
-                        ui::app::Gcs::new(
-                            vehicle.clone(),
-                            tx,
-                            origin,
-                            terrain.clone(),
-                            sensor.clone(),
-                            vtol,
-                            cx,
-                        )
-                    })
-                },
-            )
+            .open_window(window_options("SIM001 Ground Control", console_bounds, (800.0, 540.0)), |window, cx| {
+                screens::hide_window_buttons(window);
+                cx.new(|cx| ui::app::Gcs::new(vehicle.clone(), tx, origin, terrain.clone(), sensor.clone(), vtol, cx))
+            })
             .expect("open console window");
 
         if let Some(sensor) = sensor.clone() {
@@ -345,9 +274,5 @@ fn default_assets() -> PathBuf {
         return PathBuf::from(home).join("assets");
     }
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    if manifest.exists() {
-        manifest
-    } else {
-        PathBuf::from("domains/teleoperation/console/assets")
-    }
+    if manifest.exists() { manifest } else { PathBuf::from("domains/teleoperation/console/assets") }
 }

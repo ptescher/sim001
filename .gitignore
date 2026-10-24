@@ -1,4 +1,4 @@
-# Rust build output (sim, the console and mapbuild each have their own target/)
+# Rust build output (one target/ at the root for the whole workspace)
 target/
 
 # Per-machine radio / gamepad calibration (written by the F2 wizard)

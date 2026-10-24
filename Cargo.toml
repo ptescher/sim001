@@ -1,13 +1,13 @@
 # The repo is one Cargo workspace laid out as workspace -> domain -> module: each domain is a
 # directory under domains/, and each module in it is a crate (domains/<domain>/<module>).
-# See domains/README.md. The sim (this package) predates the layout. domains/teleoperation/console
-# and domains/visualization/mapbuild keep their own lockfiles and build on their own.
+# See domains/README.md. The sim (this package) predates the layout. Everything builds from this
+# one workspace: one Cargo.lock, one target/.
 [workspace]
 members = ["domains/*/*", "tools/tasks", "tools/expectation", "tools/suite_budget"]
-exclude = ["domains/teleoperation/console", "domains/teleoperation/command", "domains/teleoperation/launcher", "domains/visualization/mapbuild", "domains/teleoperation/edgetx", "vendor/bevy_solari"]
+exclude = ["domains/teleoperation/edgetx"]
 
 # The third-party crates more than one module uses, at one version (`name.workspace = true` in a
-# module; a module may add features). The excluded workspaces above keep their own versions.
+# module; a module may add features).
 [workspace.dependencies]
 bevy = { version = "0.20.0", features = ["bevy_solari", "free_camera"] }
 fastrand = "2"
@@ -88,6 +88,12 @@ opt-level = 3
 # See vendor/bevy_solari/src/realtime/gbuffer_utils.wesl.
 [patch.crates-io]
 bevy_solari = { path = "vendor/bevy_solari" }
+# GPUI (the console, the command app and the launcher) with one change: `DispatchEventResult`
+# (what `Window::dispatch_event` returns) is public, so `--expect` can deliver mouse events the way
+# the platform does. See vendor/gpui/src/window.rs.
+gpui = { path = "vendor/gpui" }
+# xattr 0.2.3 with ENODATA for ENOATTR on Linux (vendor/xattr/src/sys/mod.rs): it does not build there otherwise.
+xattr = { path = "vendor/xattr" }
 
 # The on-board executor as a static library for the ArduPlane fork: no unwinding, small.
 # cargo build --profile embedded -p cognition_executor --features ffi-static

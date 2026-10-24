@@ -20,24 +20,9 @@ suite_budget = { path = "../../../tools/suite_budget" }
 # The screenshots' JPEGs (snapshot.rs); the same image crate as GPUI's.
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
-# Keep `cargo run` (debug) usable: optimize dependencies.
-[profile.dev.package."*"]
-opt-level = 3
-
-# The same GPUI as the console (one public type; see ../console/Cargo.toml).
-[patch.crates-io]
-gpui = { path = "../../../vendor/gpui" }
-# xattr 0.2.3 with ENODATA for ENOATTR on Linux (vendor/xattr/src/sys/mod.rs): it does not build there otherwise.
-xattr = { path = "../../../vendor/xattr" }
-
 [[bin]]
 name = "sim001_launcher"
 path = "src/main.rs"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-
-
-# Its own workspace (the root one excludes it): it builds on its own, also from a checkout inside
-# another checkout (a worktree under .claude/worktrees).
-[workspace]

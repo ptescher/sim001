@@ -44,7 +44,16 @@ pub fn paint(bounds: Bounds<Pixels>, samples: &[Sample], now: f32, window: &mut 
 }
 
 #[allow(clippy::too_many_arguments)]
-fn lane(window: &mut Window, cx: &mut App, r: (f32, f32, f32, f32), name: &str, unit: &str, series: &[Series], samples: &[Sample], now: f32) {
+fn lane(
+    window: &mut Window,
+    cx: &mut App,
+    r: (f32, f32, f32, f32),
+    name: &str,
+    unit: &str,
+    series: &[Series],
+    samples: &[Sample],
+    now: f32,
+) {
     let (x, y, w, h) = r;
     let fs = 10.5;
     let plot = (x + 38.0, y + 16.0, w - 42.0, h - 30.0);

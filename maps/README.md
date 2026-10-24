@@ -51,7 +51,7 @@ Trees and land cover aren't downloaded. `domains/visualization/mapbuild` derives
 2. Build it:
 
    ```bash
-   cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- <name>
+   cargo run --release -p visualization_mapbuild -- <name>
    ```
 
    This writes `maps/<name>/build/` (git-ignored) and the ground station's map in `domains/teleoperation/console/assets/<name>/`. Downloads are cached in `build/cache/`, so re-runs take seconds and a flaky server can't lose data. NAIP and 3DEP cover the US only.

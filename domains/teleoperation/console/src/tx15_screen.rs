@@ -9,6 +9,7 @@ pub struct Lamps {
     pub armed: bool,
 }
 
+#[allow(dead_code)] // the tests below read the sim's JSON with it
 /// Read the sim's JSON: `{"live":true,"mode":"FBWA","armed":true}`.
 pub fn parse(json: &str) -> Option<Lamps> {
     let field = |name: &str| -> Option<&str> {
@@ -77,7 +78,11 @@ pub fn composite(console_jpg: &[u8], tx15_svg: &str) -> Option<String> {
     let tag = without_attribute(&without_attribute(&tx15_svg[inner..tag_end], "width"), "height");
     let screen = format!(
         "{}{}",
-        tag.replacen("<svg", &format!("<svg x=\"{}\" y=\"{margin}\" width=\"{sw}\" height=\"{sh}\"", (w.saturating_sub(sw)) / 2), 1),
+        tag.replacen(
+            "<svg",
+            &format!("<svg x=\"{}\" y=\"{margin}\" width=\"{sw}\" height=\"{sh}\"", (w.saturating_sub(sw)) / 2),
+            1
+        ),
         &tx15_svg[tag_end..]
     );
     let total = h + sh + 2 * margin;
@@ -96,8 +101,14 @@ mod tests {
 
     #[test]
     fn the_lamps_are_read_from_the_json_the_sim_writes() {
-        assert_eq!(parse(r#"{"live":true,"mode":"FBWA","armed":true}"#), Some(Lamps { mode: "FBWA".into(), armed: true }));
-        assert_eq!(parse(r#"{"live":false,"mode":"NO LINK","armed":false}"#), Some(Lamps { mode: "NO LINK".into(), armed: false }));
+        assert_eq!(
+            parse(r#"{"live":true,"mode":"FBWA","armed":true}"#),
+            Some(Lamps { mode: "FBWA".into(), armed: true })
+        );
+        assert_eq!(
+            parse(r#"{"live":false,"mode":"NO LINK","armed":false}"#),
+            Some(Lamps { mode: "NO LINK".into(), armed: false })
+        );
         assert_eq!(parse("not json"), None);
     }
 
@@ -132,6 +143,8 @@ mod tests {
     fn the_composite_has_the_radio_above_the_console() {
         let jpg = [0xFF, 0xD8, 0xFF, 0xC0, 0, 17, 8, 0, 100, 0, 200, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1];
         let svg = composite(&jpg, "<svg viewBox=\"0 0 480 272\"><text>FBWA</text></svg>").unwrap();
-        assert!(svg.contains("viewBox=\"0 0 200 692\"") && svg.contains("FBWA") && svg.contains("data:image/jpeg;base64,"));
+        assert!(
+            svg.contains("viewBox=\"0 0 200 692\"") && svg.contains("FBWA") && svg.contains("data:image/jpeg;base64,")
+        );
     }
 }

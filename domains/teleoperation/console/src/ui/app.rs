@@ -1,14 +1,13 @@
 //! Root view: the console layout and its panels.
 
-use super::map::{MapData, MapState, Tool};
 use super::draw::round_corners;
+use super::map::{MapData, MapState, Tool};
 use super::theme::*;
 use super::{charts, hud, map};
 use crate::feed::Sensor;
 use crate::geo::{Origin, TerrainMap, wrap360};
 use crate::link::{Cmd, Shared};
 use crate::vehicle::{Vehicle, Waypoint, WpKind, mode_number};
-use teleoperation_core::debug::{self, Level, Source};
 use gpui::{
     AnyElement, Bounds, Context, Div, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
     Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful, Window, canvas, div, prelude::*, px,
@@ -19,6 +18,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use teleoperation_core::debug::{self, Level, Source};
 
 thread_local! {
     /// Where each button was last painted, by id, so `--expect` can click it the way a
@@ -38,32 +38,29 @@ const ROW_H: f32 = 28.0;
 fn fit(id: &'static str, content: Div) -> Div {
     let open = EXPANDED.with(|e| e.borrow().contains(id));
     let natural = ROWS.with(|r| r.borrow().get(id).copied()).unwrap_or(0.0);
-    let measure = canvas(
-        move |b, _, _| ROWS.with(|r| r.borrow_mut().insert(id, f32::from(b.size.height))),
-        |_, _, _, _| {},
-    )
-    .absolute()
-    .inset_0();
+    let measure =
+        canvas(move |b, _, _| ROWS.with(|r| r.borrow_mut().insert(id, f32::from(b.size.height))), |_, _, _, _| {})
+            .absolute()
+            .inset_0();
     let mut clip = div().flex_1().min_w(px(0.0)).overflow_hidden();
     if !open {
         clip = clip.max_h(px(ROW_H));
     }
-    div()
-        .flex()
-        .items_start()
-        .gap_1()
-        .child(clip.child(content.relative().child(measure)))
-        .children((natural > ROW_H + 2.0).then(move || {
-            button(format!("more-{id}"), if open { "LESS ▴" } else { "MORE ▾" }, Style::Normal).on_click(move |_, window, _| {
-                EXPANDED.with(|e| {
-                    let mut e = e.borrow_mut();
-                    if !e.remove(id) {
-                        e.insert(id);
-                    }
-                });
-                window.refresh();
-            })
-        }))
+    div().flex().items_start().gap_1().child(clip.child(content.relative().child(measure))).children(
+        (natural > ROW_H + 2.0).then(move || {
+            button(format!("more-{id}"), if open { "LESS ▴" } else { "MORE ▾" }, Style::Normal).on_click(
+                move |_, window, _| {
+                    EXPANDED.with(|e| {
+                        let mut e = e.borrow_mut();
+                        if !e.remove(id) {
+                            e.insert(id);
+                        }
+                    });
+                    window.refresh();
+                },
+            )
+        }),
+    )
 }
 
 /// Where the button with this id is on screen now, if it is.
@@ -74,7 +71,8 @@ pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
 /// A VTOL's own modes (ArduPlane QuadPlane), shown when the plane has lift rotors.
 const Q_MODE_BUTTONS: [&str; 5] = ["QSTABILIZE", "QHOVER", "QLOITER", "QLAND", "QRTL"];
 
-const MODE_BUTTONS: [&str; 10] = ["MANUAL", "FBWA", "FBWB", "CRUISE", "AUTO", "RTL", "LOITER", "CIRCLE", "GUIDED", "TAKEOFF"];
+const MODE_BUTTONS: [&str; 10] =
+    ["MANUAL", "FBWA", "FBWB", "CRUISE", "AUTO", "RTL", "LOITER", "CIRCLE", "GUIDED", "TAKEOFF"];
 
 pub struct Gcs {
     pub(crate) vehicle: Shared,
@@ -245,7 +243,16 @@ impl Gcs {
         let utc = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let (hh, mm, ss) = ((utc / 3600) % 24, (utc / 60) % 60, utc % 60);
         let (link_txt, link_col) = if v.link.alive() {
-            (format!("LINK {}  ·  {}  ·  SYS {}{}", v.link.address, v.link.status, v.sysid, v.ping.last_ms().map_or(String::new(), |ms| format!("  ·  PING {ms:.0} ms"))), GREEN)
+            (
+                format!(
+                    "LINK {}  ·  {}  ·  SYS {}{}",
+                    v.link.address,
+                    v.link.status,
+                    v.sysid,
+                    v.ping.last_ms().map_or(String::new(), |ms| format!("  ·  PING {ms:.0} ms"))
+                ),
+                GREEN,
+            )
         } else if v.link.connected {
             (format!("LINK {}  ·  {}", v.link.address, v.link.status), AMBER)
         } else {
@@ -281,7 +288,7 @@ impl Gcs {
             self.arm_confirm = None;
         }
         let alive = v.link.alive();
-        let armed = v.armed;
+        let _armed = v.armed;
         // ArduPilot reports whether its pre-arm checks pass; until then (e.g. the first ~30 s
         // while the EKF initialises) say so, with the latest reason. Arming is still allowed.
         const PREARM_CHECK: u32 = 0x1000_0000;
@@ -296,13 +303,15 @@ impl Gcs {
         // A disarm ArduPilot refused (it thinks it's flying) can be forced with a second click.
         let force = v.armed && self.disarm_at.is_some_and(|t| (1..8).contains(&t.elapsed().as_secs()));
         let arm = if v.armed {
-            button("disarm", if force { "FORCE DISARM" } else { "DISARM" }, Style::Danger).on_click(cx.listener(move |this, _, _, cx| {
-                match disarm_click(&mut this.disarm_at, Instant::now()) {
-                    Disarm::Force => this.send(Cmd::ForceDisarm),
-                    Disarm::Ask => this.send(Cmd::Arm(false)),
-                }
-                cx.notify();
-            }))
+            button("disarm", if force { "FORCE DISARM" } else { "DISARM" }, Style::Danger).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    match disarm_click(&mut this.disarm_at, Instant::now()) {
+                        Disarm::Force => this.send(Cmd::ForceDisarm),
+                        Disarm::Ask => this.send(Cmd::Arm(false)),
+                    }
+                    cx.notify();
+                },
+            ))
         } else {
             let (text, style) = if confirming {
                 ("CONFIRM ARM", Style::Danger)
@@ -331,13 +340,17 @@ impl Gcs {
             }))
         });
         let rebooting = self.reboot_confirm.is_some_and(|t| t.elapsed() < Duration::from_secs(3));
-        let reboot = button("reboot", if rebooting { "CONFIRM REBOOT" } else { "REBOOT FC" }, if rebooting { Style::Danger } else { Style::Normal })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if arm_click(&mut this.reboot_confirm, Instant::now()) {
-                    this.send(Cmd::Reboot);
-                }
-                cx.notify();
-            }));
+        let reboot = button(
+            "reboot",
+            if rebooting { "CONFIRM REBOOT" } else { "REBOOT FC" },
+            if rebooting { Style::Danger } else { Style::Normal },
+        )
+        .on_click(cx.listener(move |this, _, _, cx| {
+            if arm_click(&mut this.reboot_confirm, Instant::now()) {
+                this.send(Cmd::Reboot);
+            }
+            cx.notify();
+        }));
         let hint = if confirming || rebooting {
             div().text_color(c(GREY)).child("click again within 3 s")
         } else if let Some(reason) = not_ready_reason {
@@ -371,7 +384,8 @@ impl Gcs {
             }))
         };
         let modes: Vec<_> = MODE_BUTTONS.iter().map(|&m| mode_button(m, cx)).collect();
-        let q_modes: Vec<_> = if self.vtol { Q_MODE_BUTTONS.iter().map(|&m| mode_button(m, cx)).collect() } else { vec![] };
+        let q_modes: Vec<_> =
+            if self.vtol { Q_MODE_BUTTONS.iter().map(|&m| mode_button(m, cx)).collect() } else { vec![] };
         div()
             .flex()
             .flex_col()
@@ -380,7 +394,15 @@ impl Gcs {
             .size_full()
             .child(fit(
                 "r-vehicle",
-                div().flex().flex_wrap().gap_2().items_center().child(label("VEHICLE")).child(arm).child(reboot).children(takeoff),
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .items_center()
+                    .child(label("VEHICLE"))
+                    .child(arm)
+                    .child(reboot)
+                    .children(takeoff),
             ))
             // The reason the vehicle isn't ready (or a confirmation) has a line of its own, so
             // the buttons keep their places.
@@ -390,17 +412,18 @@ impl Gcs {
                 fit("r-qmodes", div().flex().flex_wrap().gap_1().items_center().child(label("VTOL")).children(q_modes))
             }))
             .children(direct.then(|| {
-                div()
-                    .text_color(c(CYAN))
-                    .child("DIRECT: the sim's sticks are flying (J / D-pad down in the sim). ArduPilot is only watching.")
+                div().text_color(c(CYAN)).child(
+                    "DIRECT: the sim's sticks are flying (J / D-pad down in the sim). ArduPilot is only watching.",
+                )
             }))
     }
 
     fn map_toolbar(&self, cx: &mut Context<Self>) -> Div {
         let st = &self.map;
         let tool_btn = |id: &'static str, text: &'static str, tool: Tool| {
-            button(id, text, if st.tool == tool { Style::Active } else { Style::Normal })
-                .on_click(cx.listener(move |this, _, _, _| this.map.tool = if this.map.tool == tool { Tool::Pan } else { tool }))
+            button(id, text, if st.tool == tool { Style::Active } else { Style::Normal }).on_click(
+                cx.listener(move |this, _, _, _| this.map.tool = if this.map.tool == tool { Tool::Pan } else { tool }),
+            )
         };
         let plan_len = st.plan.len();
         let bar = div()
@@ -416,28 +439,47 @@ impl Gcs {
             .child(tool_btn("goto", "GOTO", Tool::Goto))
             .children(self.sensor.is_some().then(|| tool_btn("look", "LOOK", Tool::Look)))
             .child(tool_btn("plan", "PLAN", Tool::Plan))
-            .child(button("alt-dn", "ALT-", Style::Normal).on_click(cx.listener(|this, _, _, _| this.map.plan_alt = (this.map.plan_alt - 10.0).max(10.0))))
+            .child(
+                button("alt-dn", "ALT-", Style::Normal)
+                    .on_click(cx.listener(|this, _, _, _| this.map.plan_alt = (this.map.plan_alt - 10.0).max(10.0))),
+            )
             .child(div().text_color(c(AMBER)).min_w(px(44.0)).child(format!("{:.0} m", st.plan_alt)))
-            .child(button("alt-up", "ALT+", Style::Normal).on_click(cx.listener(|this, _, _, _| this.map.plan_alt = (this.map.plan_alt + 10.0).min(300.0))))
+            .child(
+                button("alt-up", "ALT+", Style::Normal)
+                    .on_click(cx.listener(|this, _, _, _| this.map.plan_alt = (this.map.plan_alt + 10.0).min(300.0))),
+            )
             .child(button("tkof", "+TKOF", Style::Normal).on_click(cx.listener(|this, _, _, _| this.add_takeoff())))
             .child(button("rtl", "+RTL", Style::Normal).on_click(cx.listener(|this, _, _, _| {
                 this.map.plan.push(Waypoint { kind: WpKind::Rtl, lat: 0.0, lon: 0.0, alt: 0.0 });
             })))
             .child(button("clear", "CLEAR", Style::Normal).on_click(cx.listener(|this, _, _, _| this.map.plan.clear())))
             .child(
-                button("upload", format!("UPLOAD {plan_len}"), if plan_len > 0 { Style::Caution } else { Style::Normal })
-                    .on_click(cx.listener(|this, _, _, _| {
-                        if this.map.plan.is_empty() {
-                            this.log(4, "Nothing to upload: use PLAN to click waypoints on the map");
-                        } else {
-                            this.send(Cmd::Upload(this.map.plan.clone()));
-                            this.map.tool = Tool::Pan;
-                        }
-                    })),
+                button(
+                    "upload",
+                    format!("UPLOAD {plan_len}"),
+                    if plan_len > 0 { Style::Caution } else { Style::Normal },
+                )
+                .on_click(cx.listener(|this, _, _, _| {
+                    if this.map.plan.is_empty() {
+                        this.log(4, "Nothing to upload: use PLAN to click waypoints on the map");
+                    } else {
+                        this.send(Cmd::Upload(this.map.plan.clone()));
+                        this.map.tool = Tool::Pan;
+                    }
+                })),
             )
-            .child(button("download", "DOWNLOAD", Style::Normal).on_click(cx.listener(|this, _, _, _| this.send(Cmd::Download))))
-            .child(button("edit", "EDIT", Style::Normal).on_click(cx.listener(|this, _, _, _| this.edit_vehicle_mission())))
-            .child(button("restart", "WP1", Style::Normal).on_click(cx.listener(|this, _, _, _| this.send(Cmd::SetCurrentWp(1)))));
+            .child(
+                button("download", "DOWNLOAD", Style::Normal)
+                    .on_click(cx.listener(|this, _, _, _| this.send(Cmd::Download))),
+            )
+            .child(
+                button("edit", "EDIT", Style::Normal)
+                    .on_click(cx.listener(|this, _, _, _| this.edit_vehicle_mission())),
+            )
+            .child(
+                button("restart", "WP1", Style::Normal)
+                    .on_click(cx.listener(|this, _, _, _| this.send(Cmd::SetCurrentWp(1)))),
+            );
         fit("r-map", bar).flex_1().min_w(px(0.0))
     }
 
@@ -462,7 +504,7 @@ impl Gcs {
     fn annunciators(&self, v: &Vehicle, agl: Option<f32>, tile_w: f32) -> Div {
         use Ann::*;
         let alive = v.link.alive();
-        let flash = (v.now() * 2.0) as u32 % 2 == 0;
+        let flash = ((v.now() * 2.0) as u32).is_multiple_of(2);
         let s = |bit: u32| -> Ann {
             match v.sensor_ok(bit) {
                 None => Off,
@@ -478,9 +520,40 @@ impl Gcs {
         let ekf_var = v.ekf_vel_var.max(v.ekf_pos_var).max(v.ekf_hgt_var).max(v.ekf_mag_var);
         let flying = v.armed && v.alt_rel > 3.0;
         let tiles: Vec<(&str, Ann)> = vec![
-            ("LINK", if alive { Ok } else if v.link.connected { Caution } else { Warn }),
-            ("GPS", if !alive { Off } else if v.gps_fix >= 3 { Ok } else if v.gps_fix == 2 { Caution } else { Warn }),
-            ("EKF", if !alive { Off } else if ekf_var > 0.8 { Warn } else if !ekf_good || ekf_var > 0.5 { Caution } else { Ok }),
+            (
+                "LINK",
+                if alive {
+                    Ok
+                } else if v.link.connected {
+                    Caution
+                } else {
+                    Warn
+                },
+            ),
+            (
+                "GPS",
+                if !alive {
+                    Off
+                } else if v.gps_fix >= 3 {
+                    Ok
+                } else if v.gps_fix == 2 {
+                    Caution
+                } else {
+                    Warn
+                },
+            ),
+            (
+                "EKF",
+                if !alive {
+                    Off
+                } else if ekf_var > 0.8 {
+                    Warn
+                } else if !ekf_good || ekf_var > 0.5 {
+                    Caution
+                } else {
+                    Ok
+                },
+            ),
             ("AHRS", if alive { s(AHRS) } else { Off }),
             (
                 "BATT",
@@ -492,7 +565,16 @@ impl Gcs {
                     Some(_) => Ok,
                 },
             ),
-            ("ARMED", if !alive { Off } else if v.armed { Caution } else { Ok }),
+            (
+                "ARMED",
+                if !alive {
+                    Off
+                } else if v.armed {
+                    Caution
+                } else {
+                    Ok
+                },
+            ),
             (
                 "PREARM",
                 if !alive || v.armed {
@@ -503,7 +585,16 @@ impl Gcs {
                     s(PREARM)
                 },
             ),
-            ("STALL", if flying && v.airspeed < 9.5 { Warn } else if alive { Ok } else { Off }),
+            (
+                "STALL",
+                if flying && v.airspeed < 9.5 {
+                    Warn
+                } else if alive {
+                    Ok
+                } else {
+                    Off
+                },
+            ),
             (
                 "TERRAIN",
                 match agl {
@@ -515,9 +606,23 @@ impl Gcs {
             ),
             ("FENCE", if alive { s(FENCE) } else { Off }),
             ("RC", if alive { s(RC) } else { Off }),
-            ("XTRACK", if alive && v.mode() == "AUTO" && v.xtrack.abs() > 25.0 { Caution } else if alive { Ok } else { Off }),
+            (
+                "XTRACK",
+                if alive && v.mode() == "AUTO" && v.xtrack.abs() > 25.0 {
+                    Caution
+                } else if alive {
+                    Ok
+                } else {
+                    Off
+                },
+            ),
         ];
-        div().flex().flex_wrap().gap_1().p_2().children(tiles.into_iter().map(|(name, a)| annunciator(name, a, flash, tile_w)))
+        div()
+            .flex()
+            .flex_wrap()
+            .gap_1()
+            .p_2()
+            .children(tiles.into_iter().map(|(name, a)| annunciator(name, a, flash, tile_w)))
     }
 
     fn systems(&self, v: &Vehicle, agl: Option<f32>) -> Div {
@@ -557,18 +662,53 @@ impl Gcs {
             .child(row("HDG / THR", format!("{:03.0}° / {}%", wrap360(v.yaw.to_degrees()), v.throttle), GREEN))
             .child(row(
                 "BATTERY",
-                format!("{}S {:.2} V {:.1} A {} mAh{}", v.batt_cells, v.batt_v, v.batt_a, v.batt_mah, if v.batt_pct >= 0 { format!(" {}%", v.batt_pct) } else { String::new() }),
+                format!(
+                    "{}S {:.2} V {:.1} A {} mAh{}",
+                    v.batt_cells,
+                    v.batt_v,
+                    v.batt_a,
+                    v.batt_mah,
+                    if v.batt_pct >= 0 { format!(" {}%", v.batt_pct) } else { String::new() }
+                ),
                 AMBER,
             ))
             .child(row("GPS", format!("{fix} {} SV HDOP {:.1}", v.sats, v.hdop), GREEN))
-            .child(row("WIND (EST)", if v.wind_valid { format!("{:03.0}° {:.1} m/s", v.wind_dir, v.wind_speed) } else { "--".into() }, CYAN))
+            .child(row(
+                "WIND (EST)",
+                if v.wind_valid { format!("{:03.0}° {:.1} m/s", v.wind_dir, v.wind_speed) } else { "--".into() },
+                CYAN,
+            ))
             .child(row("HOME", home.map_or("--".into(), |(d, b)| format!("{d:.0} m @ {b:03.0}°")), AMBER))
-            .child(row("NAV WP / DIST", if v.nav_valid { format!("{} / {:.0} m", v.mission_seq, v.wp_dist) } else { "--".into() }, MAGENTA))
-            .child(row("XTRACK / ALT ERR", if v.nav_valid { format!("{:+.1} / {:+.1} m", v.xtrack, v.alt_error) } else { "--".into() }, MAGENTA))
-            .child(row("MISSION", if v.mission_status.is_empty() { "--".into() } else { v.mission_status.clone() }, CYAN))
-            .child(row("EKF VEL/POS/HGT/MAG", format!("{:.2} {:.2} {:.2} {:.2}", v.ekf_vel_var, v.ekf_pos_var, v.ekf_hgt_var, v.ekf_mag_var), GREEN))
-            .child(row("RC 1-4  5/8", format!("{} {} {} {}  {}/{}", v.rc[0], v.rc[1], v.rc[2], v.rc[3], v.rc[4], v.rc[7]), GREY))
-            .child(row("SERVO 1-5", format!("{} {} {} {} {}", v.servo[0], v.servo[1], v.servo[2], v.servo[3], v.servo[4]), GREY))
+            .child(row(
+                "NAV WP / DIST",
+                if v.nav_valid { format!("{} / {:.0} m", v.mission_seq, v.wp_dist) } else { "--".into() },
+                MAGENTA,
+            ))
+            .child(row(
+                "XTRACK / ALT ERR",
+                if v.nav_valid { format!("{:+.1} / {:+.1} m", v.xtrack, v.alt_error) } else { "--".into() },
+                MAGENTA,
+            ))
+            .child(row(
+                "MISSION",
+                if v.mission_status.is_empty() { "--".into() } else { v.mission_status.clone() },
+                CYAN,
+            ))
+            .child(row(
+                "EKF VEL/POS/HGT/MAG",
+                format!("{:.2} {:.2} {:.2} {:.2}", v.ekf_vel_var, v.ekf_pos_var, v.ekf_hgt_var, v.ekf_mag_var),
+                GREEN,
+            ))
+            .child(row(
+                "RC 1-4  5/8",
+                format!("{} {} {} {}  {}/{}", v.rc[0], v.rc[1], v.rc[2], v.rc[3], v.rc[4], v.rc[7]),
+                GREY,
+            ))
+            .child(row(
+                "SERVO 1-5",
+                format!("{} {} {} {} {}", v.servo[0], v.servo[1], v.servo[2], v.servo[3], v.servo[4]),
+                GREY,
+            ))
     }
 
     /// The autopilot's own output, the last lines, read from its file once a second.
@@ -576,7 +716,8 @@ impl Gcs {
         if self.proc_log.0.is_some_and(|t| t.elapsed() < Duration::from_secs(1)) {
             return;
         }
-        self.proc_log = (Some(Instant::now()), debug::tail_lines(&crate::station::logs_dir().join("sitl/arduplane.log"), 8));
+        self.proc_log =
+            (Some(Instant::now()), debug::tail_lines(&crate::station::logs_dir().join("sitl/arduplane.log"), 8));
     }
 
     /// What a debugger wants: the autopilot's state, its own output, and everything that
@@ -589,20 +730,41 @@ impl Gcs {
             Level::Debug | Level::Trace => GREY,
         };
         let state = debug::state_report(v).into_iter().map(|(k, val)| {
-            div()
-                .flex()
-                .gap_2()
-                .child(div().flex_none().w(px(84.0)).text_color(c(GREY)).child(k.to_uppercase()))
-                .child(div().flex_1().min_w(px(0.0)).text_color(c(if val.contains("LOST") || val.starts_with("no (") || val.starts_with("unhealthy") { AMBER } else { GREEN })).child(val))
+            div().flex().gap_2().child(div().flex_none().w(px(84.0)).text_color(c(GREY)).child(k.to_uppercase())).child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .text_color(c(if val.contains("LOST") || val.starts_with("no (") || val.starts_with("unhealthy") {
+                        AMBER
+                    } else {
+                        GREEN
+                    }))
+                    .child(val),
+            )
         });
-        let process = self.proc_log.1.iter().map(|l| div().text_color(c(GREY)).whitespace_nowrap().overflow_hidden().child(l.clone()));
+        let process = self
+            .proc_log
+            .1
+            .iter()
+            .map(|l| div().text_color(c(GREY)).whitespace_nowrap().overflow_hidden().child(l.clone()));
         let events = v.debug.tail(80).into_iter().rev().map(|e| {
             let secs = e.t as u64;
             div()
                 .flex()
                 .gap_2()
-                .child(div().flex_none().whitespace_nowrap().text_color(c(DARK)).child(format!("{:02}:{:02}.{:01}", secs / 60, secs % 60, ((e.t.fract()) * 10.0) as u8)))
-                .child(div().flex_none().w(px(38.0)).text_color(c(if e.source == Source::Fc { GREY } else { CYAN })).child(e.source.tag()))
+                .child(div().flex_none().whitespace_nowrap().text_color(c(DARK)).child(format!(
+                    "{:02}:{:02}.{:01}",
+                    secs / 60,
+                    secs % 60,
+                    ((e.t.fract()) * 10.0) as u8
+                )))
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(38.0))
+                        .text_color(c(if e.source == Source::Fc { GREY } else { CYAN }))
+                        .child(e.source.tag()),
+                )
                 .child(div().flex_1().min_w(px(0.0)).text_color(c(level_colour(e.level))).child(e.text.clone()))
         });
         let heading = |t: &'static str| div().pt_1().text_color(c(MAGENTA)).child(t);
@@ -624,8 +786,19 @@ impl Gcs {
             div()
                 .flex()
                 .gap_2()
-                .child(div().flex_none().whitespace_nowrap().text_color(c(DARK)).child(format!("T+{:02}:{:02}:{:02}", age / 3600, (age / 60) % 60, age % 60)))
-                .child(div().flex_none().w(px(26.0)).text_color(c(if l.source == "GCS" { CYAN } else { GREY })).child(l.source))
+                .child(div().flex_none().whitespace_nowrap().text_color(c(DARK)).child(format!(
+                    "T+{:02}:{:02}:{:02}",
+                    age / 3600,
+                    (age / 60) % 60,
+                    age % 60
+                )))
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(26.0))
+                        .text_color(c(if l.source == "GCS" { CYAN } else { GREY }))
+                        .child(l.source),
+                )
                 // Long messages (e.g. ArduPilot's pre-arm reasons) wrap rather than clip.
                 .child(div().flex_1().min_w(px(0.0)).text_color(c(severity(l.severity))).child(l.text.clone()))
         });
@@ -666,16 +839,23 @@ impl Render for Gcs {
         let command = self.command_panel(&v, cx);
         drop(v);
         let toolbar = self.map_toolbar(cx);
-        let debug_toggle = button("debug-toggle", if self.debug_view { "MESSAGES" } else { "DEBUG" }, if self.debug_view { Style::Active } else { Style::Normal })
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.debug_view = !this.debug_view;
-                cx.notify();
-            }));
+        let debug_toggle = button(
+            "debug-toggle",
+            if self.debug_view { "MESSAGES" } else { "DEBUG" },
+            if self.debug_view { Style::Active } else { Style::Normal },
+        )
+        .on_click(cx.listener(|this, _, _, cx| {
+            this.debug_view = !this.debug_view;
+            cx.notify();
+        }));
 
-        let hud_canvas = canvas(|_, _, _| {}, move |b, _, window, cx| {
-            hud::paint(b, &hud_data, hud::HudOpts::default(), window, cx);
-            round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
-        })
+        let hud_canvas = canvas(
+            |_, _, _| {},
+            move |b, _, window, cx| {
+                hud::paint(b, &hud_data, hud::HudOpts::default(), window, cx);
+                round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
+            },
+        )
         .size_full();
         let map_state = MapStateSnapshot::from(&self.map);
         let terrain = self.terrain.clone();
@@ -692,10 +872,13 @@ impl Render for Gcs {
             },
         )
         .size_full();
-        let charts_canvas = canvas(|_, _, _| {}, move |b, _, window, cx| {
-            charts::paint(b, &history, now, window, cx);
-            round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
-        })
+        let charts_canvas = canvas(
+            |_, _, _| {},
+            move |b, _, window, cx| {
+                charts::paint(b, &history, now, window, cx);
+                round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
+            },
+        )
         .size_full();
 
         let map_area = div()
@@ -708,11 +891,17 @@ impl Render for Gcs {
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, _| this.map.drag = None))
             .on_scroll_wheel(cx.listener(|this, ev, _, cx| this.map_scroll(ev, cx)));
 
-        let map_screen = screen("TACTICAL SITUATION", Some(toolbar.into_any_element()), map_area.into_any_element()).flex_1();
+        let map_screen =
+            screen("TACTICAL SITUATION", Some(toolbar.into_any_element()), map_area.into_any_element()).flex_1();
         let pfd = screen("PRIMARY FLIGHT DISPLAY", None, hud_canvas.into_any_element());
         let command = scrolling("VEHICLE COMMAND", None, command.into_any_element());
         let trends = screen("TELEMETRY TRENDS", None, charts_canvas.into_any_element());
-        let messages_screen = scrolling(if self.debug_view { "DEBUG" } else { "MESSAGES" }, Some(debug_toggle.into_any_element()), msgs.into_any_element()).flex_1();
+        let messages_screen = scrolling(
+            if self.debug_view { "DEBUG" } else { "MESSAGES" },
+            Some(debug_toggle.into_any_element()),
+            msgs.into_any_element(),
+        )
+        .flex_1();
         // The debug view takes the whole right column: the autopilot's state, its output and the
         // events on the link need the room, and the state it shows covers what SYSTEMS does.
         let right = if self.debug_view {
@@ -740,7 +929,14 @@ impl Render for Gcs {
                 .min_w(px(0.0))
                 .children(self.sensor.is_none().then(|| pfd.h(relative(0.42))))
                 .child(map_screen)
-                .child(div().flex().gap(px(6.0)).h(px(if self.vtol { 230.0 } else { 170.0 })).child(command.w(relative(0.5))).child(trends.flex_1().min_w(px(0.0))));
+                .child(
+                    div()
+                        .flex()
+                        .gap(px(6.0))
+                        .h(px(if self.vtol { 230.0 } else { 170.0 }))
+                        .child(command.w(relative(0.5)))
+                        .child(trends.flex_1().min_w(px(0.0))),
+                );
             div().flex().flex_1().min_h(px(0.0)).gap(px(6.0)).child(main).child(right)
         } else {
             div()
@@ -749,9 +945,26 @@ impl Render for Gcs {
                 .min_h(px(0.0))
                 .gap(px(6.0))
                 // Left station: flight display and vehicle commands.
-                .child(div().flex().flex_col().gap(px(6.0)).w(relative(0.36)).child(pfd.flex_1()).child(command.h(px(150.0))))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.0))
+                        .w(relative(0.36))
+                        .child(pfd.flex_1())
+                        .child(command.h(px(150.0))),
+                )
                 // Centre: tactical map and trends.
-                .child(div().flex().flex_col().gap(px(6.0)).flex_1().min_w(px(0.0)).child(map_screen).child(trends.h(px(170.0))))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.0))
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .child(map_screen)
+                        .child(trends.h(px(170.0))),
+                )
                 // Right: health and messages.
                 .child(right)
         };
@@ -815,7 +1028,11 @@ mod tests {
         let now = Instant::now();
         let mut at = None;
         assert_eq!(disarm_click(&mut at, now), Disarm::Ask);
-        assert_eq!(disarm_click(&mut at, now + Duration::from_millis(300)), Disarm::Ask, "too soon: it is the same click");
+        assert_eq!(
+            disarm_click(&mut at, now + Duration::from_millis(300)),
+            Disarm::Ask,
+            "too soon: it is the same click"
+        );
         assert_eq!(disarm_click(&mut at, now + Duration::from_secs(3)), Disarm::Force);
         assert!(at.is_none());
         assert_eq!(disarm_click(&mut at, now + Duration::from_secs(20)), Disarm::Ask);
@@ -946,12 +1163,9 @@ fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, style: Sty
         .active(|s| s.opacity(0.7))
         .child(text.into())
         .child(
-            canvas(
-                move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(recorded, b)),
-                |_, _, _, _| {},
-            )
-            .absolute()
-            .inset_0(),
+            canvas(move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(recorded, b)), |_, _, _, _| {})
+                .absolute()
+                .inset_0(),
         )
 }
 

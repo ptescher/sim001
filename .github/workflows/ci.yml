@@ -1,5 +1,5 @@
 # Keeps unformatted or lint-failing code out of master: the same checks as the pre-commit routine
-# (cargo fmt, cargo clippy --workspace --all-targets), plus cargo check. Tests are not run here (they
+# (cargo fmt, cargo clippy --workspace --all-targets); clippy compiles everything cargo check would. Tests are not run here (they
 # need Docker, ArduPilot and a GPU).
 name: CI
 
@@ -34,8 +34,10 @@ jobs:
         with:
           toolchain: "1.99.0"
           components: clippy
+      # Pull requests read master's cache and leave it alone: one cache, always warm.
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       # Bevy's system libraries.
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
-      - run: cargo check --workspace --all-targets --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings

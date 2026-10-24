@@ -1,5 +1,5 @@
 # Cypress Island Airfield, Cypress Island, WA (private gravel strip, ~670 m, 16/34).
-# Build the map pack with: cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- cypress
+# Build the map pack with: cargo run --release -p visualization_mapbuild -- cypress
 title=Cypress Island Airfield
 # Area fetched: a square of size_m metres centred here (runway midpoint).
 center_lat=48.57197

@@ -5,8 +5,10 @@ use std::io::Read;
 use std::time::Duration;
 
 const UA: &str = "sim001-mapbuild/0.1 (flight simulator map builder)";
-pub const DEM_SERVICE: &str = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage";
-pub const NAIP_SERVICE: &str = "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage";
+pub const DEM_SERVICE: &str =
+    "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage";
+pub const NAIP_SERVICE: &str =
+    "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage";
 const OVERPASS: [&str; 3] = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass-api.de/api/interpreter",
@@ -157,6 +159,7 @@ fn fetch_tiled<T: Copy + Default>(
     Ok(Mosaic { w, h, bands, lon0: req.lon0, lat1: req.lat1, dlon, dlat, data })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn arcgis_url(service: &str, extra: &str, lon0: f64, lat0: f64, lon1: f64, lat1: f64, w: usize, h: usize) -> String {
     format!(
         "{service}?bbox={lon0:.8},{lat0:.8},{lon1:.8},{lat1:.8}&bboxSR=4326&imageSR=4326&size={w},{h}\
@@ -174,7 +177,16 @@ pub fn dem(req: &Request) -> Result<Mosaic<f32>, String> {
         1,
         "elevation (USGS 3DEP)",
         |a, b, c, d, w, h| {
-            arcgis_url(DEM_SERVICE, "&format=tiff&pixelType=F32&noDataInterpretation=esriNoDataMatchAny&compression=None", a, b, c, d, w, h)
+            arcgis_url(
+                DEM_SERVICE,
+                "&format=tiff&pixelType=F32&noDataInterpretation=esriNoDataMatchAny&compression=None",
+                a,
+                b,
+                c,
+                d,
+                w,
+                h,
+            )
         },
         |bytes, w, h| {
             let mut dec = tiff::decoder::Decoder::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
@@ -198,7 +210,9 @@ pub fn naip(req: &Request, nir: bool) -> Result<Mosaic<u8>, String> {
         2500,
         bands,
         if nir { "NAIP near-infrared" } else { "NAIP colour" },
-        |a, b, c, d, w, h| arcgis_url(NAIP_SERVICE, &format!("&format=jpg&compressionQuality=92&bandIds={ids}"), a, b, c, d, w, h),
+        |a, b, c, d, w, h| {
+            arcgis_url(NAIP_SERVICE, &format!("&format=jpg&compressionQuality=92&bandIds={ids}"), a, b, c, d, w, h)
+        },
         |bytes, w, h| {
             let img = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
             if (img.width() as usize, img.height() as usize) != (w, h) {

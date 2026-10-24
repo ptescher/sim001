@@ -19,11 +19,11 @@ use gpui::{
 };
 use recreation_towers::seat::Join;
 use recreation_towers::{Order, Team, TeamView};
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
-use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
 
 /// The process exit code once the run is over (0 when everything that could run passed).
@@ -240,10 +240,14 @@ impl AppDriver {
             println!("expect:   no server log at {}", log.display());
             return;
         };
-        let slug: String = title.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
+        let slug: String =
+            title.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
         let saved = log.with_file_name(format!("failed-{slug}.log"));
         let kept = std::fs::write(&saved, &text).is_ok();
-        println!("expect:   server log ({}):", if kept { saved.display().to_string() } else { log.display().to_string() });
+        println!(
+            "expect:   server log ({}):",
+            if kept { saved.display().to_string() } else { log.display().to_string() }
+        );
         let lines: Vec<&str> = text.lines().collect();
         for l in &lines[lines.len().saturating_sub(12)..] {
             println!("expect:     {l}");
@@ -305,9 +309,7 @@ impl AppDriver {
             let at = MapView::new(b, &rules).to_screen(tower.at);
             Ok(at)
         })??;
-        self.with_window(move |w, cx| {
-            press(w, cx, point(px(x), px(y)), MouseButton::Right)
-        })
+        self.with_window(move |w, cx| press(w, cx, point(px(x), px(y)), MouseButton::Right))
     }
 
     /// Waits for the server's echo of drone `k`'s order.
@@ -544,7 +546,17 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     })
     .detach();
     std::thread::spawn(move || {
-        let mut driver = AppDriver { tx, server: server.clone(), server_args, cameras, used: false, dead: Cell::new(false), trace: RefCell::default(), began: Cell::new(Instant::now()), suite: suite_budget::Budget::from_env() };
+        let mut driver = AppDriver {
+            tx,
+            server: server.clone(),
+            server_args,
+            cameras,
+            used: false,
+            dead: Cell::new(false),
+            trace: RefCell::default(),
+            began: Cell::new(Instant::now()),
+            suite: suite_budget::Budget::from_env(),
+        };
         // The section's tests of the rules (with no window) and of the server are not the app's.
         let all = acceptance.plans.len();
         let plans: Vec<_> =

@@ -110,8 +110,10 @@ fn paint_inner(bounds: Bounds<Pixels>, d: &HudData, opts: HudOpts, window: &mut 
     let big = (w + h) * 2.0;
 
     // Sky and ground.
-    let sky: Vec<_> = [(-big, -big * 2.0), (big, -big * 2.0), (big, 0.0), (-big, 0.0)].iter().map(|p| to_screen(p.0, p.1)).collect();
-    let gnd: Vec<_> = [(-big, 0.0), (big, 0.0), (big, big * 2.0), (-big, big * 2.0)].iter().map(|p| to_screen(p.0, p.1)).collect();
+    let sky: Vec<_> =
+        [(-big, -big * 2.0), (big, -big * 2.0), (big, 0.0), (-big, 0.0)].iter().map(|p| to_screen(p.0, p.1)).collect();
+    let gnd: Vec<_> =
+        [(-big, 0.0), (big, 0.0), (big, big * 2.0), (-big, big * 2.0)].iter().map(|p| to_screen(p.0, p.1)).collect();
     if !video {
         fill_poly(window, &sky, c(SKY));
         fill_poly(window, &gnd, c(GROUND));
@@ -190,7 +192,20 @@ fn paint_inner(bounds: Bounds<Pixels>, d: &HudData, opts: HudOpts, window: &mut 
     // Fixed aircraft reference.
     let yel = c(AMBER);
     let s = w * 0.06;
-    polyline(window, &[(cx0 - s * 2.0, cy0), (cx0 - s * 0.7, cy0), (cx0 - s * 0.35, cy0 + s * 0.4), (cx0, cy0), (cx0 + s * 0.35, cy0 + s * 0.4), (cx0 + s * 0.7, cy0), (cx0 + s * 2.0, cy0)], 3.0, yel);
+    polyline(
+        window,
+        &[
+            (cx0 - s * 2.0, cy0),
+            (cx0 - s * 0.7, cy0),
+            (cx0 - s * 0.35, cy0 + s * 0.4),
+            (cx0, cy0),
+            (cx0 + s * 0.35, cy0 + s * 0.4),
+            (cx0 + s * 0.7, cy0),
+            (cx0 + s * 2.0, cy0),
+        ],
+        3.0,
+        yel,
+    );
     fill_circle(window, cx0, cy0, 2.5, yel);
 
     heading_tape(window, cx, d, x, y, w, fs);
@@ -209,14 +224,41 @@ fn paint_inner(bounds: Bounds<Pixels>, d: &HudData, opts: HudOpts, window: &mut 
     if let Some(n) = &d.nav {
         text(window, cx, &format!("{:<4} {:>5.0} m", n.label, n.wp_dist), br, bl, fs, c(MAGENTA), Align::Right);
         let ete = if d.groundspeed > 1.0 { n.wp_dist / d.groundspeed } else { 0.0 };
-        text(window, cx, &format!("ETE {:>2}:{:02}", (ete / 60.0) as u32, (ete % 60.0) as u32), br, bl + lh, fs, c(MAGENTA), Align::Right);
+        text(
+            window,
+            cx,
+            &format!("ETE {:>2}:{:02}", (ete / 60.0) as u32, (ete % 60.0) as u32),
+            br,
+            bl + lh,
+            fs,
+            c(MAGENTA),
+            Align::Right,
+        );
     }
     let ft = d.flight_secs;
-    text(window, cx, &format!("FLT {:02}:{:02}", (ft / 60.0) as u32, (ft % 60.0) as u32), br, bl + lh * 2.0, fs, g, Align::Right);
+    text(
+        window,
+        cx,
+        &format!("FLT {:02}:{:02}", (ft / 60.0) as u32, (ft % 60.0) as u32),
+        br,
+        bl + lh * 2.0,
+        fs,
+        g,
+        Align::Right,
+    );
 
     let tl = y + 70.0;
     let gps_col = if d.gps.0 >= 3 { g } else { c(AMBER) };
-    text(window, cx, &format!("GPS {}D {:>2}SV", d.gps.0.min(3), d.gps.1), x + 14.0, tl, fs * 0.9, gps_col, Align::Left);
+    text(
+        window,
+        cx,
+        &format!("GPS {}D {:>2}SV", d.gps.0.min(3), d.gps.1),
+        x + 14.0,
+        tl,
+        fs * 0.9,
+        gps_col,
+        Align::Left,
+    );
     if let Some((dir, spd)) = d.wind {
         text(window, cx, &format!("W {:03.0}/{:>4.1}", dir, spd), x + 14.0, tl + lh * 0.9, fs * 0.9, g, Align::Left);
     }
@@ -271,7 +313,17 @@ fn heading_tape(window: &mut Window, cx: &mut App, d: &HudData, x: f32, y: f32, 
         let tx = cx0 + angle_diff(d.track, d.heading).clamp(-35.0, 35.0) * hp;
         circle(window, tx, base + 0.0, 3.0, 1.5, c(CYAN));
     });
-    boxed_text(window, cx, &format!("{:03.0}", wrap360(d.heading.round())), cx0, base + 16.0, fs * 1.15, g, Align::Center, 0.0);
+    boxed_text(
+        window,
+        cx,
+        &format!("{:03.0}", wrap360(d.heading.round())),
+        cx0,
+        base + 16.0,
+        fs * 1.15,
+        g,
+        Align::Center,
+        0.0,
+    );
 }
 
 fn tape_box(window: &mut Window, x0: f32, cy: f32, tw: f32, th: f32) {
@@ -310,7 +362,16 @@ fn speed_tape(window: &mut Window, cx: &mut App, d: &HudData, x: f32, cy: f32, t
     let col = if d.airspeed < 9.5 && d.armed { c(RED) } else { g };
     boxed_text(window, cx, &format!("{:>4.1}", d.airspeed), x + tw * 0.45, cy, fs * 1.25, col, Align::Center, 44.0);
     text(window, cx, "IAS m/s", x + tw * 0.5, cy - th * 0.5 - 12.0, fs * 0.8, g, Align::Center);
-    text(window, cx, &format!("GS {:>4.1}", d.groundspeed), x + tw * 0.5, cy + th * 0.5 + 13.0, fs * 0.9, g, Align::Center);
+    text(
+        window,
+        cx,
+        &format!("GS {:>4.1}", d.groundspeed),
+        x + tw * 0.5,
+        cy + th * 0.5 + 13.0,
+        fs * 0.9,
+        g,
+        Align::Center,
+    );
 }
 
 fn alt_tape(window: &mut Window, cx: &mut App, d: &HudData, right: f32, cy: f32, th: f32, fs: f32) {
@@ -349,9 +410,27 @@ fn alt_tape(window: &mut Window, cx: &mut App, d: &HudData, right: f32, cy: f32,
     boxed_text(window, cx, &format!("{:>5.1}", d.alt), x + tw * 0.55, cy, fs * 1.25, g, Align::Center, 52.0);
     text(window, cx, "ALT m", x + tw * 0.5, cy - th * 0.5 - 12.0, fs * 0.8, g, Align::Center);
     let vs_col = if d.climb < -3.0 { c(AMBER) } else { g };
-    text(window, cx, &format!("VS {:>+4.1}", d.climb), x + tw * 0.5, cy + th * 0.5 + 13.0, fs * 0.9, vs_col, Align::Center);
+    text(
+        window,
+        cx,
+        &format!("VS {:>+4.1}", d.climb),
+        x + tw * 0.5,
+        cy + th * 0.5 + 13.0,
+        fs * 0.9,
+        vs_col,
+        Align::Center,
+    );
     if let Some(agl) = d.agl {
         let col = if agl < 15.0 && d.armed { c(AMBER) } else { g };
-        text(window, cx, &format!("AGL {:>4.0}", agl), x + tw * 0.5, cy + th * 0.5 + 13.0 + fs * 1.3, fs * 0.9, col, Align::Center);
+        text(
+            window,
+            cx,
+            &format!("AGL {:>4.0}", agl),
+            x + tw * 0.5,
+            cy + th * 0.5 + 13.0 + fs * 1.3,
+            fs * 0.9,
+            col,
+            Align::Center,
+        );
     }
 }

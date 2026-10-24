@@ -18,7 +18,10 @@ pub fn displays(_cx: &App) -> Vec<Display> {
         .map(|(i, s)| {
             let v = s.visibleFrame();
             let top = main_h - (v.origin.y + v.size.height);
-            Display { rect: Rect::new(v.origin.x as f32, top as f32, v.size.width as f32, v.size.height as f32), main: i == 0 }
+            Display {
+                rect: Rect::new(v.origin.x as f32, top as f32, v.size.width as f32, v.size.height as f32),
+                main: i == 0,
+            }
         })
         .collect()
 }

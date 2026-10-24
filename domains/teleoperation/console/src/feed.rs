@@ -11,7 +11,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use teleoperation_shared::feed::{FLAG_DIRECT, FrameHeader, GameStatus, Gimbal, GimbalCmd, Key, KeyPress, RadioState, VehicleStatus, read_frame};
+use teleoperation_shared::feed::{
+    FLAG_DIRECT, FrameHeader, GameStatus, Gimbal, GimbalCmd, Key, KeyPress, RadioState, VehicleStatus, read_frame,
+};
 
 pub struct VideoFrame {
     pub header: FrameHeader,
@@ -50,7 +52,11 @@ pub struct Sensor {
 impl Sensor {
     /// The sim's sticks are flying the aircraft (ArduPilot only watching), per the newest frame.
     pub fn direct(&self) -> bool {
-        self.frame.lock().unwrap().as_ref().is_some_and(|f| f.header.flags & FLAG_DIRECT != 0 && f.at.elapsed().as_secs_f32() < 2.0)
+        self.frame
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|f| f.header.flags & FLAG_DIRECT != 0 && f.at.elapsed().as_secs_f32() < 2.0)
     }
 
     /// Gimbal state of the newest frame (what the picture actually shows).
@@ -126,7 +132,13 @@ impl Sensor {
     }
 }
 
-pub fn spawn(address: String, vehicle: Shared, tx: Sender<Cmd>, origin: Origin, terrain: Option<Arc<TerrainMap>>) -> Arc<Sensor> {
+pub fn spawn(
+    address: String,
+    vehicle: Shared,
+    tx: Sender<Cmd>,
+    origin: Origin,
+    terrain: Option<Arc<TerrainMap>>,
+) -> Arc<Sensor> {
     let sensor = Arc::new(Sensor {
         address: address.clone(),
         frame: Mutex::new(None),
@@ -177,7 +189,11 @@ fn receive(s: Arc<Sensor>) {
             // The sim reset the aircraft (teleported it to the hand). Do what you'd do at the
             // field: disarm and power-cycle the autopilot, so its estimators start clean.
             if resets.is_some_and(|r| r != h.resets) {
-                s.vehicle.lock().unwrap().push_log("GCS", 4, "Sim reset: restarting the autopilot for a clean start (~30 s)");
+                s.vehicle.lock().unwrap().push_log(
+                    "GCS",
+                    4,
+                    "Sim reset: restarting the autopilot for a clean start (~30 s)",
+                );
                 let tx = s.tx.lock().unwrap();
                 let _ = tx.send(Cmd::ForceDisarm);
                 let _ = tx.send(Cmd::Reboot);
@@ -218,7 +234,8 @@ fn track(s: Arc<Sensor>) {
             last_status = Instant::now();
             let status = {
                 let v = s.vehicle.lock().unwrap();
-                (v.link.alive() && v.have_heartbeat).then(|| VehicleStatus { armed: v.armed, mode: v.mode().to_string() })
+                (v.link.alive() && v.have_heartbeat)
+                    .then(|| VehicleStatus { armed: v.armed, mode: v.mode().to_string() })
             };
             if let (Some(st), Some(w)) = (status, s.writer.lock().unwrap().as_mut()) {
                 let _ = w.write_all(&st.encode());

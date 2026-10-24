@@ -34,22 +34,6 @@ suite_budget = { path = "../../../tools/suite_budget" }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.2", features = ["NSScreen", "NSWindow", "NSResponder", "NSGraphics", "NSView", "NSButton", "NSControl"] }
 
-# Keep `cargo run` (debug) usable: optimize dependencies.
-[profile.dev.package."*"]
-opt-level = 3
-
-# GPUI with one change: `DispatchEventResult` (what `Window::dispatch_event` returns) is public,
-# so `--expect` can deliver mouse events to the console the way the platform does.
-# See vendor/gpui/src/window.rs.
-[patch.crates-io]
-gpui = { path = "../../../vendor/gpui" }
-# xattr 0.2.3 with ENODATA for ENOATTR on Linux (vendor/xattr/src/sys/mod.rs): it does not build there otherwise.
-xattr = { path = "../../../vendor/xattr" }
-
 [[bin]]
 name = "sim001_gcs"
 path = "src/main.rs"
-
-# Its own workspace (the root one excludes it): it builds on its own, also from a checkout inside
-# another checkout (a worktree under .claude/worktrees).
-[workspace]

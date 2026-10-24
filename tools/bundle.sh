@@ -27,16 +27,13 @@ esac
 
 if [ $build = 1 ]; then
   echo "== building the sim, the viewer, the tag runner, the expectation tool, the map builder, the console and the launcher"
-  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation
-  (cd domains/visualization/mapbuild && cargo build --release)
-  (cd domains/teleoperation/console && cargo build --release)
-  (cd domains/teleoperation/launcher && cargo build --release)
+  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation -p visualization_mapbuild -p teleoperation_console -p teleoperation_launcher
 fi
 SIM=target/release/sim001$exe
-GCS=domains/teleoperation/console/target/release/sim001_gcs$exe
-LAUNCHER=domains/teleoperation/launcher/target/release/sim001_launcher$exe
+GCS=target/release/sim001_gcs$exe
+LAUNCHER=target/release/sim001_launcher$exe
 # The other programs: the viewer of a real plane, the tag runner, the expectation tool, the map builder.
-EXTRA="target/release/sim001_view$exe target/release/cognition_runner$exe target/release/expectation$exe domains/visualization/mapbuild/target/release/mapbuild$exe"
+EXTRA="target/release/sim001_view$exe target/release/cognition_runner$exe target/release/expectation$exe target/release/mapbuild$exe"
 for f in "$SIM" "$GCS" "$LAUNCHER" $EXTRA; do [ -x "$f" ] || { echo "missing $f (build first)" >&2; exit 1; }; done
 
 # The console's terrain map of the Alpine Valley comes from the sim.

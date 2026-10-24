@@ -21,21 +21,6 @@ suite_budget = { path = "../../../tools/suite_budget" }
 # The screenshots' JPEGs (snapshot.rs) and the map's PNG (ground.rs); the same image crate as GPUI's.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
-
-# Keep `cargo run` (debug) usable: optimize dependencies.
-[profile.dev.package."*"]
-opt-level = 3
-
-# GPUI with `DispatchEventResult` public, so `--expect` can deliver mouse events the way the
-# platform does (see vendor/gpui/src/window.rs), as the console does.
-[patch.crates-io]
-gpui = { path = "../../../vendor/gpui" }
-xattr = { path = "../../../vendor/xattr" }
-
 [[bin]]
 name = "sim001_command"
 path = "src/main.rs"
-
-# Its own workspace (the root one excludes it): it builds on its own, also from a checkout inside
-# another checkout (a worktree under .claude/worktrees).
-[workspace]

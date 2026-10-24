@@ -88,9 +88,7 @@ fn main() {
     if let Some(name) = args.iter().position(|a| a == "--map").and_then(|i| args.get(i + 1)) {
         let maps = sitl::resource_root().join("maps");
         if let Err(e) = terrain::load_site(&maps, name) {
-            eprintln!(
-                "--map {name}: {e}\nBuild it with: cargo run --release --manifest-path domains/visualization/mapbuild/Cargo.toml -- {name}"
-            );
+            eprintln!("--map {name}: {e}\nBuild it with: cargo run --release -p visualization_mapbuild -- {name}");
             std::process::exit(1);
         }
         let r = terrain::real().unwrap();

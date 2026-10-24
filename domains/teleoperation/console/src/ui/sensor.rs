@@ -13,8 +13,9 @@ use crate::feed::{Sensor, Spi};
 use crate::geo::{Origin, sensor_ray, wrap360};
 use crate::link::Shared;
 use gpui::{
-    App, Bounds, ContentMask, Context, Corners, Div, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Pixels, Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful, Window, canvas, div, prelude::*, px,
+    App, Bounds, ContentMask, Context, Corners, Div, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful, Window, canvas,
+    div, prelude::*, px,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -68,7 +69,11 @@ impl SensorView {
         self.drag = Some((start, g0, true));
         // Grab-and-drag: the picture follows the mouse.
         let vfov = vfov(g0.hfov, vh / vw.max(1.0));
-        self.sensor.slew(Gimbal { pan: g0.pan - dx / vw.max(1.0) * g0.hfov, tilt: g0.tilt + dy / vh.max(1.0) * vfov, hfov: g0.hfov });
+        self.sensor.slew(Gimbal {
+            pan: g0.pan - dx / vw.max(1.0) * g0.hfov,
+            tilt: g0.tilt + dy / vh.max(1.0) * vfov,
+            hfov: g0.hfov,
+        });
     }
 
     fn mouse_up(&mut self, ev: &MouseUpEvent) {
@@ -121,7 +126,13 @@ impl SensorView {
             .px_2()
             .h(px(30.0))
             .bg(c(TITLE_BG))
-            .child(div().text_color(c(GREY)).mr_2().child("SENSOR  EO").on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move()))
+            .child(
+                div()
+                    .text_color(c(GREY))
+                    .mr_2()
+                    .child("SENSOR  EO")
+                    .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move()),
+            )
             .child(point_btn("fwd", "FWD", 0.0, 0.0))
             .child(point_btn("down", "DOWN 30", 0.0, -30.0))
             .child(point_btn("left", "LEFT 60", -60.0, -25.0))
@@ -146,7 +157,13 @@ impl SensorView {
             })))
             // Empty space and the status read-out double as the window's drag handle.
             .child(div().flex_1().h_full().on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move()))
-            .child(div().text_color(c(GREEN)).whitespace_nowrap().child(status).on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move()))
+            .child(
+                div()
+                    .text_color(c(GREEN))
+                    .whitespace_nowrap()
+                    .child(status)
+                    .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move()),
+            )
     }
 }
 
@@ -155,14 +172,16 @@ impl Render for SensorView {
         // Swap in the newest frame, freeing the previous one from the GPU atlas.
         let (frame, stale) = {
             let f = self.sensor.frame.lock().unwrap();
-            (f.as_ref().map(|f| (f.header, f.image.clone())), f.as_ref().is_none_or(|f| f.at.elapsed().as_secs_f32() > 1.5))
+            (
+                f.as_ref().map(|f| (f.header, f.image.clone())),
+                f.as_ref().is_none_or(|f| f.at.elapsed().as_secs_f32() > 1.5),
+            )
         };
-        if let Some((_, img)) = &frame {
-            if self.shown.as_ref().is_none_or(|s| !Arc::ptr_eq(s, img)) {
-                if let Some(old) = self.shown.replace(img.clone()) {
-                    let _ = window.drop_image(old);
-                }
-            }
+        if let Some((_, img)) = &frame
+            && self.shown.as_ref().is_none_or(|s| !Arc::ptr_eq(s, img))
+            && let Some(old) = self.shown.replace(img.clone())
+        {
+            let _ = window.drop_image(old);
         }
         let overlay = {
             let v = self.vehicle.lock().unwrap();
@@ -185,13 +204,27 @@ impl Render for SensorView {
         let status = match &frame {
             Some((h, _)) if !overlay.stale => {
                 let g = h.gimbal;
-                let name = if g.hfov > 50.0 { "WFOV" } else if g.hfov > 18.0 { "MFOV" } else { "NFOV" };
-                format!("{name} {:.1}°  {:.0} FPS  F{:06}  T {:.1}", g.hfov, overlay.fps, h.frame % 1_000_000, h.sim_time)
+                let name = if g.hfov > 50.0 {
+                    "WFOV"
+                } else if g.hfov > 18.0 {
+                    "MFOV"
+                } else {
+                    "NFOV"
+                };
+                format!(
+                    "{name} {:.1}°  {:.0} FPS  F{:06}  T {:.1}",
+                    g.hfov,
+                    overlay.fps,
+                    h.frame % 1_000_000,
+                    h.sim_time
+                )
             }
             _ => self.sensor.status.lock().unwrap().clone(),
         };
         let rect_cell = self.video_rect.clone();
-        let video = canvas(|_, _, _| {}, move |b, _, window, cx| paint_video(b, frame, &overlay, &rect_cell, window, cx)).size_full();
+        let video =
+            canvas(|_, _, _| {}, move |b, _, window, cx| paint_video(b, frame, &overlay, &rect_cell, window, cx))
+                .size_full();
         let toolbar = self.toolbar(status, cx);
         div()
             .size_full()
@@ -347,7 +380,16 @@ fn sensor_symbology(window: &mut Window, cx: &mut App, r: (f32, f32, f32, f32), 
             format!("ELEV {:+.0} m  SLR {:.0} m", s.height, s.range),
         ];
         for (i, t) in right.iter().enumerate() {
-            text(window, cx, t, vx + vw - 12.0, vy + 18.0 + i as f32 * lh, fs, if i == 0 && o.tracking { c(AMBER) } else { col }, Align::Right);
+            text(
+                window,
+                cx,
+                t,
+                vx + vw - 12.0,
+                vy + 18.0 + i as f32 * lh,
+                fs,
+                if i == 0 && o.tracking { c(AMBER) } else { col },
+                Align::Right,
+            );
         }
     } else {
         text(window, cx, "SPI --  (above horizon)", vx + vw - 12.0, vy + 18.0, fs, col, Align::Right);
