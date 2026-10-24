@@ -82,6 +82,15 @@ team's three in CAMERAS. The app starts the view with `--serve`, and it stops wi
   take-off sequence of `recreation_games` (arm, QHOVER to 15 m, FBWA, then AGENT), the AGENT
   fence and ceiling set for the field, and the referee stepped with the physics.
 
+## The advisor
+
+A seat that a person commands has an advisor (`recreation_towers::Advisor`). It looks at the
+team's view once a second, so it knows only what the team knows, and it speaks only when something
+matters: an enemy drone near a held tower, a tower lost, a drone down, or the clock running out
+with the team behind. A thing is said once, and again after 30 s if it is still true. The server
+sends it to the person's seat as `ToSeat::Advice`; the commander app shows it in an ADVISOR panel
+for 20 s. Rules: `expectations/09-towers/rules/13-advisor.expect`.
+
 ## Crates
 
 | Crate | Path | Role |

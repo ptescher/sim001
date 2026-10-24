@@ -1,0 +1,77 @@
+Feature: The advisor
+  A person who commands a team has an advisor. The advisor looks at the map of the team once
+  each second. It speaks only when something matters. It does not speak when all is well.
+
+  Four things matter. An enemy drone comes near a tower that the team holds. The team loses a
+  tower. A drone of the team is down. The clock runs out and the team is behind. The advisor
+  uses only the map of the team, as the computer commander does. Thus it does not know about an
+  enemy drone in the fog.
+
+  The advisor says each thing one time. It says it again only after 30 s, if it is still true.
+  Thus the person is not told the same thing over and over.
+
+  Expectation: The advisor is quiet when nothing matters
+    Given the Red scout is at its base
+    And the time left is 600 s
+    When the advisor of Blue looks
+    Then the advice of Blue is none
+
+  Expectation: The advisor warns of an enemy drone near a tower that the team holds
+    Given the Red scout is near the Blue home tower
+    And the time left is 600 s
+    When the advisor of Blue looks
+    Then the advice of Blue is a tower is in danger
+
+  Expectation: The advisor says a danger one time
+    Overrides: The advisor warns of an enemy drone near a tower that the team holds
+    The first look gives the advice. The next look, one second later, is quiet.
+
+    Given the Red scout is near the Blue home tower
+    And the time left is 600 s
+    When the advisor of Blue looks twice
+    Then the advice of Blue is none
+
+  Expectation: The advisor says a danger again after 30 seconds
+    Overrides: The advisor says a danger one time
+    Given the Red scout is near the Blue home tower
+    And the time left is 600 s
+    When the advisor of Blue looks, and again 31 seconds later
+    Then the advice of Blue is a tower is in danger
+
+  Expectation: The advisor tells the team that it lost a tower
+    A team knows that it lost a tower only if it sees the tower. A drone sees the tower from 130 m,
+    outside the radio shadow of the tower.
+
+    Given the towers held by Blue are 2
+    And the west tower is held by Blue
+    And the first Blue drone is 130 m from the west tower
+    And the Red scout is at its base
+    And the time left is 600 s
+    When Red takes the west tower while the advisor of Blue watches
+    Then the advice of Blue is a tower is lost
+
+  Expectation: The advisor tells the team that a drone is down
+    Given the batteries are on
+    And the Red scout is at its base
+    And the time left is 600 s
+    And the battery of the first Blue drone is 5 s
+    And the first Blue drone is low in the mid lane
+    When the advisor of Blue looks after 10 seconds of play
+    Then the advice of Blue is a drone is down
+
+  Expectation: The advisor tells a team that is behind when the clock runs out
+    Given the Red scout is at its base
+    And the time left is 50 s
+    And the score of Blue is 100 points
+    And the score of Red is 200 points
+    When the advisor of Blue looks
+    Then the advice of Blue is the team is behind
+
+  Expectation: The advisor does not tell a team that is ahead when the clock runs out
+    Overrides: The advisor tells a team that is behind when the clock runs out
+    Given the Red scout is at its base
+    And the time left is 50 s
+    And the score of Blue is 200 points
+    And the score of Red is 100 points
+    When the advisor of Blue looks
+    Then the advice of Blue is none

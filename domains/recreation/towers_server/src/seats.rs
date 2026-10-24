@@ -4,7 +4,7 @@
 
 use crate::world::World;
 use recreation_towers::seat::{self, Join, ToSeat, ToServer, Truth};
-use recreation_towers::{Rules, Team};
+use recreation_towers::{Advice, Rules, Team};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
@@ -42,6 +42,14 @@ impl Seats {
             .iter()
             .filter(|t| self.people[t.index()])
             .all(|&t| clients.iter().any(|c| c.join == Join::Command(t)))
+    }
+
+    /// Tells the seat that commands `team` what its advisor has to say.
+    pub fn advise(&self, team: Team, advice: &[Advice]) {
+        let lines: Vec<String> = advice.iter().map(|a| seat::encode(&ToSeat::Advice(a.clone()))).collect();
+        self.clients.lock().unwrap().retain_mut(|c| {
+            c.join != Join::Command(team) || lines.iter().all(|line| writeln!(c.stream, "{line}").is_ok())
+        });
     }
 
     /// Sends every seat what it may know of the game now; drops the seats that have gone.

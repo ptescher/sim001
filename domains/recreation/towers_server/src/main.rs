@@ -21,7 +21,7 @@ mod world;
 
 use glam::Vec3;
 use recreation_games::Radio;
-use recreation_towers::{Class, Commander, Outcome, Rules, Team};
+use recreation_towers::{Advisor, Class, Commander, Outcome, Rules, Team};
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
 use std::net::{TcpListener, UdpSocket};
 use std::path::{Path, PathBuf};
@@ -243,6 +243,9 @@ fn main() {
         .collect();
     let home = cognition_agent::parse_home(launch::HOME).expect("the SITL home");
     let mut ground = ground::Ground::connect(&names, &modes, &ports, home);
+    // A person who commands a team has an advisor.
+    let mut advisors: Vec<(Team, Advisor)> =
+        Team::BOTH.into_iter().filter(|t| a.people[t.index()]).map(|t| (t, Advisor::new(rules))).collect();
     let mut commanders: Vec<(Team, Commander)> = Team::BOTH
         .into_iter()
         .filter(|t| !a.people[t.index()] && !a.nobody[t.index()])
@@ -282,6 +285,12 @@ fn main() {
             }
             if w.started() && w.game.time >= next_decision {
                 next_decision = w.game.time + DECIDE_EVERY;
+                for (team, advisor) in &mut advisors {
+                    let said = advisor.look(&w.game.view(*team));
+                    if !said.is_empty() {
+                        seats.advise(*team, &said);
+                    }
+                }
                 for (team, c) in &mut commanders {
                     let view = w.game.view(*team);
                     for (k, order) in c.decide(&view) {
