@@ -48,7 +48,7 @@ pub fn run(suite: &Path, only: Option<&str>) -> i32 {
         let only = only.to_lowercase();
         acceptance.plans.retain(|p| p.title.to_lowercase().contains(&only));
     }
-    let mut services = services();
+    let services = services();
     let missing = services.missing(&["ground-radio", "flight-controller"]);
     for why in &missing {
         println!("not supported yet: {why}");
