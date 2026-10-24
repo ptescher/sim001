@@ -58,19 +58,25 @@ impl Seats {
     /// Sends every seat what it may know of the game now; drops the seats that have gone.
     pub fn send(&self, world: &World) {
         let game = &world.game;
-        let views = [game.view(Team::Blue), game.view(Team::Red)].map(|mut v| {
+        // A seat that watches a team gets its whole map. One that commands is the team's ground station:
+        // it builds the part of the map that its drones report from their telemetry, and gets from
+        // the server only what the towers and the base see.
+        let encode = |mut v: recreation_towers::TeamView| {
             for d in &mut v.drones {
                 let i = game.drone(v.team, d.k);
                 (d.order, d.low) = world.told[i];
             }
             seat::encode(&ToSeat::View(v))
-        });
+        };
+        let views = [game.view(Team::Blue), game.view(Team::Red)].map(&encode);
+        let site_views = [game.site_view(Team::Blue), game.site_view(Team::Red)].map(&encode);
         let mut truth = Truth::of(game);
         truth.attitudes = world.planes.iter().map(|p| p.rot.to_array()).collect();
         let truth = seat::encode(&ToSeat::Truth(truth));
         self.clients.lock().unwrap().retain_mut(|c| {
             let line = match c.join {
-                Join::Command(t) | Join::Watch(t) => &views[t.index()],
+                Join::Command(t) => &site_views[t.index()],
+                Join::Watch(t) => &views[t.index()],
                 Join::Spectate => &truth,
             };
             writeln!(c.stream, "{line}").is_ok()

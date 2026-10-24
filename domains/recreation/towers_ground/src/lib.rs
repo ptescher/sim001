@@ -9,8 +9,10 @@
 //! through a [`Transport`]: TCP to the simulated ground radio, or a serial line to a real one.
 //! What it knows of the game is a [`Situation`].
 
+pub mod map;
+
 use cognition_agent::Craft;
-use cognition_agent::link::{Link, LinkState, Traffic};
+use cognition_agent::link::{Link, LinkState, PositionReport, Sighting, Traffic};
 use cognition_plan::{CMD_PLAN, Primitive, WirePlan, to_global};
 use glam::Vec3;
 use recreation_towers::flight;
@@ -185,6 +187,19 @@ impl Ground {
     /// The telemetry of the `k`th drone: its flight mode, from its last heartbeat.
     pub fn mode_of(&self, k: usize) -> Option<u32> {
         self.drones.get(k)?.link.as_ref()?.mode()
+    }
+
+    /// What the `k`th drone last said of itself, and what its sensor reported: its telemetry.
+    pub fn telemetry(&self, k: usize) -> (Option<PositionReport>, Vec<Sighting>) {
+        self.drones.get(k).and_then(|d| d.link.as_ref()).map_or((None, vec![]), |l| {
+            let s = l.state();
+            (s.position, s.sightings.clone())
+        })
+    }
+
+    /// How many position reports the drones have sent.
+    pub fn position_reports(&self) -> u64 {
+        self.drones.iter().filter_map(|d| d.link.as_ref()).map(|l| l.state().position_reports).sum()
     }
 
     /// The drones that have been in AGENT mode.

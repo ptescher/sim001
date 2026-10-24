@@ -5,8 +5,10 @@
 //! orders that the commander gave.
 
 use crate::seat::{Seat, Status};
+use glam::Vec2;
 use recreation_towers::seat::Join;
 use recreation_towers::{Game, Order, Phase, Rules};
+use recreation_towers_ground::map::{self, OwnReport, Seen};
 use recreation_towers_ground::{AGENT_MODE, Ground, QLOITER_MODE, Situation, Transport, drone_name, sitl_home};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -29,6 +31,11 @@ struct Clock {
 impl Clock {
     fn new() -> Clock {
         Clock { map_time: f32::NEG_INFINITY, at: Instant::now(), rate: 1.0, last: 0.0 }
+    }
+
+    /// Game seconds to a wall second.
+    fn rate(&self) -> f64 {
+        self.rate
     }
 
     /// The time now, given the time of the latest map.
@@ -61,6 +68,7 @@ struct Flying {
     rules: Rules,
     first: usize,
     clock: Clock,
+    home: (f64, f64, f32),
 }
 
 fn run(seat: &Seat, host: &str) {
@@ -69,10 +77,12 @@ fn run(seat: &Seat, host: &str) {
         std::thread::sleep(LOOK_EVERY);
         let (status, rules, view, air, orders) = {
             let s = seat.state();
-            (s.status.clone(), s.rules, s.view.clone(), s.air.clone(), s.orders.clone())
+            (s.status.clone(), s.rules, s.raw_view.clone(), s.air.clone(), s.orders.clone())
         };
         let (Status::Seated(Join::Command(team)), Some(rules), Some(view)) = (status, rules, view) else {
-            flying = None;
+            if flying.take().is_some() {
+                seat.state().station = false;
+            }
             seat.flown.store(0, Ordering::SeqCst);
             continue;
         };
@@ -91,7 +101,15 @@ fn run(seat: &Seat, host: &str) {
                 .collect();
             let transport = Transport::Tcp { host: host.to_string(), ports: air.clone() };
             let ground = Ground::connect(&transport, &names, &indices, &modes, sitl_home());
-            flying = Some(Flying { air, ground, game: Game::new(rules), rules, first, clock: Clock::new() });
+            flying = Some(Flying {
+                air,
+                ground,
+                game: Game::new(rules),
+                rules,
+                first,
+                clock: Clock::new(),
+                home: sitl_home(),
+            });
         }
         let f = flying.as_mut().expect("a ground");
         let n = f.rules.drones;
@@ -131,5 +149,35 @@ fn run(seat: &Seat, host: &str) {
         };
         f.ground.tick(&situation);
         seat.flown.store(f.ground.agent_drones(), Ordering::SeqCst);
+        seat.heard.store(f.ground.position_reports() as usize, Ordering::SeqCst);
+        // The map: what the server says of the towers, plus what the drones report of themselves and of the enemy.
+        let rate = f.clock.rate() as f32;
+        let (mut own, mut seen) = (vec![None; n], vec![]);
+        for (k, report) in own.iter_mut().enumerate() {
+            let (position, sightings) = f.ground.telemetry(k);
+            *report = position.map(|p| {
+                let (north, east) = cognition_plan::to_local(f.home.0, f.home.1, p.lat, p.lon);
+                OwnReport {
+                    at: Vec2::new(north, east),
+                    alt: p.alt,
+                    vel: Vec2::new(p.vel[0], p.vel[1]),
+                    age: p.heard.elapsed().as_secs_f32() * rate,
+                }
+            });
+            seen.extend(sightings.iter().map(|s| {
+                let (north, east) = cognition_plan::to_local(f.home.0, f.home.1, s.lat, s.lon);
+                Seen {
+                    enemy: s.enemy,
+                    at: Vec2::new(north, east),
+                    alt: s.alt_amsl - f.home.2,
+                    vel: Vec2::new(s.speed * s.heading.to_radians().cos(), s.speed * s.heading.to_radians().sin()),
+                    age: s.heard.elapsed().as_secs_f32() * rate,
+                }
+            }));
+        }
+        let made = map::build(&view, &own, &seen, &f.rules);
+        let mut state = seat.state();
+        state.station = true;
+        state.view = Some(made);
     }
 }

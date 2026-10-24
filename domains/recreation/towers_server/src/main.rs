@@ -203,7 +203,13 @@ fn main() {
         .map(|i| {
             let sitl = launch::MAVLINK_PORT + 10 * (a.first_instance + i as u16);
             let w = world.clone();
-            air::open(sitl, Arc::new(move || w.lock().unwrap().in_reach(i))).expect("the air for a drone")
+            let w2 = world.clone();
+            air::open(
+                sitl,
+                Arc::new(move || w.lock().unwrap().in_reach(i)),
+                Arc::new(move || w2.lock().unwrap().sense(i)),
+            )
+            .expect("the air for a drone")
         })
         .collect();
     let air_ports: Arc<Vec<u16>> = Arc::new(air.iter().map(|c| c.port).collect());
@@ -387,6 +393,7 @@ fn main() {
             println!("RESULT light_low={}", light.iter().filter(|&&i| w.lows[i]).count());
             println!("RESULT air_carried={}", air.iter().map(|c| c.counts.carried()).sum::<u64>());
             println!("RESULT air_dropped={}", air.iter().map(|c| c.counts.dropped()).sum::<u64>());
+            println!("RESULT sensed={}", air.iter().map(|c| c.counts.sensed()).sum::<u64>());
             drop(w);
             std::thread::sleep(Duration::from_millis(500));
             drop(fleet);
