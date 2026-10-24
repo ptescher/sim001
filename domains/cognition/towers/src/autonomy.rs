@@ -5,7 +5,7 @@
 //! each order goes out with a standing order ([`recreation_towers::Standing`]) chosen from the
 //! team's map. An [`Autonomy`] chooses it. [`Prepared`] puts one on any captain.
 
-use crate::{Captain, TowersResult, play};
+use crate::{Captain, TowersResult, play_with};
 use recreation_towers::{Commander, Order, Rules, Standing, Team, TeamView};
 
 /// Chooses the standing order that goes with an order.
@@ -97,17 +97,24 @@ pub struct Comparison {
     pub error: f32,
     /// Drone-seconds out of contact in a game, for `a` and for `b`.
     pub dark: [f32; 2],
+    /// Drones that went down with an empty battery in a game, for `a` and for `b`.
+    pub downs: [f32; 2],
 }
 
-/// Plays `a` against `b` on each seed, as Blue and as Red, each with the default commander.
+/// Plays `a` against `b` on each seed, as Blue and as Red, each with the default commander, by
+/// the default rules.
 pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comparison, String> {
-    let rules = Rules::default();
+    compare_with(Rules::default(), a, b, seeds)
+}
+
+/// The same, by `rules`.
+pub fn compare_with(rules: Rules, a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comparison, String> {
     let seat = |autonomy| Prepared { captain: Commander::new(rules), autonomy };
     let mut c = Comparison::default();
     let mut scores = vec![];
     for &seed in seeds {
-        let first: TowersResult = play(&mut seat(a), &mut seat(b), seed)?;
-        let second: TowersResult = play(&mut seat(b), &mut seat(a), seed)?;
+        let first: TowersResult = play_with(rules, &mut seat(a), &mut seat(b), seed)?;
+        let second: TowersResult = play_with(rules, &mut seat(b), &mut seat(a), seed)?;
         for (r, mine) in [(&first, Team::Blue), (&second, Team::Red)] {
             let s = r.score_for(mine, rules.win_score);
             scores.push(s);
@@ -119,6 +126,8 @@ pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comp
             }
             c.dark[0] += r.dark[mine.index()];
             c.dark[1] += r.dark[mine.other().index()];
+            c.downs[0] += r.downs[mine.index()] as f32;
+            c.downs[1] += r.downs[mine.other().index()] as f32;
         }
     }
     let n = scores.len().max(1) as f32;
@@ -126,6 +135,7 @@ pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comp
     let var = scores.iter().map(|s| (s - c.margin).powi(2)).sum::<f32>() / (n - 1.0).max(1.0);
     c.error = (var / n).sqrt();
     c.dark = c.dark.map(|d| d / n);
+    c.downs = c.downs.map(|d| d / n);
     Ok(c)
 }
 
@@ -152,6 +162,16 @@ mod tests {
         assert!((ab.margin + ba.margin).abs() < 1e-5, "{ab:?} {ba:?}");
         assert_eq!((ab.won, ab.lost), (ba.lost, ba.won));
         assert!((ab.dark[0] - ba.dark[1]).abs() < 1e-2 && (ab.dark[1] - ba.dark[0]).abs() < 1e-2, "{ab:?} {ba:?}");
+    }
+
+    #[test]
+    fn a_comparison_by_rules_plays_the_batteries_of_those_rules() {
+        let rules = Rules { light_battery: 150.0, standard_battery: 240.0, heavy_battery: 300.0, ..Rules::default() };
+        let c = compare_with(rules, &Persist, &Persist, &seeds(2)).unwrap();
+        assert_eq!(c.games, 4);
+        assert!(c.downs.iter().all(|d| d.is_finite() && *d >= 0.0), "{c:?}");
+        // The commander sends a drone to charge in time: only the drones it cannot reach go down.
+        assert!(c.downs[0] < 2.0, "{c:?}");
     }
 
     #[test]

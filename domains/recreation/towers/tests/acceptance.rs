@@ -50,11 +50,7 @@ impl World {
 
     /// Blue drone `k`'s order, as the spec words it.
     fn order_of(&self, k: usize) -> String {
-        match self.blue.order(k) {
-            None => "none".into(),
-            Some(Order::Take(t)) => format!("take the {} tower", self.game.towers[t].name),
-            Some(o) => format!("{o:?}"),
-        }
+        self.say(self.blue.order(k))
     }
 
     /// An order, as the spec words it.
@@ -546,6 +542,8 @@ fn bindings() -> Bindings<World> {
             (r.light_battery, r.standard_battery, r.heavy_battery) =
                 if on { (150.0, 240.0, 300.0) } else { (0.0, 0.0, 0.0) };
             w.game.fill_batteries();
+            // The commander plays by the same rules.
+            w.blue = Commander::new(w.game.rules);
         })
         .observe("the battery of the first Blue drone", |w| tenth(w.game.battery[w.game.drone(Team::Blue, 0)]))
         .arrange("the battery of the first Blue drone", |w, v| {
