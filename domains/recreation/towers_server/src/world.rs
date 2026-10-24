@@ -11,13 +11,15 @@ use cognition_plan::{Primitive, WirePlan, to_global};
 use glam::{Vec2, Vec3};
 use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
 use recreation_towers::flight;
-use recreation_towers::{Game, Instruction, Link, Order, Phase as Referee, Rules, Standing, Team};
+use recreation_towers::{Class, Game, Instruction, Link, Order, Phase as Referee, Rules, Standing, Team};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
 use simulation_physics::{Environment, FlightState, Phase, Start, step};
 
 /// A crashed drone is back at its base this long after the crash (s).
 pub const RESPAWN: f32 = 15.0;
+/// A drone this far from where it started (m) has left its base.
+const AWAY: f32 = 100.0;
 /// Each plan is good for this long (s); the ground sends a new one about once a second.
 pub const PLAN_TTL: f32 = 3.0;
 
@@ -86,20 +88,46 @@ pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64)
     WirePlan { id, primitive, target: 0, lat, lon, alt: leg.alt, radius, ttl: PLAN_TTL }
 }
 
-/// The fastest a hovering drone is flown (m/s): its QLOITER's full stick (`Q_LOIT_SPEED`).
-const HOVER_SPEED: f32 = 5.0;
+/// The fastest a hovering drone is flown (m/s): its QLOITER's full stick (`Q_LOIT_SPEED_MS` in
+/// `ardupilot/seeker3.parm`).
+const HOVER_SPEED: f32 = 25.0;
 /// How fast it climbs at full throttle stick (m/s): `Q_PILOT_SPD_UP`.
-const HOVER_CLIMB: f32 = 3.0;
+const HOVER_CLIMB: f32 = 5.0;
+/// Flown low, under the treetops, in a lane 60 m wide, it is asked for this speed at most (m/s).
+const LANE_SPEED: f32 = 18.0;
+/// It plans to brake this hard for its point (m/s/s): under QLOITER's `Q_LOIT_BRK_ACC_M`.
+const HOVER_BRAKE: f32 = 4.0;
+/// QLOITER takes seconds to reach the speed the sticks ask for, so the sticks ask for this much
+/// more of the change than they want.
+const HOVER_LEAD: f32 = 1.0;
+/// A drone whose way turns away from where it flies slows to this share of its speed, at most.
+const HOVER_TURN: f32 = 0.25;
 
 /// The sticks that fly a drone that hovers (no wing, in QLOITER) to a point: the roll and pitch
 /// sticks ask for a speed relative to its nose, and the throttle stick for a climb, as a pilot's do.
-/// `at`: north, east of the field's centre; `climbing`: its climb rate (m/s); `heading`: clockwise
-/// from north.
-pub fn hover_sticks(at: Vec2, alt: f32, climbing: f32, heading: f32, to: Vec2, to_alt: f32) -> Controls {
+/// `at`: north, east of the field's centre; `vel`: its velocity (m/s, north, east); `climbing`:
+/// its climb rate (m/s); `heading`: clockwise from north; `top`: the most speed to ask for (m/s).
+#[allow(clippy::too_many_arguments)]
+pub fn hover_sticks(
+    at: Vec2,
+    vel: Vec2,
+    top: f32,
+    alt: f32,
+    climbing: f32,
+    heading: f32,
+    to: Vec2,
+    to_alt: f32,
+) -> Controls {
     let err = to - at;
+    let dist = err.length();
     // Slow down as it comes in: the speed it can lose in the distance left.
-    let speed = (0.3 * err.length()).min(HOVER_SPEED);
-    let want = if err.length() > 0.1 { err.normalize() * speed } else { Vec2::ZERO };
+    let mut speed = (2.0 * HOVER_BRAKE * dist).sqrt().min(0.5 * dist).min(top);
+    // And for a corner: the more the way turns from where it flies, the slower.
+    if vel.length() > 3.0 && dist > 0.1 {
+        speed *= vel.normalize().dot(err / dist).max(HOVER_TURN);
+    }
+    let want = if dist > 0.1 { err / dist * speed } else { Vec2::ZERO };
+    let want = (want + (want - vel) * HOVER_LEAD).clamp_length_max(top);
     let nose = Vec2::new(heading.cos(), heading.sin());
     let right = Vec2::new(-heading.sin(), heading.cos());
     // The climb it asks for is what is left of the height, less the climb it has: no overshoot.
@@ -147,6 +175,10 @@ pub struct World {
     pub crashes: u32,
     /// Towers each team took (Blue's, Red's).
     pub taken: [u32; 2],
+    /// When each drone was first 100 m from where it started (the game's time, s).
+    pub away: Vec<Option<f32>>,
+    /// The fastest each drone has flown over the ground (m/s).
+    pub top_speed: Vec<f32>,
     /// Physics packets from each drone's SITL.
     pub packets: Vec<u64>,
 }
@@ -158,6 +190,7 @@ impl World {
         let forest = Forest::new(&game.map.trees());
         let terrain = Valley(game.map.clone());
         let params: Vec<AircraftParams> = game.drones.iter().map(|d| aircraft(d.class)).collect();
+        let lows: Vec<bool> = game.drones.iter().map(|d| d.class == Class::Light).collect();
         let planes = (0..n).map(|i| FlightState::new(&params[i], &World::start_of(&game, i))).collect();
         World {
             game,
@@ -166,17 +199,30 @@ impl World {
             preflight: vec![Preflight::default(); n],
             down_for: vec![0.0; n],
             orders: vec![Some(Order::Home); n],
-            lows: vec![false; n],
+            told: lows.iter().map(|&low| (Some(Order::Home), low)).collect(),
+            lows,
             standing: vec![None; n],
-            told: vec![(Some(Order::Home), false); n],
             terrain,
             forest,
             near: vec![],
             go,
             crashes: 0,
             taken: [0; 2],
+            away: vec![None; n],
+            top_speed: vec![0.0; n],
             packets: vec![0; n],
         }
+    }
+
+    /// Drone `i` flies its orders low unless it is told otherwise: a light drone, which is small
+    /// and quick, and hides under the treetops.
+    pub fn low_by_default(&self, i: usize) -> bool {
+        self.game.drones[i].class == Class::Light
+    }
+
+    /// The drones of `class`, by their index in the game.
+    pub fn of_class(&self, class: Class) -> impl Iterator<Item = usize> + '_ {
+        (0..self.game.drones.len()).filter(move |&i| self.game.drones[i].class == class)
     }
 
     fn start_of(game: &Game, i: usize) -> Start {
@@ -270,7 +316,7 @@ impl World {
             if flown.order != self.orders[i] {
                 println!("failsafe: drone {i} out of contact, and flies {:?}", flown.order);
                 self.orders[i] = flown.order;
-                self.lows[i] = false;
+                self.lows[i] = self.low_by_default(i);
             }
         }
     }
@@ -310,7 +356,8 @@ impl World {
                 let leg = leg_for(&self.game, i, order, self.lows[i]);
                 let (at, alt) = to_field(s.pos);
                 let heading = simulation_physics::euler(s.rot).2;
-                hover_sticks(at, alt, s.vel.y, heading, leg.point, leg.alt)
+                let top = if self.lows[i] { LANE_SPEED } else { HOVER_SPEED };
+                hover_sticks(at, vel_to_field(s.vel), top, alt, s.vel.y, heading, leg.point, leg.alt)
             } else {
                 Controls { throttle: 0.5, ..Default::default() }
             };
@@ -326,6 +373,17 @@ impl World {
         d.at = at;
         d.alt = alt;
         d.vel = vel_to_field(s.vel);
+        let vel = d.vel;
+        if self.game.time > 0.0 {
+            if airborne(&self.planes[i]) {
+                self.top_speed[i] = self.top_speed[i].max(vel.length());
+            }
+            let (start, _) = to_field(World::start_of(&self.game, i).pos);
+            if self.away[i].is_none() && at.distance(start) > AWAY {
+                self.away[i] = Some(self.game.time);
+            }
+        }
+        let d = &mut self.game.drones[i];
         d.phase = if s.phase == Phase::Crashed {
             Referee::Down
         } else if airborne(s) {
@@ -423,14 +481,88 @@ mod tests {
     #[test]
     fn a_hovering_drone_is_flown_towards_its_point_by_its_sticks() {
         // Facing north, with the point to the north east and higher: forward, right, and up.
-        let s = hover_sticks(Vec2::ZERO, 50.0, 0.0, 0.0, Vec2::new(100.0, 100.0), 80.0);
+        let s = hover_sticks(Vec2::ZERO, Vec2::ZERO, HOVER_SPEED, 50.0, 0.0, 0.0, Vec2::new(100.0, 100.0), 80.0);
         assert!(s.elevator < -0.3 && s.aileron > 0.3 && s.throttle > 0.6, "{s:?}");
         // Facing east, the same point is on its left and ahead.
-        let s = hover_sticks(Vec2::ZERO, 50.0, 0.0, std::f32::consts::FRAC_PI_2, Vec2::new(100.0, 100.0), 50.0);
+        let s = hover_sticks(
+            Vec2::ZERO,
+            Vec2::ZERO,
+            HOVER_SPEED,
+            50.0,
+            0.0,
+            std::f32::consts::FRAC_PI_2,
+            Vec2::new(100.0, 100.0),
+            50.0,
+        );
         assert!(s.elevator < -0.3 && s.aileron < -0.3 && (s.throttle - 0.5).abs() < 1e-3, "{s:?}");
         // On the point and at height: the sticks are at rest.
-        let s = hover_sticks(Vec2::new(5.0, 5.0), 60.0, 0.0, 1.0, Vec2::new(5.0, 5.0), 60.0);
+        let s = hover_sticks(Vec2::new(5.0, 5.0), Vec2::ZERO, HOVER_SPEED, 60.0, 0.0, 1.0, Vec2::new(5.0, 5.0), 60.0);
         assert_eq!((s.aileron, s.elevator, s.throttle), (0.0, 0.0, 0.5));
+    }
+
+    /// Far from its point, a light drone asks for the full speed of its QLOITER, the speed a
+    /// Seeker 3 flies; near it, it asks for less than it flies, to brake in time.
+    #[test]
+    fn a_hovering_drone_flies_at_full_speed_and_brakes_for_its_point() {
+        let s = hover_sticks(Vec2::ZERO, Vec2::ZERO, HOVER_SPEED, 50.0, 0.0, 0.0, Vec2::new(500.0, 0.0), 50.0);
+        assert_eq!(s.elevator, -1.0, "full stick forward: {s:?}");
+        const { assert!(HOVER_SPEED >= 20.0) };
+        // At full speed, 30 m from the point: it asks for less than half its speed.
+        let s = hover_sticks(
+            Vec2::ZERO,
+            Vec2::new(HOVER_SPEED, 0.0),
+            HOVER_SPEED,
+            50.0,
+            0.0,
+            0.0,
+            Vec2::new(30.0, 0.0),
+            50.0,
+        );
+        assert!(-s.elevator * HOVER_SPEED < 0.5 * HOVER_SPEED, "{s:?}");
+    }
+
+    /// Under the treetops a lane is 60 m wide, and a drone that leans over to turn at 25 m/s
+    /// leaves it: a light drone flying low is asked for less than its full speed.
+    #[test]
+    fn a_hovering_drone_is_held_to_the_speed_it_is_given() {
+        let s = hover_sticks(
+            Vec2::ZERO,
+            Vec2::new(LANE_SPEED, 0.0),
+            LANE_SPEED,
+            18.0,
+            0.0,
+            0.0,
+            Vec2::new(500.0, 0.0),
+            18.0,
+        );
+        assert!((-s.elevator * HOVER_SPEED - LANE_SPEED).abs() < 1.0, "{s:?}");
+        let s = hover_sticks(Vec2::ZERO, Vec2::ZERO, LANE_SPEED, 18.0, 0.0, 0.0, Vec2::new(500.0, 0.0), 18.0);
+        assert!(-s.elevator * HOVER_SPEED <= LANE_SPEED + 1e-3, "no more than the cap at the start: {s:?}");
+        const { assert!(LANE_SPEED < HOVER_SPEED && LANE_SPEED >= 16.0) };
+    }
+
+    /// A light drone in a lane that turns slows for the corner: flying north at full speed with
+    /// its point off to the east, it asks for less speed than it has.
+    #[test]
+    fn a_hovering_drone_slows_for_a_corner() {
+        let v = Vec2::new(HOVER_SPEED, 0.0);
+        let s = hover_sticks(Vec2::ZERO, v, HOVER_SPEED, 18.0, 0.0, 0.0, Vec2::new(0.0, 70.0), 18.0);
+        assert!(s.elevator > 0.0, "it brakes: {s:?}");
+        assert!(s.aileron * HOVER_SPEED < 0.6 * HOVER_SPEED, "it does not ask for full speed to the east: {s:?}");
+    }
+
+    /// The light drones fly their orders low by default, the others high.
+    #[test]
+    fn a_light_drone_flies_low_by_default() {
+        let mut w = world();
+        for i in 0..w.game.drones.len() {
+            let light = w.game.drones[i].class == Class::Light;
+            assert_eq!(w.lows[i], light, "drone {i}");
+            assert_eq!(w.low_by_default(i), light);
+        }
+        let light = w.of_class(Class::Light).next().unwrap();
+        w.command(light, Order::Home, w.low_by_default(light));
+        assert!(w.lows[light]);
     }
 
     /// Blue's drone 1 flies in the radio shadow of the Red home tower.

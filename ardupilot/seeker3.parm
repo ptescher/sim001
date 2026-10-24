@@ -1,7 +1,7 @@
 # DeepSpace Seeker 3 (sim001 --aircraft seeker3), layered over t1s.parm: a 3 inch quadcopter, flown
 # as a quadplane with a quad frame and no wing. Motor 1 front right, 2 rear left, 3 front left, 4
-# rear right (ArduPilot's quad X) on SERVO1 to SERVO4. In the Towers game the ground flies it in
-# GUIDED, which hovers (Q_GUIDED_MODE), so there is no forward flight and no AGENT mode.
+# rear right (ArduPilot's quad X) on SERVO1 to SERVO4. In the Towers game the server's radio flies
+# it in QLOITER with the sticks, so there is no forward flight and no AGENT mode.
 # 2 is QuadPlane with the VTOL AUTO: a mission flies its waypoints as a multicopter does. With 1 the
 # plane flies them as a plane (it banks to turn and waits for an airspeed that a wingless quad never
 # has), and the quad drifts away with the wind.
@@ -42,13 +42,32 @@ Q_M_SPIN_MIN 0.10
 # and this one flies in GUIDED (QGUIDED) and the Q modes.
 Q_ASSIST_SPEED 1
 Q_GUIDED_MODE 1
-Q_ANGLE_MAX 3500
-Q_VELZ_MAX 400
-Q_PILOT_SPD_UP 300
-Q_PILOT_SPD_DN 200
-Q_WP_SPEED 600
-Q_WP_ACCEL 200
-Q_P_POSXY_P 0.6
+
+# How fast it flies. A Seeker 3 flown in acro tops 40 m/s (about 150 km/h); the sim's level top
+# speed is 32 m/s at 39 degrees of lean. QuadPlane's defaults are for a big VTOL in a hover
+# (15 degrees, 5 m/s, gentle braking), which made the light drone the slowest in Towers: the radio
+# (`towers_server`'s `hover_sticks`) flies it in QLOITER, whose full stick is Q_LOIT_SPEED_MS. These
+# are in degrees and m/s (the ArduPilot we build moved them from centi-units: Q_ANGLE_MAX, Q_VELZ_MAX,
+# Q_WP_SPEED, Q_WP_ACCEL and Q_P_POSXY_P are gone, and Q_PILOT_SPD_UP 300 was 300 m/s).
+Q_A_ANGLE_MAX 45
+Q_LOIT_ANG_MAX 40
+Q_LOIT_SPEED_MS 25
+Q_LOIT_ACC_MAX_M 6
+Q_LOIT_BRK_ACC_M 5
+Q_LOIT_BRK_JRK_M 10
+Q_LOIT_BRK_DELAY 0.3
+Q_P_NE_JERK 10
+Q_WP_SPD 25
+Q_WP_ACC 5
+Q_PILOT_SPD_UP 5
+Q_PILOT_SPD_DN 3
+Q_PILOT_ACCEL_Z 5
+# A 3 inch quad rolls far quicker than a VTOL: QuadPlane's 75 deg/s and 400 deg/s/s would take a
+# second to lean it over.
+Q_A_RATE_R_MAX 360
+Q_A_RATE_P_MAX 360
+Q_A_ACC_R_MAX 1500
+Q_A_ACC_P_MAX 1500
 
 # A 4S pack, 2500 mAh so that a game's 8 minutes in the air do not drain it (a real 850 mAh one
 # would). The failsafes are off, as on the VTOL (a hard climb sags the pack, and

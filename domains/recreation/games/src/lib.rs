@@ -43,10 +43,19 @@ const TAKEOFF_HEIGHT: f32 = 15.0;
 /// first (m above the ground).
 const HEAVY_MASS: f32 = 2.0;
 const HEAVY_TAKEOFF_HEIGHT: f32 = 40.0;
+/// A plane with no wing (a quadcopter) has nothing to wait for: it is up once it is clear of the
+/// ground (m), and its pilot flies it on, climbing.
+const LIFT_OFF_HEIGHT: f32 = 3.0;
 
 /// How high a plane of `params` climbs in a hover before it transitions.
 fn takeoff_height(params: &AircraftParams) -> f32 {
-    if params.mass > HEAVY_MASS { HEAVY_TAKEOFF_HEIGHT } else { TAKEOFF_HEIGHT }
+    if params.surfaces.is_empty() {
+        LIFT_OFF_HEIGHT
+    } else if params.mass > HEAVY_MASS {
+        HEAVY_TAKEOFF_HEIGHT
+    } else {
+        TAKEOFF_HEIGHT
+    }
 }
 /// With an autopilot, how long it holds its arm switch on before it decides the plane will not
 /// arm yet, and how long it waits before it tries again (s).
@@ -225,10 +234,9 @@ impl Preflight {
         match self.stage {
             Stage::Cold | Stage::Resting(_) => Some(off),
             Stage::Arming(_) => Some(on(0.0, qhover)),
-            // Above the middle of the stick, QHOVER climbs.
-            // (A quadcopter has 6 times its weight in thrust: it climbs gently, or it cannot hold
-            // its attitude.)
-            Stage::Climbing => Some(on(if params.surfaces.is_empty() { 0.6 } else { 0.9 }, qhover)),
+            // Above the middle of the stick, QHOVER climbs; a quadcopter at the full climb rate
+            // of its autopilot (Q_PILOT_SPD_UP), which leaves it the thrust to hold its attitude.
+            Stage::Climbing => Some(on(if params.surfaces.is_empty() { 1.0 } else { 0.9 }, qhover)),
             // Wings level and a little nose up while the wing takes over.
             Stage::Transition(_) => Some(Radio {
                 sticks: Controls { elevator: 0.2, throttle: 1.0, ..Default::default() },
@@ -1339,6 +1347,21 @@ mod tests {
             game.radio(0, &Flat, DT);
         }
         assert!(game.on_the_wing(0), "the transition is done");
+    }
+
+    /// A quadcopter has no wing to wait for: it climbs at full stick, and is up a few metres off
+    /// the ground, where the pilot flies it on.
+    #[test]
+    fn a_quadcopter_climbs_at_full_stick_and_is_up_off_the_ground() {
+        let p = simulation_aircraft::seeker3::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        let mut pre = Preflight::default();
+        s.spool.fill(0.2);
+        pre.radio(&p, &s, 0.0, DT);
+        let r = pre.radio(&p, &s, 0.0, DT).expect("still climbing");
+        assert!(r.arm && r.mode == mode_slot(&p, "QHOVER") && r.sticks.throttle == 1.0, "climbs: {r:?}");
+        assert!(pre.radio(&p, &s, 5.0, DT).is_none(), "up at 5 m");
+        assert!(pre.on_the_wing());
     }
 
     /// The planes go back to the host at the end of the game.
