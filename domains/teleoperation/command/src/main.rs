@@ -54,7 +54,10 @@ fn main() {
     let join = if flag("--watch") { Join::Watch(team) } else { Join::Command(team) };
     let expect = flag("--expect");
     let serve = flag("--serve") || expect;
-    let addr = arg("--connect").unwrap_or_else(|| format!("127.0.0.1:{PORT}"));
+    // A server of its own takes a free port for its seats (the usual one may be in use), which
+    // the app, the 3D view and any restarted game all use.
+    let own_port = if serve && arg("--connect").is_none() { Some(server::free_port(PORT)) } else { None };
+    let addr = arg("--connect").unwrap_or_else(|| format!("127.0.0.1:{}", own_port.unwrap_or(PORT)));
     let cameras_on = !flag("--no-cameras");
 
     // The server's arguments: this app's team is a person's; the other team's is the computer's,
@@ -69,6 +72,9 @@ fn main() {
         "--speedup".to_string(),
         arg("--speedup").unwrap_or_else(|| if expect { "10".into() } else { "1".into() }),
     ];
+    if let Some(port) = own_port {
+        server_args.extend(["--seat-port".to_string(), port.to_string()]);
+    }
     if expect {
         // The tests play a practice game: nothing of Red's gets in the way of what they check.
         server_args[3] = "nobody".into();
