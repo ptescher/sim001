@@ -24,6 +24,11 @@ pub struct State {
     pub status: Status,
     pub rules: Option<Rules>,
     pub view: Option<TeamView>,
+    /// What the server last sent: the towers, the base, the clock and the score. The ground station
+    /// makes `view` from it and from the telemetry of its drones (station.rs).
+    pub raw_view: Option<TeamView>,
+    /// The station makes the `view`.
+    pub station: bool,
     /// The ports of the air in front of the team's drones, on the server's host: the way to them.
     pub air: Vec<u16>,
     /// The orders given, by drone number in the team: the order and whether it is flown low.
@@ -44,6 +49,8 @@ pub struct Seat {
     generation: Arc<AtomicU64>,
     /// The drones that the app's own ground has put in AGENT mode (station.rs).
     pub flown: AtomicUsize,
+    /// How many position reports the app has heard from its drones.
+    pub heard: AtomicUsize,
 }
 
 impl Seat {
@@ -56,6 +63,8 @@ impl Seat {
                 status: Status::Connecting,
                 rules: None,
                 view: None,
+                raw_view: None,
+                station: false,
                 air: vec![],
                 orders: vec![],
                 advice: vec![],
@@ -63,6 +72,7 @@ impl Seat {
             orders: Mutex::new(tx),
             generation: Arc::new(AtomicU64::new(0)),
             flown: AtomicUsize::new(0),
+            heard: AtomicUsize::new(0),
         });
         seat.reconnect();
         seat
@@ -98,8 +108,16 @@ impl Seat {
     /// Forgets the game and connects again (to a new game on the same server address).
     pub fn reconnect(&self) {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        *self.state() =
-            State { status: Status::Connecting, rules: None, view: None, air: vec![], orders: vec![], advice: vec![] };
+        *self.state() = State {
+            status: Status::Connecting,
+            rules: None,
+            view: None,
+            raw_view: None,
+            station: false,
+            air: vec![],
+            orders: vec![],
+            advice: vec![],
+        };
         let (tx, rx) = channel();
         *self.orders.lock().unwrap() = tx;
         let (addr, join, state, current) = (self.addr.clone(), self.join, self.state.clone(), self.generation.clone());
@@ -146,7 +164,12 @@ fn run(addr: &str, join: Join, state: &Mutex<State>, orders: Receiver<ToServer>,
                     s.air = air;
                 }
                 ToSeat::Refused(why) => s.status = Status::Refused(why),
-                ToSeat::View(v) => s.view = Some(v),
+                ToSeat::View(v) => {
+                    if !s.station {
+                        s.view = Some(v.clone());
+                    }
+                    s.raw_view = Some(v);
+                }
                 ToSeat::Truth(_) => {}
                 ToSeat::Advice(a) => {
                     s.advice.push((a, Instant::now()));

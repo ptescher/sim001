@@ -1,6 +1,6 @@
 //! What a seat gets: its team's map of the game ([`TeamView`]), and the orders it gives.
 
-use crate::{Game, Kind, Outcome, Phase, Team};
+use crate::{DroneSighting, Game, Kind, Outcome, Phase, Team};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -100,6 +100,16 @@ pub struct TeamView {
 impl Game {
     /// What `team` knows.
     pub fn view(&self, team: Team) -> TeamView {
+        self.view_from(team, &self.maps[team.index()].drones)
+    }
+
+    /// What `team` knows if its drones tell it nothing of the enemy: only what its towers and its
+    /// base see. A ground station adds what its drones report.
+    pub fn site_view(&self, team: Team) -> TeamView {
+        self.view_from(team, &self.site_drones[team.index()])
+    }
+
+    fn view_from(&self, team: Team, seen: &[Option<DroneSighting>]) -> TeamView {
         let map = &self.maps[team.index()];
         let towers = self
             .towers
@@ -145,7 +155,7 @@ impl Game {
         let enemies = self
             .drones
             .iter()
-            .zip(&map.drones)
+            .zip(seen)
             .enumerate()
             .filter(|(_, (d, _))| d.team != team)
             .filter_map(|(i, (_, s))| {

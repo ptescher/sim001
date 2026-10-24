@@ -112,6 +112,9 @@ pub struct World {
     pub taken: [u32; 2],
     /// Physics packets from each drone's SITL.
     pub packets: Vec<u64>,
+    /// The game time at which each drone's sensor next reports (s), and the sequence of its frames.
+    next_sense: Vec<f32>,
+    sense_seq: Vec<u8>,
 }
 
 impl World {
@@ -139,6 +142,8 @@ impl World {
             crashes: 0,
             taken: [0; 2],
             packets: vec![0; n],
+            next_sense: vec![0.0; n],
+            sense_seq: vec![0; n],
         }
     }
 
@@ -217,6 +222,32 @@ impl World {
         self.orders[i] = Some(order);
         self.lows[i] = low;
         self.standing[i] = standing;
+    }
+
+    /// What drone `i`'s sensor reports now, once a second of game time: each enemy drone in its
+    /// range, as an ADSB_VEHICLE frame from the drone (see `cognition_agent::link::sighting_frame`).
+    pub fn sense(&mut self, i: usize) -> Vec<Vec<u8>> {
+        if !self.started() || self.game.time < self.next_sense[i] {
+            return vec![];
+        }
+        self.next_sense[i] = self.game.time + 1.0;
+        let home = recreation_towers_ground::sitl_home();
+        self.game
+            .drone_senses(i)
+            .into_iter()
+            .map(|j| {
+                let d = &self.game.drones[j];
+                let craft = cognition_agent::Craft {
+                    id: j as u8 + 1,
+                    pos: Vec3::new(d.at.x, d.at.y, -d.alt),
+                    vel: Vec3::new(d.vel.x, d.vel.y, 0.0),
+                    flying: true,
+                };
+                let t = cognition_agent::link::Traffic::from_craft(&craft, home, "SEEN");
+                self.sense_seq[i] = self.sense_seq[i].wrapping_add(1);
+                cognition_agent::link::sighting_frame(i as u8 + 1, self.sense_seq[i], j, &t)
+            })
+            .collect()
     }
 
     /// What the ground sees of the game: all of it.

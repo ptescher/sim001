@@ -12,18 +12,26 @@
 use communication_radio::frame::Framer;
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Whether the radio reaches the drone right now.
 pub type Contact = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// What the drone's sensor reports now, as frames: the world works it out when asked.
+pub type Sensor = Arc<dyn Fn() -> Vec<Vec<u8>> + Send + Sync>;
+
+/// How often the air asks the sensor (wall time).
+const SENSE_EVERY: Duration = Duration::from_millis(50);
 
 /// What the air did with the frames of one drone.
 #[derive(Default)]
 pub struct Counts {
     pub carried: AtomicU64,
     pub dropped: AtomicU64,
+    /// Sensor reports that the air carried to the ground.
+    pub sensed: AtomicU64,
 }
 
 impl Counts {
@@ -33,6 +41,10 @@ impl Counts {
 
     pub fn dropped(&self) -> u64 {
         self.dropped.load(Ordering::Relaxed)
+    }
+
+    pub fn sensed(&self) -> u64 {
+        self.sensed.load(Ordering::Relaxed)
     }
 }
 
@@ -47,15 +59,16 @@ pub struct Channel {
 const PATIENCE: Duration = Duration::from_secs(120);
 
 /// Opens the air in front of the MAVLink port `upstream` of a drone. `contact` says, for each
-/// frame, whether the radio reaches the drone.
-pub fn open(upstream: u16, contact: Contact) -> io::Result<Channel> {
+/// frame, whether the radio reaches the drone. `sensor` is what the drone's sensor reports: it goes
+/// down to the ground, in the drone's stream, while the radio reaches the drone.
+pub fn open(upstream: u16, contact: Contact, sensor: Sensor) -> io::Result<Channel> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
     let counts = Arc::new(Counts::default());
     let c = counts.clone();
     std::thread::Builder::new().name(format!("air-{upstream}")).spawn(move || {
         for ground in listener.incoming().flatten() {
-            carry(ground, upstream, &contact, &c);
+            carry(ground, upstream, &contact, &sensor, &c);
         }
     })?;
     Ok(Channel { port, counts })
@@ -73,7 +86,7 @@ fn connect(upstream: u16) -> Option<TcpStream> {
 }
 
 /// One frame stream, from `from` to `to`: whole frames that the contact lets through.
-fn pump(mut from: TcpStream, mut to: TcpStream, contact: Contact, counts: Arc<Counts>, done: Arc<AtomicBool>) {
+fn pump(mut from: TcpStream, to: Arc<Mutex<TcpStream>>, contact: Contact, counts: Arc<Counts>, done: Arc<AtomicBool>) {
     let mut framer = Framer::default();
     let mut buf = [0u8; 4096];
     while let Ok(n) = from.read(&mut buf) {
@@ -83,7 +96,7 @@ fn pump(mut from: TcpStream, mut to: TcpStream, contact: Contact, counts: Arc<Co
         for frame in framer.push(&buf[..n]) {
             if !contact() {
                 counts.dropped.fetch_add(1, Ordering::Relaxed);
-            } else if to.write_all(&frame).is_ok() {
+            } else if to.lock().unwrap().write_all(&frame).is_ok() {
                 counts.carried.fetch_add(1, Ordering::Relaxed);
             } else {
                 done.store(true, Ordering::SeqCst);
@@ -95,22 +108,32 @@ fn pump(mut from: TcpStream, mut to: TcpStream, contact: Contact, counts: Arc<Co
 }
 
 /// The ground and the drone, until one hangs up.
-fn carry(ground: TcpStream, upstream: u16, contact: &Contact, counts: &Arc<Counts>) {
+fn carry(ground: TcpStream, upstream: u16, contact: &Contact, sensor: &Sensor, counts: &Arc<Counts>) {
     let Some(drone) = connect(upstream) else { return };
     let _ = (ground.set_nodelay(true), drone.set_nodelay(true));
     let done = Arc::new(AtomicBool::new(false));
-    let (g2, d2) = (ground.try_clone().unwrap(), drone.try_clone().unwrap());
+    // The ground hears the drone and its sensor through one writer, a frame at a time.
+    let to_ground = Arc::new(Mutex::new(ground.try_clone().unwrap()));
+    let to_drone = Arc::new(Mutex::new(drone.try_clone().unwrap()));
+    let g2 = ground.try_clone().unwrap();
     let up = {
         let (contact, counts, done) = (contact.clone(), counts.clone(), done.clone());
-        std::thread::spawn(move || pump(g2, d2, contact, counts, done))
+        std::thread::spawn(move || pump(g2, to_drone, contact, counts, done))
     };
+    let d2 = drone.try_clone().unwrap();
     let down = {
-        let (g, d) = (ground.try_clone().unwrap(), drone.try_clone().unwrap());
-        let (contact, counts, done) = (contact.clone(), counts.clone(), done.clone());
-        std::thread::spawn(move || pump(d, g, contact, counts, done))
+        let (to, contact, counts, done) = (to_ground.clone(), contact.clone(), counts.clone(), done.clone());
+        std::thread::spawn(move || pump(d2, to, contact, counts, done))
     };
     while !done.load(Ordering::SeqCst) {
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(SENSE_EVERY);
+        if contact() {
+            for frame in sensor() {
+                if to_ground.lock().unwrap().write_all(&frame).is_ok() {
+                    counts.sensed.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
     }
     let _ = (ground.shutdown(Shutdown::Both), drone.shutdown(Shutdown::Both));
     let _ = (up.join(), down.join());
@@ -156,7 +179,7 @@ mod tests {
     #[test]
     fn a_frame_goes_both_ways_while_the_radio_reaches_the_drone() {
         let (port, heard, send) = sitl();
-        let air = open(port, Arc::new(|| true)).unwrap();
+        let air = open(port, Arc::new(|| true), Arc::new(Vec::new)).unwrap();
         let mut ground = TcpStream::connect(("127.0.0.1", air.port)).unwrap();
         ground.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         ground.write_all(&frame(3)).unwrap();
@@ -173,7 +196,7 @@ mod tests {
         let (port, heard, send) = sitl();
         let reach = Arc::new(AtomicBool::new(false));
         let r = reach.clone();
-        let air = open(port, Arc::new(move || r.load(Ordering::SeqCst))).unwrap();
+        let air = open(port, Arc::new(move || r.load(Ordering::SeqCst)), Arc::new(Vec::new)).unwrap();
         let mut ground = TcpStream::connect(("127.0.0.1", air.port)).unwrap();
         ground.set_read_timeout(Some(Duration::from_millis(500))).unwrap();
         ground.write_all(&frame(3)).unwrap();
@@ -190,12 +213,32 @@ mod tests {
     #[test]
     fn a_frame_in_two_pieces_is_carried_whole() {
         let (port, heard, _send) = sitl();
-        let air = open(port, Arc::new(|| true)).unwrap();
+        let air = open(port, Arc::new(|| true), Arc::new(Vec::new)).unwrap();
         let mut ground = TcpStream::connect(("127.0.0.1", air.port)).unwrap();
         let f = frame(9);
         ground.write_all(&f[..6]).unwrap();
         std::thread::sleep(Duration::from_millis(100));
         ground.write_all(&f[6..]).unwrap();
         assert_eq!(heard.recv_timeout(Duration::from_secs(5)).unwrap(), f);
+    }
+
+    #[test]
+    fn the_sensors_reports_go_down_to_the_ground_while_the_radio_reaches_the_drone_and_not_in_a_shadow() {
+        let (port, _heard, _send) = sitl();
+        let reach = Arc::new(AtomicBool::new(true));
+        let r = reach.clone();
+        let sensor: Sensor = Arc::new(|| vec![frame(4)]);
+        let air = open(port, Arc::new(move || r.load(Ordering::SeqCst)), sensor).unwrap();
+        let mut ground = TcpStream::connect(("127.0.0.1", air.port)).unwrap();
+        ground.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut got = vec![0u8; frame(4).len()];
+        ground.read_exact(&mut got).unwrap();
+        assert_eq!(got, frame(4));
+        assert!(air.counts.sensed() >= 1);
+        reach.store(false, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(200));
+        let before = air.counts.sensed();
+        std::thread::sleep(Duration::from_millis(300));
+        assert_eq!(air.counts.sensed(), before, "nothing from the sensor in a shadow");
     }
 }
