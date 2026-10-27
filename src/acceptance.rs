@@ -210,7 +210,7 @@ pub fn plugin(
             deadline: Mutex::new(None),
             needs: if services.is_empty() { vec![] } else { vec!["ardupilot".to_string()] },
         };
-        let opts = RunOptions { docs_dir: docs.clone(), patience: 100 };
+        let opts = RunOptions { docs_dir: docs.clone(), patience: 100, ..Default::default() };
         let mut report = expectation_story::Report::default();
         let began = std::time::Instant::now();
         for plan in &acceptance.plans {

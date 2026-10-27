@@ -50,7 +50,7 @@ Feature: Playing Towers with ArduPilot drones
 
   Expectation: A light drone is the first to leave its base
     A light drone has no wing, so it does not wait for a transition. In QLOITER it flies along
-    the lanes at 18 m/s, which is faster than the 15 m/s cruise of the T1-S. It used to wait 30 s and
+    the lanes at 18 m/s, the cruise of the T1-S. It used to wait 30 s and
     fly at 5 m/s.
 
     When two computer teams play a game of Towers
