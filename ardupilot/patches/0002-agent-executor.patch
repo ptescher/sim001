@@ -185,7 +185,7 @@ diff --git a/ArduPlane/mode_agent.cpp b/ArduPlane/mode_agent.cpp
 index ae0d062..8872455 100644
 --- a/ArduPlane/mode_agent.cpp
 +++ b/ArduPlane/mode_agent.cpp
-@@ -1,52 +1,593 @@
+@@ -1,52 +1,599 @@
  #include "mode.h"
  #include "Plane.h"
 +#include <GCS_MAVLink/GCS.h>
@@ -464,6 +464,11 @@ index ae0d062..8872455 100644
 +    p.band[0] = alt;
 +    p.band[1] = alt + radius;
 +    p.ttl = MAX(packet.param4, 0.0f);
++    // a repeated id is not a new plan: the plane keeps the one it has, and AG_PRIM goes on
++    // showing what it flies
++    if (have_plan && plan.id == id) {
++        return MAV_RESULT_ACCEPTED;
++    }
 +    // the executor adopts it on its next step if the id is new, and keeps it
 +    plan = p;
 +    have_plan = true;
@@ -494,6 +499,7 @@ index ae0d062..8872455 100644
 +    // handle_plan checks them and fills `plan`: take the result and put the plan back.
 +    const struct agent_plan kept = plan;
 +    const bool had = have_plan;
++    have_plan = false; // so that handle_plan fills `plan` also for the id it holds
 +    const MAV_RESULT result = handle_plan(packet, why);
 +    if (result == MAV_RESULT_ACCEPTED) {
 +        standing = plan;
@@ -799,7 +805,7 @@ index ae0d062..8872455 100644
  }
  
  void ModeAgent::run()
-@@ -54,5 +595,10 @@ void ModeAgent::run()
+@@ -54,5 +601,10 @@ void ModeAgent::run()
      // Run base class function and then output throttle
      Mode::run();
  

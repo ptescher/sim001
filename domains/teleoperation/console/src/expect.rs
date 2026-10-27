@@ -317,7 +317,7 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
         let mut driver = ConsoleDriver::new(tx, vtol, rc_modes);
         driver.line = radio;
         driver.in_use = in_use.clone();
-        let opts = RunOptions { docs_dir: docs.clone(), patience: 480 };
+        let opts = RunOptions { docs_dir: docs.clone(), patience: 480, ..Default::default() };
         let mut report = expectation_story::Report::default();
         let mut aborted = false;
         let suite_time = suite_budget::Budget::from_env();

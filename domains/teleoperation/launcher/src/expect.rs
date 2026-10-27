@@ -463,7 +463,7 @@ pub fn start(cx: &mut App, window: WindowHandle<Launcher>, config: Config) {
         // The window paints once before the first click.
         std::thread::sleep(Duration::from_secs(1));
         println!("expect: {} tests of the launcher", acceptance.plans.len());
-        let opts = RunOptions { docs_dir: docs.clone(), patience: 20 };
+        let opts = RunOptions { docs_dir: docs.clone(), patience: 20, ..Default::default() };
         let mut report = expectation_story::Report::default();
         let suite_time = suite_budget::Budget::from_env();
         for plan in &acceptance.plans {
