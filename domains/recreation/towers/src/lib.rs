@@ -885,7 +885,7 @@ mod tests {
 
     #[test]
     fn the_start_has_each_home_tower_held_and_the_rest_neutral() {
-        let g = Game::new(Rules::default());
+        let g = Game::new(Rules { drones: 3, ..Rules::default() });
         let holders: Vec<_> = g.towers.iter().map(|t| t.holder).collect();
         assert_eq!(holders, [Some(Team::Blue), None, None, None, Some(Team::Red)]);
         assert_eq!(g.towers[0].control, 1.0);
@@ -1421,7 +1421,7 @@ mod tests {
 
     #[test]
     fn a_team_knows_its_own_drones_and_towers() {
-        let mut g = Game::new(Rules::default());
+        let mut g = Game::new(Rules { drones: 3, ..Rules::default() });
         g.look();
         let blue = &g.maps[Team::Blue.index()];
         assert!(blue.drones[..3].iter().all(|s| s.is_some_and(|s| s.seen)));

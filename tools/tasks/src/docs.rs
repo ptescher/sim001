@@ -27,9 +27,11 @@ pub const SUITE_SECS: u64 = 120;
 /// plans are ~380 s of the suite's ~635 s. The games are CPU-bound and already use every core, so
 /// splitting the suite into tests that run side by side does not shorten it (it made it slower).
 /// Fewer games would measure a smaller difference from noise: the 0.05 the plan wants is only a
-/// few standard errors at 512 games. 720 s is the measured time and about 15% for a slower box.
+/// few standard errors at 512 games. The suite took 737 s with two plans left to run, since the plans of the captain whose code changes
+/// build a worktree and play it (they were refused at once before): 900 s is that, the two plans, and room
+/// for a slower box.
 /// Revisit this when the games get cheaper, or the plan can use fewer of them.
-pub const LEAGUE_SECS: u64 = 720;
+pub const LEAGUE_SECS: u64 = 900;
 /// What a suite gets on top, to write its results and shut down; past it the runner is killed.
 const GRACE_SECS: u64 = 30;
 
