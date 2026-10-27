@@ -32,6 +32,10 @@ pub const SUITE_SECS: u64 = 120;
 /// for a slower box.
 /// Revisit this when the games get cheaper, or the plan can use fewer of them.
 pub const LEAGUE_SECS: u64 = 900;
+/// What the Towers commander app gets: each test of it is on a game server of its own, and the
+/// 3D view of a game takes about 2.5 minutes to load the valley, which the test of the cameras
+/// waits for. The suite takes ~305 s; 420 s leaves room for a slower box.
+pub const COMMAND_SECS: u64 = 420;
 /// What a suite gets on top, to write its results and shut down; past it the runner is killed.
 const GRACE_SECS: u64 = 30;
 
@@ -148,26 +152,29 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     // The sim with a flight controller: it flies from its sticks while ArduPilot steps the physics beside it.
     out.push(sim_step("the sim with a flight controller", &["--aircraft", "t1s-vtol", "--direct"]));
 
-    let app = |name: &'static str, dir: &str, extra: &[&str]| {
+    let app = |name: &'static str, dir: &str, extra: &[&str], secs: u64| {
         let mut args = s(&["run", "--release", "--"]);
         args.extend(s(extra));
         args.extend(s(&["--expect", "--docs", &docs_arg]));
-        suite(Step {
-            name,
-            program: "cargo".into(),
-            args,
-            dir: root.join("domains/teleoperation").join(dir),
-            env: vec![],
-            limit: Duration::ZERO,
-            may_fail: true,
-        })
+        suite_for(
+            Step {
+                name,
+                program: "cargo".into(),
+                args,
+                dir: root.join("domains/teleoperation").join(dir),
+                env: vec![],
+                limit: Duration::ZERO,
+                may_fail: true,
+            },
+            secs,
+        )
     };
     // The launcher's window, with a stand-in for each program it starts.
-    out.push(app("the launcher", "launcher", &[]));
+    out.push(app("the launcher", "launcher", &[], SUITE_SECS));
     // The commander app of Towers, each test on a fresh game of its own server.
-    out.push(app("the Towers commander app", "command", &[]));
+    out.push(app("the Towers commander app", "command", &[], COMMAND_SECS));
     if !no_station {
-        out.push(app("the console (the station)", "console", &["--station"]));
+        out.push(app("the console (the station)", "console", &["--station"], SUITE_SECS));
     }
     out.push(cargo(
         "the manual",
@@ -306,12 +313,16 @@ mod tests {
         assert!(beside.args.contains(&"--direct".to_string()));
     }
 
-    /// Every suite has the same budget, and is killed a little after it, except the league, which
-    /// has the longer one that LEAGUE_SECS explains.
+    /// Every suite has the same budget, and is killed a little after it, except the league and the
+    /// Towers commander app, which have the longer ones that LEAGUE_SECS and COMMAND_SECS explain.
     #[test]
     fn every_suite_has_two_minutes_and_a_grace() {
         for step in steps(&root(), false).iter().filter(|s| s.may_fail) {
-            let secs = if step.name == "the league" { LEAGUE_SECS } else { SUITE_SECS };
+            let secs = match step.name {
+                "the league" => LEAGUE_SECS,
+                "the Towers commander app" => COMMAND_SECS,
+                _ => SUITE_SECS,
+            };
             assert!(step.env.contains(&("SIM001_SUITE_BUDGET".to_string(), secs.to_string())), "{}", step.name);
             assert_eq!(step.limit, Duration::from_secs(secs + GRACE_SECS), "{}", step.name);
         }

@@ -215,6 +215,8 @@ Vocabulary:
     Shows: the first Blue drone gets the order to {value}. In the app, the list of drones shows the order beside B1
   State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
     Shows: the second Blue drone gets the order to {value}
+  State: the towers with a Blue drone on the way are 0..5
+    Shows: 4: the commander has sent a drone to each of the four towers that Blue does not hold
   State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
     Shows: the third Blue drone gets the order to {value}
   # The advisor of a team (recreation_towers::Advisor): what it says to a person who commands.
@@ -255,6 +257,8 @@ Vocabulary:
     Shows: neutral: the west tower on the map is grey
   Event: the commander joins the game
     Say: wait until the top bar says BLUE COMMANDER
+  Event: the commander waits for the cameras
+    Say: wait until CAMERAS shows a picture beside each name. The 3D view loads the valley first, which takes some minutes after a game starts
   Event: the commander selects the first Blue drone
     Say: click B1 in the list of drones, or press 1
   Event: the commander sends the selected drone to the west tower
