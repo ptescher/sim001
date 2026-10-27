@@ -257,6 +257,8 @@ Vocabulary:
     Shows: neutral: the west tower on the map is grey
   Event: the commander joins the game
     Say: wait until the top bar says BLUE COMMANDER
+  Event: the commander waits for the cameras
+    Say: wait until CAMERAS shows a picture beside each name. The 3D view loads the valley first, which takes some minutes after a game starts
   Event: the commander selects the first Blue drone
     Say: click B1 in the list of drones, or press 1
   Event: the commander sends the selected drone to the west tower
