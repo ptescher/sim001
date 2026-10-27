@@ -344,12 +344,12 @@ mod tests {
         let g = Game::new(Rules::default());
         let svg = map_svg(&g.view(Team::Blue), &g.rules);
         assert!(svg.starts_with("<svg") && svg.ends_with("</svg>"));
-        assert!(svg.contains("BLUE MAP") && svg.contains("8:00 LEFT"), "{svg}");
+        assert!(svg.contains("BLUE MAP") && svg.contains("10:00 LEFT"), "{svg}");
         assert!(svg.contains("BLUE 0") && svg.contains("RED 0"));
         for name in ["WEST", "CENTRE", "EAST", "BLUE HOME", "RED HOME"] {
             assert!(svg.contains(name), "no {name}");
         }
-        assert_eq!(svg.matches("<polygon").count(), 3, "Blue's three drones, and no Red drone it hasn't seen");
+        assert_eq!(svg.matches("<polygon").count(), g.rules.drones, "Blue's drones, and no Red drone it hasn't seen");
     }
 
     #[test]

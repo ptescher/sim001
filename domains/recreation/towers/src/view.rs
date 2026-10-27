@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn a_view_has_the_teams_drones_and_only_the_enemies_it_has_seen() {
-        let mut g = Game::new(Rules::default());
+        let mut g = Game::new(Rules { drones: 3, ..Rules::default() });
         let blue = g.drone(Team::Blue, 0);
         let scout = g.drone(Team::Red, 0);
         g.drones[blue].at = Vec2::ZERO;
