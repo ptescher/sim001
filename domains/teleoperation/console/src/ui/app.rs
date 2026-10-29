@@ -63,6 +63,18 @@ fn fit(id: &'static str, content: Div) -> Div {
     )
 }
 
+/// The rows of buttons that are cut to one line now, behind a MORE button: their other buttons are
+/// painted, but out of sight, and a click there lands on what is beneath them.
+pub fn rows_cut_short() -> Vec<&'static str> {
+    let open = EXPANDED.with(|e| e.borrow().clone());
+    ROWS.with(|r| {
+        let mut cut: Vec<_> =
+            r.borrow().iter().filter(|(id, h)| **h > ROW_H + 2.0 && !open.contains(*id)).map(|(id, _)| *id).collect();
+        cut.sort_unstable();
+        cut
+    })
+}
+
 /// Where the button with this id is on screen now, if it is.
 pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
     BUTTONS.with(|b| b.borrow().get(id).copied())

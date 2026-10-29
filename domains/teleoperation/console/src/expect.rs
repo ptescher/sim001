@@ -1163,6 +1163,15 @@ impl ConsoleDriver {
     }
 
     fn press(&self, id: &'static str) -> Result<(), String> {
+        // A window too narrow for a row of buttons cuts it to one line behind MORE, and a click on
+        // a button on the lines that are cut would land on the map under it: open the rows first.
+        let opened = self.with_window(|w, cx| {
+            let cut = app::rows_cut_short();
+            cut.iter().try_for_each(|row| click_button(w, cx, &format!("more-{row}"))).map(|()| !cut.is_empty())
+        })??;
+        if opened {
+            std::thread::sleep(SETTLE);
+        }
         self.with_window(move |w, cx| click_button(w, cx, id))??;
         std::thread::sleep(FRAME);
         Ok(())
