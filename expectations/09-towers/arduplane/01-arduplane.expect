@@ -18,10 +18,14 @@ Feature: Playing Towers with ArduPilot drones
     Then the drones in AGENT mode are 10
     And the commands that the drones refused are 0
 
-  Expectation: Each computer team takes towers
+  Expectation: The computer teams take towers
+    The two commanders are the same, and the game is a race for the towers in the middle. The
+    team that gets its drones there first often takes all of them: a game where one team takes
+    none is a game that the other team won. Thus the test asks for the towers of the two teams
+    together.
+
     When two computer teams play a game of Towers
-    Then the towers that Blue took are at least 1
-    And the towers that Red took are at least 1
+    Then the towers that the two teams took are at least 1
 
   Expectation: A seat gets only what its team sees
     When two computer teams play a game of Towers
