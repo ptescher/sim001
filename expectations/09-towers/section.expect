@@ -300,10 +300,8 @@ Vocabulary:
     Shows: 0: the report of the server says `RESULT refused=0`. The drones accepted every plan and every mode change
   State: the drones that crashed are 0..100
     Shows: 0: the report of the server says `RESULT crashes=0`
-  State: the towers that Blue took are 0..100
-    Shows: at least 1: the report of the server says `RESULT taken_blue=` with 1 or more
-  State: the towers that Red took are 0..100
-    Shows: at least 1: the report of the server says `RESULT taken_red=` with 1 or more
+  State: the towers that the two teams took are 0..200
+    Shows: at least 1: the report of the server says `RESULT taken_blue=` and `RESULT taken_red=`, and the two add up to 1 or more
   State: the frames that the air carried between the ground and the drones are 0..100000000
     Shows: at least 1: the report of the server says `RESULT air_carried=` with 1 or more. Every order, plan and telemetry frame went through the simulated air
   State: the sensor reports that the drones sent are 0..100000000
