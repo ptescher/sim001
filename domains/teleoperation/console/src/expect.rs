@@ -9,8 +9,8 @@
 //! `cargo run --release -- --station --expect`.
 //!
 //! Not driven yet (their tests report "not supported yet"): the mission file, the terrain
-//! check, the survey grid and measuring (the console has no such features), and anything in the
-//! sim's window (throwing the plane).
+//! check, the survey grid and measuring (the console has no such features), and calibrating the
+//! radio (F2, in the sim's window; the stand-in radio of the station is never calibrated).
 
 use crate::link::Cmd;
 use crate::ui::app::{self, Gcs};
@@ -136,8 +136,8 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator restarts the mission", Act::Button("restart")),
     ("operator arms the vehicle", Act::Arm),
     ("operator disarms the vehicle", Act::Button("disarm")),
-    ("operator switches to AUTO", Act::Button("mode-AUTO")),
-    ("operator switches to AUTO anyway", Act::Twice("mode-AUTO")),
+    ("operator switches to auto", Act::Button("mode-AUTO")),
+    ("operator switches to auto anyway", Act::Twice("mode-AUTO")),
     ("operator takes off vertically", Act::Button("vtol-tkof")),
     ("operator switches to forward flight", Act::Button("mode-CRUISE")),
     ("operator switches to hover", Act::Button("mode-QLOITER")),
@@ -160,6 +160,7 @@ const EVENTS: &[(&str, Act)] = &[
     ),
     ("pilot switches to cruise", Act::Radios(&[RadioMove::Throttle(STICK_TOP), RadioMove::Mode("CRUISE")])),
     ("pilot sends the plane home", Act::Radio(RadioMove::Mode("QRTL"))),
+    ("pilot throws the plane in the sim", Act::Key(Key::Throw)),
     ("pilot starts a race", Act::Key(Key::Race)),
     ("pilot starts a game of tag", Act::Key(Key::Tag)),
     ("countdown ends", Act::Go),
@@ -190,6 +191,7 @@ const STATES: &[&str] = &[
     "height above home",
     "battery current",
     "battery voltage",
+    "radio",
     "radio line",
     "tx15 screen mode",
     "tx15 screen arming",
@@ -923,6 +925,11 @@ impl ConsoleDriver {
         if key == "radio line" {
             return Ok(Value::from(if self.serial_line() { "serial" } else { "USB" }));
         }
+        if key == "radio" {
+            // The station's stand-in radio goes straight to the channels, past the sim's
+            // calibration (F2, in the sim's window): it is never a calibrated one.
+            return Ok(Value::from("not calibrated"));
+        }
         if key == "tx15 screen mode" || key == "tx15 screen arming" {
             let lamps = self.tx15_lamps()?;
             return Ok(Value::from(if key == "tx15 screen mode" {
@@ -1256,6 +1263,10 @@ impl Driver for ConsoleDriver {
                 }
                 self.arrange_mode(&mode)
             }
+            "radio" => {
+                let want = name()?;
+                self.check(key, &want, " (the station's stand-in radio is never calibrated)")
+            }
             "radio line" => {
                 let want = name()?;
                 self.check(key, &want, " (start the station with --flight-computer for the serial line)")
@@ -1515,11 +1526,16 @@ impl Driver for ConsoleDriver {
     }
 
     fn supports(&self, need: Need<'_>) -> bool {
-        match need {
-            Need::Observe(v) | Need::Arrange(v) => STATES.contains(&v.key.as_str()),
-            Need::Set(v) => SETTABLE.contains(&v.key.as_str()),
-            Need::Perform(e) => EVENTS.iter().any(|(k, _)| *k == e.key),
-        }
+        supported(need)
+    }
+}
+
+/// What the driver can do: the states it reads, the ones it sets and the events it performs.
+fn supported(need: Need<'_>) -> bool {
+    match need {
+        Need::Observe(v) | Need::Arrange(v) => STATES.contains(&v.key.as_str()),
+        Need::Set(v) => SETTABLE.contains(&v.key.as_str()),
+        Need::Perform(e) => EVENTS.iter().any(|(k, _)| *k == e.key),
     }
 }
 
@@ -1616,5 +1632,38 @@ mod tests {
         let n = plans.iter().filter(|p| supported(p)).count();
         println!("{n} of {} console tests are supported", plans.len());
         assert!(n >= 16, "only {n} of {} console tests are supported", plans.len());
+    }
+
+    /// Lists, in the file named by `SIM001_LIST_UNSUPPORTED`, the plans of the suite that the
+    /// driver cannot run and what each lacks (run it with `--ignored`).
+    #[test]
+    #[ignore]
+    fn list_the_plans_the_driver_cannot_run() {
+        struct Dry;
+        impl Driver for Dry {
+            fn set(&mut self, _: &Variable, _: &Value) -> Result<(), String> {
+                Err("dry".into())
+            }
+            fn perform(&mut self, _: &Event) -> Result<(), String> {
+                Err("dry".into())
+            }
+            fn observe(&mut self, _: &Variable) -> Result<Value, String> {
+                Err("dry".into())
+            }
+            fn supports(&self, need: Need<'_>) -> bool {
+                supported(need)
+            }
+        }
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
+        let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
+        let report = a.run(&mut Dry, &RunOptions { patience: 1, controls: false, ..Default::default() });
+        let mut out = String::new();
+        for (p, r) in a.plans.iter().zip(&report.results) {
+            let ours = a.suite.sections.iter().any(|s| s.slug == "gcs" && a.suite.subtree(s.id).contains(&p.section));
+            if ours {
+                out += &format!("{:?}\t{}\t{}\n", r.status, p.title, r.start.error.clone().unwrap_or_default());
+            }
+        }
+        std::fs::write(std::env::var("SIM001_LIST_UNSUPPORTED").expect("a path"), out).unwrap();
     }
 }
