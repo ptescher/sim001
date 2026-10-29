@@ -166,6 +166,11 @@ const EVENTS: &[(&str, Act)] = &[
     ("countdown ends", Act::Go),
 ];
 
+/// What the plane does by itself, and the driver waits for.
+const WAITS: &[&str] = &["plane reaches a waypoint", "plane reaches the last item"];
+/// How long the plane has to get to the next waypoint, or to the last item, flying the mission.
+const FLY_SECS: u64 = 240;
+
 /// States the driver can read (and put in place). Those the console has no feature for are
 /// always at their starting value, so a test that needs them to change needs an event below
 /// that the driver doesn't have.
@@ -1444,6 +1449,23 @@ impl Driver for ConsoleDriver {
     }
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
+        match event.key.as_str() {
+            // The mission goes on to its next item.
+            "plane reaches a waypoint" => {
+                let from = self.call(|g, _, _| g.vehicle.lock().unwrap().mission_seq)?;
+                return self.wait_for(FLY_SECS, "the plane reaching a waypoint", move |g| {
+                    g.vehicle.lock().unwrap().mission_seq > from
+                });
+            }
+            // The mission is on its last item (the first is home).
+            "plane reaches the last item" => {
+                return self.wait_for(FLY_SECS, "the plane reaching the last item", |g| {
+                    let v = g.vehicle.lock().unwrap();
+                    v.mission.len() > 1 && usize::from(v.mission_seq) + 1 >= v.mission.len()
+                });
+            }
+            _ => {}
+        }
         let act = EVENTS.iter().find(|(k, _)| *k == event.key).map(|(_, a)| a).ok_or("no way to do it")?;
         match *act {
             Act::Button(id) => self.press(id),
@@ -1535,7 +1557,7 @@ fn supported(need: Need<'_>) -> bool {
     match need {
         Need::Observe(v) | Need::Arrange(v) => STATES.contains(&v.key.as_str()),
         Need::Set(v) => SETTABLE.contains(&v.key.as_str()),
-        Need::Perform(e) => EVENTS.iter().any(|(k, _)| *k == e.key),
+        Need::Perform(e) => EVENTS.iter().any(|(k, _)| *k == e.key) || WAITS.contains(&e.key.as_str()),
     }
 }
 
