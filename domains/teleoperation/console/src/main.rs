@@ -12,6 +12,7 @@ mod screens;
 mod station;
 mod tx15_screen;
 mod ui;
+mod wpfile;
 // The screenless half of the station lives in teleoperation_core; keep the old paths.
 use teleoperation_core::{geo, link, vehicle};
 

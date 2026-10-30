@@ -4,4 +4,5 @@ pub mod draw;
 pub mod hud;
 pub mod map;
 pub mod sensor;
+pub mod survey;
 pub mod theme;
