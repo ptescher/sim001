@@ -366,6 +366,33 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 && std::env::var("SIM001_EXPECT_NO_RETRY").is_err()
             {
                 println!("expect: ✗ {} ({:.0} s): trying once more", plan.title, began.elapsed().as_secs_f32());
+                // What went wrong the first time is gone with the second go: say it.
+                for line in r.steps.iter().flat_map(|st| st.checks.iter()).filter_map(|c| c.error.as_ref()).take(3) {
+                    println!("expect:   first go: {line}");
+                }
+                if let Some(e) = &r.start.error {
+                    println!("expect:   first go: {e}");
+                }
+                // What the autopilot said (not part of the test's time: it is over).
+                driver.deadline = None;
+                if let Ok(lines) = driver.call(|g, _, _| {
+                    let v = g.vehicle.lock().unwrap();
+                    v.log.iter().rev().take(40).map(|l| l.text.clone()).collect::<Vec<_>>()
+                }) {
+                    for l in lines.iter().rev() {
+                        println!("expect:   first go, vehicle: {l}");
+                    }
+                }
+                // The steps up to the deadline (after it every call only says that time is up), the
+                // checks that only repeat left out.
+                let mut last = "";
+                for line in driver.trace.borrow().iter().filter(|l| !l.contains("ran out of time")) {
+                    let what = line.get(8..).unwrap_or(line);
+                    if what != last {
+                        println!("expect:     {line}");
+                    }
+                    last = what;
+                }
                 driver.budget = suite_time.cap(Duration::from_secs(test_budget(plan)));
                 r = expectation_harness::run(&acceptance.suite, std::slice::from_ref(plan), &mut driver, &opts)
                     .results
@@ -385,6 +412,10 @@ pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
                 expectation_story::Status::Unsupported => {}
                 _ => {
                     println!("expect: ✗ {} ({:.0} s)", plan.title, began.elapsed().as_secs_f32());
+                    println!("expect:   steps (s since the test began):");
+                    for line in driver.trace.borrow().iter() {
+                        println!("expect:     {line}");
+                    }
                     // What the vehicle was saying, for working out why. (Not part of the test's time:
                     // after the budget, the driver refuses every call.)
                     driver.deadline = None;
@@ -525,14 +556,17 @@ fn click_button(window: &mut Window, cx: &mut App, id: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// Where to click the map next: somewhere new each time, so the plan's points are apart.
+/// Where to click the map next: somewhere new each time, round the middle of the map (which follows
+/// the plane), 100 degrees on from the one before and far enough out (about 135 m) for the plane to
+/// have to fly between them: ArduPlane takes a waypoint as reached 90 m short of it.
 fn map_point(g: &Gcs) -> Result<Point<Pixels>, String> {
     let b = g.map_bounds.get();
     if b.size.width <= Pixels::ZERO {
         return Err("the map isn't on screen".into());
     }
-    let n = g.map.plan.len() as f32;
-    Ok(Point::new(b.center().x + gpui::px(40.0 * ((n % 5.0) - 2.0)), b.center().y - gpui::px(30.0 * (n % 4.0))))
+    let angle = (g.map.plan.len() as f32 * 100.0).to_radians();
+    let out = 150.0_f32.min(0.4 * f32::from(b.size.width).min(f32::from(b.size.height)));
+    Ok(Point::new(b.center().x + gpui::px(out * angle.sin()), b.center().y - gpui::px(out * angle.cos())))
 }
 
 fn enum_value(v: &Value) -> Result<String, String> {
@@ -563,9 +597,12 @@ fn kind_of(name: &str) -> Option<WpKind> {
     })
 }
 
-/// A waypoint of our own on the valley floor near home, for arranging a plan.
+/// A waypoint of our own on the valley floor near home, for arranging a plan: on a ring 220 m round
+/// home, 100 degrees on from the one before. The plane has to fly between them: ArduPlane takes a
+/// waypoint as reached 90 m short of it (WP_RADIUS), and the ground within 300 m of home is flat.
 fn waypoint(g: &Gcs, i: usize) -> Waypoint {
-    let (lat, lon) = g.origin.to_ll(80.0 + 40.0 * i as f32, 50.0 * ((i % 3) as f32 - 1.0));
+    let angle = (i as f32 * 100.0).to_radians();
+    let (lat, lon) = g.origin.to_ll(220.0 * angle.cos(), 220.0 * angle.sin());
     Waypoint { kind: WpKind::Waypoint, lat, lon, alt: g.map.plan_alt }
 }
 
@@ -664,7 +701,8 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
         "home position" => Value::from(if v.home.is_some() { "set" } else { "not set" }),
         "vehicle's current item" => Value::from(v.mission_seq as f64),
         "plane" => {
-            let on_ground = !v.have_position || (v.alt_rel < 2.0 && v.groundspeed < 2.0);
+            // A plane lying still reads up to 2 m/s of ground speed (GPS noise).
+            let on_ground = !v.have_position || (v.alt_rel < 2.0 && v.groundspeed < 3.0);
             Value::from(match v.mode() {
                 _ if on_ground => "on the ground",
                 "AUTO" => "flying the mission",
@@ -724,7 +762,14 @@ fn arrange_model(g: &mut Gcs, key: &str, value: &Value) -> Result<(), String> {
             }
         }
         "takeoff" => match name()?.as_str() {
-            "planned" => g.add_takeoff(),
+            // A plan that has items already keeps its length: the takeoff takes the place of the first.
+            "planned" => {
+                let had = g.map.plan.len();
+                g.add_takeoff();
+                if had > 0 && g.map.plan.len() > had {
+                    g.map.plan.remove(1);
+                }
+            }
             _ => g.map.plan.retain(|w| w.kind != WpKind::Takeoff),
         },
         "last plan item" => match name()?.as_str() {
@@ -778,9 +823,18 @@ struct ConsoleDriver {
     /// Why the plane can't be got ready (the autopilot didn't come back, or never got ready to
     /// arm): no other test can run either, so the run stops instead of waiting out each one.
     dead: Option<String>,
+    /// What the driver did in this test, and when (seconds since the test began), for the report of
+    /// a test that fails.
+    trace: std::cell::RefCell<Vec<String>>,
+    began: Instant,
 }
 
 impl ConsoleDriver {
+    /// Notes what the driver does now.
+    fn note(&self, what: impl std::fmt::Display) {
+        self.trace.borrow_mut().push(format!("{:6.1}  {what}", self.began.elapsed().as_secs_f32()));
+    }
+
     fn new(tx: Sender<Job>, vtol: bool, rc_modes: Vec<&'static str>) -> Self {
         let radio = RadioState {
             connected: false,
@@ -804,6 +858,8 @@ impl ConsoleDriver {
             in_use: Default::default(),
             pending_auto: false,
             dead: None,
+            trace: Default::default(),
+            began: Instant::now(),
         }
     }
 
@@ -1212,13 +1268,39 @@ impl ConsoleDriver {
     fn press(&self, id: &'static str) -> Result<(), String> {
         // A window too narrow for a row of buttons cuts it to one line behind MORE, and a click on
         // a button on the lines that are cut would land on the map under it: open the rows first.
-        let opened = self.with_window(|w, cx| {
-            let cut = app::rows_cut_short();
-            cut.iter().try_for_each(|row| click_button(w, cx, &format!("more-{row}"))).map(|()| !cut.is_empty())
-        })??;
-        if opened {
+        // The first click a window gets may only wake it up, so a row can stay cut after its MORE
+        // is pressed: press again until none is.
+        let mut opened_any = false;
+        for _ in 0..4 {
+            let cut = self.with_window(|w, cx| {
+                let cut = app::rows_cut_short();
+                cut.iter().try_for_each(|row| click_button(w, cx, &format!("more-{row}"))).map(|()| cut)
+            })??;
+            if cut.is_empty() {
+                break;
+            }
+            opened_any = true;
+            self.note(format!("pressed MORE for the rows {cut:?}"));
             std::thread::sleep(SETTLE);
         }
+        if opened_any {
+            // The buttons move as the rows open out, and a click goes where a button was painted
+            // last: wait until the button has stopped moving.
+            let mut before = None;
+            for _ in 0..25 {
+                std::thread::sleep(Duration::from_millis(200));
+                let now = self.with_window(move |_, _| {
+                    app::button_bounds(id).map(|b| (f32::from(b.origin.x), f32::from(b.origin.y)))
+                })?;
+                if before == Some(now) {
+                    break;
+                }
+                before = Some(now);
+            }
+        }
+        let at = self
+            .with_window(move |_, _| app::button_bounds(id).map(|b| (f32::from(b.origin.x), f32::from(b.origin.y))))?;
+        self.note(format!("press {id} at {at:?}"));
         self.with_window(move |w, cx| click_button(w, cx, id))??;
         std::thread::sleep(FRAME);
         Ok(())
@@ -1238,6 +1320,8 @@ impl Driver for ConsoleDriver {
     /// Back to the Background's UI state: panning, no plan, 40 m. The vehicle is arranged per
     /// test (disarmed, MANUAL, ...), since it can't be reset by the console.
     fn reset(&mut self) -> Result<(), String> {
+        self.trace.borrow_mut().clear();
+        self.began = Instant::now();
         self.pending_auto = false;
         // Getting a fresh plane (the autopilot restarts) is not the test's time: the clock starts
         // when the plane is ready.
@@ -1281,6 +1365,7 @@ impl Driver for ConsoleDriver {
     }
 
     fn arrange(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
+        self.note(format!("arrange: {} = {value}", var.subject));
         let key = var.key.as_str();
         let name = || enum_value(value);
         match key {
@@ -1438,10 +1523,14 @@ impl Driver for ConsoleDriver {
                     {
                         return Err("only a plane armed in AUTO flies the mission".into());
                     }
-                    self.perform_key(Key::Throw)?;
-                    self.wait_for(15, "the thrown plane flying the mission", |g| {
+                    // A VTOL lifts off by itself from the takeoff of its mission; a wing is thrown.
+                    if !self.vtol {
+                        self.perform_key(Key::Throw)?;
+                    }
+                    // Off the ground, not just moving: a plane on the ground can read 2 m/s.
+                    self.wait_for(90, "the plane flying the mission", |g| {
                         let v = g.vehicle.lock().unwrap();
-                        v.mode() == "AUTO" && v.have_position && (v.alt_rel >= 2.0 || v.groundspeed >= 2.0)
+                        v.mode() == "AUTO" && v.have_position && v.alt_rel >= 2.0
                     })?;
                 }
                 self.check(key, "flying the mission", "")
@@ -1517,6 +1606,7 @@ impl Driver for ConsoleDriver {
     }
 
     fn set(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
+        self.note(format!("set: {} = {value}", var.subject));
         match var.key.as_str() {
             "autopilot mode" => {
                 let mode = enum_value(value)?;
@@ -1553,6 +1643,7 @@ impl Driver for ConsoleDriver {
     }
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
+        self.note(format!("perform: {}", event.text));
         match event.key.as_str() {
             // The mission goes on to its next item.
             "plane reaches a waypoint" => {
@@ -1614,7 +1705,12 @@ impl Driver for ConsoleDriver {
     }
 
     fn observe(&mut self, var: &Variable) -> Result<Value, String> {
-        self.read(&var.key)
+        let seen = self.read(&var.key);
+        match &seen {
+            Ok(v) => self.note(format!("observe: {} is {v}", var.subject)),
+            Err(e) => self.note(format!("observe: {}: {e}", var.subject)),
+        }
+        seen
     }
 
     fn settle(&mut self) {

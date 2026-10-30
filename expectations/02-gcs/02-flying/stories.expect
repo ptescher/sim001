@@ -1,9 +1,9 @@
 Story: Flying the circuit and coming home
   As a pilot
   I want the plane to fly the waypoints in order and come home after the last one
-  So that all I have to do is throw it and catch it
+  So that all I have to do is start it and wait
 
-  After the throw, the plane flies its mission without your help. At each waypoint, the
+  After the takeoff, the plane flies its mission without your help. At each waypoint, the
   [[current item]] on the map moves to the next one. After the last waypoint, the mode
   changes to RTL.
 
@@ -21,11 +21,14 @@ Story: Flying the circuit again
   I want to start the mission over without landing
   So that I can fly another lap
 
-  WP1 sends the plane back to the first item of its mission. Thus the plane flies the
-  circuit again, and it does not land.
+  WP1 sends the plane back to the first item of its mission. When the mission starts with a
+  takeoff, that is the takeoff: a plane that is flying takes off again, or has done it already
+  and goes on to the first waypoint, and either way it flies the circuit again. It does not land.
 
   Scenario: Back to the first waypoint
     When the plane reaches a waypoint
     Then the vehicle's current item is 2
+    When the plane reaches a waypoint
+    Then the vehicle's current item is 3
     When the operator restarts the mission
-    Then the vehicle's current item is 1
+    Then the vehicle's current item is at most 2

@@ -4,9 +4,10 @@ Section: Flying a mission
   decides where to go. It also decides when the mission starts again from the first item.
 
 Vocabulary:
-  Phrase: the plane is flying a three-waypoint mission
-    Say: do the steps of [[From plan to flight]], but plan only three waypoints, with no takeoff and no return
+  Phrase: the plane is flying a short mission
+    Say: do the steps of [[From plan to flight]], but plan only a takeoff and two waypoints, with no return. Click the waypoints at least 150 m apart and from home, because ArduPlane counts a waypoint as reached 90 m short of it. The VTOL lifts off by itself from the takeoff
     Given the plan has 3 items
+    And the takeoff is planned
     And the last plan item is WAYPOINT
     And the vehicle mission is up to date
     And the vehicle is armed
@@ -16,4 +17,4 @@ Vocabulary:
 
 Background:
   Follows: the console is connected to a plane on the ground
-  Given the plane is flying a three-waypoint mission
+  Given the plane is flying a short mission
