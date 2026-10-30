@@ -207,7 +207,9 @@ cargo run --release --bin sim001 -- --expect                           # run the
 cargo run --release --bin sim001 -- --expect --docs docs               # ...and rewrite docs/ from the results
 (cd domains/teleoperation/console && cargo run --release -- --station --expect --docs ../../../docs)   # the same for the console (needs Docker)
 cargo run -p expectation -- docs expectations docs    # rewrite docs/ from the saved results
-cargo run --release -p sim001_tasks -- docs                # every runner in turn, with a time limit on each, then the docs
+cargo run --release -p sim001_tasks -- docs                # every runner but the console's in turn, with a time limit on each, then the docs
+cargo run --release -p sim001_tasks -- console             # the console's own suite: hours, in a window (4 h at most); then the docs from all the saved results
+cargo run --release -p sim001_tasks -- console --only Measuring   # the console's tests whose title has that text
 cargo run --release -p sim001_tasks -- pack-docs          # the manual's results and screenshots, packed into site/ for Pages
 cargo run --release --bin sim001 -- --aircraft t1s-vtol --direct --expect --docs docs   # the sim's tests for a plane with a flight controller (ArduPilot beside it)
 ```
