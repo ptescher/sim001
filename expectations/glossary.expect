@@ -440,6 +440,10 @@ Term: Spire
 Term: Depot
   In [[Towers]], the west tower and the east tower. A depot blocks the radio 120 m round it.
 
+Term: Outpost
+  In [[Towers]], a small tower on a lane of the chain, between a home tower and the centre or a
+  flank tower. It gives one point each second. It blocks the radio of the enemy 50 m round it.
+
 Term: Battery
   In [[Towers]], the seconds that a drone can still fly. A flying drone uses 1 s each second, and
   more when enemy drones share its tower circle. A drone recharges over its base and in the

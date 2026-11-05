@@ -131,6 +131,8 @@ pub enum LayoutKind {
     /// Five towers: a home tower each, and a west, a centre and an east tower.
     #[default]
     Valley,
+    /// Eleven towers: the valley's five, and an outpost halfway along each lane on each side.
+    Chain,
 }
 
 impl Layout {
@@ -138,7 +140,33 @@ impl Layout {
     pub fn of(rules: &Rules) -> Layout {
         match rules.layout {
             LayoutKind::Valley => Layout::valley(rules),
+            LayoutKind::Chain => Layout::chain(rules),
         }
+    }
+
+    /// The chain: the valley's five towers, then an outpost halfway between a home tower and the
+    /// west, the centre and the east tower, first Blue's three, then Red's.
+    pub fn chain(rules: &Rules) -> Layout {
+        let mut layout = Layout::valley(rules);
+        let at = |k: usize| layout.towers[k].at;
+        let mut outposts = vec![];
+        for (home, side) in [(0, "Blue"), (4, "Red")] {
+            for (far, lane) in [(1, "west"), (2, "mid"), (3, "east")] {
+                outposts.push(TowerSpec {
+                    name: format!("{side} {lane} outpost"),
+                    kind: Kind::Outpost,
+                    at: (at(home) + at(far)) * 0.5,
+                    holder: None,
+                });
+            }
+        }
+        layout.towers.extend(outposts);
+        layout.lanes = vec![
+            (LaneName::West, vec![0, 5, 1, 8, 4]),
+            (LaneName::Mid, vec![0, 6, 2, 9, 4]),
+            (LaneName::East, vec![0, 7, 3, 10, 4]),
+        ];
+        layout
     }
 
     /// The valley: five towers, three lanes.
@@ -668,5 +696,55 @@ mod tests {
         let q = m.nearest_open(Vec2::new(-250.0, 90.0));
         assert!(m.open(q), "{q}");
         assert!(q.distance(Vec2::new(-250.0, 90.0)) < 70.0);
+    }
+
+    fn chain() -> Map {
+        Map::new(&Rules { layout: LayoutKind::Chain, ..Rules::default() })
+    }
+
+    #[test]
+    fn the_chain_is_the_valley_with_six_outposts_after_its_five_towers() {
+        let (valley, chain) = (Map::new(&Rules::default()), chain());
+        assert_eq!(chain.layout.towers.len(), 11);
+        assert_eq!(chain.layout.towers[..5], valley.layout.towers[..]);
+        assert!(chain.layout.towers[5..].iter().all(|t| t.kind == Kind::Outpost && t.holder.is_none()));
+        let names: Vec<_> = chain.layout.towers[5..].iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "Blue west outpost",
+                "Blue mid outpost",
+                "Blue east outpost",
+                "Red west outpost",
+                "Red mid outpost",
+                "Red east outpost"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_outpost_stands_halfway_along_its_lane_and_on_open_ground() {
+        let m = chain();
+        let (blue_home, red_home) = (m.towers[0], m.towers[4]);
+        for (k, far) in [(5, 1), (6, 2), (7, 3)] {
+            let blue = m.towers[k];
+            assert!(
+                (blue.distance(blue_home) - blue.distance(m.towers[far])).abs() < 1.0,
+                "{k}: halfway home to the tower"
+            );
+            assert!(m.open(blue), "{k}");
+            let red = m.towers[k + 3];
+            assert!((red.distance(red_home) - red.distance(m.towers[far])).abs() < 1.0, "{k}: halfway on Red's side");
+            assert!(m.open(red) && m.in_clearing(red));
+        }
+    }
+
+    #[test]
+    fn each_lane_of_the_chain_runs_through_its_outposts() {
+        let m = chain();
+        let west = m.lanes.iter().find(|l| l.name == LaneName::West).unwrap();
+        assert_eq!(west.points.len(), 5);
+        assert_eq!(west.points[1], m.towers[5]);
+        assert_eq!(west.points[3], m.towers[8]);
     }
 }

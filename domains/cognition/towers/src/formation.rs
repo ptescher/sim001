@@ -16,9 +16,22 @@ pub enum Post {
     OwnHome,
     /// The enemy's home tower.
     EnemyHome,
+    /// The outposts of the chain on the team's own side of the field, and on the enemy's.
+    OwnWest,
+    OwnMid,
+    OwnEast,
+    FarWest,
+    FarMid,
+    FarEast,
 }
 
 impl Post {
+    fn outpost(self, team: Team, lane: usize) -> usize {
+        let own = matches!(self, Post::OwnWest | Post::OwnMid | Post::OwnEast);
+        let side = if (team == Team::Blue) == own { 5 } else { 8 };
+        side + lane
+    }
+
     pub fn tower(self, team: Team) -> usize {
         match (self, team) {
             (Post::West, _) => 1,
@@ -26,6 +39,10 @@ impl Post {
             (Post::East, _) => 3,
             (Post::OwnHome, Team::Blue) | (Post::EnemyHome, Team::Red) => 0,
             (Post::OwnHome, Team::Red) | (Post::EnemyHome, Team::Blue) => 4,
+            // The chain: Blue's outposts are towers 5 to 7, Red's 8 to 10, west, mid, east.
+            (Post::OwnWest | Post::FarWest, _) => Post::outpost(self, team, 0),
+            (Post::OwnMid | Post::FarMid, _) => Post::outpost(self, team, 1),
+            (Post::OwnEast | Post::FarEast, _) => Post::outpost(self, team, 2),
         }
     }
 }
@@ -85,6 +102,15 @@ mod tests {
         let orders = f.decide(&view(Team::Blue)).unwrap();
         let towers: Vec<_> = orders.iter().map(|&(_, o)| o).collect();
         assert_eq!(towers, vec![Order::Take(2), Order::Take(1), Order::Take(3), Order::Take(2), Order::Take(0)]);
+    }
+
+    #[test]
+    fn the_outposts_of_each_side_are_the_other_way_round_for_the_other_team() {
+        assert_eq!(Post::OwnWest.tower(Team::Blue), 5);
+        assert_eq!(Post::OwnEast.tower(Team::Blue), 7);
+        assert_eq!(Post::FarMid.tower(Team::Blue), 9);
+        assert_eq!(Post::OwnWest.tower(Team::Red), 8);
+        assert_eq!(Post::FarEast.tower(Team::Red), 7);
     }
 
     #[test]

@@ -83,3 +83,41 @@ The same round robin with the spire worth less (`formations 40 spire_score=X`; 8
   "no centre" now holds its own, which is the sacrifice of the centre on both sides.
 - `Rules::default()` is not changed: the specs and the commander's tuning say two points. Next:
   set `spire_score` 1.5, regenerate the acceptance numbers, and re-tune the commander.
+
+## Step 2: layouts as data, and the chain (11 towers)
+
+`Rules::layout` picks the layout: `Valley` (five towers, as before: the allocation matrix is
+identical) or `Chain` (the valley's five, and an *outpost* halfway along each of the three lanes
+on each side: Blue west/mid/east, Red west/mid/east). An outpost is a new kind of tower: one
+point a second, no recharge, a radio shadow of 50 m (`outpost_jam_radius`). The halfway places
+are 215 m from a fort and 215 m from the centre, so an outpost's shadow clears the fort's (160 m)
+but overlaps the spire's (200 m) by a ring of 35 m. No smaller shadow fixes that on a 430 m lane,
+so the chain does not keep "no two shadows overlap" of the v2 plan.
+
+`cargo run --release -p cognition_towers --example formations 40 layout=1` (80 games a cell):
+
+| Row against column | commander | mass centre | balanced | own line | far line | raid | spread | snipe | no centre | mean |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| commander | - | +1.42 | +1.28 | +1.02 | +0.91 | +0.93 | +1.12 | +1.39 | +1.31 | **+1.17** |
+| mass centre (all five) | −1.42 | - | −0.78 | −1.12 | −0.97 | −0.56 | −0.96 | −1.33 | −1.27 | −1.05 |
+| balanced (west, east, three at the centre) | −1.28 | +0.78 | - | +0.80 | −0.46 | +0.28 | −0.60 | −0.21 | −1.17 | −0.23 |
+| own line (the three own-side outposts, two at the centre) | −1.02 | +1.12 | −0.80 | - | +1.31 | +1.21 | +0.25 | +1.35 | +1.12 | +0.57 |
+| far line (the three enemy-side outposts, two at the centre) | −0.91 | +0.97 | +0.46 | −1.31 | - | +0.69 | −0.80 | +1.22 | −0.43 | −0.01 |
+| raid (two at the enemy home) | −0.93 | +0.56 | −0.28 | −1.21 | −0.69 | - | −1.44 | +1.01 | −0.04 | −0.38 |
+| spread (own west and east outposts, the enemy's mid, centre, west) | −1.12 | +0.96 | +0.60 | −0.25 | +0.80 | +1.44 | - | +1.49 | +1.14 | +0.63 |
+| snipe (all five at the enemy-side outposts) | −1.39 | +1.33 | +0.21 | −1.35 | −1.22 | −1.01 | −1.49 | - | −1.08 | −0.75 |
+| no centre | −1.31 | +1.27 | +1.17 | −1.12 | +0.43 | +0.04 | −1.14 | +1.08 | - | +0.05 |
+
+Reading it:
+
+- **The fixed allocations cycle, none dominates.** A closed 3-cycle: balanced beats own line
+  (+0.80), own line beats far line (+1.31), far line beats balanced (+0.46). Mass centre and
+  snipe lose to nearly everything. Spread beats raid (+1.44), snipe (+1.49), no centre (+1.14)
+  and far line (+0.80), and loses only to the commander and, narrowly, to own line (−0.25).
+- **A reactive commander beats every fixed allocation** (+0.9 to +1.4). On the chain there are
+  enough towers that a team that holds what it takes and sends the next drone to the nearest
+  free tower out-scores any plan that does not react. The reaction is where the skill is.
+  Against the valley's five towers the default commander only broke even (+0.54 mean).
+- So the next question is not whether to add towers (it does what the plan wanted: no single
+  allocation wins) but whether a *captain* can beat the default commander. That is a job for the
+  captain league on the chain layout.

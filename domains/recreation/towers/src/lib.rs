@@ -45,8 +45,10 @@ pub enum Kind {
     Fort,
     /// The centre tower: the widest shadow, the longest sight and the most points.
     Spire,
-    /// A flank tower: the narrowest shadow.
+    /// A flank tower: a narrow shadow, and it recharges the drones.
     Depot,
+    /// A small tower on a lane of the chain, between two bigger ones: a shadow of 50 m.
+    Outpost,
 }
 
 /// A side.
@@ -168,6 +170,7 @@ pub struct Rules {
     pub jam_radius: f32,
     pub spire_jam_radius: f32,
     pub depot_jam_radius: f32,
+    pub outpost_jam_radius: f32,
     /// A drone in a radio shadow is in contact if a friend in contact is this near (m, across); 0 for
     /// no relay.
     pub mesh_range: f32,
@@ -226,6 +229,7 @@ impl Default for Rules {
             jam_radius: 160.0,
             spire_jam_radius: 200.0,
             depot_jam_radius: 120.0,
+            outpost_jam_radius: 50.0,
             mesh_range: 70.0,
             mesh_hops: 3,
             link_timeout: 45.0,
@@ -295,6 +299,7 @@ impl Rules {
             Kind::Fort => self.jam_radius,
             Kind::Spire => self.spire_jam_radius,
             Kind::Depot => self.depot_jam_radius,
+            Kind::Outpost => self.outpost_jam_radius,
         }
     }
 

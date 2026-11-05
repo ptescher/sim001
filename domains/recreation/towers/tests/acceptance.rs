@@ -619,6 +619,29 @@ fn bindings() -> Bindings<World> {
         .observe("the time out of contact on board the first Blue drone", |w| {
             tenth(w.game.edge_obs(w.game.drone(Team::Blue, 0)).silent)
         })
+        .observe("the layout", |w| match w.game.rules.layout {
+            recreation_towers::map::LayoutKind::Valley => "the valley",
+            recreation_towers::map::LayoutKind::Chain => "the chain",
+        })
+        .arrange("the layout", |w, v| {
+            let layout = if v.as_str() == Some("the chain") {
+                recreation_towers::map::LayoutKind::Chain
+            } else {
+                recreation_towers::map::LayoutKind::Valley
+            };
+            let rules = Rules { layout, ..w.game.rules };
+            w.game = Game::new(rules);
+            w.game.look();
+        })
+        .observe("the towers in the game", |w| w.game.towers.len() as f64)
+        .observe("the Blue west outpost", |w| holder_name(w.tower("Blue west outpost").holder))
+        .observe("the Blue drones in the Blue west outpost circle", |w| w.count(Team::Blue, "Blue west outpost", true))
+        .set("the Blue drones in the Blue west outpost circle", move |w, v| {
+            w.in_circle(Team::Blue, "Blue west outpost", count(v), true)
+        })
+        .arrange("the Blue drones in the Blue west outpost circle", move |w, v| {
+            w.in_circle(Team::Blue, "Blue west outpost", count(v), true)
+        })
         .observe("the batteries", |w| if w.game.rules.standard_battery > 0.0 { "on" } else { "off" })
         .arrange("the batteries", |w, v| {
             let on = v.as_str() == Some("on");
