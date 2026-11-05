@@ -8,14 +8,18 @@
 //! code can play each other.
 
 mod autonomy;
+mod edge;
 
-pub use autonomy::{After, Autonomy, Comparison, Failsafe, Persist, Prepared, Surface, compare, compare_with};
+pub use autonomy::{
+    After, Autonomy, Comparison, Failsafe, Persist, Prepared, Surface, compare, compare_captains, compare_with,
+};
+pub use edge::{Edge, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
 use recreation_towers::flight::{ORBIT_RADIUS, orbit_height};
 use recreation_towers::{
-    Commander, CommanderTuning, Game, Instruction, Order, Outcome, Phase, Rules, Standing, Team, TeamView,
+    Commander, CommanderTuning, EdgeObs, Game, Instruction, Order, Outcome, Phase, Rules, Standing, Team, TeamView,
 };
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -48,6 +52,12 @@ pub trait Captain {
     fn standing(&mut self, _view: &TeamView, _orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
         vec![]
     }
+
+    /// A drone that is out of contact flies `order`: its own decision from what it knows on
+    /// board, once a second. `None` goes on with the order.
+    fn edge(&mut self, _team: Team, _obs: &EdgeObs, _order: Order) -> Option<Order> {
+        None
+    }
 }
 
 impl<C: Captain + ?Sized> Captain for &mut C {
@@ -57,6 +67,10 @@ impl<C: Captain + ?Sized> Captain for &mut C {
 
     fn standing(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
         (**self).standing(view, orders)
+    }
+
+    fn edge(&mut self, team: Team, obs: &EdgeObs, order: Order) -> Option<Order> {
+        (**self).edge(team, obs, order)
     }
 }
 
@@ -172,6 +186,7 @@ pub struct Match {
     /// What each drone was told: its order and its standing order.
     told: Vec<Instruction>,
     next_decision: f32,
+    next_edge: f32,
     dark: [f32; 2],
     /// Each drone is down now, and how many times each team's drones went down.
     down: Vec<bool>,
@@ -221,6 +236,7 @@ impl Match {
             pending: vec![],
             told: vec![Instruction::default(); 2 * rules.drones],
             next_decision: 0.0,
+            next_edge: 0.0,
             dark: [0.0; 2],
             down: vec![false; 2 * rules.drones],
             downs: [0; 2],
@@ -257,9 +273,29 @@ impl Match {
             }
             false
         });
+        let edge_now = game.time >= self.next_edge;
+        if edge_now {
+            self.next_edge += DECIDE_EVERY;
+        }
         for (i, told) in self.told.iter_mut().enumerate() {
             // Out of contact long enough, a drone flies its standing order, or home.
             told.tick(game.silent[i], game.rules.link_timeout, game.charge(i), game.rules.bingo);
+            // A drone out of contact decides for itself, once a second, from what it knows on board.
+            if edge_now
+                && game.silent[i] > 0.0
+                && game.drones[i].phase == Phase::Flying
+                && let Some(order) = told.order
+            {
+                let team = game.drones[i].team;
+                let captain: &mut dyn Captain = if team == Team::Blue { &mut *blue } else { &mut *red };
+                if let Some(new) = captain.edge(team, &game.edge_obs(i), order)
+                    && new != order
+                {
+                    // Its own decision replaces the standing order: the failsafe still holds.
+                    told.order = Some(new);
+                    told.standing = None;
+                }
+            }
             if flyers[i].order != told.order {
                 flyers[i].hold = flyers[i].at;
                 flyers[i].order = told.order;

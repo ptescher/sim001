@@ -133,12 +133,22 @@ pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comp
 
 /// The same, by `rules`.
 pub fn compare_with(rules: Rules, a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comparison, String> {
-    let seat = |autonomy| Prepared { captain: Commander::new(rules), autonomy };
+    let seat = |autonomy| -> Box<dyn Captain + '_> { Box::new(Prepared { captain: Commander::new(rules), autonomy }) };
+    compare_captains(rules, &|| seat(a), &|| seat(b), seeds)
+}
+
+/// `a` against `b` on each seed, each played on both sides, with a new captain for each game.
+pub fn compare_captains<'a>(
+    rules: Rules,
+    a: &dyn Fn() -> Box<dyn Captain + 'a>,
+    b: &dyn Fn() -> Box<dyn Captain + 'a>,
+    seeds: &[u64],
+) -> Result<Comparison, String> {
     let mut c = Comparison::default();
     let mut scores = vec![];
     for &seed in seeds {
-        let first: TowersResult = play_with(rules, &mut seat(a), &mut seat(b), seed)?;
-        let second: TowersResult = play_with(rules, &mut seat(b), &mut seat(a), seed)?;
+        let first: TowersResult = play_with(rules, &mut *a(), &mut *b(), seed)?;
+        let second: TowersResult = play_with(rules, &mut *b(), &mut *a(), seed)?;
         for (r, mine) in [(&first, Team::Blue), (&second, Team::Red)] {
             let s = r.score_for(mine, rules.win_score);
             scores.push(s);
