@@ -64,8 +64,10 @@ while it.
 league/
   champion.json        the champion: tuning, tactics, commit, hash, its arena results
   history.jsonl        every challenger: strategy, parent, diff, results, verdict
-  generations/NNN.md   a readable report per generation
-  worktrees/           Claude agents' checkouts (removed after each generation)
+  runs.jsonl           every Claude run: cost, turns, time, whether it was stopped
+  generations/NNN.md   a readable report per generation (with what each Claude run cost)
+  work/NNN/            Claude agents' worktrees (removed after the generation), and each
+                       run's record, kept: STRATEGY.run/ (prompt, output, the files it wrote)
 ```
 
 **Promotion.** A challenger plays the same N seeds (256 by default) as the champion. The
@@ -102,8 +104,10 @@ that win.
 | `claude-engineer` | `claude -p` in a git worktree off the champion's commit. It may change the executor's primitives or the brain (not the envelope). The league runs `cargo test -p cognition_executor -p cognition_agent` there, then builds the arena there and plays it | One Claude run plus a build |
 
 Claude runs headless (`claude -p --output-format json`), with its tools limited to reading,
-editing inside its worktree, and `cargo`. It has a turn budget and a wall-clock budget. The
-prompt is in `domains/cognition/league/prompts/`. What it says it did is not trusted: the
+editing, and `cargo`. Each run has a budget of $5 (`--max-budget-usd`) and 30 minutes
+(`--claude-minutes`). Past its time the league stops the run with everything it started (its
+process group) and refuses its challenger (`timed out`). The prompt is in
+`domains/cognition/league/prompts/`. What it says it did is not trusted: the
 league checks the diff and the tests, and the arena decides.
 
 ## The loop

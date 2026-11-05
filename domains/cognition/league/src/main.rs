@@ -5,6 +5,7 @@
 //! play   [--candidate X] [--opponent Y] [--seeds N | --seed-list a,b,c] [--json]
 //! judge  --champion X --challenger Y [--seeds N] [--opponent-bin PROGRAM]
 //! run    [--generations N] [--strategies es,claude-tuner,claude-engineer] [--dir DIR] [--seeds N]
+//!        [--claude-minutes M]   (each Claude run's time, 30 unless given; past it, it is stopped)
 //! start  --champion X [--dir DIR]   (a new league: what was in DIR goes)
 //! status [--dir DIR]
 //! captain-seat                     (a captain on stdin and stdout, for the league to play)
@@ -93,13 +94,20 @@ fn main() {
         Some("run") => {
             let gens: u32 = arg("--generations").and_then(|s| s.parse().ok()).unwrap_or(1);
             let names = arg("--strategies").unwrap_or("es".into());
+            let claude_time = arg("--claude-minutes")
+                .map(|m| m.parse::<f64>().unwrap_or_else(|_| fail(format!("--claude-minutes {m}: not a number"))))
+                .map(|m| std::time::Duration::from_secs_f64(m * 60.0));
+            let claude = |c: Claude| match claude_time {
+                Some(t) => c.with_time(t),
+                None => c,
+            };
             let mut strategies: Vec<Box<dyn Strategy>> = names
                 .split(',')
                 .map(|n| -> Box<dyn Strategy> {
                     match n.trim() {
                         "es" => Box::new(Es::new(fastrand::u64(..))),
-                        "claude-tuner" => Box::new(Claude::tuner()),
-                        "claude-engineer" => Box::new(Claude::engineer()),
+                        "claude-tuner" => Box::new(claude(Claude::tuner())),
+                        "claude-engineer" => Box::new(claude(Claude::engineer())),
                         other => fail(format!("no strategy called {other} (es, claude-tuner, claude-engineer)")),
                     }
                 })
