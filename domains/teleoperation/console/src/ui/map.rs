@@ -18,6 +18,10 @@ pub enum Tool {
     Plan,
     /// Point the aircraft camera at a ground point and keep it there.
     Look,
+    /// Click two points: the map shows the distance between them.
+    Measure,
+    /// Click the corners of an area: FILL GRID covers it with waypoints.
+    Survey,
 }
 
 pub struct MapState {
@@ -28,6 +32,13 @@ pub struct MapState {
     pub tool: Tool,
     pub plan: Vec<Waypoint>,
     pub plan_alt: f32,
+    /// The points of a measurement: none, one (the start) or two (and the distance is shown).
+    pub measure: Vec<(f32, f32)>,
+    /// The corners of the area of a survey grid so far.
+    pub survey: Vec<(f32, f32)>,
+    /// How many items the plan had when its heights were checked against the terrain, and whether
+    /// they were all clear: any change to the plan makes the check old.
+    pub checked: Option<(usize, bool)>,
     pub drag: Option<((f32, f32), (f32, f32))>,
     pub cursor: Option<(f32, f32)>,
     pub bounds: Bounds<Pixels>,
@@ -42,6 +53,9 @@ impl MapState {
             tool: Tool::Pan,
             plan: vec![],
             plan_alt: 40.0,
+            measure: vec![],
+            survey: vec![],
+            checked: None,
             drag: None,
             cursor: None,
             bounds: Bounds::default(),
@@ -450,6 +464,33 @@ fn paint_inner(
     polyline(window, &[(sbx, sby - 6.0), (sbx, sby), (sbx + bar, sby), (sbx + bar, sby - 6.0)], 2.0, c(WHITE));
     text(window, cx, &format!("{nice:.0} m"), sbx + bar * 0.5, sby - 12.0, fs * 0.9, c(WHITE), Align::Center);
 
+    // The measurement: its points, the line between them and the distance.
+    let ends: Vec<_> = st.measure.iter().map(|&(n, e)| to_s(n, e)).collect();
+    if let [a, b] = ends[..] {
+        line(window, a, b, 2.0, c(WHITE));
+        let (dn, de) = (st.measure[1].0 - st.measure[0].0, st.measure[1].1 - st.measure[0].1);
+        let metres = (dn * dn + de * de).sqrt();
+        let s = if metres >= 1000.0 { format!("{:.2} km", metres / 1000.0) } else { format!("{metres:.0} m") };
+        let tw = s.len() as f32 * fs * 0.62 + 12.0;
+        let (mx, my) = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+        fill_rect(window, mx - tw * 0.5, my - 22.0, tw, 20.0, ca(0x000000, 0.7));
+        text(window, cx, &s, mx, my - 12.0, fs * 0.9, c(WHITE), Align::Center);
+    }
+    for (sx, sy) in &ends {
+        fill_circle(window, *sx, *sy, 4.0, c(WHITE));
+    }
+
+    // The area of a survey grid being drawn.
+    let area: Vec<_> = st.survey.iter().map(|&(n, e)| to_s(n, e)).collect();
+    if area.len() > 1 {
+        let mut closed = area.clone();
+        closed.push(area[0]);
+        dashed(window, &closed, 2.0, 6.0, c(AMBER));
+    }
+    for (sx, sy) in &area {
+        fill_circle(window, *sx, *sy, 4.0, c(AMBER));
+    }
+
     // Cursor readout.
     if let Some((n, e)) = st.cursor {
         let (lat, lon) = d.origin.to_ll(n, e);
@@ -475,6 +516,10 @@ fn paint_inner(
             Some((format!("PLAN: click adds waypoint at {:.0} m, right-click removes last", st.plan_alt), AMBER))
         }
         Tool::Look => Some(("LOOK: click a point to keep the camera on it".to_string(), SPI)),
+        Tool::Survey => {
+            Some((format!("GRID: click the corners of the area ({} so far), then FILL GRID", st.survey.len()), AMBER))
+        }
+        Tool::Measure => Some(("MEASURE: click two points, and the map shows the distance".to_string(), WHITE)),
     };
     if let Some((s, col)) = hint {
         let tw = s.len() as f32 * fs * 0.62 + 16.0;

@@ -63,10 +63,29 @@ fn fit(id: &'static str, content: Div) -> Div {
     )
 }
 
+/// The rows of buttons that are cut to one line now, behind a MORE button: their other buttons are
+/// painted, but out of sight, and a click there lands on what is beneath them.
+pub fn rows_cut_short() -> Vec<&'static str> {
+    let open = EXPANDED.with(|e| e.borrow().clone());
+    ROWS.with(|r| {
+        let mut cut: Vec<_> =
+            r.borrow().iter().filter(|(id, h)| **h > ROW_H + 2.0 && !open.contains(*id)).map(|(id, _)| *id).collect();
+        cut.sort_unstable();
+        cut
+    })
+}
+
 /// Where the button with this id is on screen now, if it is.
 pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
     BUTTONS.with(|b| b.borrow().get(id).copied())
 }
+
+/// The lines of a survey grid are this far apart (m).
+const SURVEY_SPACING: f32 = 40.0;
+/// A height check raises a waypoint to at least this far above the ground below it (m).
+const TERRAIN_CLEARANCE: f32 = 30.0;
+/// The highest a plan altitude goes (ALT+ stops here).
+const MAX_PLAN_ALT: f32 = 300.0;
 
 /// A VTOL's own modes (ArduPlane QuadPlane), shown when the plane has lift rotors.
 const Q_MODE_BUTTONS: [&str; 5] = ["QSTABILIZE", "QHOVER", "QLOITER", "QLAND", "QRTL"];
@@ -180,6 +199,21 @@ impl Gcs {
                 };
                 self.send(Cmd::Goto { lat, lon, alt });
                 self.map.tool = Tool::Pan;
+            }
+            (MouseButton::Left, Tool::Survey) => self.map.survey.push((n, e)),
+            (MouseButton::Right, Tool::Survey) => {
+                self.map.survey.pop();
+            }
+            (MouseButton::Left, Tool::Measure) => {
+                // The first click starts a measurement (and forgets the last one), the second ends
+                // it and lets the map pan again, with the distance still shown.
+                if self.map.measure.len() >= 2 {
+                    self.map.measure.clear();
+                }
+                self.map.measure.push((n, e));
+                if self.map.measure.len() == 2 {
+                    self.map.tool = Tool::Pan;
+                }
             }
             (MouseButton::Left, Tool::Look) => {
                 if let Some(s) = &self.sensor {
@@ -439,6 +473,7 @@ impl Gcs {
             .child(tool_btn("goto", "GOTO", Tool::Goto))
             .children(self.sensor.is_some().then(|| tool_btn("look", "LOOK", Tool::Look)))
             .child(tool_btn("plan", "PLAN", Tool::Plan))
+            .child(tool_btn("measure", "MEASURE", Tool::Measure))
             .child(
                 button("alt-dn", "ALT-", Style::Normal)
                     .on_click(cx.listener(|this, _, _, _| this.map.plan_alt = (this.map.plan_alt - 10.0).max(10.0))),
@@ -453,6 +488,17 @@ impl Gcs {
                 this.map.plan.push(Waypoint { kind: WpKind::Rtl, lat: 0.0, lon: 0.0, alt: 0.0 });
             })))
             .child(button("clear", "CLEAR", Style::Normal).on_click(cx.listener(|this, _, _, _| this.map.plan.clear())))
+            .child(tool_btn("survey", "GRID", Tool::Survey))
+            .child(
+                button("fill-grid", "FILL GRID", Style::Normal).on_click(cx.listener(|this, _, _, _| this.fill_grid())),
+            )
+            .child(
+                button("check-heights", "CHECK HT", Style::Normal)
+                    .on_click(cx.listener(|this, _, _, _| this.check_heights())),
+            )
+            .child(button("cmd", "CMD", Style::Normal).on_click(cx.listener(|this, _, _, _| this.next_command())))
+            .child(button("save-plan", "SAVE", Style::Normal).on_click(cx.listener(|this, _, _, _| this.save_plan())))
+            .child(button("load-plan", "LOAD", Style::Normal).on_click(cx.listener(|this, _, _, _| this.load_plan())))
             .child(
                 button(
                     "upload",
@@ -481,6 +527,96 @@ impl Gcs {
                     .on_click(cx.listener(|this, _, _, _| this.send(Cmd::SetCurrentWp(1)))),
             );
         fit("r-map", bar).flex_1().min_w(px(0.0))
+    }
+
+    /// Covers the area of GRID with lines of waypoints at the plan altitude (Auto WP, Grid).
+    fn fill_grid(&mut self) {
+        let area = std::mem::take(&mut self.map.survey);
+        let points = super::survey::grid(&area, SURVEY_SPACING);
+        if points.is_empty() {
+            self.log(4, "A grid needs an area: use GRID and click at least three corners");
+            return;
+        }
+        for (n, e) in points {
+            let (lat, lon) = self.origin.to_ll(n, e);
+            self.map.plan.push(Waypoint { kind: WpKind::Waypoint, lat, lon, alt: self.map.plan_alt });
+        }
+        self.map.tool = Tool::Pan;
+    }
+
+    /// Raises the waypoints that are too near the ground below them; the plan is then checked
+    /// (until it changes), or too low somewhere if a waypoint would have to go above 300 m.
+    fn check_heights(&mut self) {
+        let Some(terrain) = self.terrain.clone() else {
+            self.log(4, "No terrain map to check the heights against");
+            return;
+        };
+        let mut clear = true;
+        for wp in self.map.plan.iter_mut().filter(|w| w.has_position()) {
+            let (n, e) = self.origin.to_ne(wp.lat, wp.lon);
+            let Some(ground) = terrain.height(n, e) else { continue };
+            let wanted = (ground + TERRAIN_CLEARANCE).max(0.0);
+            if wp.alt < wanted {
+                wp.alt = wanted.min(MAX_PLAN_ALT);
+                clear &= wanted <= MAX_PLAN_ALT;
+            }
+        }
+        self.map.checked = Some((self.map.plan.len(), clear));
+    }
+
+    /// Changes the command of the last item of the plan to the next one, in its place.
+    fn next_command(&mut self) {
+        let Some(last) = self.map.plan.last().copied() else {
+            self.log(4, "No plan item to change");
+            return;
+        };
+        let kind = match last.kind {
+            WpKind::Waypoint => WpKind::LoiterUnlim,
+            WpKind::LoiterUnlim => WpKind::LoiterTurns,
+            WpKind::LoiterTurns => WpKind::Land,
+            WpKind::Land => WpKind::Rtl,
+            WpKind::Rtl | WpKind::Takeoff | WpKind::Other(_) => WpKind::Waypoint,
+        };
+        // An RTL has no place of its own: the item that takes its place goes where the one before it is.
+        let (lat, lon) = match (last.lat == 0.0 && last.lon == 0.0, self.map.plan.len().checked_sub(2)) {
+            (true, Some(before)) => (self.map.plan[before].lat, self.map.plan[before].lon),
+            _ => (last.lat, last.lon),
+        };
+        let item = match kind {
+            WpKind::Rtl => Waypoint { kind, lat: 0.0, lon: 0.0, alt: 0.0 },
+            _ => Waypoint { kind, lat, lon, alt: if last.alt > 0.0 { last.alt } else { self.map.plan_alt } },
+        };
+        *self.map.plan.last_mut().expect("a last item") = item;
+        self.map.checked = None;
+    }
+
+    /// Writes the plan to the mission file (Mission Planner's Save WP File).
+    fn save_plan(&self) {
+        let home = {
+            let v = self.vehicle.lock().unwrap();
+            v.home.map_or_else(|| self.origin.to_ll(0.0, 0.0), |h| (h.0, h.1))
+        };
+        let path = crate::wpfile::path();
+        match crate::wpfile::save(&path, &self.map.plan, home) {
+            Ok(()) => self.log(6, format!("Plan saved to {}", path.display())),
+            Err(e) => self.log(4, format!("Could not save the plan: {e}")),
+        }
+    }
+
+    /// Brings the plan back from the mission file (Load WP File). With no file, nothing changes.
+    fn load_plan(&mut self) {
+        let path = crate::wpfile::path();
+        if !path.exists() {
+            self.log(4, "No mission file to load: use SAVE first");
+            return;
+        }
+        match crate::wpfile::load(&path) {
+            Ok(plan) => {
+                self.log(6, format!("Plan loaded from {} ({} items)", path.display(), plan.len()));
+                self.map.plan = plan;
+            }
+            Err(e) => self.log(4, format!("Could not load the plan: {e}")),
+        }
     }
 
     pub(crate) fn add_takeoff(&mut self) {
@@ -1076,6 +1212,9 @@ impl MapStateSnapshot {
             tool: m.tool,
             plan: m.plan.clone(),
             plan_alt: m.plan_alt,
+            measure: m.measure.clone(),
+            survey: m.survey.clone(),
+            checked: m.checked,
             drag: None,
             cursor: m.cursor,
             bounds: m.bounds,

@@ -140,6 +140,10 @@ struct Occluded(bool);
 #[derive(Resource, Default)]
 struct Pressed(Vec<KeyCode>);
 
+/// How long one test may take (`SIM001_EXPECT_TIMEOUT`): the longest, a hover tutorial that arms,
+/// lifts off, holds and lands with ArduPilot, takes ~70 s.
+const TEST_SECS: u64 = 100;
+
 /// How much faster than real time the tests run the sim (`SIM001_EXPECT_SPEED`, default 8). The
 /// stand-in pilot flies inside the physics loop, so it flies the same at any speed.
 #[derive(Resource, Clone, Copy)]
@@ -451,7 +455,7 @@ struct SimDriver {
     /// The sim's state, to read and change without waiting for a frame.
     core: Option<Arc<Mutex<SimCore>>>,
     /// When the test that is running has to be done (`SIM001_EXPECT_TIMEOUT` s after it starts,
-    /// default 40): a test that is not done by then is a failure, and the suite moves on.
+    /// default [`TEST_SECS`]): a test that is not done by then is a failure, and the suite moves on.
     deadline: Mutex<Option<std::time::Instant>>,
 }
 
@@ -478,7 +482,8 @@ impl SimDriver {
             if let Some(b) = self.suite_time.filter(|b| b.spent()) {
                 return Err(format!("the suite ran out of time ({} s)", b.limit().as_secs()));
             }
-            let secs = std::env::var("SIM001_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(40);
+            let secs =
+                std::env::var("SIM001_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(TEST_SECS);
             return Err(format!("the test ran out of time ({secs} s)"));
         }
         Ok(())
@@ -701,7 +706,7 @@ impl Driver for SimDriver {
             input.wizard = None;
             input.keyboard_only = true;
         });
-        let secs = std::env::var("SIM001_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(40);
+        let secs = std::env::var("SIM001_EXPECT_TIMEOUT").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(TEST_SECS);
         let allowed = Duration::from_secs(secs);
         let allowed = self.suite_time.map_or(allowed, |b| b.cap(allowed));
         *self.deadline.lock().unwrap() = Some(std::time::Instant::now() + allowed);

@@ -16,6 +16,11 @@ Feature: The loop
   the [[safety envelope]]. A promoted change to the code goes on the branch `league/champion`.
   The league never merges it into `master`.
 
+  Each Claude run has a limit of money and a limit of time. The league stops a run when its time
+  is up, and refuses its challenger. The league keeps a record of each Claude run: the prompt,
+  what Claude said and the files that it wrote. The report of the generation gives the cost of
+  each run.
+
   Expectation: Each generation is written down
     Given the league is new
     When the league runs one generation with the evolution strategy
@@ -39,3 +44,14 @@ Feature: The loop
     When a Claude strategy gives a challenger that changes the envelope
     Then the verdict is refused
     And the reason is it changes the envelope
+
+  Expectation: A Claude run that does not stop in time is stopped
+    Given the league is new
+    When a Claude strategy is still working when its time is up
+    Then the verdict is refused
+    And the reason is it ran out of time
+
+  Expectation: Each Claude run is written down
+    Given the league is new
+    When a Claude strategy gives new numbers
+    Then the Claude run is written down

@@ -279,25 +279,26 @@ mod tests {
 
     #[test]
     fn at_the_start_it_spreads_its_drones_over_the_neutral_towers_nearest_first() {
-        let g = Game::new(Rules::default());
+        let g = Game::new(Rules { drones: 3, ..Rules::default() });
         let mut c = Commander::new(g.rules);
         let (west, centre, east) = (g.tower("west"), g.tower("centre"), g.tower("east"));
         let orders = c.decide(&g.view(Team::Blue));
-        assert_eq!(orders, vec![(0, Order::Take(west)), (1, Order::Take(centre)), (2, Order::Take(east))]);
+        // Each tower, nearest the base first, gets the nearest drone: the centre's is the third.
+        assert_eq!(orders, vec![(0, Order::Take(west)), (1, Order::Take(east)), (2, Order::Take(centre))]);
     }
 
     #[test]
     fn a_drone_keeps_its_tower_until_the_team_holds_it_then_goes_on() {
-        let mut g = Game::new(Rules::default());
+        let mut g = Game::new(Rules { drones: 3, ..Rules::default() });
         let mut c = Commander::new(g.rules);
         let (west, centre) = (g.tower("west"), g.tower("centre"));
         decide(&mut c, &g);
         // The drone for the centre flies off towards it: still its order, though the west tower is
         // now nearer to it than the centre is to the others.
-        let i = g.drone(Team::Blue, 1);
+        let i = g.drone(Team::Blue, 2);
         g.drones[i] = crate::Drone { at: Vec2::new(-50.0, -150.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
         g.step(0.1);
-        assert_eq!(decide(&mut c, &g)[1], Some(Order::Take(centre)));
+        assert_eq!(decide(&mut c, &g)[2], Some(Order::Take(centre)));
         // Blue takes the centre: that drone goes on to the nearest tower nobody is sent to.
         g.towers[centre].holder = Some(Team::Blue);
         g.towers[centre].control = 1.0;
@@ -305,12 +306,12 @@ mod tests {
         g.step(0.1);
         let orders = decide(&mut c, &g);
         assert_eq!(orders[0], Some(Order::Take(west)));
-        assert_eq!(orders[1], Some(Order::Take(g.tower("Red home"))));
+        assert_eq!(orders[2], Some(Order::Take(g.tower("Red home"))));
     }
 
     #[test]
     fn a_crashed_drone_gets_no_order_and_the_others_keep_theirs() {
-        let mut g = Game::new(Rules::default());
+        let mut g = Game::new(Rules { drones: 3, ..Rules::default() });
         let mut c = Commander::new(g.rules);
         let before = decide(&mut c, &g);
         let i = g.drone(Team::Blue, 1);
@@ -319,12 +320,12 @@ mod tests {
         assert_eq!(orders, vec![before[0], None, before[2]]);
         // Back at its base, it gets the tower nobody is on.
         g.drones[i].phase = Phase::Ground;
-        assert_eq!(decide(&mut c, &g)[1], Some(Order::Take(g.tower("centre"))));
+        assert_eq!(decide(&mut c, &g)[1], Some(Order::Take(g.tower("east"))));
     }
 
     #[test]
     fn spare_drones_join_the_nearest_tower_the_team_does_not_hold() {
-        let mut g = Game::new(Rules::default());
+        let mut g = Game::new(Rules { drones: 3, ..Rules::default() });
         for name in ["west", "east"] {
             let t = g.tower(name);
             g.towers[t].holder = Some(Team::Blue);
@@ -335,7 +336,7 @@ mod tests {
         // nearer one.
         let orders = decide(&mut Commander::new(g.rules), &g);
         let (centre, red) = (Some(Order::Take(g.tower("centre"))), Some(Order::Take(g.tower("Red home"))));
-        assert_eq!(orders, vec![red, centre, centre]);
+        assert_eq!(orders, vec![centre, red, centre]);
     }
 
     /// Blue's first drone and Red's second fight over the west tower, with its control at

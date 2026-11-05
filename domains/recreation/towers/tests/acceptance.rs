@@ -498,6 +498,17 @@ fn bindings() -> Bindings<World> {
         })
         .observe("the order of the second Blue drone", |w| w.order_of(1))
         .observe("the order of the third Blue drone", |w| w.order_of(2))
+        .observe("the towers with a Blue drone on the way", |w| {
+            let mut on_the_way: Vec<usize> = (0..w.game.rules.drones)
+                .filter_map(|k| match w.blue.order(k) {
+                    Some(Order::Take(t)) => Some(t),
+                    _ => None,
+                })
+                .collect();
+            on_the_way.sort_unstable();
+            on_the_way.dedup();
+            on_the_way.len() as f64
+        })
         .on("the computer commander of Blue decides", |w| {
             let view = w.game.view(Team::Blue);
             w.blue.decide(&view);
@@ -716,8 +727,8 @@ fn the_section_documents_itself_with_pictures_of_the_map() {
     } else {
         a.docs(Some(&report)).write(&out).unwrap();
     }
-    let shot = out
-        .join("screenshots/towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second/01.svg");
+    // After 20 s with each team holding its home tower, the map shows 20 points each.
+    let shot = out.join("screenshots/towers--rules--coverage--one-drone-takes-a-neutral-tower-in-20-seconds/01.svg");
     let svg = std::fs::read_to_string(&shot).unwrap_or_else(|e| panic!("{}: {e}", shot.display()));
-    assert!(svg.contains("BLUE 20"), "the score after 10 s with two towers: {svg}");
+    assert!(svg.contains("BLUE 20") && svg.contains("RED 20"), "the score after 20 s with a home tower each: {svg}");
 }

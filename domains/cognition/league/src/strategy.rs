@@ -13,7 +13,7 @@ pub use crate::contest::Role;
 use crate::contest::{Contest, Group};
 use crate::judge::{Judgement, Reason, Verdict};
 use crate::league::{Record, git};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -49,6 +49,91 @@ pub trait Strategy: Send {
     fn propose(&mut self, ctx: &Context) -> Vec<Proposal>;
     /// How each of its proposals fared, in the order given.
     fn feedback(&mut self, _entries: &[Entry], _judged: &[Judgement]) {}
+    /// The runs of an agent since this was last asked (a Claude strategy's: what each cost).
+    fn take_runs(&mut self) -> Vec<Run> {
+        vec![]
+    }
+}
+
+/// One run of an agent, as the league keeps it (`runs.jsonl`, and the report).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Run {
+    pub strategy: String,
+    #[serde(default)]
+    pub generation: u32,
+    /// What it cost and how many turns it took, as `claude --output-format json` says; unknown
+    /// when it printed nothing (it was stopped, or it failed).
+    pub cost_usd: Option<f64>,
+    pub turns: Option<u32>,
+    /// The wall-clock time it took.
+    pub seconds: f64,
+    pub timed_out: bool,
+    /// Where its prompt, its output and the files it wrote are kept, from the league's folder.
+    #[serde(default)]
+    pub folder: String,
+    /// The last thing it said.
+    #[serde(default)]
+    pub said: String,
+}
+
+impl Run {
+    /// A run from what `claude --output-format json` printed (`out`).
+    pub fn read(strategy: &str, out: &[u8], seconds: f64, timed_out: bool) -> Run {
+        let v: serde_json::Value = serde_json::from_slice(out).unwrap_or_default();
+        Run {
+            strategy: strategy.into(),
+            cost_usd: v.get("total_cost_usd").and_then(|c| c.as_f64()),
+            turns: v.get("num_turns").and_then(|t| t.as_u64()).map(|t| t as u32),
+            seconds,
+            timed_out,
+            said: v.get("result").and_then(|r| r.as_str()).unwrap_or("").to_string(),
+            ..Run::default()
+        }
+    }
+}
+
+/// Runs `cmd` for at most `time`: true if it finished, false if it was stopped. On Unix it runs
+/// in a process group of its own, and the whole group is stopped: what it started (a build, a
+/// test) would otherwise go on, and hold its output open. Being in a group of its own, it does
+/// not get the terminal's Ctrl-C: a league stopped that way leaves it to its own time and budget.
+pub fn run_for(cmd: &mut Command, time: std::time::Duration) -> std::io::Result<bool> {
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(cmd, 0);
+    let mut child = cmd.spawn()?;
+    let deadline = std::time::Instant::now() + time;
+    loop {
+        if child.try_wait()?.is_some() {
+            return Ok(true);
+        }
+        if std::time::Instant::now() >= deadline {
+            #[cfg(unix)]
+            // SAFETY: a signal to the group this child leads (its id is the group's).
+            unsafe {
+                libc::kill(-(child.id() as i32), libc::SIGKILL);
+            }
+            #[cfg(not(unix))]
+            let _ = child.kill();
+            child.wait()?;
+            return Ok(false);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+/// Copies the files under `from` into `to`, but programs the league built (`bin`).
+fn keep(from: &Path, to: &Path) {
+    let Ok(entries) = std::fs::read_dir(from) else { return };
+    let _ = std::fs::create_dir_all(to);
+    for e in entries.flatten() {
+        let (path, name) = (e.path(), e.file_name());
+        if path.is_dir() {
+            if name != "bin" {
+                keep(&path, &to.join(&name));
+            }
+        } else {
+            let _ = std::fs::copy(&path, to.join(&name));
+        }
+    }
 }
 
 /// The evolution strategy: a (μ/μ, λ) ES with its own search centre. Each generation it samples
@@ -163,12 +248,23 @@ pub struct Claude {
     /// The most each run may spend (US dollars).
     pub budget_usd: f32,
     pub model: Option<String>,
+    /// The longest a run may take.
+    pub time: std::time::Duration,
+    /// The runs not yet taken by the league.
+    runs: Vec<Run>,
 }
 
 impl Claude {
     fn new(role: Role) -> Claude {
         let command = std::env::var_os("SIM001_CLAUDE").map(PathBuf::from).unwrap_or_else(|| "claude".into());
-        Claude { role, command, budget_usd: 5.0, model: None }
+        Claude {
+            role,
+            command,
+            budget_usd: 5.0,
+            model: None,
+            time: std::time::Duration::from_secs(30 * 60),
+            runs: vec![],
+        }
     }
 
     pub fn tuner() -> Claude {
@@ -181,6 +277,10 @@ impl Claude {
 
     pub fn with_command(self, command: PathBuf) -> Claude {
         Claude { command, ..self }
+    }
+
+    pub fn with_time(self, time: std::time::Duration) -> Claude {
+        Claude { time, ..self }
     }
 
     /// The prompt, with the generation's facts filled in.
@@ -235,6 +335,10 @@ impl Strategy for Claude {
         }
     }
 
+    fn take_runs(&mut self) -> Vec<Run> {
+        std::mem::take(&mut self.runs)
+    }
+
     fn propose(&mut self, ctx: &Context) -> Vec<Proposal> {
         let refuse = |reason: Reason, notes: String| vec![Proposal { entry: Err(reason), worktree: None, notes }];
         let base = match &ctx.champion.commit {
@@ -250,6 +354,10 @@ impl Strategy for Claude {
         }
         let league_dir = wt.join(".league");
         let _ = std::fs::create_dir_all(&league_dir);
+        // The run's record, beside the worktree: the league removes the worktree after the
+        // generation, and keeps this.
+        let kept = ctx.work.join(format!("{}.run", self.name()));
+        let _ = std::fs::create_dir_all(&kept);
         let prompt = self.prompt(ctx, &wt);
         let _ = std::fs::write(league_dir.join("prompt.md"), &prompt);
 
@@ -282,14 +390,26 @@ impl Strategy for Claude {
         if let Some(m) = &self.model {
             cmd.args(["--model", m]);
         }
-        let said = match cmd.output() {
-            Ok(o) => {
-                let _ = std::fs::write(league_dir.join("claude-output.json"), &o.stdout);
-                let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap_or_default();
-                v.get("result").and_then(|r| r.as_str()).unwrap_or("").to_string()
-            }
+        let (out_path, err_path) = (kept.join("claude-output.json"), kept.join("claude-stderr.txt"));
+        let started = std::time::Instant::now();
+        let ran = std::fs::File::create(&out_path)
+            .and_then(|out| Ok((out, std::fs::File::create(&err_path)?)))
+            .and_then(|(out, err)| run_for(cmd.stdout(out).stderr(err), self.time));
+        let finished = match ran {
+            Ok(f) => f,
             Err(e) => return refuse(Reason::NoCandidate, format!("could not run {}: {e}", self.command.display())),
         };
+        let out = std::fs::read(&out_path).unwrap_or_default();
+        let mut run = Run::read(self.name(), &out, started.elapsed().as_secs_f64(), !finished);
+        run.generation = ctx.generation;
+        run.folder = kept.strip_prefix(ctx.dir).unwrap_or(&kept).to_string_lossy().into_owned();
+        keep(&league_dir, &kept);
+        let said = run.said.clone();
+        self.runs.push(run);
+        if !finished {
+            let minutes = self.time.as_secs_f32() / 60.0;
+            return refuse(Reason::TimedOut, format!("stopped after {minutes:.1} minutes, its time"));
+        }
 
         let suggested: Vec<Suggested> = std::fs::read_to_string(league_dir.join("candidates.json"))
             .ok()
@@ -350,6 +470,46 @@ mod tests {
         ] {
             assert!(Command::new("git").args(args).current_dir(dir).status().unwrap().success());
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_run_past_its_time_is_stopped_with_what_it_started() {
+        let dir = std::env::temp_dir().join(format!("league-stop-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let pid_file = dir.join("child.pid");
+        // A shell that waits on a child of its own, as Claude waits on a build.
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(format!("sleep 600 & echo $! > {}; wait", pid_file.display()));
+        let started = std::time::Instant::now();
+        let finished = run_for(&mut cmd, std::time::Duration::from_secs(1)).unwrap();
+        assert!(!finished, "it said the run finished");
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "it waited {:?}", started.elapsed());
+        let child = std::fs::read_to_string(&pid_file).unwrap().trim().to_string();
+        // Gone, or a zombie that nobody has reaped yet: either way, it no longer runs.
+        let state = Command::new("ps").args(["-o", "stat=", "-p", &child]).output().unwrap().stdout;
+        let state = String::from_utf8_lossy(&state);
+        assert!(
+            state.trim().is_empty() || state.starts_with('Z'),
+            "the shell's child {child} is still running: {state}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_run_that_finishes_in_time_is_not_stopped() {
+        assert!(run_for(&mut Command::new("true"), std::time::Duration::from_secs(5)).unwrap());
+    }
+
+    #[test]
+    fn a_run_reads_its_cost_and_turns_from_what_claude_printed() {
+        let out = br#"{"type":"result","result":"done","total_cost_usd":1.25,"num_turns":12,"duration_ms":60000}"#;
+        let run = Run::read("claude-tuner", out, 61.0, false);
+        assert_eq!((run.cost_usd, run.turns, run.seconds, run.timed_out), (Some(1.25), Some(12), 61.0, false));
+        assert_eq!(run.said, "done");
+        // Nothing printed (it was stopped, or it failed): the time is still known.
+        let run = Run::read("claude-engineer", b"", 1800.0, true);
+        assert_eq!((run.cost_usd, run.turns, run.seconds, run.timed_out), (None, None, 1800.0, true));
     }
 
     #[test]

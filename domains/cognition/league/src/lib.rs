@@ -20,4 +20,4 @@ pub mod strategy;
 pub use entry::Entry;
 pub use judge::{Judgement, Reason, Verdict, judge};
 pub use league::{Generation, League, Options};
-pub use strategy::{Context, Proposal, Strategy};
+pub use strategy::{Context, Proposal, Run, Strategy};

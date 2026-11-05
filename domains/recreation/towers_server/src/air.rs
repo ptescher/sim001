@@ -152,6 +152,19 @@ mod tests {
         f
     }
 
+    /// The counts (carried, dropped), given a moment to reach `want`: the air counts a frame after
+    /// it has written it, so the other end can have the frame before the count goes up.
+    fn settled(counts: &Counts, want: (u64, u64)) -> (u64, u64) {
+        let end = std::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            let now = (counts.carried(), counts.dropped());
+            if now == want || std::time::Instant::now() > end {
+                return now;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     /// A stand-in SITL that reports what it hears and sends one frame down when told.
     fn sitl() -> (u16, std::sync::mpsc::Receiver<Vec<u8>>, std::sync::mpsc::Sender<Vec<u8>>) {
         let l = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -188,7 +201,7 @@ mod tests {
         let mut got = vec![0u8; frame(5).len()];
         ground.read_exact(&mut got).unwrap();
         assert_eq!(got, frame(5));
-        assert_eq!((air.counts.carried(), air.counts.dropped()), (2, 0));
+        assert_eq!(settled(&air.counts, (2, 0)), (2, 0));
     }
 
     #[test]
@@ -207,7 +220,7 @@ mod tests {
         reach.store(true, Ordering::SeqCst);
         ground.write_all(&frame(4)).unwrap();
         assert_eq!(heard.recv_timeout(Duration::from_secs(5)).unwrap(), frame(4));
-        assert_eq!((air.counts.carried(), air.counts.dropped()), (1, 2));
+        assert_eq!(settled(&air.counts, (1, 2)), (1, 2));
     }
 
     #[test]
@@ -234,6 +247,11 @@ mod tests {
         let mut got = vec![0u8; frame(4).len()];
         ground.read_exact(&mut got).unwrap();
         assert_eq!(got, frame(4));
+        // Counted after it was written, as the frames are (see `settled`).
+        let end = std::time::Instant::now() + Duration::from_secs(2);
+        while air.counts.sensed() == 0 && std::time::Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(5));
+        }
         assert!(air.counts.sensed() >= 1);
         reach.store(false, Ordering::SeqCst);
         std::thread::sleep(Duration::from_millis(200));

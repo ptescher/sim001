@@ -1,23 +1,37 @@
-# Keeps unformatted or lint-failing code out of master: the same checks as the pre-commit routine
-# (cargo fmt, cargo clippy --workspace --all-targets); clippy compiles everything cargo check would. Tests are not run here (they
-# need Docker, ArduPilot and a GPU).
+# Keeps master green on Linux, on GitHub's free runners: formatting, the spec, the lints and the
+# tests. One job does the spec, clippy and the tests, so they share one Rust cache: two caches of
+# Bevy and GPUI would not fit in the repository's 10 GB.
+#
+# The tests are `cargo nextest run --profile ci` (see .config/nextest.toml): every test target in
+# the workspace, side by side, but the league's acceptance suite (about 12 minutes on a 10-core
+# laptop; `tasks docs` runs it). The acceptance suites that fly ArduPlane SITL (cognition_runner,
+# recreation_towers_server) find no ArduPlane here, and check that every test then says "not
+# supported yet". What needs a window, a GPU or Docker is `tasks docs` and `tasks console`.
 name: CI
 
 on:
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "plans/**", "site/**"]
   push:
     branches: [master]
+    paths-ignore: ["**.md", "docs/**", "plans/**", "site/**"]
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  # No debug info: a smaller target/ and cache, and faster links. Backtraces still name functions.
+  CARGO_PROFILE_DEV_DEBUG: "0"
 
 jobs:
   fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -26,18 +40,45 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
 
-  check:
+  linux:
+    name: spec, clippy and tests (Linux)
     runs-on: ubuntu-latest
+    # A cold cache builds everything twice (clippy, then the tests): about 30 minutes.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.99.0"
           components: clippy
+      # Bevy's and GPUI's system libraries (the test binaries of the GPUI apps link them).
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libudev-dev \
+            libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libx11-dev libxcursor-dev libxi-dev \
+            libxrandr-dev libvulkan-dev libxcb1-dev libxcb-xkb-dev libxcb-render0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libfontconfig-dev libfreetype-dev libdbus-1-dev libssl-dev
       # Pull requests read master's cache and leave it alone: one cache, always warm.
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
-      # Bevy's system libraries.
-      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - id: setup
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # Each check runs whatever the one before it found, so a pull request hears about all three.
+      - name: The spec (conflicts, coverage, stories)
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo run -q --locked -p expectation -- check expectations
+      - name: Clippy
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Build the tests
+        id: build-tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo nextest run --workspace --locked --profile ci --no-run
+      - name: Tests
+        if: ${{ !cancelled() && steps.build-tests.outcome == 'success' }}
+        run: cargo nextest run --workspace --locked --profile ci
