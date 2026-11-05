@@ -1,0 +1,39 @@
+Feature: What a drone knows on board
+  A drone knows what its own camera sees, also when it is out of contact. The commander does not
+  know it: a drone in a radio shadow sends no camera picture. The camera sees 150 m round the
+  drone. It shows the enemy drones that are in that range, and who holds a tower that is
+  in that range. The drone also knows its [[battery]] and the time since it was last in contact.
+
+  This is all that a drone can use to decide for itself. A decision that needs more is a decision
+  for the commander, taken before the drone goes dark.
+
+  Expectation: A drone out of contact sees the enemy drones near it
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    And the Red scout is 50 m from the first Blue drone
+    Then the enemy drones on board the first Blue drone are 1
+    And the Red scout on the Blue map is unknown
+
+  Expectation: A drone does not see an enemy drone that is far
+    Overrides: A drone out of contact sees the enemy drones near it
+    The Red scout is far from the first Blue drone.
+
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    And the Red scout is far from anything Blue
+    Then the enemy drones on board the first Blue drone are 0
+
+  Expectation: A drone sees who holds the tower in its camera
+    The Blue map shows the holder of the west tower as the team last saw it. The drone sees it now.
+
+    Given the west tower is held by Red
+    And the first Blue drone is in the west circle
+    And the Red drones in the west circle are 0
+    And the Blue drones in the west circle are 1
+    Then the west tower on board the first Blue drone is held by Red
+
+  Expectation: A drone knows how long it has been out of contact
+    Given the Red home tower is held by Red
+    And the first Blue drone is near the Red home tower
+    When the game runs for 10 seconds
+    Then the time out of contact on board the first Blue drone is 10 s

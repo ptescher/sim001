@@ -15,6 +15,7 @@
 
 mod advisor;
 mod commander;
+mod edge;
 mod filter;
 pub mod flight;
 mod instruction;
@@ -25,6 +26,7 @@ mod view;
 
 pub use advisor::{Advice, AdviceKind, Advisor};
 pub use commander::{Commander, CommanderTuning};
+pub use edge::{EdgeObs, EnemySeen, TowerSeen};
 pub use filter::LinkFilter;
 pub use instruction::{Instruction, Standing};
 pub use map::Map;
