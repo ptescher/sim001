@@ -129,9 +129,11 @@ impl Commander {
     ///
     /// First, a tower the team holds with an enemy drone in sight near it (within [`DEFEND_RANGE`])
     /// gets the drone nearest to it, if no drone is on it already. Then the heavy drone, which
-    /// counts double, goes to the spire if the team does not hold it and nobody is on it. Then each tower the team does not hold, nearest the
-    /// base first, gets the nearest drone with nothing to do; a drone keeps its tower until the
-    /// team holds it. Drones left over join the nearest tower the team does not hold. A drone that
+    /// counts double, goes to the spire if the team does not hold it and nobody is on it. Then the
+    /// drones with nothing to do and the towers the team does not hold that nobody is on are
+    /// matched greedily, the pair that wins its tower soonest first (the flight, and the capture at
+    /// the drone's weight, per point the tower scores); a drone keeps its tower until the team
+    /// holds it. Drones left over join the nearest tower the team does not hold. A drone that
     /// has been behind at a contested tower for [`GIVE_UP`] gives it up, and is not sent back to
     /// it for [`STAY_AWAY`].
     pub fn decide(&mut self, view: &TeamView) -> Vec<(usize, Order)> {
@@ -234,13 +236,44 @@ impl Commander {
                 self.orders[d.k] = Some(Order::Take(t));
             }
         }
-        let mut targets: Vec<usize> = (0..view.towers.len()).filter(|&t| !ours(t)).collect();
-        targets.sort_by(|&a, &b| view.towers[a].at.distance(base).total_cmp(&view.towers[b].at.distance(base)));
-        for &t in &targets {
-            if !on(&self.orders, t)
-                && let Some(k) = nearest(&self.orders, t, false)
-            {
-                self.orders[k] = Some(Order::Take(t));
+        let targets: Vec<usize> = (0..view.towers.len()).filter(|&t| !ours(t)).collect();
+        // Free drones and the towers nobody is sent to are matched greedily by the time the drone
+        // takes to win the tower (the flight and the capture at its weight) per point the tower
+        // scores: the quickest points first. A drone is not sent where its battery cannot cover
+        // the flight, the capture and the way home.
+        let time = |k: usize, t: usize| {
+            let tower = &view.towers[t];
+            let flight = view.drones[k].at.distance(tower.at) / CRUISE;
+            let need = 1.0 - tower.control * view.team.sign();
+            (flight, self.rules.capture_time * need / self.rules.class(k).weight())
+        };
+        let lasts = |k: usize, t: usize| {
+            let (flight, capture) = time(k, t);
+            self.rules.battery(self.rules.class(k)) <= 0.0
+                || view.drones[k].battery
+                    >= self.rules.bingo + flight + capture + view.towers[t].at.distance(base) / CRUISE + REFUEL_MARGIN
+        };
+        let cost = |k: usize, t: usize| {
+            let (flight, capture) = time(k, t);
+            (flight + capture) / self.rules.points(view.towers[t].kind)
+        };
+        loop {
+            let mut best: Option<(usize, usize)> = None;
+            for &t in targets.iter().filter(|&&t| !on(&self.orders, t)) {
+                for k in 0..self.orders.len() {
+                    if up[k]
+                        && !away[k][t]
+                        && self.orders[k].is_none()
+                        && lasts(k, t)
+                        && best.is_none_or(|(bk, bt)| cost(k, t) < cost(bk, bt))
+                    {
+                        best = Some((k, t));
+                    }
+                }
+            }
+            match best {
+                Some((k, t)) => self.orders[k] = Some(Order::Take(t)),
+                None => break,
             }
         }
         for (k, order) in self.orders.iter_mut().enumerate().filter(|(k, o)| up[*k] && o.is_none()) {
@@ -299,12 +332,12 @@ mod tests {
     }
 
     #[test]
-    fn at_the_start_it_spreads_its_drones_over_the_neutral_towers_nearest_first() {
+    fn at_the_start_it_spreads_its_drones_over_the_towers_it_can_win_soonest() {
         let g = Game::new(Rules { drones: 3, ..Rules::default() });
         let mut c = Commander::new(g.rules);
         let (west, centre, east) = (g.tower("west"), g.tower("centre"), g.tower("east"));
         let orders = c.decide(&g.view(Team::Blue));
-        // Each tower, nearest the base first, gets the nearest drone: the centre's is the third.
+        // The quickest win first, each drone and tower once: the centre's drone is the third.
         assert_eq!(orders, vec![(0, Order::Take(west)), (1, Order::Take(east)), (2, Order::Take(centre))]);
     }
 
@@ -316,6 +349,26 @@ mod tests {
         assert_eq!(g.rules.class(3), crate::Class::Heavy);
         c.decide(&g.view(Team::Blue));
         assert_eq!(c.order(3), Some(Order::Take(centre)));
+    }
+
+    /// Drone 0 flies over the west tower with `battery` s left; the others wait at the base.
+    fn over_the_west_tower(battery: f32) -> (Game, usize) {
+        let mut g = Game::new(Rules { drones: 3, ..Rules::default() });
+        let west = g.tower("west");
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i] = crate::Drone { at: g.towers[west].at, alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        g.battery[i] = battery;
+        g.reported[i] = battery;
+        (g, west)
+    }
+
+    #[test]
+    fn a_drone_over_a_tower_is_sent_to_the_tower_it_wins_soonest() {
+        // Nearest-first would send it to the centre, which is nearer the base. The west tower is
+        // won in a capture time; the centre needs a long flight first.
+        let (g, west) = over_the_west_tower(240.0);
+        let mut c = Commander::new(g.rules);
+        assert_eq!(decide(&mut c, &g)[0], Some(Order::Take(west)));
     }
 
     #[test]

@@ -147,3 +147,35 @@ sides of each seed, 512 games):
 - The tuner's numbers (never give up a contested tower) looked good on the seeds Claude tried
   (+0.29) and lost on the league's: a pick among several tries on one set of seeds. The league's
   fresh seeds are the check that catches it.
+
+## Step 4: an Opus league run (chain, two generations), and what was kept
+
+`SIM001_LAYOUT=chain cognition_league run --game captain --generations 2 --strategies
+claude-engineer,claude-tuner --claude-model opus --seeds 128` from master's commander. Two
+promotions: generation 1 the tuner's numbers (`defend_range` 0, `give_up` 5, `stay_away` 90;
++0.51 by the league), generation 2 the engineer's allocation code (+0.49 on top of them).
+Opus's own estimates were within 0.06 of the league's (the earlier run's were far more
+optimistic). The engineer proposed the same code in both generations; it was kept out in
+generation 1 (+0.16) because the opponent had not yet dropped its defence.
+
+An Opus subagent re-judged them on 256 seeds the league never saw (3,000,000 and up; 512 games a
+row), against master's commander:
+
+| Challenger | Chain | Valley |
+| --- | --- | --- |
+| The final champion (allocation code + the tuner's numbers) | +0.756 (+0.698) | **−0.110** (−0.198) |
+| The tuner's numbers alone | +0.496 (+0.438) | **−0.303** (−0.391) |
+| The allocation code alone, with master's numbers | +0.181 (+0.124) | +0.157 (+0.073) |
+
+- **The numbers overfit the layout (and the opponent):** turning the defence off pays on the chain
+  and loses on the valley. They are not made the defaults.
+- **The allocation code is kept.** Drones and unclaimed towers are matched greedily by the time
+  the drone needs to win the tower (the flight, and the capture at its weight) per point the tower
+  scores; a drone is not sent where its battery cannot last the flight, the capture and the way
+  home. On a third set of fresh seeds (4,000,000 and up), merged with master's numbers:
+  chain +0.180 (lower bound +0.128), valley +0.129 (lower bound +0.043).
+- **Not tested on its own:** the battery condition. A drone that the pairing skips falls through to
+  the existing step that sends the leftover drones to the nearest tower it does not hold, so the
+  condition cannot change a simple order; the greedy pairing has a unit test.
+- **Next for the league:** judge on the chain and the valley together (no valley regression), and
+  against a pool of past champions, not only the default commander.

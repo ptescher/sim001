@@ -1,8 +1,11 @@
 Feature: The computer commander
   A computer can command a team. It looks at the map of its team once each second, and it gives
-  each drone an order. It sends one drone to each tower that its team does not hold, nearest
-  towers first. Each tower goes to the drone that is nearest to it. A drone keeps its order
-  until its team holds the tower.
+  each drone an order. It sends one drone to each tower that its team does not hold. It matches
+  the free drones to the towers by the time that a drone needs to win a tower. That time is the
+  flight, and the capture at the weight of the drone, for each point that the tower gives. The
+  pair that wins soonest comes first. A drone does not go to a tower if its battery cannot last
+  the flight, the capture and the way home. A drone keeps its order until its team holds the
+  tower.
 
   When drones of the two teams circle a tower, the drone that arrived later is often behind:
   the control is on the side of the other team. A drone that is behind at a contested tower for
@@ -16,7 +19,7 @@ Feature: The computer commander
   team. Thus it does not know about an enemy drone in the fog.
 
   Expectation: At the start, the commander sends a drone to each neutral tower
-    Each tower goes to the drone that is nearest to it, the tower nearest to the base first.
+    Each tower goes to the drone that wins it soonest.
     Blue holds its home tower, so four towers get a drone: the west, the centre, the east and
     the Red home tower. A team has five drones, so the one that is left over joins the nearest
     of them.
