@@ -24,6 +24,24 @@ Its numbers (`captain`): `CommanderTuning` in commander.rs, each with its bounds
 
 {{history}}
 
+## How to work here (read this first)
+
+- Your shell allows only plain commands that start with `cargo run --release -p cognition_league ...`, `cargo build`. No `mkdir`, `cat`, heredocs, pipes (`| tail`), `&&`, `2>&1` or `timeout`: a command with any of them is refused, and then you cannot test anything. Create files with the Write tool (`.league/` already exists). Run one command per call.
+- The game may have 5 towers (the valley) or 11 (the chain, with an outpost halfway on each lane for each side, one point each): read the number of towers from the `TeamView`, never assume it. Squads are three standard drones, a heavy and a light. The spire gives 1.5 points a second, the others 1.
+- Untested ideas are worth nothing: the league plays your proposals against the champion on fresh seeds. Play every idea yourself with `judge` (128 seeds) before you keep it.
+
+## Be creative
+
+Nudging the commander's numbers is probably noise (a +0.5 mean over 10 games was -0.05 over 128). The decision that matters is the allocation: which drone goes to which tower, and when to change it. Measured on the pure strategies: no single allocation wins, they cycle (a spread beats a raid, a raid beats a snipe, a line of outposts beats a team that masses on the centre), and the default commander beats every fixed allocation because it reacts. Look for something structurally different, and say in your notes what the idea was:
+
+- read what the enemy does (where its drones are seen, which towers it holds) and answer it: mass where it is thin, raid its home when it masses at the centre, defend the tower it is heading for;
+- send the heavy and the light on different jobs (the heavy counts double, the light half);
+- trade: give up a tower to take two, or sacrifice the centre when the enemy masses on it;
+- keep drones in contact: stay out of an enemy tower's radio shadow unless the drone has a plan for being cut off;
+- trace the games the champion loses worst and fix what you see there.
+
+A change that wins by +0.15 over 128 seeds is a good result; one that wins by +0.5 on 10 seeds is not.
+
 ## Your job
 
 1. Read the report, the rules and the commander, and form a hypothesis about what loses games.

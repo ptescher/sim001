@@ -9,8 +9,8 @@ use super::{Code, Contest, Group, Role};
 use crate::Entry;
 use crate::judge::{Reason, Summary};
 use cognition_arena::GameResult;
-use cognition_towers::{Captain, SeatProcess, TowersResult, play};
-use recreation_towers::{Commander, CommanderTuning, Outcome, Rules, Team};
+use cognition_towers::{Captain, SeatProcess, TowersResult, league_rules, play};
+use recreation_towers::{Commander, CommanderTuning, Outcome, Team};
 use std::path::{Path, PathBuf};
 
 pub struct CaptainContest;
@@ -39,7 +39,7 @@ impl Seat {
     /// The captain for a new game as `team`.
     fn begin(&mut self, team: Team) -> Result<Box<dyn Captain + '_>, String> {
         Ok(match self {
-            Seat::Here(t) => Box::new(Commander::with_tuning(Rules::default(), *t)),
+            Seat::Here(t) => Box::new(Commander::with_tuning(league_rules(), *t)),
             Seat::Process(p, t) => {
                 p.start(team, t)?;
                 Box::new(p)
@@ -57,7 +57,7 @@ fn both_sides(a: &mut Seat, b: &mut Seat, seed: u64) -> Result<(TowersResult, To
 
 /// The record of a seed for `a`.
 fn record(seed: u64, first: &TowersResult, second: &TowersResult) -> GameResult {
-    let win = Rules::default().win_score;
+    let win = league_rules().win_score;
     let (s1, s2) = (first.score_for(Team::Blue, win), second.score_for(Team::Red, win));
     let mut g = GameResult {
         seed,
