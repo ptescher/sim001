@@ -121,3 +121,29 @@ Reading it:
 - So the next question is not whether to add towers (it does what the plan wanted: no single
   allocation wins) but whether a *captain* can beat the default commander. That is a job for the
   captain league on the chain layout.
+
+## Step 3: the first captain that beats the commander on the chain
+
+`SIM001_LAYOUT=chain cognition_league run --game captain --strategies claude-tuner,claude-engineer
+--seeds 64` (one generation, $2.26 of Claude). The three numbers-only challengers were kept out
+(−0.05, −0.51, −0.54); the engineer's code change was promoted (+0.69, lower bound +0.52).
+
+The change (now in `commander.rs`, spec in `05-commander.expect`): **the heavy drone, which counts
+double at a tower, goes to the spire** when the team does not hold it and no drone is on it,
+instead of joining the nearest flank as a spare; and a drone recharges earlier when enemies are
+in its circle, at the contest drain's rate (without it the new rule lost 2.75 drones a game).
+
+Checked on 256 seeds that the league never saw (`judge`, challenger against the old build, both
+sides of each seed, 512 games):
+
+| Layout | Mean difference | Lower bound | Games won / lost | Points a game |
+| --- | --- | --- | --- | --- |
+| chain | **+0.754** | +0.698 | 409 / 102 (1 drawn) | 584 against 491 |
+| valley | −0.010 | −0.100 | 261 / 251 | 526 against 544 |
+
+- The idea is worth a lot on the chain (a team with five drones can use a double-weight drone
+  where it counts, and the spire is the one tower worth 1.5) and nothing on the valley, where
+  the default commander's flank spare did as well.
+- The tuner's numbers (never give up a contested tower) looked good on the seeds Claude tried
+  (+0.29) and lost on the league's: a pick among several tries on one set of seeds. The league's
+  fresh seeds are the check that catches it.

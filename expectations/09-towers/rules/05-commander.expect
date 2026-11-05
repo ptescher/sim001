@@ -8,7 +8,7 @@ Feature: The computer commander
   the control is on the side of the other team. A drone that is behind at a contested tower for
   10 s gives up. It goes to a tower that no drone of its team is sent to. If every tower has a
   drone already, it joins the nearest tower that its team does not hold. It does not come back
-  for 30 s. Thus two commanders do not stop each other at every tower.
+  for 30 s. The heavy drone goes to the spire at the start. Thus two commanders do not stop each other at every tower.
 
   When the commander sees an enemy drone within 120 m of a tower that its team holds, it defends
   the tower first. That is two circles out: an enemy drone that circles the next tower is not a
@@ -23,6 +23,14 @@ Feature: The computer commander
 
     When the computer commander of Blue decides
     Then the towers with a Blue drone on the way are 4
+
+  Expectation: At the start, the heavy drone goes to the spire
+    Overrides: At the start, the commander sends a drone to each neutral tower
+    The heavy drone counts for two drones at a tower. The commander sends it to the spire, the
+    tower that gives most points, when the team does not hold the spire and no drone is on it.
+
+    When the computer commander of Blue decides
+    Then the order of the fourth Blue drone is take the centre tower
 
   Expectation: The commander defends a tower that an enemy drone comes near
     Overrides: At the start, the commander sends a drone to each neutral tower

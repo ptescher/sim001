@@ -128,7 +128,8 @@ impl Commander {
     /// Looks at the team's map and gives every drone its order: `(drone, order)` for each.
     ///
     /// First, a tower the team holds with an enemy drone in sight near it (within [`DEFEND_RANGE`])
-    /// gets the drone nearest to it, if no drone is on it already. Then each tower the team does not hold, nearest the
+    /// gets the drone nearest to it, if no drone is on it already. Then the heavy drone, which
+    /// counts double, goes to the spire if the team does not hold it and nobody is on it. Then each tower the team does not hold, nearest the
     /// base first, gets the nearest drone with nothing to do; a drone keeps its tower until the
     /// team holds it. Drones left over join the nearest tower the team does not hold. A drone that
     /// has been behind at a contested tower for [`GIVE_UP`] gives it up, and is not sent back to
@@ -171,7 +172,18 @@ impl Commander {
                 continue;
             }
             let home = d.at.distance(base);
-            let need = self.rules.bingo + home / CRUISE + REFUEL_MARGIN;
+            // In a tower's circle with enemies in it the battery drains faster (by their weight):
+            // the margin is kept in seconds at that rate.
+            let r = self.rules.circle_radius;
+            let enemy: f32 = view.towers.iter().find(|t| d.at.distance(t.at) <= r).map_or(0.0, |t| {
+                view.enemies
+                    .iter()
+                    .filter(|e| e.seen && e.at.distance(t.at) <= r)
+                    .map(|e| self.rules.class(e.k).weight())
+                    .sum()
+            });
+            let rate = 1.0 + self.rules.contest_drain * enemy;
+            let need = self.rules.bingo + home / CRUISE + REFUEL_MARGIN * rate;
             if self.recharging[d.k] {
                 self.recharging[d.k] = d.battery < BACK_TO_WORK * full;
             } else {
@@ -211,6 +223,15 @@ impl Commander {
                 && let Some(k) = nearest(&self.orders, t, true)
             {
                 self.orders[k] = Some(Order::Take(t));
+            }
+        }
+        // The heavy, which counts double, goes to the spire, the tower most worth fighting for.
+        for t in (0..view.towers.len()).filter(|&t| view.towers[t].kind == Kind::Spire && !ours(t)) {
+            if let Some(d) = view.drones.iter().find(|d| {
+                self.rules.class(d.k) == crate::Class::Heavy && up[d.k] && !away[d.k][t] && self.orders[d.k].is_none()
+            }) && !on(&self.orders, t)
+            {
+                self.orders[d.k] = Some(Order::Take(t));
             }
         }
         let mut targets: Vec<usize> = (0..view.towers.len()).filter(|&t| !ours(t)).collect();
@@ -285,6 +306,16 @@ mod tests {
         let orders = c.decide(&g.view(Team::Blue));
         // Each tower, nearest the base first, gets the nearest drone: the centre's is the third.
         assert_eq!(orders, vec![(0, Order::Take(west)), (1, Order::Take(east)), (2, Order::Take(centre))]);
+    }
+
+    #[test]
+    fn at_the_start_the_heavy_goes_to_the_spire() {
+        let g = Game::new(Rules::default());
+        let mut c = Commander::new(g.rules);
+        let centre = g.tower("centre");
+        assert_eq!(g.rules.class(3), crate::Class::Heavy);
+        c.decide(&g.view(Team::Blue));
+        assert_eq!(c.order(3), Some(Order::Take(centre)));
     }
 
     #[test]

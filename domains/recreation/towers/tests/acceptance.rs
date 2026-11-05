@@ -498,6 +498,7 @@ fn bindings() -> Bindings<World> {
         })
         .observe("the order of the second Blue drone", |w| w.order_of(1))
         .observe("the order of the third Blue drone", |w| w.order_of(2))
+        .observe("the order of the fourth Blue drone", |w| w.order_of(3))
         .observe("the towers with a Blue drone on the way", |w| {
             let mut on_the_way: Vec<usize> = (0..w.game.rules.drones)
                 .filter_map(|k| match w.blue.order(k) {
