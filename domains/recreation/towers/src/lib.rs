@@ -14,6 +14,7 @@
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
 
 mod advisor;
+mod belief;
 mod commander;
 mod edge;
 mod filter;
@@ -25,6 +26,7 @@ pub mod svg;
 mod view;
 
 pub use advisor::{Advice, AdviceKind, Advisor};
+pub use belief::Belief;
 pub use commander::{Commander, CommanderTuning};
 pub use edge::{EdgeObs, EnemySeen, TowerSeen};
 pub use filter::LinkFilter;

@@ -126,6 +126,10 @@ Vocabulary:
   State: the orbit of the first Blue drone is high | low
     Shows: high: at the end of its way, the first Blue drone circles 55 m to 75 m high, above the trees
     Shows: low: at the end of its way, the first Blue drone circles below the treetops
+  State: the spread of the Blue belief of the Red scout is 0..600 m
+    Shows: the Blue belief shows the Red scout as a cloud {value} m across
+  State: the chance on the Blue belief of the Red scout near the first Blue drone is 0..100 %
+    Shows: the Blue belief puts the Red scout within 150 m of the first Blue drone with a chance of {value} %
   State: the Red scout on the Blue map is seen | last seen | unknown
     Shows: seen: the Blue map shows the Red scout where it is now
     Shows: last seen: the Blue map shows the Red scout dim, where Blue last saw it, with the time since then
