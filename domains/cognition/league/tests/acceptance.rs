@@ -13,7 +13,7 @@ use expectation_harness::{Acceptance, Bindings, Progress, RunOptions, Screenshot
 use expectation_story::Status;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// The games the champion is scored on against the slow executor, at the end of a run: new ones,
 /// and enough that the measure is not noise (about ±0.03).
@@ -102,9 +102,22 @@ impl World {
     }
 
     fn claude(&mut self, fake: &str) {
-        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fakes").join(fake);
-        let mut s: Vec<Box<dyn Strategy>> = vec![Box::new(Claude::engineer().with_command(script))];
+        self.claude_as(Claude::engineer().with_command(fake_claude(fake)));
+    }
+
+    /// One generation with this Claude strategy alone.
+    fn claude_as(&mut self, strategy: Claude) {
+        let mut s: Vec<Box<dyn Strategy>> = vec![Box::new(strategy)];
         self.generations(1, &mut s);
+    }
+
+    /// Whether the last Claude tuner's run is on record: its cost in the report (the stand-in
+    /// says $0.42), and its prompt, output and files in its folder.
+    fn claude_run_written_down(&self) -> bool {
+        let report = std::fs::read_to_string(self.dir.join("generations/001.md")).unwrap_or_default();
+        let run = self.dir.join("work/001/claude-tuner.run");
+        report.contains("$0.42")
+            && ["prompt.md", "claude-output.json", "candidates.json", "try1.json"].iter().all(|f| run.join(f).exists())
     }
 
     /// The verdict of the last judgement: the one asked for, or the one challenger of the last
@@ -179,6 +192,11 @@ impl World {
         }
         s + "</svg>"
     }
+}
+
+/// A stand-in for `claude`, from `tests/fakes`.
+fn fake_claude(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fakes").join(name)
 }
 
 fn entry(v: &expectation_model::Value) -> Entry {
@@ -262,6 +280,7 @@ fn bindings() -> Bindings<World> {
             Some("tests fail") => "its tests fail",
             Some("envelope changed") => "it changes the envelope",
             Some("rules changed") => "it changes the rules",
+            Some("timed out") => "it ran out of time",
             Some(other) => other,
             None => "none",
         })
@@ -274,6 +293,13 @@ fn bindings() -> Bindings<World> {
         })
         .on("a Claude strategy gives a challenger whose tests fail", |w| w.claude("breaks-tests.sh"))
         .on("a Claude strategy gives a challenger that changes the envelope", |w| w.claude("changes-envelope.sh"))
+        .on("a Claude strategy gives new numbers", |w| {
+            w.claude_as(Claude::tuner().with_command(fake_claude("proposes-numbers.sh")))
+        })
+        .on("a Claude strategy is still working when its time is up", |w| {
+            w.claude_as(Claude::tuner().with_command(fake_claude("hangs.sh")).with_time(Duration::from_secs(3)))
+        })
+        .observe("the Claude run", |w| if w.claude_run_written_down() { "written down" } else { "missing" })
         .observe("the challengers in the history", |w| {
             std::fs::read_to_string(w.dir.join("history.jsonl")).map_or(0.0, |s| s.lines().count() as f64)
         })
@@ -328,7 +354,11 @@ fn suite() -> Acceptance {
 
 #[test]
 fn every_test_of_the_section_passes() {
-    let a = suite();
+    let mut a = suite();
+    // SIM001_EXPECT_ONLY=TEXT runs only the tests whose title has TEXT in it (any case).
+    if let Ok(only) = std::env::var("SIM001_EXPECT_ONLY") {
+        a.plans.retain(|p| p.title.to_lowercase().contains(&only.to_lowercase()));
+    }
     let section = a.suite.sections.iter().find(|s| s.slug == "league").expect("a league section").id;
     let ours = a.suite.subtree(section);
     // With SIM001_DOCS=DIR the results and pictures of the league's report go into the project's docs.
