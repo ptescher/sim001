@@ -110,7 +110,10 @@ Feature: Commanding from the app
     Then the west tower on the Blue map is held by Blue
 
   Expectation: CAMERAS shows the camera of each drone
-    When the commander joins the game
+    The pictures come when the 3D view has loaded the valley. That takes some minutes after a
+    game starts, and the game goes on meanwhile.
+
+    When the commander waits for the cameras
     Then the camera feeds in the app are 5
 
   Expectation: A click on a camera selects its drone
