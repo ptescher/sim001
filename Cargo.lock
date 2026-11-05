@@ -2943,6 +2943,7 @@ dependencies = [
  "expectation_model",
  "expectation_story",
  "fastrand 2.5.0",
+ "libc",
  "recreation_towers",
  "serde",
  "serde_json",

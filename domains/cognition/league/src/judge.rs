@@ -44,6 +44,8 @@ pub enum Reason {
     Invalid,
     /// The strategy gave nothing usable.
     NoCandidate,
+    /// The strategy did not finish in its time, and was stopped.
+    TimedOut,
 }
 
 impl Reason {
@@ -60,6 +62,7 @@ impl Reason {
             Reason::BuildFails => "build fails",
             Reason::Invalid => "invalid",
             Reason::NoCandidate => "no candidate",
+            Reason::TimedOut => "timed out",
         }
     }
 }

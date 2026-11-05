@@ -56,11 +56,12 @@ Vocabulary:
     Shows: promoted: the league says `promoted`. The challenger is the new champion
     Shows: kept out: the league says `kept out`: the challenger is not better. The champion stays
     Shows: refused: the league says `refused` and the reason. The champion stays
-  State: the reason is none | it crashed | its tests fail | it changes the envelope | it changes the rules
+  State: the reason is none | it crashed | its tests fail | it changes the envelope | it changes the rules | it ran out of time
     Shows: it crashed: the reason is `crashed`
     Shows: its tests fail: the reason is `tests fail`
     Shows: it changes the envelope: the reason is `envelope changed`
     Shows: it changes the rules: the reason is `rules changed`
+    Shows: it ran out of time: the reason is `timed out`
 
   # The loop.
   State: the challengers in the history are 0..100000
@@ -69,6 +70,8 @@ Vocabulary:
     Shows: written: the file `league/generations/001.md` gives the scores of the generation
   State: the champion file is written | missing
     Shows: written: the file `league/champion.json` holds the tuning, the tactics and the hash of the champion
+  State: the Claude run is written down | missing
+    Shows: written down: the report of the generation gives the cost, the turns and the time of the Claude run. The folder `league/work/001/claude-tuner.run` keeps the prompt, the output of Claude and the files that Claude wrote
   State: the score of the champion against the slow executor is -100..100
     Shows: at least 0.05: on the same games, the mean score of the champion is at least 0.05 more than that of the slow executor
 
@@ -88,6 +91,10 @@ Vocabulary:
     Say: the Claude engineer changes the code of the executor, and `cargo test -p cognition_executor` fails in its worktree
   Event: a Claude strategy gives a challenger that changes the envelope
     Say: the Claude engineer changes the safety envelope of the executor
+  Event: a Claude strategy gives new numbers
+    Say: the Claude tuner writes new numbers in `.league/candidates.json`, and it spends $0.42
+  Event: a Claude strategy is still working when its time is up
+    Say: the Claude tuner does not stop before its time is up. Each Claude run gets 30 minutes, or the minutes that `--claude-minutes` gives
 
   # Captains for Towers.
   State: the champion captain is the default captain | the timid captain

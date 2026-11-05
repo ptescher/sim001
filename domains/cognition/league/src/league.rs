@@ -5,12 +5,15 @@
 //! DIR/state.json             how many generations have run
 //! DIR/history.jsonl          one line per challenger: its entry and its judgement
 //! DIR/generations/NNN.md     a report per generation, for people and for the Claude strategies
-//! DIR/work/                  the strategies' scratch folders and worktrees (left for inspection)
+//! DIR/runs.jsonl             one line per agent run (a Claude strategy's): its cost, turns, time
+//! DIR/work/NNN/              the strategies' scratch folders and worktrees; the worktrees are
+//!                            removed after the generation, and each Claude run's prompt, output
+//!                            and files stay in `work/NNN/STRATEGY.run/`
 //! ```
 
 use crate::contest::{Code, Contest};
 use crate::judge::{Judgement, RULES, Reason, Verdict, judge};
-use crate::strategy::{Context, Proposal};
+use crate::strategy::{Context, Proposal, Run};
 use crate::{Entry, Strategy};
 use cognition_arena::GameResult;
 use serde::{Deserialize, Serialize};
@@ -175,6 +178,7 @@ impl League {
                 .collect();
             handles.into_iter().map(|h| h.join().expect("a strategy panicked")).collect()
         });
+        let runs: Vec<Run> = strategies.iter_mut().flat_map(|s| s.take_runs()).collect();
 
         let seeds = League::seeds(number, opts.seeds);
         let champion_games = self.play(&self.champion, None, &seeds);
@@ -256,6 +260,7 @@ impl League {
             &champion_games,
             &judged.iter().map(|(e, j, g)| (e, j, g.as_deref())).collect::<Vec<_>>(),
             promoted.as_ref(),
+            &runs,
         );
         let mut history = String::new();
         for (entry, judgement, _) in &judged {
@@ -267,6 +272,12 @@ impl League {
         std::fs::create_dir_all(&self.dir).expect("the league's folder");
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("history.jsonl")).unwrap();
         f.write_all(history.as_bytes()).unwrap();
+        if !runs.is_empty() {
+            let lines: String = runs.iter().map(|r| serde_json::to_string(r).unwrap() + "\n").collect();
+            let mut f =
+                std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("runs.jsonl")).unwrap();
+            f.write_all(lines.as_bytes()).unwrap();
+        }
 
         // Each code challenger's commit stays reachable (refs/league/NAME); the worktrees go.
         for (entry, _, _) in &judged {
@@ -381,6 +392,7 @@ impl League {
         champion: &[GameResult],
         judged: &[(&Entry, &Judgement, Option<&[GameResult]>)],
         promoted: Option<&Entry>,
+        runs: &[Run],
     ) -> String {
         let mut r = String::new();
         let _ = writeln!(r, "# Generation {number}\n");
@@ -436,6 +448,31 @@ impl League {
             None => {
                 let _ = writeln!(r, "**No challenger was promoted. The champion stays.**\n");
             }
+        }
+        if !runs.is_empty() {
+            let _ = writeln!(r, "## The Claude runs\n");
+            let _ = writeln!(r, "| Strategy | Cost | Turns | Time | Ended | Kept in |");
+            let _ = writeln!(r, "| --- | --- | --- | --- | --- | --- |");
+            for run in runs {
+                let _ = writeln!(
+                    r,
+                    "| {} | {} | {} | {:.1} min | {} | `{}` |",
+                    run.strategy,
+                    run.cost_usd.map_or("unknown".into(), |c| format!("${c:.2}")),
+                    run.turns.map_or("unknown".into(), |t| t.to_string()),
+                    run.seconds / 60.0,
+                    if run.timed_out { "stopped: out of time" } else { "finished" },
+                    run.folder
+                );
+            }
+            let spent: f64 = runs.iter().filter_map(|r| r.cost_usd).sum();
+            let unknown = runs.iter().filter(|r| r.cost_usd.is_none()).count();
+            let _ = write!(r, "\nIn all, the Claude runs of this generation reported ${spent:.2}.");
+            if unknown > 0 {
+                // A run that was stopped prints nothing; its limit (`--max-budget-usd`) still held.
+                let _ = write!(r, " {unknown} reported no cost: a run that is stopped does not say.");
+            }
+            let _ = writeln!(r, "\n");
         }
         let _ = writeln!(r, "## The challengers\n");
         for (e, j, games) in judged {
