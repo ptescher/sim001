@@ -180,6 +180,12 @@ Vocabulary:
     Shows: on: the list of drones shows the battery of each drone in seconds, and a drone with an empty battery goes down
   State: the battery of the first Blue drone is 0..300 s
     Shows: the list of drones shows BAT {value} s beside B1
+  State: the enemy drones on board the first Blue drone are 0..4
+    Shows: the camera of B1 shows {value} enemy drones. The commander sees them only when B1 is in contact
+  State: the west tower on board the first Blue drone is held by Blue | held by Red | neutral
+    Shows: held by Red: the camera of B1 shows the west tower red, when B1 is within 150 m of it
+  State: the time out of contact on board the first Blue drone is 0..600 s
+    Shows: B1 counts {value} s since the last contact
   State: the battery of the first Blue drone on the Blue map is 0..300 s
     Shows: the Blue map shows the battery that B1 last reported, {value} s, with its age
   State: the condition of the first Blue drone is flying | down | on the ground

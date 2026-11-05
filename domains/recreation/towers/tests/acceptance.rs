@@ -608,6 +608,17 @@ fn bindings() -> Bindings<World> {
             w.game.maps[Team::Blue.index()].drones[i].map_or(0.0, |s| tenth(w.game.time - s.time))
         })
         // The battery.
+        .observe("the enemy drones on board the first Blue drone", |w| {
+            w.game.edge_obs(w.game.drone(Team::Blue, 0)).enemies.len() as f64
+        })
+        .observe("the west tower on board the first Blue drone", |w| {
+            let west = w.game.tower("west");
+            let obs = w.game.edge_obs(w.game.drone(Team::Blue, 0));
+            obs.towers.iter().find(|t| t.index == west).map_or("unseen", |t| holder_name(t.holder))
+        })
+        .observe("the time out of contact on board the first Blue drone", |w| {
+            tenth(w.game.edge_obs(w.game.drone(Team::Blue, 0)).silent)
+        })
         .observe("the batteries", |w| if w.game.rules.standard_battery > 0.0 { "on" } else { "off" })
         .arrange("the batteries", |w, v| {
             let on = v.as_str() == Some("on");
