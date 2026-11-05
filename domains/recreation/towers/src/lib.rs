@@ -14,7 +14,6 @@
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
 
 mod advisor;
-pub mod battlefield;
 mod belief;
 mod commander;
 mod edge;

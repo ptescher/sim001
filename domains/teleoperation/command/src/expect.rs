@@ -404,8 +404,8 @@ impl AppDriver {
     }
 
     /// The camera of the battlefield now, and the rules.
-    fn eye(&self) -> Result<(recreation_towers::battlefield::Eye, recreation_towers::Rules), String> {
-        let (eye, rules) = self.call(|v, _, _| (v.eye, v.seat.state().rules))?;
+    fn eye(&self) -> Result<(teleoperation_shared::battlefield::Eye, recreation_towers::Rules), String> {
+        let (eye, rules) = self.call(|v, _, _| (v.rig.eye, v.seat.state().rules))?;
         Ok((eye, rules.ok_or("the app has no rules yet")?))
     }
 
@@ -502,7 +502,7 @@ impl Driver for AppDriver {
         if is(&var.subject, CAMERA[0]) {
             let heading = value.as_f64().ok_or("a heading is a number")? as f32;
             return self.call(move |v, _, cx| {
-                v.eye.heading = heading;
+                v.rig.eye.heading = heading;
                 cx.notify();
             });
         }
@@ -519,14 +519,14 @@ impl Driver for AppDriver {
             })?;
             let at = at.ok_or_else(|| format!("no place {}", text(value)))?;
             return self.call(move |v, _, cx| {
-                v.eye.look = at;
+                v.rig.eye.look = at;
                 cx.notify();
             });
         }
         if is(&var.subject, CAMERA[1]) {
             let height = value.as_f64().ok_or("a height is a number")? as f32;
             return self.call(move |v, _, cx| {
-                v.eye.distance = height / v.eye.pitch.to_radians().sin();
+                v.rig.eye.distance = height / v.rig.eye.pitch.to_radians().sin();
                 cx.notify();
             });
         }

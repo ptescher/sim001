@@ -1,5 +1,5 @@
-//! The app's colours and corners: the console's look (the shared theme's Night variant), with a
-//! colour for each team.
+//! The colours and corners of the battlefield screens: the console's look (the shared theme's Night
+//! variant), with the colours of the two teams of Towers.
 
 use gpui::{Hsla, Rgba, rgb};
 use illustration_theme::{NIGHT as P, geometry};
@@ -49,11 +49,4 @@ pub fn ca(hex: u32, a: f32) -> Hsla {
     let mut r: Rgba = rgb(hex);
     r.a = a;
     r.into()
-}
-
-pub fn team(t: recreation_towers::Team) -> u32 {
-    match t {
-        recreation_towers::Team::Blue => BLUE,
-        recreation_towers::Team::Red => RED,
-    }
 }

@@ -10,5 +10,8 @@ path = "src/main.rs"
 
 [dependencies]
 visualization_engine = { path = "../engine" }
+# The ground station's battlefield (--battlefield).
+visualization_battlefield = { path = "../battlefield" }
+teleoperation_shared = { path = "../../teleoperation/shared" }
 visualization_telemetry = { path = "../telemetry" }
 bevy.workspace = true

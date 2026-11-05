@@ -1,15 +1,14 @@
 //! The picture of the battlefield: the valley from the commander's camera, rendered by the game's
-//! 3D view (`towers_view`) with no drones in it (`recreation_towers::battlefield`). The app sends
+//! 3D view (`towers_view`) with no drones in it (`teleoperation_shared::battlefield`). The app sends
 //! the camera and the size of the battlefield; the pictures come back on a thread of their own,
 //! each with the eye that it was rendered from, and the window takes the newest.
 
 use gpui::RenderImage;
-use recreation_towers::Team;
-use recreation_towers::battlefield::{self, Eye, Request, read_frame};
 use std::io::Write;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use teleoperation_shared::battlefield::{self, Eye, Request, read_frame};
 
 /// A picture older than this is no picture (s).
 const STALE: f32 = 2.0;
@@ -29,17 +28,17 @@ struct Link {
     request: Mutex<Option<(Request, bool)>>,
 }
 
-/// The team's battlefield on the 3D view, or none (the game has no 3D view).
+/// The battlefield on a 3D view, or none (there is no 3D view).
 pub struct Battlefield {
     link: Option<Arc<Link>>,
 }
 
 impl Battlefield {
-    /// Connects to `team`'s battlefield at `host`, after the cameras of the drones that start at
-    /// `first_feed_port`; it connects again when it is lost.
-    pub fn connect(host: &str, first_feed_port: u16, team: Team) -> Arc<Battlefield> {
+    /// Connects to battlefield `slot` at `host` (see `teleoperation_shared::battlefield::port`); it
+    /// connects again when it is lost.
+    pub fn connect(host: &str, first_feed_port: u16, slot: usize) -> Arc<Battlefield> {
         let link = Arc::new(Link::default());
-        let addr = format!("{host}:{}", battlefield::port(first_feed_port, team));
+        let addr = format!("{host}:{}", battlefield::port(first_feed_port, slot));
         let l = link.clone();
         std::thread::Builder::new()
             .name("battlefield".into())

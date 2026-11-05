@@ -7,6 +7,8 @@
 //!   --tcp ADDR          connect to MAVLink on TCP instead (SITL's spare port is 127.0.0.1:5762)
 //!   --home LAT,LON,ALT  where the pilot box is; default the map's home, or what the plane says
 //!   --map NAME          the scenery of a real place, from maps/NAME (see domains/visualization/mapbuild)
+//!   --battlefield       serve the ground station's battlefield: the 3D picture of the place from its
+//!                       camera, with the plane in it (TCP 5620, see visualization_battlefield)
 //!   --raytrace          ray-traced lighting (Bevy Solari) instead of rasterized
 //!   --capture DIR       save pictures of the scenery and exit; each view is one
 //!   --at NAME=x,agl,z,tx,tagl,tz[,fov]   (repeat it). Heights are above the ground.
@@ -131,6 +133,18 @@ fn main() {
                 settle_secs: std::env::var("SIM001_SETTLE").ok().and_then(|v| v.parse().ok()).unwrap_or(4.0),
             },
         );
+    }
+    if flag("--battlefield") {
+        app.add_plugins(visualization_battlefield::BattlefieldPlugin {
+            first_feed_port: teleoperation_shared::feed::DEFAULT_PORT,
+            slots: 1,
+            hide_vehicles: false,
+            // The ground station's frame: metres from home, the pilot box.
+            origin: {
+                let p = terrain::pilot_pos();
+                Vec3::new(p.x, terrain::ground_height(p.x, p.z), p.z)
+            },
+        });
     }
     app.run();
 }

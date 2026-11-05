@@ -1,0 +1,15 @@
+[package]
+name = "teleoperation_battlefield"
+version = "0.1.0"
+edition = "2024"
+description = "The battlefield view, shared by the ground station and the commander app of Towers: the 3D picture of the field from the operator's camera (from the sim, a site renderer or the game's 3D view), the camera and its controls, the projections, the minimap, and the bars, cards and command card of a real-time strategy screen. GPUI"
+
+[dependencies]
+gpui = "0.2.2"
+glam.workspace = true
+# The battlefield's camera and the link to the 3D view that renders it.
+teleoperation_shared = { path = "../shared" }
+# The shared look (the console, the sim's HUD and the docs use it too).
+illustration_theme = { path = "../../illustration/theme" }
+# The pictures (the same image crate as GPUI's).
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

@@ -4,7 +4,7 @@
 use crate::draw::rect;
 use glam::{Vec2, Vec3};
 use gpui::{Bounds, Pixels};
-use recreation_towers::battlefield::Eye;
+use teleoperation_shared::battlefield::Eye;
 
 /// The battlefield: the field as the camera `eye` sees it, in the screen rectangle of the picture.
 #[derive(Clone, Copy)]

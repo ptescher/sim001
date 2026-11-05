@@ -6,19 +6,15 @@
 //!   cargo run --release -- --team red --watch        watch Red's map, with no orders
 //!   cargo run --release -- --serve --no-cameras      the same, with no 3D view and no pictures from the drones
 
-mod battlefield;
 mod bench;
 mod cameras;
-mod draw;
 mod expect;
 mod field;
 mod ground;
-mod lens;
 mod seat;
 mod server;
 mod snapshot;
 mod station;
-mod theme;
 mod ui;
 
 use gpui::{
@@ -133,8 +129,10 @@ fn main() {
     };
     // The battlefield: the valley in 3D from the commander's camera, rendered by the same 3D view.
     let battlefield = match join {
-        Join::Command(t) | Join::Watch(t) if cameras_on => battlefield::Battlefield::connect(&host, first_feed, t),
-        _ => battlefield::Battlefield::none(),
+        Join::Command(t) | Join::Watch(t) if cameras_on => {
+            teleoperation_battlefield::Battlefield::connect(&host, first_feed, t.index())
+        }
+        _ => teleoperation_battlefield::Battlefield::none(),
     };
 
     let expect_config = expect.then(|| {

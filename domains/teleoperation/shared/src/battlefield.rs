@@ -1,17 +1,16 @@
-//! The battlefield: the commander's camera over the valley, the picture of it that the 3D view
-//! (`towers_view`) renders, and the link between them. The commander app steers the camera; the
-//! 3D view renders the valley from it with no drones in it, so that the picture shows nothing that
-//! the fog hides; the app draws its map on the picture with the same camera.
+//! The battlefield: the camera of a commander or an operator over the field, the picture of it
+//! that a 3D view renders (the sim, a site renderer, or the game's `towers_view`), and the link
+//! between them. The app steers the camera; the 3D view renders the place from it, and each picture
+//! goes back with the eye it was rendered from, so the app draws its map on it in the right place.
 //!
-//! The field's frame is the game's: x north, y east (m from the field's centre), and up.
+//! The field's frame: x north, y east (m from the field's centre, or home), and up.
 
 use glam::{Vec2, Vec3};
-use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
 /// The commander's camera: it looks down at `look` on the ground, from `distance` away, towards
 /// `heading`, tilted `pitch` below the horizon.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Eye {
     /// The point of the ground in the middle of the picture (north, east; m).
     pub look: Vec2,
@@ -83,10 +82,10 @@ impl Eye {
     }
 }
 
-/// The battlefield of `team` is on this port: after the cameras of the drones, which start at
-/// `first_feed_port`.
-pub fn port(first_feed_port: u16, team: crate::Team) -> u16 {
-    first_feed_port + 20 + team.index() as u16
+/// Battlefield `slot` (a team's, or the station's 0) is on this port: after the cameras of the
+/// drones, which start at `first_feed_port`.
+pub fn port(first_feed_port: u16, slot: usize) -> u16 {
+    first_feed_port + 20 + slot as u16
 }
 
 /// The largest picture the 3D view renders (pixels).
@@ -281,8 +280,8 @@ mod tests {
     }
 
     #[test]
-    fn each_team_has_a_port_of_its_own_after_the_drones_cameras() {
-        assert_eq!(port(5601, crate::Team::Blue), 5621);
-        assert_eq!(port(5601, crate::Team::Red), 5622);
+    fn each_slot_has_a_port_of_its_own_after_the_drones_cameras() {
+        assert_eq!(port(5601, 0), 5621);
+        assert_eq!(port(5601, 1), 5622);
     }
 }

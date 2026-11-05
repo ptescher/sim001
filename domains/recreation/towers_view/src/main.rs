@@ -10,7 +10,7 @@
 //! (Blue's three, then Red's) on TCP port `--feed-port + i` (default 5601). A camera renders only
 //! while someone watches its feed. The battlefield of each team, the valley from the camera of
 //! its commander with no drones in it, is on `--feed-port + 20` (Blue) and `+ 21` (Red); see
-//! `recreation_towers::battlefield`. With `--stop-with-stdin` the view quits when its input closes
+//! `visualization_battlefield`. With `--stop-with-stdin` the view quits when its input closes
 //! (the commander app starts it so, and it stops with the app).
 //!
 //! `--export-map DIR` writes the top-down map of the valley (`terrain_map.png`, `terrain_height.bin`
@@ -18,7 +18,6 @@
 //! this view, drawn from the same trees and lake, in metres north and east of the field's centre
 //! (SITL's home), so the commander app and the ground station draw it where the game has it.
 
-mod battlefield;
 mod feeds;
 mod valley;
 
@@ -75,7 +74,6 @@ fn main() {
     let game = Game::default();
     spawn_spectator(server, game.0.clone());
     let links = feeds::serve(first_port);
-    let battlefields = battlefield::serve(first_port);
 
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -98,10 +96,15 @@ fn main() {
     })
     .insert_resource(game)
     .insert_resource(links)
-    .insert_resource(battlefields)
     .add_systems(Update, publish.before(EngineSet::Draw));
     feeds::plugin(&mut app, size);
-    battlefield::plugin(&mut app);
+    // The battlefield of each team, with no drones in it: the fog hides them from the commander.
+    app.add_plugins(visualization_battlefield::BattlefieldPlugin {
+        first_feed_port: first_port,
+        slots: 2,
+        hide_vehicles: true,
+        origin: Vec3::ZERO,
+    });
     app.run();
 }
 
