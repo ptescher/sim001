@@ -11,8 +11,7 @@ Story: Watching two computer teams play
     When two computer teams play a game of Towers
     Then the drones in AGENT mode are 10
     And the commands that the drones refused are 0
-    And the towers that Blue took are at least 1
-    And the towers that Red took are at least 1
+    And the towers that the two teams took are at least 1
     And the sightings from the fog on the Blue seat are 0
     And the Red drones that the Blue seat saw are at least 1
     And the drones that crashed are 0

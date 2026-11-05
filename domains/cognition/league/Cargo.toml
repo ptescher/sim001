@@ -14,6 +14,10 @@ fastrand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+# To stop a Claude run that is out of time, with everything it started (its process group).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 # The acceptance tests (tests/acceptance.rs): the section "Making the executor better".
 expectation_harness.workspace = true
