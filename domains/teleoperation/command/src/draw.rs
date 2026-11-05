@@ -76,10 +76,6 @@ pub fn circle(window: &mut Window, cx: f32, cy: f32, r: f32, width: f32, color: 
     polyline(window, &circle_pts(cx, cy, r), width, color);
 }
 
-pub fn dashed_circle(window: &mut Window, cx: f32, cy: f32, r: f32, width: f32, dash: f32, color: Hsla) {
-    dashed(window, &circle_pts(cx, cy, r), width, dash, color);
-}
-
 pub fn fill_circle(window: &mut Window, cx: f32, cy: f32, r: f32, color: Hsla) {
     fill_poly(window, &circle_pts(cx, cy, r), color);
 }
@@ -119,20 +115,4 @@ pub fn text(window: &mut Window, cx: &mut App, s: &str, x: f32, y: f32, size: f3
     let x0 = if align == Align::Center { x - w * 0.5 } else { x };
     let lh = size * 1.25;
     let _ = shaped.paint(pt(x0, y - lh * 0.5), px(lh), window, cx);
-}
-
-/// Masks the corners of a canvas outside a rounded rectangle of radius `r` with `color`.
-pub fn round_corners(window: &mut Window, b: Bounds<Pixels>, r: f32, color: Hsla) {
-    let (x, y, w, h) = rect(b);
-    let n = 10;
-    for (cx0, cy0, sx, sy) in
-        [(x, y, 1.0f32, 1.0f32), (x + w, y, -1.0, 1.0), (x + w, y + h, -1.0, -1.0), (x, y + h, 1.0, -1.0)]
-    {
-        let mut pts = vec![(cx0, cy0)];
-        for i in 0..=n {
-            let a = i as f32 / n as f32 * std::f32::consts::FRAC_PI_2;
-            pts.push((cx0 + sx * r * (1.0 - a.cos()), cy0 + sy * r * (1.0 - a.sin())));
-        }
-        fill_poly(window, &pts, color);
-    }
 }

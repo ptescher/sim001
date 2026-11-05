@@ -31,3 +31,29 @@ Story: Changing your mind
     Then the order of the first Blue drone is hold
     When the commander sends the selected drone home
     Then the order of the first Blue drone is go home
+
+Story: Watch your drone on the battlefield
+  As a commander of a team
+  I want to move the camera over the battlefield
+  So that I see my drones where they fight
+
+  The camera starts over your base. You select a drone, move the camera to the west tower with the
+  minimap, and send the drone there. When the tower is yours, you turn the camera and bring it back
+  to the drone.
+
+  Scenario: Follow a drone to the west tower
+    When the commander joins the game
+    Then the point of the battlefield camera is the Blue base
+    When the commander selects the first Blue drone
+    Then the selected drone is the first Blue drone
+    When the commander clicks the west tower on the minimap
+    Then the point of the battlefield camera is the west tower
+    When the commander sends the selected drone to the west tower
+    Then the order of the first Blue drone is take the west tower
+    When the game runs for 2 minutes
+    Then the west tower on the Blue map is held by Blue
+    And the first Blue drone is in the west circle
+    When the commander turns the battlefield camera to the right
+    Then the heading of the battlefield camera is 45 deg
+    When the commander centres the battlefield on the selected drone
+    Then the point of the battlefield camera is the west tower

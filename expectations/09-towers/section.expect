@@ -172,9 +172,9 @@ Vocabulary:
     Shows: held by Red: the Red home tower is red
     Shows: neutral: the Red home tower is grey
   State: the link of the first Blue drone is in contact | cut | lost
-    Shows: in contact: the list of drones shows the telemetry of B1, and CAMERAS shows its picture
-    Shows: cut: the list of drones shows NO LINK beside B1, with the time since the last contact. CAMERAS shows no picture of B1
-    Shows: lost: the list of drones shows NO LINK beside B1, and the order of B1 is the last order that you gave. The drone flies home by itself
+    Shows: in contact: the card of B1 shows its telemetry and the picture from its camera
+    Shows: cut: the card of B1 shows NO LINK, with the time since the last contact. The card has no picture
+    Shows: lost: the card of B1 shows NO LINK, and the order of B1 is the last order that you gave. The drone flies home by itself
   State: the link filter lets the frames of the first Blue drone through is yes | no
     Shows: yes: the filter of the link passes the frames to and from B1
     Shows: no: the filter of the link drops the frames to and from B1, as a radio shadow does
@@ -194,9 +194,9 @@ Vocabulary:
   # The battery of the drones.
   State: the batteries are off | on
     Set: {value}
-    Shows: on: the list of drones shows the battery of each drone in seconds, and a drone with an empty battery goes down
+    Shows: on: the card of each drone shows its battery in seconds, and a drone with an empty battery goes down
   State: the battery of the first Blue drone is 0..300 s
-    Shows: the list of drones shows BAT {value} s beside B1
+    Shows: the card of B1 shows BAT {value} s
   State: the enemy drones on board the first Blue drone are 0..4
     Shows: the camera of B1 shows {value} enemy drones. The commander sees them only when B1 is in contact
   State: the west tower on board the first Blue drone is held by Blue | held by Red | neutral
@@ -206,14 +206,14 @@ Vocabulary:
   State: the battery of the first Blue drone on the Blue map is 0..300 s
     Shows: the Blue map shows the battery that B1 last reported, {value} s, with its age
   State: the condition of the first Blue drone is flying | down | on the ground
-    Shows: down: B1 is out of the game, and the list of drones shows DOWN beside B1
+    Shows: down: B1 is out of the game, and the card of B1 shows DOWN
   # Standing orders: what a drone out of contact does.
   State: the order that the first Blue drone flies is none | take the west tower | hold | go home
-    Shows: the order {value} is the order that B1 flies now. In the app, the list of drones shows it beside B1
+    Shows: the order {value} is the order that B1 flies now. In the app, the card of B1 shows it
   State: the standing order of the first Blue drone is none | hold after 5 s | go home after 5 s | hold after 30 s
-    Shows: hold after 5 s: the list of drones shows STANDING HOLD beside the order of B1
-    Shows: go home after 5 s: the list of drones shows STANDING HOME beside the order of B1
-    Shows: hold after 30 s: the list of drones shows STANDING HOLD 30 beside the order of B1
+    Shows: hold after 5 s: the card of B1 shows STANDING HOLD under its order
+    Shows: go home after 5 s: the card of B1 shows STANDING HOME under its order
+    Shows: hold after 30 s: the card of B1 shows STANDING HOLD 30 under its order
   Event: the first Blue drone flies through the radio shadow for 10 seconds
     Say: order the first Blue drone to fly to a point 100 m from the Red home tower, wait 10 seconds, and order it back to the Blue home tower
   Event: the first Blue drone is given the order to hold
@@ -235,7 +235,7 @@ Vocabulary:
   # The computer commander of a team (recreation_towers::Commander): its orders to the Blue
   # drones. The first Blue drone stands at the west end of the Blue base, the third at the east end.
   State: the order of the first Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
-    Shows: the first Blue drone gets the order to {value}. In the app, the list of drones shows the order beside B1
+    Shows: the first Blue drone gets the order to {value}. In the app, the card of B1 shows the order
   State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
     Shows: the second Blue drone gets the order to {value}
   State: the towers with a Blue drone on the way are 0..5
@@ -268,38 +268,73 @@ Vocabulary:
   State: the towers on the app's map are 0..5
     Shows: 5: the map shows the five towers, each with its circle and its control bar
   State: the selected drone is none | the first Blue drone | the second Blue drone | the third Blue drone
-    Set: click {value} in the list of drones
-    Shows: the first Blue drone: B1 is lit in the list of drones, and a ring goes round B1 on the map
+    Set: click the card of {value} in the bottom bar
+    Shows: the first Blue drone: the card of B1 is lit in the bottom bar, and a ring goes round B1 on the battlefield
   State: the unit panel of the app is hidden | shown
     Shows: hidden: the app has no UNIT panel
-    Shows: shown: the UNIT panel is under the list of drones
+    Shows: shown: the UNIT panel is in the bottom bar, beside the cards of the drones
   State: the class in the unit panel is none | standard | light | heavy
     Shows: the UNIT panel says CLASS {value}, and its icon is the shape of that class
   State: the mass in the unit panel is 0..5 kg
     Shows: the UNIT panel says MASS {value} kg
+  State: the towers held by Blue in the top bar are 0..11
+    Shows: the top bar shows {value} blue tower chips
+  State: the picture in the portrait is nothing | the camera of the first Blue drone | the camera of the second Blue drone | the camera of the third Blue drone
+    Shows: the camera of the first Blue drone: the PORTRAIT in the bottom bar shows the picture from the camera of B1
+    Shows: nothing: the bottom bar has no PORTRAIT
+  # The battlefield: the 3D view of the valley, from the commander's camera (02-battlefield).
+  State: the battlefield picture in the app is live | missing
+    Shows: live: the battlefield shows the valley in 3D, with the forest, the lanes, the lake and the mountains
+    Shows: missing: the battlefield shows the plain map of the valley, in the same perspective
+  State: the point of the battlefield camera is the Blue base | the west tower | the centre tower | the east tower | the Red base | another place
+    Set: click {value} on the minimap
+    Shows: the Blue base: the Blue base is in the middle of the battlefield
+    Shows: the west tower: the west tower is in the middle of the battlefield
+  State: the distance from the Blue base to the battlefield camera's point is 0..3000 m
+    Shows: the middle of the battlefield is {value} m from the Blue base
+  State: the heading of the battlefield camera is 0..359 deg
+    Set: turn the camera with Q and E until it looks to {value}°
+    Shows: the camera looks to {value}°, and the compass on the minimap points that way
+  State: the height of the battlefield camera is 20..2500 m
+    Set: turn the mouse wheel until the camera is {value} m above the ground
+    Shows: the camera is {value} m above the ground
+  Event: the commander waits for the battlefield
+    Say: wait until the 3D view has loaded the valley
+  Event: the commander clicks the west tower on the minimap
+    Say: click the west tower on the minimap
+  Event: the commander pans the battlefield to the front
+    Say: hold W, or the up arrow, for one second
+  Event: the commander moves the mouse to the top edge of the battlefield
+    Say: move the mouse to the top edge of the battlefield, and keep it there for one second
+  Event: the commander turns the battlefield camera to the right
+    Say: press E. Q turns the camera to the left
+  Event: the commander zooms the battlefield in
+    Say: turn the mouse wheel forward one step
+  Event: the commander centres the battlefield on the selected drone
+    Say: press Space
   State: the west tower on the Blue map is held by Blue | held by Red | neutral
     Shows: held by Blue: the west tower on the map turns blue
     Shows: neutral: the west tower on the map is grey
   Event: the commander joins the game
     Say: wait until the top bar says BLUE COMMANDER
   Event: the commander waits for the cameras
-    Say: wait until CAMERAS shows a picture beside each name. The 3D view loads the valley first, which takes some minutes after a game starts
+    Say: wait until the card of each drone in the bottom bar shows a picture. The 3D view loads the valley first, which takes some minutes after a game starts
   Event: the commander selects the first Blue drone
-    Say: click B1 in the list of drones, or press 1
+    Say: click the card of B1 in the bottom bar, or press 1
   Event: the commander sends the selected drone to the west tower
-    Say: right-click the west tower on the map
+    Say: right-click the west tower on the battlefield
   Event: the commander holds the selected drone
-    Say: click HOLD
+    Say: click HOLD, or press H
   Event: the commander sends the selected drone home
-    Say: click HOME
+    Say: click HOME, or press B
   Event: the commander flies the selected drone low
     Say: click LOW, or press L
   Event: the commander clicks the camera of the second Blue drone
-    Say: click the picture of B2 in CAMERAS
+    Say: click the picture in the card of B2
   State: the flight of the first Blue drone is high | low
     Set: select B1, and click LOW until it is {value}
-    Shows: low: the list of drones shows LOW beside the order of B1
-    Shows: high: the list of drones shows the order of B1 with no LOW
+    Shows: low: the card of B1 shows LOW under its order
+    Shows: high: the card of B1 shows its order with no LOW
   State: the drones that the app flies in AGENT mode are 0..5
     Shows: at least 1: the app has put a drone in AGENT mode and sent it plans by MAVLink, through the air
   State: the position reports that the app heard from its drones are 0..1000000
@@ -307,7 +342,7 @@ Vocabulary:
   State: the maps of the game that the game server sent the app are 0..100000
     Shows: 0: the app got no map of its team from the game server: only the word of the umpire (the clock, the score and the outcome) and the reports of the towers and the base
   State: the camera feeds in the app are 0..5
-    Shows: 5: CAMERAS shows the picture from the camera of each Blue drone, beside its name
+    Shows: 5: the card of each Blue drone shows the picture from its camera
   Event: the game runs for 2 minutes
     Say: wait until the clock has run for 2 minutes
   Event: the game runs for 3 minutes

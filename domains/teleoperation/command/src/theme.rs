@@ -23,7 +23,6 @@ pub const GREEN_DIM: u32 = P.ok_dim.0;
 pub const AMBER: u32 = P.caution.0;
 pub const WHITE: u32 = P.text.0;
 pub const GREY: u32 = P.muted.0;
-pub const DARK: u32 = P.faint.0;
 
 pub const CONTROL: u32 = P.control.0;
 pub const CONTROL_HOVER: u32 = P.control_hover.0;

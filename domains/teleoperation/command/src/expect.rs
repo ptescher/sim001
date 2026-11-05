@@ -9,13 +9,14 @@
 
 use crate::seat::Status;
 use crate::server::Server;
-use crate::ui::{self, CommanderView, MapView};
+use crate::ui::{self, CommanderView};
 use expectation_harness::{Acceptance, Driver, Need, Progress, RunOptions, Screenshot};
 use expectation_model::{Event, Value, Variable};
 use expectation_story::Status as TestStatus;
 use gpui::{
-    App, AppContext as _, Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    PlatformInput, Point, Window, WindowHandle, point, px,
+    App, AppContext as _, Context, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput, Point, ScrollDelta, ScrollWheelEvent, TouchPhase, Window,
+    WindowHandle, point, px,
 };
 use recreation_towers::seat::Join;
 use recreation_towers::{Order, Team, TeamView};
@@ -82,6 +83,13 @@ const EVENTS: &[&str] = &[
     "the commander clicks the camera of the second Blue drone",
     "the game runs for 2 minutes",
     "the game runs for 3 minutes",
+    "the commander waits for the battlefield",
+    "the commander clicks the west tower on the minimap",
+    "the commander pans the battlefield to the front",
+    "the commander moves the mouse to the top edge of the battlefield",
+    "the commander turns the battlefield camera to the right",
+    "the commander zooms the battlefield in",
+    "the commander centres the battlefield on the selected drone",
 ];
 
 const OBSERVED: &[&str] = &[
@@ -100,7 +108,29 @@ const OBSERVED: &[&str] = &[
     "the drones that the app flies in AGENT mode",
     "the position reports that the app heard from its drones",
     "the maps of the game that the game server sent the app",
+    "the towers held by Blue in the top bar",
+    "the first Blue drone",
+    "the picture in the portrait",
+    "the battlefield picture in the app",
+    "the point of the battlefield camera",
+    "the distance from the Blue base to the battlefield camera's point",
+    "the heading of the battlefield camera",
+    "the height of the battlefield camera",
 ];
+
+/// The states of the battlefield's camera that a test sets up, as the commander would with the keys
+/// and the wheel.
+const CAMERA: [&str; 3] = [
+    "the heading of the battlefield camera",
+    "the height of the battlefield camera",
+    "the point of the battlefield camera",
+];
+
+/// The camera looks at a place when the middle of the picture is this near it (m).
+const LOOKS_AT: f32 = 100.0;
+
+/// How long a key is held, or the mouse kept at an edge, to move the camera.
+const HOLD: Duration = Duration::from_secs(1);
 
 /// The cameras need the 3D view to load the valley first.
 const FEEDS: Duration = Duration::from_secs(180);
@@ -135,6 +165,29 @@ fn holder_name(h: Option<Team>) -> &'static str {
 /// A left click at `at`, as the platform would deliver it.
 fn click(window: &mut Window, cx: &mut App, at: Point<Pixels>) {
     press(window, cx, at, MouseButton::Left);
+}
+
+/// A key pressed (`down`) or let go, as the platform would deliver it.
+fn key(window: &mut Window, cx: &mut App, key: &str, down: bool) {
+    let keystroke = Keystroke::parse(key).expect("a key");
+    let e = if down {
+        PlatformInput::KeyDown(KeyDownEvent { keystroke, is_held: false })
+    } else {
+        PlatformInput::KeyUp(KeyUpEvent { keystroke })
+    };
+    let _ = window.dispatch_event(e, cx);
+}
+
+/// A key pressed and let go.
+fn tap(window: &mut Window, cx: &mut App, k: &str) {
+    key(window, cx, k, true);
+    key(window, cx, k, false);
+}
+
+/// The mouse moved to `at`, with no button down.
+fn hover(window: &mut Window, cx: &mut App, at: Point<Pixels>) {
+    let e = MouseMoveEvent { position: at, pressed_button: None, modifiers: Modifiers::default() };
+    let _ = window.dispatch_event(PlatformInput::MouseMove(e), cx);
 }
 
 /// A click with `button`.
@@ -302,18 +355,58 @@ impl AppDriver {
         // Draw first: the map's bounds are those of the last frame, and the layout may have changed
         // since (a selection shows the UNIT panel), which would move the tower under the click.
         self.with_window(|w, cx| w.draw(cx).clear())?;
-        let (x, y) = self.call(move |v, _, _| {
-            let (view, rules) = {
-                let s = v.seat.state();
-                (s.view.clone(), s.rules)
-            };
-            let (Some(view), Some(rules)) = (view, rules) else { return Err("the app has no map".to_string()) };
+        let shown = self.call(move |v, _, _| {
+            let view = v.seat.state().view.clone().ok_or("the app has no map".to_string())?;
             let tower = view.towers.iter().find(|t| t.name == name).ok_or(format!("no {name} tower"))?;
             let b = v.map_bounds.get();
-            let at = MapView::new(b, &rules).to_screen(tower.at);
-            Ok(at)
+            Ok::<_, String>(v.screen_of(tower.at).filter(|&(x, y)| b.contains(&point(px(x), px(y)))))
         })??;
+        // Off the battlefield: the commander first looks there, with the minimap.
+        let (x, y) = match shown {
+            Some(at) => at,
+            None => {
+                self.click_minimap_tower(name)?;
+                self.with_window(|w, cx| w.draw(cx).clear())?;
+                self.call(move |v, _, _| {
+                    let at = v.seat.state().view.as_ref()?.towers.iter().find(|t| t.name == name)?.at;
+                    v.screen_of(at)
+                })?
+                .ok_or(format!("the {name} tower is not on the battlefield"))?
+            }
+        };
         self.with_window(move |w, cx| press(w, cx, point(px(x), px(y)), MouseButton::Right))
+    }
+
+    /// Clicks the tower `name` on the minimap.
+    fn click_minimap_tower(&self, name: &'static str) -> Result<(), String> {
+        self.with_window(|w, cx| w.draw(cx).clear())?;
+        let (x, y) = self.call(move |v, _, _| {
+            let view = v.seat.state().view.clone().ok_or("the app has no map")?;
+            let tower = view.towers.iter().find(|t| t.name == name).ok_or(format!("no {name} tower"))?;
+            v.minimap_screen(tower.at).ok_or("there is no minimap".to_string())
+        })??;
+        self.with_window(move |w, cx| click(w, cx, point(px(x), px(y))))
+    }
+
+    /// Holds the key `k` down for a while, then lets it go.
+    fn hold_key(&self, k: &'static str) -> Result<(), String> {
+        self.with_window(move |w, cx| key(w, cx, k, true))?;
+        std::thread::sleep(HOLD);
+        self.with_window(move |w, cx| key(w, cx, k, false))
+    }
+
+    /// Presses the key `k` once.
+    fn press_key(&self, k: &'static str) -> Result<(), String> {
+        self.with_window(move |w, cx| {
+            w.draw(cx).clear();
+            tap(w, cx, k)
+        })
+    }
+
+    /// The camera of the battlefield now, and the rules.
+    fn eye(&self) -> Result<(recreation_towers::battlefield::Eye, recreation_towers::Rules), String> {
+        let (eye, rules) = self.call(|v, _, _| (v.eye, v.seat.state().rules))?;
+        Ok((eye, rules.ok_or("the app has no rules yet")?))
     }
 
     /// Waits for the server's echo of drone `k`'s order.
@@ -340,7 +433,7 @@ impl Driver for AppDriver {
             drop(s);
             self.call(|v, _, _| {
                 v.seat.reconnect();
-                v.select(None);
+                v.fresh();
             })?;
         }
         self.used = true;
@@ -357,8 +450,22 @@ impl Driver for AppDriver {
                 Err(format!("a fresh game has another {subject}"))
             };
         }
-        if is(subject, "the selected drone") {
+        if is(subject, "the selected drone") || CAMERA.iter().any(|c| is(subject, c)) {
             return self.set(var, value);
+        }
+        if is(subject, "the first Blue drone") && text(value) == "in the west circle" {
+            // Sent to the west tower, as a commander does, and on its way until it circles it.
+            self.call(|v, _, _| {
+                let west = v.seat.state().view.as_ref().and_then(|m| m.towers.iter().position(|t| t.name == "west"));
+                if let Some(t) = west {
+                    v.seat.order(0, Order::Take(t), false);
+                }
+            })?;
+            let circle = self.call(|v, _, _| v.seat.state().rules.map_or(60.0, |r| r.circle_radius))?;
+            return self.until(GAME, "the first Blue drone in the west circle", move |v| {
+                let west = v.towers.iter().find(|t| t.name == "west");
+                west.zip(v.drones.first()).is_some_and(|(t, d)| d.at.distance(t.at) < circle + 20.0)
+            });
         }
         if is(subject, "the order of the first Blue drone") && text(value) == "take the west tower" {
             self.call(|v, _, _| {
@@ -385,11 +492,44 @@ impl Driver for AppDriver {
         let subject = var.subject.as_str();
         START.iter().any(|(s, v)| is(subject, s) && text(value) == v.to_lowercase())
             || is(subject, "the selected drone")
+            || CAMERA.iter().any(|c| is(subject, c))
+            || (is(subject, "the first Blue drone") && text(value) == "in the west circle")
             || (is(subject, "the order of the first Blue drone") && text(value) == "take the west tower")
             || is(subject, "the flight of the first Blue drone")
     }
 
     fn set(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
+        if is(&var.subject, CAMERA[0]) {
+            let heading = value.as_f64().ok_or("a heading is a number")? as f32;
+            return self.call(move |v, _, cx| {
+                v.eye.heading = heading;
+                cx.notify();
+            });
+        }
+        if is(&var.subject, CAMERA[2]) {
+            let want = text(value);
+            let at = self.call(move |v, _, _| {
+                let s = v.seat.state();
+                let rules = s.rules?;
+                match want.as_str() {
+                    "the blue base" => Some(rules.base(Team::Blue)),
+                    "the red base" => Some(rules.base(Team::Red)),
+                    t => s.view.as_ref()?.towers.iter().find(|x| format!("the {} tower", x.name) == t).map(|x| x.at),
+                }
+            })?;
+            let at = at.ok_or_else(|| format!("no place {}", text(value)))?;
+            return self.call(move |v, _, cx| {
+                v.eye.look = at;
+                cx.notify();
+            });
+        }
+        if is(&var.subject, CAMERA[1]) {
+            let height = value.as_f64().ok_or("a height is a number")? as f32;
+            return self.call(move |v, _, cx| {
+                v.eye.distance = height / v.eye.pitch.to_radians().sin();
+                cx.notify();
+            });
+        }
         if !is(&var.subject, "the selected drone") {
             return Err(format!("the app can't set {}", var.subject));
         }
@@ -415,6 +555,31 @@ impl Driver for AppDriver {
                 self.until(ANSWER, "the server's answer to LOW", |v| v.drones.first().is_some_and(|d| d.low))
             }
             "the commander clicks the camera of the second blue drone" => self.click_button("camera-1"),
+            // The check that follows waits for the picture.
+            "the commander waits for the battlefield" => Ok(()),
+            "the commander clicks the west tower on the minimap" => self.click_minimap_tower("west"),
+            "the commander pans the battlefield to the front" => self.hold_key("w"),
+            "the commander moves the mouse to the top edge of the battlefield" => {
+                let b = self.call(|v, _, _| v.map_bounds.get())?;
+                let (top, middle) = (point(b.center().x, b.origin.y + px(2.0)), b.center());
+                self.with_window(move |w, cx| hover(w, cx, top))?;
+                std::thread::sleep(HOLD);
+                self.with_window(move |w, cx| hover(w, cx, middle))
+            }
+            "the commander turns the battlefield camera to the right" => self.press_key("e"),
+            "the commander zooms the battlefield in" => {
+                let at = self.call(|v, _, _| v.map_bounds.get().center())?;
+                self.with_window(move |w, cx| {
+                    let e = ScrollWheelEvent {
+                        position: at,
+                        delta: ScrollDelta::Lines(point(0.0, 1.0)),
+                        modifiers: Modifiers::default(),
+                        touch_phase: TouchPhase::Moved,
+                    };
+                    let _ = w.dispatch_event(PlatformInput::ScrollWheel(e), cx);
+                })
+            }
+            "the commander centres the battlefield on the selected drone" => self.press_key("space"),
             e @ ("the game runs for 2 minutes" | "the game runs for 3 minutes") => {
                 let minutes: f32 = if e.ends_with("2 minutes") { 2.0 } else { 3.0 };
                 let from = self.view()?.map_or(0.0, |v| v.time);
@@ -461,6 +626,68 @@ impl Driver for AppDriver {
                 let live = self.call(|v, _, _| v.cameras.live())?;
                 if live >= 3 || Instant::now() > end {
                     return Ok(Value::from(live as f64));
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+        }
+        if lower == "the battlefield picture in the app" {
+            // The 3D view loads the valley first, which takes a while.
+            let end = Instant::now() + self.suite.cap(FEEDS);
+            loop {
+                let live = self.call(|v, _, _| v.battlefield_live())?;
+                if live || Instant::now() > end {
+                    return Ok(Value::from(if live { "live" } else { "missing" }));
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+        }
+        if CAMERA.iter().any(|c| is(subject, c))
+            || lower == "the point of the battlefield camera"
+            || lower == "the distance from the blue base to the battlefield camera's point"
+        {
+            let (eye, rules) = self.eye()?;
+            if is(subject, CAMERA[0]) {
+                return Ok(Value::from(eye.heading.rem_euclid(360.0).round() as f64 % 360.0));
+            }
+            if is(subject, CAMERA[1]) {
+                return Ok(Value::from(eye.height().round() as f64));
+            }
+            let base = rules.base(Team::Blue);
+            if lower.starts_with("the distance") {
+                return Ok(Value::from(eye.look.distance(base).round() as f64));
+            }
+            let view = self.view()?.ok_or("the app has no map yet")?;
+            let mut places = vec![("the Blue base".to_string(), base), ("the Red base".into(), rules.base(Team::Red))];
+            places.extend(view.towers.iter().map(|t| (format!("the {} tower", t.name), t.at)));
+            let near = places
+                .into_iter()
+                .filter(|(_, at)| at.distance(eye.look) < LOOKS_AT)
+                .min_by(|a, b| a.1.distance(eye.look).total_cmp(&b.1.distance(eye.look)));
+            return Ok(Value::from(near.map_or("another place".to_string(), |(name, _)| name)));
+        }
+        if lower == "the first blue drone" {
+            // Only where the app's map puts it in the west circle, or not.
+            let circle = self.call(|v, _, _| v.seat.state().rules.map_or(60.0, |r| r.circle_radius))?;
+            let view = self.view()?.ok_or("the app has no map yet")?;
+            let west = view.towers.iter().find(|t| t.name == "west").ok_or("no west tower")?;
+            let inside = view.drones.first().is_some_and(|d| d.at.distance(west.at) < circle + 20.0);
+            return Ok(Value::from(if inside { "in the west circle" } else { "somewhere else" }));
+        }
+        if lower == "the towers held by blue in the top bar" {
+            self.with_window(|w, cx| w.draw(cx).clear())?;
+            let chips = self.call(|v, _, _| v.chips.borrow().clone())?;
+            return Ok(Value::from(chips.iter().filter(|c| **c == Some(Team::Blue)).count() as f64));
+        }
+        if lower == "the picture in the portrait" {
+            // The pictures come when the 3D view has loaded the valley.
+            let end = Instant::now() + self.suite.cap(FEEDS);
+            loop {
+                self.with_window(|w, cx| w.draw(cx).clear())?;
+                let (shown, selected) = self.call(|v, _, _| (v.portrait.get(), v.selected.first().copied()))?;
+                if shown.is_some() || selected.is_none() || Instant::now() > end {
+                    return Ok(Value::from(
+                        shown.map_or("nothing".to_string(), |k| format!("the camera of {}", DRONES[k])),
+                    ));
                 }
                 std::thread::sleep(Duration::from_millis(250));
             }
@@ -524,10 +751,12 @@ impl Driver for AppDriver {
             Need::Arrange(v) => {
                 START.iter().any(|(s, _)| is(&v.subject, s))
                     || is(&v.subject, "the selected drone")
+                    || is(&v.subject, "the first Blue drone")
+                    || CAMERA.iter().any(|c| is(&v.subject, c))
                     || is(&v.subject, "the order of the first Blue drone")
                     || is(&v.subject, "the flight of the first Blue drone")
             }
-            Need::Set(v) => is(&v.subject, "the selected drone"),
+            Need::Set(v) => is(&v.subject, "the selected drone") || CAMERA.iter().any(|c| is(&v.subject, c)),
             Need::Perform(e) => EVENTS.iter().any(|s| is(&e.text, s)),
             Need::Observe(v) => {
                 OBSERVED.iter().any(|s| is(&v.subject, s)) || START.iter().any(|(s, _)| is(&v.subject, s))
@@ -625,11 +854,23 @@ pub fn start(cx: &mut App, app: WindowHandle<CommanderView>, config: Config) {
     });
 }
 
+/// Whether the app can arrange `var` in `c`: the first Blue drone only in the west circle.
+fn arranges(var: &Variable, c: &expectation_model::Constraint) -> bool {
+    if !is(&var.subject, "the first Blue drone") {
+        return true;
+    }
+    let expectation_model::VarKind::Enum(values) = &var.kind else { return false };
+    let Some(i) = values.iter().position(|v| v == "in the west circle") else { return false };
+    matches!(c, expectation_model::Constraint::OneOf(m) if *m == 1 << i)
+}
+
 /// Whether the driver can run every step of `plan` (a test of the rules with no window, or of
 /// the server, is not the app's).
 fn driver_support(a: &Acceptance, plan: &expectation_story::Plan, d: &AppDriver) -> bool {
     let v = &a.suite.vocabulary;
-    plan.start.iter().all(|(x, _)| d.supports(Need::Arrange(v.var(x))))
+    // A state that the app arranges only in some values (the first Blue drone in the west circle)
+    // makes a test the app's only in those.
+    plan.start.iter().all(|(x, c)| d.supports(Need::Arrange(v.var(x))) && arranges(v.var(x), c))
         && plan
             .steps
             .iter()

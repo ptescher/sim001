@@ -1,32 +1,42 @@
-//! The commander's window: the top bar (the seat, the clock, the scores), the map of the team
-//! (the field, its fog, the towers, the drones) and the list of drones with their orders.
+//! The commander's window, laid out as a real-time strategy game: a thin top bar (the seat, a chip
+//! for each tower, the scores and the clock), the battlefield that fills the window (the valley in
+//! 3D from the commander's camera, with the team's map drawn on it), and the bottom bar (the
+//! minimap, a card for each drone with its camera, the PORTRAIT and UNIT of the selected drone,
+//! and the command card).
 //!
-//! The controls are those of a real-time strategy game. Left-click a drone (on the map or in the
-//! list) to select it, or drag a box round several; Shift adds to the selection (and takes a
-//! drone out of it again), Ctrl/Cmd+A selects all, the number keys select one drone, Esc lets go.
-//! Right-click a tower (take it) or anywhere else on the field (go there and circle) to order
-//! the selected drones. HOLD and HOME (or H and B) act on the selected drones; LOW (L) makes them
-//! fly along the lanes, below the treetops; CAMERAS shows the camera of each drone.
+//! Left-click a drone (on the battlefield or its card) to select it, or drag a box round several;
+//! Shift adds to the selection (and takes a drone out of it again), Ctrl/Cmd+A selects all, the
+//! number keys select one drone, Esc lets go. Right-click a tower (take it) or anywhere else on the
+//! field (go there and circle) to order the selected drones. HOLD and HOME (or H and B) act on the
+//! selected drones; LOW (L) makes them fly along the lanes, below the treetops.
+//!
+//! The camera: W, A, S, D or the arrow keys move it, and so does the mouse at an edge of the
+//! battlefield; Q and E turn it by 45°; the wheel takes it nearer to the ground or further; a click
+//! on the minimap looks there; Space looks at the selected drones.
 
+use crate::battlefield::Battlefield;
 use crate::cameras::Cameras;
 use crate::draw::*;
+use crate::field::{self, Drag, PING, Scene, team_name};
 use crate::ground::Ground;
+use crate::lens::{Flat, Lens};
 use crate::seat::{Seat, Status};
 use crate::theme::*;
 use glam::Vec2;
 use gpui::{
-    App, Bounds, ContentMask, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, ScrollDelta, ScrollWheelEvent,
-    SharedString, Stateful, Window, canvas, div, prelude::*, px,
+    Bounds, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful,
+    Window, canvas, div, prelude::*, px,
 };
-use recreation_towers::map::{LANE_HALF_WIDTH, Map};
+use recreation_towers::battlefield::Eye;
+use recreation_towers::map::Map;
 use recreation_towers::seat::Join;
-use recreation_towers::{Class, Kind, Order, Outcome, Phase, Rules, Team, TeamView};
+use recreation_towers::{Class, Order, Phase, Rules, Team, TeamView};
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 thread_local! {
     /// Where each button was last painted, by id, so `--expect` can click it the way a person
@@ -39,98 +49,87 @@ pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
     BUTTONS.with(|b| b.borrow().get(id).copied())
 }
 
-/// A drone on the map is clicked when the click is this near it (screen pixels).
-const PICK: f32 = 14.0;
-
-/// A box being dragged on the map: where the button went down, where the mouse is now (screen
-/// pixels), and whether Shift was held.
-type Drag = ((f32, f32), (f32, f32), bool);
+/// A drone on the battlefield is clicked when the click is this near it (screen pixels).
+const PICK: f32 = 16.0;
 
 /// A left button press that moves less than this (screen pixels) is a click, not a box.
 const DRAG: f32 = 4.0;
 
-/// The field on the map, north up: the whole field fits at zoom 1; zoomed in, `look` is the
-/// point of the field at the middle of the map.
-#[derive(Clone, Copy)]
-pub struct MapView {
-    centre: (f32, f32),
-    /// Pixels per metre.
-    scale: f32,
-    look: Vec2,
-}
+/// The mouse this near an edge of the battlefield moves the camera (screen pixels).
+const EDGE: f32 = 14.0;
 
-/// The most the map zooms in.
-const ZOOM_MAX: f32 = 8.0;
+/// How the camera looks down, and how near and how far from the ground it goes (m).
+const PITCH: f32 = 50.0;
+const HEIGHT_MIN: f32 = 20.0;
+const HEIGHT_MAX: f32 = 2500.0;
+/// One step of the wheel takes the camera this much nearer.
+const WHEEL_STEP: f32 = 0.8;
+/// Q and E turn the camera this far (deg).
+const TURN: f32 = 45.0;
 
-/// The minimap's side (screen pixels) and its distance from the corner of the map.
-const MINI: f32 = 150.0;
-const MINI_MARGIN: f32 = 10.0;
+/// The height of the bottom bar, and the side of its minimap (px).
+const BAR: f32 = 212.0;
+const MINIMAP: f32 = 176.0;
 
-impl MapView {
-    /// The whole field.
-    pub fn new(b: Bounds<Pixels>, rules: &Rules) -> MapView {
-        MapView::framed(b, rules, 1.0, Vec2::ZERO)
-    }
-
-    /// The field magnified `zoom` times about `look`.
-    pub fn framed(b: Bounds<Pixels>, rules: &Rules, zoom: f32, look: Vec2) -> MapView {
-        let (x, y, w, h) = rect(b);
-        let scale = zoom * 0.5 * w.min(h) / (rules.field_radius * 1.08);
-        MapView { centre: (x + w * 0.5, y + h * 0.5), scale, look }
-    }
-
-    pub fn to_screen(self, at: Vec2) -> (f32, f32) {
-        let d = at - self.look;
-        (self.centre.0 + d.y * self.scale, self.centre.1 - d.x * self.scale)
-    }
-
-    pub fn to_field(self, sx: f32, sy: f32) -> Vec2 {
-        self.look + Vec2::new((self.centre.1 - sy) / self.scale, (sx - self.centre.0) / self.scale)
-    }
-}
-
-/// The minimap's square on the map `b`: bottom right.
-fn minimap_rect(b: Bounds<Pixels>) -> (f32, f32, f32, f32) {
-    let (x, y, w, h) = rect(b);
-    (x + w - MINI - MINI_MARGIN, y + h - MINI - MINI_MARGIN, MINI, MINI)
-}
+/// How long a piece of the advisor's advice stays on the battlefield.
+const ADVICE_SHOWN: Duration = Duration::from_secs(20);
 
 pub struct CommanderView {
     pub seat: Arc<Seat>,
     /// The selected drones (their numbers in the team), in order.
     pub selected: Vec<usize>,
-    /// A box being dragged on the map: where the button went down, where the mouse is now
-    /// (screen pixels), and whether Shift was held.
     drag: Option<Drag>,
-    /// How far the map is zoomed in (1: the whole field), and the point of the field it is centred on.
-    zoom: f32,
-    look: Vec2,
-    /// The left button is down on the minimap, moving the view.
+    /// The left button is down on the minimap, moving the camera.
     minimap_drag: bool,
+    /// The battlefield and the minimap, as last painted.
     pub map_bounds: Rc<Cell<Bounds<Pixels>>>,
+    minimap_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The valley (lanes, lake, clearings), worked out from the game's rules once they arrive.
     valley: Option<Map>,
-    /// The picture of the valley under the map, if it has been exported.
+    /// The picture of the valley under the minimap, if it has been exported.
     ground: Option<Arc<Ground>>,
     /// The pictures from the team's drones, and the one of each that the window has on its atlas.
     pub cameras: Arc<Cameras>,
     shown: Vec<Option<Arc<RenderImage>>>,
+    /// The picture of the battlefield from the 3D view, and the one the window has on its atlas.
+    battlefield: Arc<Battlefield>,
+    picture: Option<(Arc<RenderImage>, Eye)>,
     focus: FocusHandle,
+    /// The commander's camera over the battlefield.
+    pub eye: Eye,
+    /// The camera has been put over the team's base.
+    eye_placed: bool,
+    /// The keys that move the camera, held down now.
+    held: HashSet<String>,
+    /// The mouse on the battlefield, for the edges (screen pixels).
+    hover: Option<(f32, f32)>,
+    last_tick: Instant,
+    /// Where the last right-click sent the drones, and when.
+    ping: Option<(Vec2, Instant)>,
+    /// The tower chips of the top bar, as last drawn: the team that holds each.
+    pub chips: RefCell<Vec<Option<Team>>>,
+    /// The drone whose camera the PORTRAIT showed when last drawn.
+    pub portrait: Cell<Option<usize>>,
 }
 
 impl CommanderView {
     pub fn new(
         seat: Arc<Seat>,
         cameras: Arc<Cameras>,
+        battlefield: Arc<Battlefield>,
         ground: Option<Arc<Ground>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> CommanderView {
-        // The game arrives on another thread; repaint at about 30 Hz.
+        // The game arrives on another thread; the camera moves and the window repaints at about 30 Hz.
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_millis(33)).await;
-                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                let ticked = this.update(cx, |v, cx| {
+                    v.tick();
+                    cx.notify()
+                });
+                if ticked.is_err() {
                     break;
                 }
             }
@@ -142,16 +141,58 @@ impl CommanderView {
             seat,
             selected: vec![],
             drag: None,
-            zoom: 1.0,
-            look: Vec2::ZERO,
             minimap_drag: false,
             map_bounds: Rc::new(Cell::new(Bounds::default())),
+            minimap_bounds: Rc::new(Cell::new(Bounds::default())),
             valley: None,
             ground,
             shown: vec![None; cameras.len()],
             cameras,
+            battlefield,
+            picture: None,
             focus,
+            eye: Eye { pitch: PITCH, ..Eye::default() },
+            eye_placed: false,
+            held: HashSet::new(),
+            hover: None,
+            last_tick: Instant::now(),
+            ping: None,
+            chips: RefCell::default(),
+            portrait: Cell::new(None),
         }
+    }
+
+    /// As on a fresh start of the app: nothing selected, and the camera over the team's base.
+    pub fn fresh(&mut self) {
+        self.selected.clear();
+        self.eye_placed = false;
+        self.held.clear();
+        self.hover = None;
+    }
+
+    /// The battlefield shows the picture of the 3D view (not the plain map).
+    pub fn battlefield_live(&self) -> bool {
+        self.battlefield.picture().is_some()
+    }
+
+    /// The battlefield through the camera now.
+    fn lens(&self) -> Lens {
+        Lens::new(self.eye, self.map_bounds.get())
+    }
+
+    /// Where the field point `at` is on the battlefield now.
+    pub fn screen_of(&self, at: Vec2) -> Option<(f32, f32)> {
+        self.lens().ground(at)
+    }
+
+    fn flat(&self) -> Option<Flat> {
+        let rules = self.seat.state().rules?;
+        Some(Flat::new(self.minimap_bounds.get(), rules.field_radius))
+    }
+
+    /// Where the field point `at` is on the minimap now.
+    pub fn minimap_screen(&self, at: Vec2) -> Option<(f32, f32)> {
+        Some(self.flat()?.to_screen(at))
     }
 
     /// How many drones the team has.
@@ -214,33 +255,37 @@ impl CommanderView {
         }
     }
 
-    /// The drones near `at` (field metres, within `pick`), nearest first.
-    fn drones_at(&self, at: Vec2, pick: f32) -> Vec<usize> {
-        let s = self.seat.state();
-        let Some(view) = &s.view else { return vec![] };
-        let mut near: Vec<_> = view.drones.iter().filter(|d| d.at.distance(at) <= pick).collect();
-        near.sort_by(|a, b| a.at.distance(at).total_cmp(&b.at.distance(at)));
-        near.iter().map(|d| d.k).collect()
+    /// The drones near the screen point `p` on the battlefield (within `PICK`), nearest first.
+    fn drones_at(&self, p: (f32, f32)) -> Vec<usize> {
+        let Some(view) = self.seat.state().view.clone() else { return vec![] };
+        let mut near: Vec<(usize, f32)> = field::drones_on_screen(self.lens(), &view)
+            .into_iter()
+            .map(|(k, s)| (k, (s.0 - p.0).hypot(s.1 - p.1)))
+            .filter(|(_, d)| *d <= PICK)
+            .collect();
+        near.sort_by(|a, b| a.1.total_cmp(&b.1));
+        near.into_iter().map(|(k, _)| k).collect()
     }
 
-    /// A left click on the field at `at`: selects the drone there (the nearest), or with nothing
-    /// there lets go of the selection. `add` (Shift) keeps the selection and toggles the drone.
-    pub fn click_field(&mut self, at: Vec2, pick: f32, add: bool) {
-        match self.drones_at(at, pick).first() {
+    /// A left click on the battlefield at `p`: selects the drone there (the nearest), or with
+    /// nothing there lets go of the selection. `add` (Shift) keeps the selection and toggles the drone.
+    fn click_field(&mut self, p: (f32, f32), add: bool) {
+        match self.drones_at(p).first() {
             Some(&k) => self.select_many(&[k], add),
             None if !add => self.selected.clear(),
             None => {}
         }
     }
 
-    /// A box on the field with corners `a` and `b`: selects the drones inside it.
-    pub fn box_select(&mut self, a: Vec2, b: Vec2, add: bool) {
-        let (lo, hi) = (a.min(b), a.max(b));
-        let inside: Vec<usize> = {
-            let s = self.seat.state();
-            let Some(view) = &s.view else { return };
-            view.drones.iter().filter(|d| d.at.cmpge(lo).all() && d.at.cmple(hi).all()).map(|d| d.k).collect()
-        };
+    /// A box on the battlefield with corners `a` and `b` (screen): selects the drones inside it.
+    fn box_select(&mut self, a: (f32, f32), b: (f32, f32), add: bool) {
+        let (x0, x1, y0, y1) = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
+        let Some(view) = self.seat.state().view.clone() else { return };
+        let inside: Vec<usize> = field::drones_on_screen(self.lens(), &view)
+            .into_iter()
+            .filter(|(_, (x, y))| *x >= x0 && *x <= x1 && *y >= y0 && *y <= y1)
+            .map(|(k, _)| k)
+            .collect();
         if inside.is_empty() && !add {
             self.selected.clear();
         } else if add {
@@ -259,25 +304,134 @@ impl CommanderView {
         };
         let (Some(view), Some(rules)) = (view, rules) else { return };
         let tower = view.towers.iter().position(|t| t.at.distance(at) <= rules.circle_radius);
-        let order = match tower {
-            Some(t) => Order::Take(t),
-            None => Order::Goto(at.clamp_length_max(rules.field_radius - 40.0)),
+        let (order, to) = match tower {
+            Some(t) => (Order::Take(t), view.towers[t].at),
+            None => {
+                let p = at.clamp_length_max(rules.field_radius - 40.0);
+                (Order::Goto(p), p)
+            }
         };
+        if !self.selected.is_empty() && self.commands() {
+            self.ping = Some((to, Instant::now()));
+        }
         self.give(order);
     }
 
+    // The camera.
+
+    /// Puts the camera over the team's base, looking towards the enemy, once the rules arrive.
+    fn place_eye(&mut self) {
+        if self.eye_placed {
+            return;
+        }
+        let Some(rules) = self.seat.state().rules else { return };
+        let team = match self.seat.join() {
+            Join::Command(t) | Join::Watch(t) => t,
+            Join::Spectate => Team::Blue,
+        };
+        self.eye = Eye {
+            look: rules.base(team),
+            // Blue's base is in the south: Blue looks north, Red south.
+            heading: if rules.base(team).x < 0.0 { 0.0 } else { 180.0 },
+            pitch: PITCH,
+            distance: 450.0,
+            ..Eye::default()
+        };
+        self.eye_placed = true;
+    }
+
+    /// Moves the camera by the keys held and the mouse at an edge.
+    fn tick(&mut self) {
+        let dt = self.last_tick.elapsed().as_secs_f32().min(0.1);
+        self.last_tick = Instant::now();
+        let held = |k: &[&str]| k.iter().any(|k| self.held.contains(*k));
+        let (mut fwd, mut right) = (0.0f32, 0.0f32);
+        if held(&["w", "up"]) {
+            fwd += 1.0;
+        }
+        if held(&["s", "down"]) {
+            fwd -= 1.0;
+        }
+        if held(&["d", "right"]) {
+            right += 1.0;
+        }
+        if held(&["a", "left"]) {
+            right -= 1.0;
+        }
+        if let Some((x, y)) = self.hover {
+            let (bx, by, bw, bh) = rect(self.map_bounds.get());
+            if x < bx + EDGE {
+                right -= 1.0;
+            }
+            if x > bx + bw - EDGE {
+                right += 1.0;
+            }
+            if y < by + EDGE {
+                fwd += 1.0;
+            }
+            if y > by + bh - EDGE {
+                fwd -= 1.0;
+            }
+        }
+        if fwd == 0.0 && right == 0.0 {
+            return;
+        }
+        let h = self.eye.heading.to_radians();
+        let (ahead, side) = (Vec2::new(h.cos(), h.sin()), Vec2::new(-h.sin(), h.cos()));
+        // Faster the higher the camera is, as in a strategy game.
+        let speed = (self.eye.height() * 1.3).max(120.0);
+        let to = self.eye.look + (ahead * fwd + side * right).normalize_or_zero() * speed * dt;
+        self.look_at(to);
+    }
+
+    /// The camera looks at `at`, kept over the field.
+    fn look_at(&mut self, at: Vec2) {
+        let limit = self.seat.state().rules.map_or(1000.0, |r| r.field_radius * 1.3);
+        self.eye.look = at.clamp_length_max(limit);
+    }
+
+    /// Q and E: the camera turns `by` degrees, to a multiple of 45°.
+    fn turn(&mut self, by: f32) {
+        self.eye.heading = ((self.eye.heading + by) / TURN).round() * TURN;
+        self.eye.heading = self.eye.heading.rem_euclid(360.0);
+    }
+
+    /// The camera goes nearer to the ground (`factor` < 1) or further.
+    fn zoom(&mut self, factor: f32) {
+        let s = self.eye.pitch.to_radians().sin();
+        self.eye.distance = (self.eye.distance * factor).clamp(HEIGHT_MIN / s, HEIGHT_MAX / s);
+    }
+
+    /// Space: the camera looks at the middle of the selected drones.
+    fn focus_selection(&mut self) {
+        let Some(view) = self.seat.state().view.clone() else { return };
+        let at: Vec<Vec2> = view.drones.iter().filter(|d| self.selected.contains(&d.k)).map(|d| d.at).collect();
+        if !at.is_empty() {
+            let mid = at.iter().copied().sum::<Vec2>() / at.len() as f32;
+            self.look_at(mid);
+        }
+    }
+
     fn key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
-        match ev.keystroke.key.as_str() {
+        let m = ev.keystroke.modifiers;
+        let key = ev.keystroke.key.as_str();
+        match key {
             k @ ("1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") => {
                 let n = k.parse::<usize>().map_or(0, |n| n - 1);
                 if n < self.drone_count() {
-                    self.select_many(&[n], ev.keystroke.modifiers.shift)
+                    self.select_many(&[n], m.shift)
                 }
             }
-            "a" if ev.keystroke.modifiers.secondary() || ev.keystroke.modifiers.control => {
+            "a" if m.secondary() || m.control => {
                 let all: Vec<usize> = (0..self.drone_count()).collect();
                 self.select_many(&all, false)
             }
+            "w" | "a" | "s" | "d" | "up" | "down" | "left" | "right" => {
+                self.held.insert(key.to_string());
+            }
+            "q" => self.turn(-TURN),
+            "e" => self.turn(TURN),
+            "space" => self.focus_selection(),
             "h" => self.give(Order::Hold),
             "b" => self.give(Order::Home),
             "l" => self.toggle_low(),
@@ -287,64 +441,26 @@ impl CommanderView {
         cx.notify();
     }
 
-    fn map_field(&self, p: gpui::Point<Pixels>) -> Option<(MapView, Vec2)> {
-        let rules = self.seat.state().rules?;
-        let map = MapView::framed(self.map_bounds.get(), &rules, self.zoom, self.look);
-        Some((map, map.to_field(f(p.x), f(p.y))))
+    fn key_up(&mut self, ev: &KeyUpEvent) {
+        self.held.remove(ev.keystroke.key.as_str());
     }
 
-    /// Keeps the view on the field.
-    fn clamp_look(&mut self, rules: &Rules) {
-        self.look = self.look.clamp_length_max(rules.field_radius);
-        if self.zoom <= 1.0 {
-            self.look = Vec2::ZERO;
-        }
-    }
-
-    /// Whether the minimap shows (the map is zoomed in), and the screen point `p` is on it.
-    fn on_minimap(&self, p: gpui::Point<Pixels>) -> bool {
-        let (mx, my, mw, mh) = minimap_rect(self.map_bounds.get());
-        let (px_, py_) = (f(p.x), f(p.y));
-        self.zoom > 1.0 && px_ >= mx && px_ <= mx + mw && py_ >= my && py_ <= my + mh
-    }
-
-    /// Centres the view on the point of the field under `p` on the minimap.
-    fn look_from_minimap(&mut self, p: gpui::Point<Pixels>) {
-        let Some(rules) = self.seat.state().rules else { return };
-        let (mx, my, mw, mh) = minimap_rect(self.map_bounds.get());
-        let mini = MapView::new(Bounds { origin: pt(mx, my), size: gpui::size(px(mw), px(mh)) }, &rules);
-        self.look = mini.to_field(f(p.x).clamp(mx, mx + mw), f(p.y).clamp(my, my + mh));
-        self.clamp_look(&rules);
-    }
-
-    /// The wheel zooms about the point under the mouse.
+    /// The wheel takes the camera nearer to the ground, or further.
     fn map_scroll(&mut self, ev: &ScrollWheelEvent, cx: &mut Context<Self>) {
-        let Some((_, at)) = self.map_field(ev.position) else { return };
-        let Some(rules) = self.seat.state().rules else { return };
-        let dy = match ev.delta {
-            ScrollDelta::Pixels(p) => f(p.y),
-            ScrollDelta::Lines(l) => l.y * 20.0,
+        let factor = match ev.delta {
+            ScrollDelta::Pixels(p) => (-f(p.y) * 0.004).exp(),
+            ScrollDelta::Lines(l) => WHEEL_STEP.powf(l.y),
         };
-        let zoom = (self.zoom * (dy * 0.004).exp()).clamp(1.0, ZOOM_MAX);
-        // Keep the point under the mouse where it is: look = at - (at - look) * old / new.
-        self.look = at - (at - self.look) * (self.zoom / zoom);
-        self.zoom = zoom;
-        self.clamp_look(&rules);
+        self.zoom(factor);
         cx.notify();
     }
 
     fn map_down(&mut self, ev: &MouseDownEvent, cx: &mut Context<Self>) {
         let p = (f(ev.position.x), f(ev.position.y));
-        if ev.button == MouseButton::Left && self.on_minimap(ev.position) {
-            self.minimap_drag = true;
-            self.look_from_minimap(ev.position);
-            cx.notify();
-            return;
-        }
         match ev.button {
             MouseButton::Left => self.drag = Some((p, p, ev.modifiers.shift)),
             MouseButton::Right => {
-                if let Some((_, at)) = self.map_field(ev.position) {
+                if let Some(at) = self.lens().to_field(p.0, p.1) {
                     self.order_field(at);
                 }
             }
@@ -354,18 +470,11 @@ impl CommanderView {
     }
 
     fn map_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
-        if self.minimap_drag {
-            if ev.dragging() {
-                self.look_from_minimap(ev.position);
-            } else {
-                self.minimap_drag = false;
-            }
-            cx.notify();
-            return;
-        }
+        let p = (f(ev.position.x), f(ev.position.y));
+        self.hover = self.map_bounds.get().contains(&ev.position).then_some(p);
         if let Some((_, to, _)) = &mut self.drag {
             if ev.dragging() {
-                *to = (f(ev.position.x), f(ev.position.y));
+                *to = p;
             } else {
                 self.drag = None;
             }
@@ -375,29 +484,27 @@ impl CommanderView {
 
     /// The button went up: a click selects the drone under it; a drag selects the drones in its box.
     fn map_up(&mut self, ev: &MouseUpEvent, cx: &mut Context<Self>) {
-        if std::mem::take(&mut self.minimap_drag) {
-            cx.notify();
-            return;
-        }
         let Some((from, _, add)) = self.drag.take() else { return };
         let to = (f(ev.position.x), f(ev.position.y));
-        if let Some((map, at)) = self.map_field(ev.position) {
-            if (to.0 - from.0).hypot(to.1 - from.1) < DRAG {
-                self.click_field(at, PICK / map.scale, add);
-            } else {
-                self.box_select(map.to_field(from.0, from.1), at, add);
-            }
+        if (to.0 - from.0).hypot(to.1 - from.1) < DRAG {
+            self.click_field(to, add);
+        } else {
+            self.box_select(from, to, add);
         }
         cx.notify();
     }
+
+    /// The camera looks at the point of the minimap under `p`.
+    fn minimap_look(&mut self, p: gpui::Point<Pixels>) {
+        let b = self.minimap_bounds.get();
+        let Some(flat) = self.flat() else { return };
+        let (x, y, w, h) = rect(b);
+        self.look_at(flat.to_field(f(p.x).clamp(x, x + w), f(p.y).clamp(y, y + h)));
+    }
 }
 
-/// What an order is, in the list of drones.
+/// What an order is, on the card of a drone.
 pub fn order_text(order: Option<Order>, view: &TeamView) -> String {
-    order_name(order, view)
-}
-
-fn order_name(order: Option<Order>, view: &TeamView) -> String {
     match order {
         None => "NO ORDER".into(),
         Some(Order::Take(t)) => format!("TAKE {}", view.towers.get(t).map_or("?".into(), |t| t.name.to_uppercase())),
@@ -412,52 +519,38 @@ fn clock(secs: f32) -> String {
     format!("{:02}:{:02}", s / 60, s % 60)
 }
 
-fn team_name(t: Team) -> &'static str {
-    match t {
-        Team::Blue => "BLUE",
-        Team::Red => "RED",
-    }
+/// Records where the element with `id` is painted, for `--expect`.
+fn recorder(id: SharedString) -> impl IntoElement {
+    canvas(move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(id, b)), |_, _, _, _| {}).absolute().inset_0()
 }
 
-fn button(id: impl Into<SharedString>, text: impl Into<SharedString>, active: bool) -> Stateful<Div> {
+/// A button of the command card: a square with its name, and its key in the corner.
+fn command(id: &'static str, name: &'static str, key: &'static str, active: bool) -> Stateful<Div> {
     let (bg, fg, border) = if active { (ACTIVE_FILL, GREEN, GREEN_DIM) } else { (CONTROL, WHITE, BEZEL_EDGE) };
-    let id: SharedString = id.into();
-    let recorded = id.clone();
     div()
         .id(id)
         .relative()
-        .px_2()
-        .py(px(4.0))
+        .w(px(62.0))
+        .h(px(52.0))
+        .flex()
+        .items_center()
+        .justify_center()
         .bg(c(bg))
         .text_color(c(fg))
+        .text_sm()
         .border_1()
         .border_color(c(border))
         .rounded(px(CONTROL_RADIUS))
         .cursor_pointer()
         .hover(|s| s.bg(c(CONTROL_HOVER)))
         .active(|s| s.opacity(0.7))
-        .child(text.into())
-        .child(
-            canvas(move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(recorded, b)), |_, _, _, _| {})
-                .absolute()
-                .inset_0(),
-        )
+        .child(name)
+        .child(div().absolute().top(px(2.0)).right(px(4.0)).text_xs().text_color(c(AMBER)).child(key))
+        .child(recorder(id.into()))
 }
 
-/// A titled screen in a bezel, as on the console.
-fn screen(title: &'static str, body: impl IntoElement) -> Div {
-    screen_with(title, body, false)
-}
-
-/// A screen whose body scrolls, for text and buttons that may not fit the window (not the map,
-/// which fits itself to the room and takes the mouse).
-fn scrolling(title: &'static str, body: impl IntoElement) -> Div {
-    screen_with(title, body, true)
-}
-
-fn screen_with(title: &'static str, body: impl IntoElement, scroll: bool) -> Div {
-    let area = div().id(title).flex_1().min_h(px(0.0)).bg(c(SCREEN)).rounded(px(SCREEN_RADIUS));
-    let area = if scroll { area.overflow_scroll() } else { area.overflow_hidden() };
+/// A titled panel of the bars, as on the console.
+fn panel(title: &'static str, body: impl IntoElement) -> Div {
     div()
         .flex()
         .flex_col()
@@ -469,10 +562,44 @@ fn screen_with(title: &'static str, body: impl IntoElement, scroll: bool) -> Div
         .p(px(BEZEL_PAD))
         .gap(px(4.0))
         .child(div().px_2().bg(c(TITLE_BG)).text_color(c(GREY)).text_xs().child(title))
-        .child(area.child(body))
+        .child(div().flex_1().min_h(px(0.0)).bg(c(SCREEN)).rounded(px(SCREEN_RADIUS)).overflow_hidden().child(body))
+}
+
+fn theme_team(t: Team) -> u32 {
+    crate::theme::team(t)
 }
 
 impl CommanderView {
+    /// The newest pictures of the drones' cameras; the ones the window had are freed from its atlas.
+    fn camera_images(&mut self, window: &mut Window) -> Vec<Option<Arc<RenderImage>>> {
+        let images: Vec<Option<Arc<RenderImage>>> = (0..self.cameras.len()).map(|k| self.cameras.image(k)).collect();
+        for (k, img) in images.iter().enumerate() {
+            let same = match (&self.shown[k], img) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            };
+            if !same && let Some(old) = std::mem::replace(&mut self.shown[k], img.clone()) {
+                let _ = window.drop_image(old);
+            }
+        }
+        images
+    }
+
+    /// The newest picture of the battlefield; the one the window had is freed from its atlas.
+    fn battlefield_picture(&mut self, window: &mut Window) -> Option<(Arc<RenderImage>, Eye)> {
+        let new = self.battlefield.picture();
+        let same = match (&self.picture, &new) {
+            (Some((a, _)), Some((b, _))) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same && let Some((old, _)) = std::mem::replace(&mut self.picture, new.clone()) {
+            let _ = window.drop_image(old);
+        }
+        new
+    }
+
     /// The details of the first selected drone: its icon and basic stats.
     fn unit_panel(&self, view: &Option<TeamView>, rules: Option<&Rules>) -> Option<Div> {
         let (v, r) = (view.as_ref()?, rules?);
@@ -495,14 +622,18 @@ impl CommanderView {
             ("ALTITUDE", format!("{:.0} m", d.alt)),
             ("STATE", format!("{state}{}", if d.low { " LOW" } else { "" })),
         ];
-        let mut stats = div().flex().flex_col().flex_1().text_sm();
-        stats = stats.child(div().text_color(c(tint)).child(format!("{}{}{more}", &team_name(v.team)[..1], k + 1)));
+        let mut stats = div().flex().flex_col().flex_1().text_xs();
+        stats = stats.child(div().text_sm().text_color(c(tint)).child(format!(
+            "{}{}{more}",
+            &team_name(v.team)[..1],
+            k + 1
+        )));
         for (name, value) in rows {
             stats = stats.child(
                 div()
                     .flex()
-                    .gap(px(8.0))
-                    .child(div().w(px(70.0)).text_color(c(GREY)).child(name))
+                    .gap(px(6.0))
+                    .child(div().w(px(58.0)).text_color(c(GREY)).child(name))
                     .child(div().text_color(c(WHITE)).child(value)),
             );
         }
@@ -525,46 +656,356 @@ impl CommanderView {
         )
     }
 
-    /// The camera of each drone beside its name, and the selected drone's (else the first's) larger.
-    fn cameras_panel(&mut self, window: &mut Window, view: &Option<TeamView>, cx: &mut Context<Self>) -> Div {
-        // The newest pictures; the ones the window had are freed from its atlas.
-        let images: Vec<Option<Arc<RenderImage>>> = (0..self.cameras.len()).map(|k| self.cameras.image(k)).collect();
-        for (k, img) in images.iter().enumerate() {
-            let same = match (&self.shown[k], img) {
-                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
-                (None, None) => true,
-                _ => false,
+    /// The card of each drone: its camera, its name, its altitude and its order.
+    fn cards(&self, images: &[Option<Arc<RenderImage>>], view: &Option<TeamView>, cx: &mut Context<Self>) -> Div {
+        let mut cards = div().flex().flex_wrap().content_start().gap(px(6.0)).p(px(6.0));
+        let Some(v) = view else { return cards };
+        let tint = theme_team(v.team);
+        let battery = self.seat.state().rules.is_some_and(|r| r.battery(r.class(0)) > 0.0);
+        for d in &v.drones {
+            let k = d.k;
+            let picked = self.selected.contains(&k);
+            let name = format!("{}{}", &team_name(v.team)[..1], k + 1);
+            let state = match d.phase {
+                // No telemetry: the last the drone sent, and how long ago.
+                _ if !d.linked => format!("NO LINK {:.0} s", d.silent),
+                Phase::Flying => format!("{:.0} m", d.alt),
+                Phase::Ground => "GROUND".into(),
+                Phase::Down => "DOWN".into(),
             };
-            if !same && let Some(old) = std::mem::replace(&mut self.shown[k], img.clone()) {
-                let _ = window.drop_image(old);
+            let mut tags = vec![];
+            if d.low {
+                tags.push("LOW".to_string());
+            }
+            if battery {
+                tags.push(format!("BAT {:.0} s", d.battery));
+            }
+            let img = images.get(k).cloned().flatten().filter(|_| d.linked);
+            let tile = camera_tile(format!("camera-{k}"), &name, img, !d.linked, 118.0, 66.0, picked).on_click(
+                cx.listener(move |this, _, _, cx| {
+                    this.select(Some(k));
+                    cx.stop_propagation();
+                    cx.notify();
+                }),
+            );
+            let card = div()
+                .id(SharedString::from(format!("drone-{k}")))
+                .relative()
+                .w(px(122.0))
+                .flex()
+                .flex_col()
+                .gap(px(1.0))
+                .p(px(1.0))
+                .bg(c(if picked { ACTIVE_FILL } else { CONTROL }))
+                .border_1()
+                .border_color(c(if picked { tint } else { BEZEL_EDGE }))
+                .rounded(px(CONTROL_RADIUS))
+                .cursor_pointer()
+                .hover(|s| s.bg(c(CONTROL_HOVER)))
+                .text_xs()
+                .child(tile)
+                .child(
+                    div()
+                        .flex()
+                        .px_1()
+                        .child(div().text_color(c(tint)).child(name))
+                        .child(div().flex_1())
+                        .child(div().text_color(c(WHITE)).child(state)),
+                )
+                .child(div().px_1().text_color(c(GREY)).child(order_text(d.order, v)))
+                .child(div().px_1().h(px(14.0)).text_color(c(AMBER)).child(tags.join("  ")))
+                .child(recorder(format!("drone-{k}").into()))
+                .on_click(cx.listener(move |this, ev: &gpui::ClickEvent, _, cx| {
+                    this.select_many(&[k], ev.modifiers().shift);
+                    cx.notify();
+                }));
+            cards = cards.child(card);
+        }
+        cards
+    }
+}
+
+impl Render for CommanderView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.place_eye();
+        let (status, rules, view) = {
+            let s = self.seat.state();
+            (s.status.clone(), s.rules, s.view.clone())
+        };
+        let join = self.seat.join();
+        let team = match join {
+            Join::Command(t) | Join::Watch(t) => Some(t),
+            Join::Spectate => None,
+        };
+        let seat_text = match &status {
+            Status::Connecting => "CONNECTING TO THE GAME SERVER...".to_string(),
+            Status::Refused(why) => format!("REFUSED: {why}"),
+            Status::Seated(Join::Command(t)) => format!("{} COMMANDER", team_name(*t)),
+            Status::Seated(Join::Watch(t)) => format!("WATCHING {}", team_name(*t)),
+            Status::Seated(Join::Spectate) => "SPECTATOR".into(),
+        };
+
+        // The top bar: the seat, a chip for each tower, the scores and the clock.
+        let mut chips = div().flex().gap(px(4.0));
+        let mut held = vec![];
+        let flash = view.as_ref().is_some_and(|v| (v.time * 3.0) as i64 % 2 == 0);
+        if let Some(v) = &view {
+            for t in &v.towers {
+                held.push(t.holder);
+                let colour = t.holder.map_or(GREY, theme_team);
+                let edge = if t.contested && flash { AMBER } else { colour };
+                chips = chips.child(
+                    div()
+                        .px(px(6.0))
+                        .py(px(1.0))
+                        .text_xs()
+                        .bg(ca(colour, if t.seen { 0.35 } else { 0.15 }))
+                        .border_1()
+                        .border_color(c(edge))
+                        .rounded(px(CONTROL_RADIUS))
+                        .text_color(c(WHITE))
+                        .child(t.name.to_uppercase()),
+                );
             }
         }
-        let team = view.as_ref().map(|v| v.team);
-        // A drone in the radio shadow of an enemy tower sends no picture.
-        let linked = |k: usize| view.as_ref().and_then(|v| v.drones.get(k)).is_none_or(|d| d.linked);
-        let mut row = div().flex().gap(px(4.0)).p_2();
-        for (k, img) in images.iter().enumerate() {
-            let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
-            let img = if linked(k) { img.clone() } else { None };
-            row = row.child(
-                camera_tile(format!("camera-{k}"), &label, img, !linked(k), 100.0, 75.0, self.selected.contains(&k))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select(Some(k));
-                        cx.notify();
-                    })),
+        *self.chips.borrow_mut() = held.clone();
+        let count = |t: Team| held.iter().filter(|h| **h == Some(t)).count();
+        let (game_text, score) = match &view {
+            None => (String::new(), [0.0, 0.0]),
+            Some(v) => {
+                let state = match v.outcome {
+                    Some(recreation_towers::Outcome::Won(t)) => format!("{} WINS", team_name(t)),
+                    Some(recreation_towers::Outcome::Draw) => "DRAW".into(),
+                    None if v.time == 0.0 => "WAITING FOR GO".into(),
+                    None => "PLAYING".into(),
+                };
+                (format!("{}  {}", clock(v.time_left), state), v.score)
+            }
+        };
+        let top = div()
+            .flex()
+            .items_center()
+            .gap(px(16.0))
+            .px_3()
+            .h(px(30.0))
+            .flex_none()
+            .bg(c(BEZEL))
+            .border_b_1()
+            .border_color(c(BEZEL_EDGE))
+            .text_sm()
+            .text_color(c(WHITE))
+            .child(div().text_color(c(GREY)).child("TOWERS"))
+            .child(div().text_color(c(team.map_or(WHITE, theme_team))).child(seat_text))
+            .child(chips)
+            .child(div().flex_1())
+            .child(div().text_color(c(BLUE)).child(format!("BLUE {:.0}  ({} held)", score[0], count(Team::Blue))))
+            .child(div().text_color(c(RED)).child(format!("RED {:.0}  ({} held)", score[1], count(Team::Red))))
+            .child(div().text_color(c(AMBER)).child(game_text));
+
+        if self.valley.is_none()
+            && let Some(r) = &rules
+        {
+            self.valley = Some(Map::new(r));
+        }
+
+        // The battlefield.
+        let picture = self.battlefield_picture(window);
+        let battlefield = self.battlefield.clone();
+        let bounds = self.map_bounds.clone();
+        let selected = self.selected.clone();
+        let (drag, ping, eye) = (self.drag, self.ping.filter(|(_, t)| t.elapsed().as_secs_f32() < PING), self.eye);
+        let (v2, r2, valley) = (view.clone(), rules, self.valley.clone());
+        let map_canvas = canvas(
+            |_, _, _| {},
+            move |b, _, window, cx| {
+                bounds.set(b);
+                let (_, _, w, h) = rect(b);
+                battlefield.ask(eye, w.round() as u16, h.round() as u16);
+                // The picture's own eye, so that the map lies on it where it was rendered.
+                let (image, lens) = match &picture {
+                    Some((img, at)) => (Some(img.clone()), Lens::new(*at, b)),
+                    None => (None, Lens::new(eye, b)),
+                };
+                if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
+                    let scene = Scene { picture: image, selected: &selected, drag, ping };
+                    field::paint_battlefield(b, lens, v, r, m, &scene, window, cx);
+                } else {
+                    let (x, y, w, h) = rect(b);
+                    fill_rect(window, x, y, w, h, c(FOG));
+                }
+            },
+        )
+        .size_full();
+        // The advisor speaks when something matters, and its words stay a while, over the battlefield.
+        let advice: Vec<_> = self
+            .seat
+            .state()
+            .advice
+            .iter()
+            .rev()
+            .filter(|(_, at)| at.elapsed() < ADVICE_SHOWN)
+            .map(|(a, _)| a.text.clone())
+            .collect();
+        let mut toasts = div().absolute().top(px(10.0)).left(px(10.0)).flex().flex_col().gap(px(4.0)).max_w(px(460.0));
+        for line in advice {
+            toasts = toasts.child(
+                div()
+                    .px_2()
+                    .py(px(3.0))
+                    .bg(ca(0x000000, 0.7))
+                    .border_l_2()
+                    .border_color(c(AMBER))
+                    .text_sm()
+                    .text_color(c(AMBER))
+                    .child(format!("ADVISOR  {line}")),
             );
         }
-        let k = self.selected.first().copied().unwrap_or(0);
-        let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
-        div().flex().flex_col().child(row).child(div().px_2().pb_2().child(camera_tile(
-            "camera-selected".to_string(),
-            &label,
-            images.get(k).cloned().flatten().filter(|_| linked(k)),
-            !linked(k),
-            252.0,
-            189.0,
-            false,
-        )))
+        let map = div()
+            .id("map")
+            .relative()
+            .flex_1()
+            .min_h(px(0.0))
+            .child(map_canvas)
+            .child(toasts)
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
+            .on_mouse_down(MouseButton::Right, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
+            .on_scroll_wheel(cx.listener(|this, ev, _, cx| this.map_scroll(ev, cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)));
+
+        // The bottom bar: the minimap.
+        let mini_bounds = self.minimap_bounds.clone();
+        let (v3, r3, ground, mini_lens) = (view.clone(), rules, self.ground.clone(), self.lens());
+        let minimap = div()
+            .id("minimap")
+            .w(px(MINIMAP))
+            .h(px(MINIMAP))
+            .cursor_crosshair()
+            .child(
+                canvas(
+                    |_, _, _| {},
+                    move |b, _, window, _| {
+                        mini_bounds.set(b);
+                        if let (Some(v), Some(r)) = (&v3, &r3) {
+                            field::paint_minimap(window, b, v, r, ground.as_deref(), mini_lens);
+                        }
+                    },
+                )
+                .size_full(),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                    this.minimap_drag = true;
+                    this.minimap_look(ev.position);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, _| {
+                    this.minimap_drag = false;
+                }),
+            );
+
+        // The cards of the drones, the PORTRAIT and UNIT of the selected one, and the command card.
+        let images = self.camera_images(window);
+        let cards = self.cards(&images, &view, cx);
+        let first = self.selected.first().copied();
+        let linked = |k: usize| view.as_ref().and_then(|v| v.drones.get(k)).is_none_or(|d| d.linked);
+        let portrait_img = first.and_then(|k| images.get(k).cloned().flatten().filter(|_| linked(k)));
+        self.portrait.set(first.filter(|_| portrait_img.is_some()));
+        let unit = self.unit_panel(&view, rules.as_ref());
+        let any = !self.selected.is_empty();
+        let all_low = any && self.selected.iter().all(|&k| self.low_of(k));
+        let card = div()
+            .flex()
+            .flex_wrap()
+            .w(px(3.0 * 62.0 + 2.0 * 6.0 + 12.0))
+            .gap(px(6.0))
+            .p(px(6.0))
+            .child(command("hold", "HOLD", "H", false).on_click(cx.listener(|this, _, _, cx| {
+                this.give(Order::Hold);
+                cx.notify();
+            })))
+            .child(command("home", "HOME", "B", false).on_click(cx.listener(|this, _, _, cx| {
+                this.give(Order::Home);
+                cx.notify();
+            })))
+            .child(command("low", "LOW", "L", all_low).on_click(cx.listener(|this, _, _, cx| {
+                this.toggle_low();
+                cx.notify();
+            })))
+            .child(command("all", "ALL", "^A", false).on_click(cx.listener(|this, _, _, cx| {
+                let all: Vec<usize> = (0..this.drone_count()).collect();
+                this.select_many(&all, false);
+                cx.notify();
+            })))
+            .child(command("focus", "FOCUS", "SPC", false).on_click(cx.listener(|this, _, _, cx| {
+                this.focus_selection();
+                cx.notify();
+            })))
+            .child(command("none", "NONE", "ESC", false).on_click(cx.listener(|this, _, _, cx| {
+                this.selected.clear();
+                cx.notify();
+            })))
+            .child(div().w_full().text_xs().text_color(c(GREY)).child(if any {
+                "Right-click: take a tower, or fly to a point."
+            } else {
+                "Select a drone: click it, or drag a box."
+            }));
+        let mut bottom = div()
+            .flex()
+            .flex_none()
+            .h(px(BAR))
+            .gap(px(GAP))
+            .p(px(GAP))
+            .bg(c(CONSOLE))
+            .border_t_1()
+            .border_color(c(BEZEL_EDGE))
+            .child(panel("MAP", minimap).flex_none())
+            .child(panel("DRONES", cards).flex_1().min_w(px(0.0)));
+        if let Some(k) = first {
+            let label = team.map_or(String::new(), |t| format!("{}{}", &team_name(t)[..1], k + 1));
+            let portrait = div().p(px(4.0)).child(camera_tile(
+                "camera-selected".to_string(),
+                &label,
+                portrait_img,
+                !linked(k),
+                200.0,
+                150.0,
+                false,
+            ));
+            bottom = bottom.child(panel("PORTRAIT", portrait).flex_none());
+        }
+        if let Some(unit) = unit {
+            bottom = bottom.child(panel("UNIT", unit).w(px(250.0)).flex_none());
+        }
+        let bottom = bottom.child(panel("COMMANDS", card).flex_none());
+
+        div()
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(|this, ev, _, cx| this.key(ev, cx)))
+            .on_key_up(cx.listener(|this, ev, _, _| this.key_up(ev)))
+            .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
+                if this.minimap_drag {
+                    if ev.dragging() {
+                        this.minimap_look(ev.position);
+                    } else {
+                        this.minimap_drag = false;
+                    }
+                }
+                this.map_move(ev, cx);
+            }))
+            .size_full()
+            .flex()
+            .flex_col()
+            .pt(px(28.0))
+            .bg(c(CONSOLE))
+            .font_family(FONT)
+            .child(top)
+            .child(map)
+            .child(bottom)
     }
 }
 
@@ -610,440 +1051,6 @@ fn camera_tile(
             .absolute()
             .inset_0(),
         )
-}
-
-/// How long the app shows a piece of the advisor's advice.
-const ADVICE_SHOWN: Duration = Duration::from_secs(20);
-
-impl Render for CommanderView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (status, rules, view) = {
-            let s = self.seat.state();
-            (s.status.clone(), s.rules, s.view.clone())
-        };
-        let join = self.seat.join();
-        let team = match join {
-            Join::Command(t) | Join::Watch(t) => Some(t),
-            Join::Spectate => None,
-        };
-        let seat_text = match (&status, join) {
-            (Status::Connecting, _) => "CONNECTING TO THE GAME SERVER...".to_string(),
-            (Status::Refused(why), _) => format!("REFUSED: {why}"),
-            (Status::Seated(Join::Command(t)), _) => format!("{} COMMANDER", team_name(*t)),
-            (Status::Seated(Join::Watch(t)), _) => format!("WATCHING {}", team_name(*t)),
-            (Status::Seated(Join::Spectate), _) => "SPECTATOR".into(),
-        };
-        let (game_text, score) = match &view {
-            None => (String::new(), [0.0, 0.0]),
-            Some(v) => {
-                let state = match v.outcome {
-                    Some(Outcome::Won(t)) => format!("{} WINS", team_name(t)),
-                    Some(Outcome::Draw) => "DRAW".into(),
-                    None if v.time == 0.0 => "WAITING FOR GO".into(),
-                    None => "PLAYING".into(),
-                };
-                (format!("{}  {}", clock(v.time_left), state), v.score)
-            }
-        };
-        let top = div()
-            .flex()
-            .items_center()
-            .gap(px(18.0))
-            .px_3()
-            .py(px(6.0))
-            .bg(c(BEZEL))
-            .rounded(px(PANEL_RADIUS))
-            .text_color(c(WHITE))
-            .child(div().text_color(c(GREY)).child("TOWERS"))
-            .child(div().text_color(c(team.map_or(WHITE, theme_team))).child(seat_text))
-            .child(div().flex_1())
-            .child(div().text_color(c(BLUE)).child(format!("BLUE {:.0}", score[0])))
-            .child(div().text_color(c(RED)).child(format!("RED {:.0}", score[1])))
-            .child(div().text_color(c(AMBER)).child(game_text));
-
-        if self.valley.is_none()
-            && let Some(r) = &rules
-        {
-            self.valley = Some(Map::new(r));
-        }
-        let valley = self.valley.clone();
-        let ground = self.ground.clone();
-        let bounds = self.map_bounds.clone();
-        let selected = self.selected.clone();
-        let painted = selected.clone();
-        let drag = self.drag;
-        let (zoom, look) = (self.zoom, self.look);
-        let (v2, r2) = (view.clone(), rules);
-        let map_canvas = canvas(
-            |_, _, _| {},
-            move |b, _, window, cx| {
-                bounds.set(b);
-                if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
-                    paint_map(b, v, r, m, ground.as_deref(), &painted, drag, (zoom, look), window, cx);
-                }
-                round_corners(window, b, SCREEN_RADIUS - 2.0, c(0x000000));
-            },
-        )
-        .size_full();
-        let map = div()
-            .id("map")
-            .size_full()
-            .child(map_canvas)
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
-            .on_mouse_down(MouseButton::Right, cx.listener(|this, ev, _, cx| this.map_down(ev, cx)))
-            .on_scroll_wheel(cx.listener(|this, ev, _, cx| this.map_scroll(ev, cx)))
-            .on_mouse_move(cx.listener(|this, ev, _, cx| this.map_move(ev, cx)))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)))
-            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, ev, _, cx| this.map_up(ev, cx)));
-
-        let mut drones = div().flex().flex_col().gap(px(4.0)).p_2().text_sm();
-        if let Some(v) = &view {
-            let tint = theme_team(v.team);
-            for d in &v.drones {
-                let k = d.k;
-                let phase = match d.phase {
-                    // No telemetry: the last the drone sent, and how long ago.
-                    _ if !d.linked => format!("NO LINK {:.0} s", d.silent),
-                    Phase::Flying => format!("{:.0} m", d.alt),
-                    Phase::Ground => "GROUND".into(),
-                    Phase::Down => "DOWN".into(),
-                };
-                let low = if d.low { " LOW" } else { "" };
-                // The battery, in a game that has them: the last the drone sent.
-                let battery = match self.seat.state().rules {
-                    Some(r) if r.battery(r.class(k)) > 0.0 => format!("  BAT {:.0} s", d.battery),
-                    _ => String::new(),
-                };
-                let label = format!(
-                    "{}{}  {:<7} {}{low}{battery}",
-                    &team_name(v.team)[..1],
-                    k + 1,
-                    phase,
-                    order_text(d.order, v)
-                );
-                drones = drones.child(
-                    button(format!("drone-{k}"), label, selected.contains(&k))
-                        .border_color(c(if selected.contains(&k) { tint } else { BEZEL_EDGE }))
-                        .on_click(cx.listener(move |this, ev: &gpui::ClickEvent, _, cx| {
-                            this.select_many(&[k], ev.modifiers().shift);
-                            cx.notify();
-                        })),
-                );
-            }
-        }
-        let actions = div()
-            .flex()
-            .flex_wrap()
-            .gap(px(6.0))
-            .p_2()
-            .child(button("hold", "HOLD", false).on_click(cx.listener(|this, _, _, cx| {
-                this.give(Order::Hold);
-                cx.notify();
-            })))
-            .child(button("home", "HOME", false).on_click(cx.listener(|this, _, _, cx| {
-                this.give(Order::Home);
-                cx.notify();
-            })))
-            .child(button("low", "LOW", !selected.is_empty() && selected.iter().all(|&k| self.low_of(k))).on_click(
-                cx.listener(|this, _, _, cx| {
-                    this.toggle_low();
-                    cx.notify();
-                }),
-            ));
-        let help = div().p_2().text_xs().text_color(c(GREY)).child(if selected.is_empty() {
-            "Click a drone, or drag a box round several (Shift adds, Ctrl+A all). Then right-click to order them."
-                .to_string()
-        } else {
-            format!(
-                "{} selected. Right-click a tower to take it, or a point to fly there. LOW: along the lanes. Esc: none.",
-                selected.len()
-            )
-        });
-        let mut towers = div().flex().flex_col().gap(px(2.0)).p_2().text_sm();
-        if let Some(v) = &view {
-            for t in &v.towers {
-                let (holder, colour) = match t.holder {
-                    Some(team) => (team_name(team), theme_team(team)),
-                    None => ("NEUTRAL", GREY),
-                };
-                let seen = if t.seen { String::new() } else { format!("  {:.0} s ago", t.age) };
-                let contested = if t.contested { "  CONTESTED" } else { "" };
-                towers = towers.child(div().text_color(c(colour)).child(format!(
-                    "{:<10} {:<7} {:+4.0}%{contested}{seen}",
-                    t.name.to_uppercase(),
-                    holder,
-                    100.0 * t.control
-                )));
-            }
-        }
-        let cameras = self.cameras_panel(window, &view, cx);
-        let unit = self.unit_panel(&view, rules.as_ref());
-        let mut right = div()
-            .flex()
-            .flex_col()
-            .gap(px(GAP))
-            .w(px(340.0))
-            .flex_none()
-            .min_h(px(0.0))
-            .child(scrolling("DRONES", div().flex().flex_col().child(drones).child(actions).child(help)));
-        if let Some(unit) = unit {
-            right = right.child(screen("UNIT", unit));
-        }
-        // The advisor speaks when something matters, and its words stay a while.
-        let advice: Vec<_> = self
-            .seat
-            .state()
-            .advice
-            .iter()
-            .rev()
-            .filter(|(_, at)| at.elapsed() < ADVICE_SHOWN)
-            .map(|(a, _)| a.text.clone())
-            .collect();
-        if !advice.is_empty() {
-            let mut lines = div().flex().flex_col().gap(px(4.0)).p_2().text_sm().text_color(c(AMBER));
-            for text in advice {
-                lines = lines.child(text);
-            }
-            right = right.child(screen("ADVISOR", lines));
-        }
-        let right = right.child(scrolling("TOWERS", towers)).child(scrolling("CAMERAS", cameras));
-
-        div()
-            .track_focus(&self.focus)
-            .on_key_down(cx.listener(|this, ev, _, cx| this.key(ev, cx)))
-            .size_full()
-            .flex()
-            .flex_col()
-            .gap(px(GAP))
-            .p(px(GAP))
-            .pt(px(30.0))
-            .bg(c(CONSOLE))
-            .font_family(FONT)
-            .child(top)
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_h(px(0.0))
-                    .gap(px(GAP))
-                    .child(screen("FIELD", map).flex_1().min_w(px(0.0)))
-                    .child(right),
-            )
-    }
-}
-
-fn theme_team(t: Team) -> u32 {
-    crate::theme::team(t)
-}
-
-/// The team's map: the fog, what the team sees, the towers and the drones.
-#[allow(clippy::too_many_arguments)]
-fn paint_map(
-    b: Bounds<Pixels>,
-    v: &TeamView,
-    rules: &Rules,
-    valley: &Map,
-    ground: Option<&Ground>,
-    selected: &[usize],
-    drag: Option<Drag>,
-    (zoom, look): (f32, Vec2),
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let (x, y, w, h) = rect(b);
-    let map = MapView::framed(b, rules, zoom, look);
-    let s = map.scale;
-    fill_rect(window, x, y, w, h, c(FOG));
-    // The ground: the picture of the valley, dim; what the team sees is lit over it. Without the
-    // picture, the plain ground of the vector map.
-    if let Some(g) = ground {
-        paint_ground(window, b, map, g);
-    }
-    // What the team sees, as the server would work it out from this map.
-    let mut eyes: Vec<(Vec2, f32)> = vec![(rules.base(v.team), rules.base_vision)];
-    eyes.extend(v.drones.iter().filter(|d| d.phase != Phase::Down).map(|d| (d.at, rules.drone_vision)));
-    eyes.extend(v.towers.iter().filter(|t| t.holder == Some(v.team)).map(|t| (t.at, rules.vision(t.kind))));
-    for (at, range) in &eyes {
-        let (sx, sy) = map.to_screen(*at);
-        if ground.is_some() {
-            fill_circle(window, sx, sy, range * s, ca(SIGHT, 0.07));
-            circle(window, sx, sy, range * s, 1.0, ca(SIGHT, 0.25));
-        } else {
-            fill_circle(window, sx, sy, range * s, c(FIELD));
-        }
-    }
-    if ground.is_none() {
-        paint_valley(window, map, valley);
-    }
-    let (cx0, cy0) = map.to_screen(Vec2::ZERO);
-    dashed_circle(window, cx0, cy0, rules.field_radius * s, 1.0, 6.0, ca(GREY, 0.6));
-    for team in Team::BOTH {
-        let (bx, by) = map.to_screen(rules.base(team));
-        fill_rect(window, bx - 10.0, by - 5.0, 20.0, 10.0, ca(theme_team(team), 0.35));
-        text(
-            window,
-            cx,
-            &format!("{} BASE", team_name(team)),
-            bx,
-            by + 14.0,
-            10.0,
-            ca(theme_team(team), 0.8),
-            Align::Center,
-        );
-    }
-    // The towers, as the team last saw them.
-    let flash = (v.time * 3.0) as i64 % 2 == 0;
-    for t in &v.towers {
-        let (tx, ty) = map.to_screen(t.at);
-        let colour = t.holder.map_or(GREY, theme_team);
-        let alpha = if t.seen { 1.0 } else { 0.55 };
-        // The radio shadow of a tower that the enemy holds: a drone of the team in it is cut off.
-        if t.holder == Some(v.team.other()) {
-            let shadow = rules.shadow(t.kind) * s;
-            fill_circle(window, tx, ty, shadow, ca(theme_team(v.team.other()), 0.10 * alpha));
-            dashed_circle(window, tx, ty, shadow, 1.0, 5.0, ca(theme_team(v.team.other()), 0.6 * alpha));
-        }
-        if t.contested && flash {
-            circle(window, tx, ty, rules.circle_radius * s, 2.5, c(AMBER));
-        } else {
-            dashed_circle(window, tx, ty, rules.circle_radius * s, 1.0, 4.0, ca(colour, 0.6 * alpha));
-        }
-        fill_rect(window, tx - 7.0, ty - 7.0, 14.0, 14.0, ca(colour, alpha));
-        stroke_rect(window, tx - 7.0, ty - 7.0, 14.0, 14.0, 1.0, ca(WHITE, 0.7 * alpha));
-        // The control bar: right of the middle towards Blue, left towards Red.
-        let (bw, by) = (44.0, ty + 14.0);
-        fill_rect(window, tx - bw * 0.5, by, bw, 5.0, ca(DARK, 0.9));
-        let filled = t.control.clamp(-1.0, 1.0) * bw * 0.5;
-        let (from, colour) = if filled >= 0.0 { (tx, BLUE) } else { (tx + filled, RED) };
-        fill_rect(window, from, by, filled.abs(), 5.0, ca(colour, alpha));
-        fill_rect(window, tx - 0.5, by - 1.0, 1.0, 7.0, c(WHITE));
-        let kind = match t.kind {
-            Kind::Fort => "FORT",
-            Kind::Spire => "SPIRE x1.5",
-            Kind::Depot => "DEPOT",
-            Kind::Outpost => "OUTPOST",
-        };
-        let name = format!("{} {kind}", t.name.to_uppercase());
-        let label = if t.seen { name } else { format!("{name} ({:.0} s)", t.age) };
-        text(window, cx, &label, tx, by + 14.0, 10.0, ca(WHITE, alpha), Align::Center);
-    }
-    let tint = theme_team(v.team);
-    // The orders: a dashed line from each drone to where it is sent.
-    for d in v.drones.iter().filter(|d| d.phase != Phase::Down) {
-        let to = match d.order {
-            Some(Order::Take(t)) => v.towers.get(t).map(|t| t.at),
-            Some(Order::Goto(p)) => Some(p),
-            Some(Order::Home) => Some(rules.base(v.team)),
-            _ => None,
-        };
-        if let Some(to) = to {
-            let (a, b2) = (map.to_screen(d.at), map.to_screen(to));
-            dashed(window, &[a, b2], 1.0, 5.0, ca(tint, if selected.contains(&d.k) { 0.9 } else { 0.4 }));
-        }
-    }
-    for d in &v.drones {
-        let (dx, dy) = map.to_screen(d.at);
-        let colour = if d.phase == Phase::Down { ca(GREY, 0.6) } else { c(tint) };
-        drone_mark(window, dx, dy, d.vel, colour, true);
-        if selected.contains(&d.k) {
-            circle(window, dx, dy, 12.0, 1.5, c(WHITE));
-        }
-        text(
-            window,
-            cx,
-            &format!("{}{}", &team_name(v.team)[..1], d.k + 1),
-            dx + 14.0,
-            dy - 10.0,
-            10.0,
-            c(tint),
-            Align::Left,
-        );
-    }
-    // The enemy drones the team sees, and where it last saw the others.
-    let enemy = theme_team(v.team.other());
-    for e in &v.enemies {
-        let (ex, ey) = map.to_screen(e.at);
-        let label = format!("{}{}", &team_name(v.team.other())[..1], e.k + 1);
-        if e.seen {
-            drone_mark(window, ex, ey, e.vel, c(enemy), true);
-            text(window, cx, &label, ex + 14.0, ey - 10.0, 10.0, c(enemy), Align::Left);
-        } else {
-            drone_mark(window, ex, ey, e.vel, ca(enemy, 0.45), false);
-            text(
-                window,
-                cx,
-                &format!("{label} {:.0} s", e.age),
-                ex + 14.0,
-                ey - 10.0,
-                10.0,
-                ca(enemy, 0.6),
-                Align::Left,
-            );
-        }
-    }
-    if let Some(((x0, y0), (x1, y1), _)) = drag {
-        let (bx, by, bw, bh) = (x0.min(x1), y0.min(y1), (x1 - x0).abs(), (y1 - y0).abs());
-        fill_rect(window, bx, by, bw, bh, ca(WHITE, 0.1));
-        stroke_rect(window, bx, by, bw, bh, 1.0, ca(WHITE, 0.8));
-    }
-    if zoom > 1.0 {
-        paint_minimap(window, b, v, rules, map);
-    }
-    if let Some(outcome) = v.outcome {
-        let banner = match outcome {
-            Outcome::Won(t) => format!("{} WINS", team_name(t)),
-            Outcome::Draw => "DRAW".into(),
-        };
-        fill_rect(window, x + w * 0.5 - 140.0, y + h * 0.5 - 30.0, 280.0, 60.0, ca(0x000000, 0.8));
-        text(window, cx, &banner, x + w * 0.5, y + h * 0.5, 28.0, c(AMBER), Align::Center);
-    }
-}
-
-/// The picture of the valley, where the game has it, under a veil of fog.
-fn paint_ground(window: &mut Window, b: Bounds<Pixels>, map: MapView, g: &Ground) {
-    let half = g.size_m * 0.5;
-    let (left, top) = map.to_screen(g.centre + Vec2::new(half, -half));
-    let side = g.size_m * map.scale;
-    let at = gpui::Bounds { origin: pt(left, top), size: gpui::size(px(side), px(side)) };
-    window.with_content_mask(Some(ContentMask { bounds: b }), |window| {
-        let _ = window.paint_image(at, Corners::default(), g.image.clone(), 0, false);
-        let (x, y, w, h) = rect(b);
-        fill_rect(window, x, y, w, h, ca(FOG, 0.62));
-    });
-}
-
-/// The ground a team knows: the lake, the lanes cut through the forest and the clearings. It is
-/// drawn over the fog and the team's sight both, dim.
-fn paint_valley(window: &mut Window, map: MapView, valley: &Map) {
-    let s = map.scale;
-    let (lx, ly) = map.to_screen(valley.lake.at);
-    fill_circle(window, lx, ly, valley.lake.radius * s, ca(LAKE, 0.8));
-    for lane in &valley.lanes {
-        let pts: Vec<(f32, f32)> = lane.points.iter().map(|&p| map.to_screen(p)).collect();
-        polyline(window, &pts, 2.0 * LANE_HALF_WIDTH * s, ca(LANE, 0.75));
-    }
-    for cl in &valley.clearings {
-        let (x, y) = map.to_screen(cl.at);
-        fill_circle(window, x, y, cl.radius * s, ca(LANE, 0.75));
-    }
-}
-
-/// A drone: a triangle pointing the way it flies (north when it is still).
-fn drone_mark(window: &mut Window, x: f32, y: f32, vel: Vec2, colour: gpui::Hsla, filled: bool) {
-    let dir = if vel.length() > 1.0 { vel.normalize() } else { Vec2::X };
-    // North is up the screen and east to the right.
-    let (fx, fy) = (dir.y, -dir.x);
-    let (sx, sy) = (-fy, fx);
-    let pts = [
-        (x + fx * 9.0, y + fy * 9.0),
-        (x - fx * 6.0 + sx * 6.0, y - fy * 6.0 + sy * 6.0),
-        (x - fx * 6.0 - sx * 6.0, y - fy * 6.0 - sy * 6.0),
-    ];
-    if filled {
-        fill_poly(window, &pts, colour);
-    } else {
-        polyline(window, &[pts[0], pts[1], pts[2], pts[0]], 1.2, colour);
-    }
 }
 
 /// A top-down silhouette of a drone of `class`, nose up, centred on (`x`, `y`) in an 84 pixel square.
@@ -1098,33 +1105,4 @@ fn unit_icon(window: &mut Window, x: f32, y: f32, class: Class, colour: gpui::Hs
             }
         }
     }
-}
-
-/// The whole field in a corner of the map, with the part the map shows outlined.
-fn paint_minimap(window: &mut Window, b: Bounds<Pixels>, v: &TeamView, rules: &Rules, shown: MapView) {
-    let (mx, my, mw, mh) = minimap_rect(b);
-    fill_rect(window, mx, my, mw, mh, ca(0x000000, 0.75));
-    stroke_rect(window, mx, my, mw, mh, 1.0, ca(WHITE, 0.6));
-    let mini = MapView::new(Bounds { origin: pt(mx, my), size: gpui::size(px(mw), px(mh)) }, rules);
-    let (cx0, cy0) = mini.to_screen(Vec2::ZERO);
-    circle(window, cx0, cy0, rules.field_radius * mini.scale, 1.0, ca(GREY, 0.6));
-    for t in &v.towers {
-        let (x, y) = mini.to_screen(t.at);
-        fill_rect(window, x - 2.5, y - 2.5, 5.0, 5.0, c(t.holder.map_or(GREY, theme_team)));
-    }
-    for e in v.enemies.iter().filter(|e| e.seen) {
-        let (x, y) = mini.to_screen(e.at);
-        fill_circle(window, x, y, 2.0, c(theme_team(v.team.other())));
-    }
-    for d in v.drones.iter().filter(|d| d.phase != Phase::Down) {
-        let (x, y) = mini.to_screen(d.at);
-        fill_circle(window, x, y, 2.5, c(theme_team(v.team)));
-    }
-    // The view: the map's corners, on the minimap.
-    let (x, y, w, h) = rect(b);
-    let (a, z) = (shown.to_field(x, y), shown.to_field(x + w, y + h));
-    let (a, z) = (mini.to_screen(a), mini.to_screen(z));
-    let (vx, vy) = (a.0.min(z.0).max(mx), a.1.min(z.1).max(my));
-    let (vx1, vy1) = (a.0.max(z.0).min(mx + mw), a.1.max(z.1).min(my + mh));
-    stroke_rect(window, vx, vy, (vx1 - vx).max(2.0), (vy1 - vy).max(2.0), 1.5, c(WHITE));
 }

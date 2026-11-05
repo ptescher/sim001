@@ -1,0 +1,52 @@
+Feature: The bars of the app
+  The top bar shows the clock, the score of each team and a chip for each tower, in the colour
+  of the team that holds it. The bottom bar has the minimap at the left, a card for each of your
+  drones in the middle, and the command card at the right.
+
+  The card of each drone shows the order that the server has for the drone, its altitude, and
+  the picture from its camera. This picture is the same [[sensor feed]] that the ground station
+  shows. Click a picture to select its drone.
+
+  When one drone is selected, the bottom bar shows its PORTRAIT and its UNIT panel. The
+  PORTRAIT is a large picture from the camera of the drone. The UNIT panel shows a small icon of
+  the drone and its basic numbers: its class, its weight on a tower, its mass, its speed, its
+  altitude and its state. The icon is a quadcopter for a light drone, and a plane for a standard
+  or a heavy drone.
+
+  Expectation: The top bar shows the towers that each team holds
+    At the start, each team holds its home tower.
+
+    When the commander joins the game
+    Then the towers held by Blue in the top bar are 1
+
+  Expectation: With no drone selected, there is no UNIT panel
+    Given the selected drone is none
+    Then the unit panel of the app is hidden
+
+  Expectation: The UNIT panel shows the details of the selected drone
+    Given the selected drone is the first Blue drone
+    Then the unit panel of the app is shown
+    And the class in the unit panel is standard
+    And the mass in the unit panel is 1.1 kg
+
+  Expectation: The card of each drone shows its camera
+    The pictures come when the 3D view has loaded the valley. That takes some minutes after a
+    game starts, and the game goes on meanwhile.
+
+    When the commander waits for the cameras
+    Then the camera feeds in the app are 5
+
+  Expectation: The PORTRAIT shows the camera of the selected drone
+    The pictures come when the 3D view has loaded the valley.
+
+    Given the selected drone is the first Blue drone
+    When the commander waits for the cameras
+    Then the picture in the portrait is the camera of the first Blue drone
+
+  Expectation: With no drone selected, there is no PORTRAIT
+    Given the selected drone is none
+    Then the picture in the portrait is nothing
+
+  Expectation: A click on a camera selects its drone
+    When the commander clicks the camera of the second Blue drone
+    Then the selected drone is the second Blue drone
