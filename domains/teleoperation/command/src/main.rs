@@ -6,11 +6,14 @@
 //!   cargo run --release -- --team red --watch        watch Red's map, with no orders
 //!   cargo run --release -- --serve --no-cameras      the same, with no 3D view and no pictures from the drones
 
+mod battlefield;
 mod bench;
 mod cameras;
 mod draw;
 mod expect;
+mod field;
 mod ground;
+mod lens;
 mod seat;
 mod server;
 mod snapshot;
@@ -36,7 +39,7 @@ sim001_command [options]
   --watch            watch the team's map, with no orders
   --red X, --blue X  with --serve: who commands the other team: computer (default) or nobody
   --speedup N        with --serve: how fast the drones' time runs (default 1)
-  --no-cameras       no pictures from the drones' cameras (and with --serve, no 3D view of the game)
+  --no-cameras       no 3D battlefield and no pictures from the drones' cameras (with --serve, no 3D view)
   --cameras PORT     the port of the first drone's camera on the 3D view (default 5601)
   --connect ADDR     the game server (default 127.0.0.1:5955)
   --expect [SUITE]   run the acceptance tests in SUITE (default ../../../expectations) against this app,
@@ -120,14 +123,18 @@ fn main() {
         station::start(seat.clone(), addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string());
     }
     // The pictures from the team's drones: the 3D view of the game is on the server's machine.
+    let host = addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string();
+    let first_feed = arg("--cameras").and_then(|p| p.parse().ok()).unwrap_or(cameras::FIRST_PORT);
     let cameras = match join {
-        Join::Command(t) | Join::Watch(t) if cameras_on => cameras::Cameras::connect(
-            addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h),
-            arg("--cameras").and_then(|p| p.parse().ok()).unwrap_or(cameras::FIRST_PORT),
-            t,
-            recreation_towers::Rules::default().drones,
-        ),
+        Join::Command(t) | Join::Watch(t) if cameras_on => {
+            cameras::Cameras::connect(&host, first_feed, t, recreation_towers::Rules::default().drones)
+        }
         _ => cameras::Cameras::none(),
+    };
+    // The battlefield: the valley in 3D from the commander's camera, rendered by the same 3D view.
+    let battlefield = match join {
+        Join::Command(t) | Join::Watch(t) if cameras_on => battlefield::Battlefield::connect(&host, first_feed, t),
+        _ => battlefield::Battlefield::none(),
     };
 
     let expect_config = expect.then(|| {
@@ -174,9 +181,11 @@ fn main() {
             focus: true,
             ..Default::default()
         };
-        let (seat, cameras, ground) = (seat.clone(), cameras.clone(), ground.clone());
+        let (seat, cameras, battlefield, ground) = (seat.clone(), cameras.clone(), battlefield.clone(), ground.clone());
         let window = cx
-            .open_window(options, |window, cx| cx.new(|cx| ui::CommanderView::new(seat, cameras, ground, window, cx)))
+            .open_window(options, |window, cx| {
+                cx.new(|cx| ui::CommanderView::new(seat, cameras, battlefield, ground, window, cx))
+            })
             .expect("open the window");
         if let Some(config) = expect_config {
             expect::start(cx, window, config);

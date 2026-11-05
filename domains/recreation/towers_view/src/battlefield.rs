@@ -1,0 +1,265 @@
+//! The battlefield of each team (`recreation_towers::battlefield`): the valley as the camera of
+//! the team's commander sees it, rendered offscreen and sent while the commander app is connected.
+//! The app steers the camera with its requests; each picture goes back with the eye that it was
+//! rendered from, so the app draws its map on it in the right place.
+//!
+//! The picture has no drones in it: the drones are on a render layer of their own, which the
+//! battlefield cameras do not see, so the picture shows nothing that the team's fog hides.
+
+use bevy::camera::RenderTarget;
+use bevy::camera::visibility::RenderLayers;
+use bevy::prelude::*;
+use bevy::render::gpu_readback::{Readback, ReadbackComplete};
+use bevy::render::render_resource::{Extent3d, TextureFormat, TextureUsages};
+use recreation_towers::Team;
+use recreation_towers::battlefield::{self, Eye, Frame, MAX_SIZE, Request, write_frame};
+use std::io::Read;
+use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
+use visualization_engine::camera::scene_look;
+use visualization_engine::loading::AppState;
+use visualization_engine::model::PlaneRoot;
+
+/// The layer of the drones: every camera but the battlefields' sees it.
+const DRONES: usize = 1;
+const IDLE_SIZE: UVec2 = UVec2::new(64, 36);
+const MAX_FPS: f64 = 30.0;
+
+#[derive(Default)]
+struct Shared {
+    clients: AtomicUsize,
+    request: Mutex<Option<Request>>,
+    latest: Mutex<Option<(Frame, Arc<Vec<u8>>)>>,
+    new_frame: Condvar,
+}
+
+/// The servers of the two battlefields, Blue's then Red's.
+#[derive(Resource, Clone)]
+pub struct Links(Vec<Arc<Shared>>);
+
+/// Starts the servers: the team's battlefield on `battlefield::port(first_feed_port, team)`.
+pub fn serve(first_feed_port: u16) -> Links {
+    let links: Vec<Arc<Shared>> = Team::BOTH.iter().map(|_| Arc::new(Shared::default())).collect();
+    for (team, shared) in Team::BOTH.into_iter().zip(&links) {
+        let (shared, port) = (shared.clone(), battlefield::port(first_feed_port, team));
+        std::thread::Builder::new()
+            .name(format!("battlefield-{}", team.index()))
+            .spawn(move || listen(shared, port))
+            .expect("spawn a battlefield server");
+    }
+    Links(links)
+}
+
+fn listen(shared: Arc<Shared>, port: u16) {
+    let listener = match TcpListener::bind(("127.0.0.1", port)) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("battlefield: cannot listen on 127.0.0.1:{port}: {e}");
+            return;
+        }
+    };
+    println!("battlefield on tcp://127.0.0.1:{port}");
+    for stream in listener.incoming().flatten() {
+        let shared = shared.clone();
+        std::thread::spawn(move || {
+            shared.clients.fetch_add(1, Ordering::Relaxed);
+            let err = viewer(&shared, stream);
+            shared.clients.fetch_sub(1, Ordering::Relaxed);
+            println!("battlefield on {port}: the app left ({err})");
+        });
+    }
+}
+
+fn viewer(shared: &Arc<Shared>, mut stream: TcpStream) -> String {
+    stream.set_nodelay(true).ok();
+    // The app's requests: the newest one counts.
+    if let Ok(mut rd) = stream.try_clone() {
+        let shared = shared.clone();
+        std::thread::spawn(move || {
+            let mut b = [0u8; Request::SIZE];
+            while rd.read_exact(&mut b).is_ok() {
+                if let Some(r) = Request::decode(&b) {
+                    *shared.request.lock().unwrap() = Some(r);
+                }
+            }
+        });
+    }
+    let mut last = 0u32;
+    loop {
+        let (frame, pixels) = {
+            let mut latest = shared.latest.lock().unwrap();
+            loop {
+                if let Some((f, p)) = latest.as_ref().filter(|(f, _)| f.frame != last) {
+                    break (*f, p.clone());
+                }
+                let (guard, _) = shared.new_frame.wait_timeout(latest, Duration::from_secs(1)).unwrap();
+                latest = guard;
+            }
+        };
+        last = frame.frame;
+        if let Err(e) = write_frame(&mut stream, &frame, &pixels) {
+            return e.to_string();
+        }
+    }
+}
+
+#[derive(Component)]
+struct BattlefieldCamera(usize);
+
+/// A mesh whose render layers have been worked out.
+#[derive(Component)]
+struct Layered;
+
+struct Cam {
+    image: Handle<Image>,
+    readback: Option<Entity>,
+    frame: u32,
+    last_sent: Option<Instant>,
+    /// The eyes of the last frames, newest last: a readback arrives a frame or two after the
+    /// camera moved, and goes out with the eye of the frame it is.
+    eyes: Vec<(Request, u32)>,
+    ticks: u32,
+}
+
+#[derive(Resource)]
+struct Cams(Vec<Cam>);
+
+pub fn plugin(app: &mut App) {
+    app.add_systems(Startup, spawn).add_systems(Update, (layers, update.after(visualization_engine::EngineSet::Draw)));
+}
+
+fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    let mut cams = Vec::new();
+    for i in 0..Team::BOTH.len() {
+        let mut target = Image::new_target_texture(IDLE_SIZE.x, IDLE_SIZE.y, TextureFormat::Bgra8UnormSrgb, None);
+        target.texture_descriptor.usage |= TextureUsages::COPY_SRC;
+        let image = images.add(target);
+        commands.spawn((
+            BattlefieldCamera(i),
+            Camera3d::default(),
+            Camera { order: -20 - i as isize, ..default() },
+            RenderTarget::Image(image.clone().into()),
+            Projection::Perspective(PerspectiveProjection { near: 1.0, ..default() }),
+            Transform::default(),
+            RenderLayers::layer(0),
+            scene_look(),
+        ));
+        cams.push(Cam { image, readback: None, frame: 0, last_sent: None, eyes: vec![], ticks: 0 });
+    }
+    commands.insert_resource(Cams(cams));
+}
+
+/// The drones go on a layer of their own, which every camera sees but the battlefields'.
+#[allow(clippy::type_complexity)]
+fn layers(
+    mut commands: Commands,
+    meshes: Query<Entity, (With<Mesh3d>, Without<Layered>)>,
+    cameras: Query<Entity, (With<Camera3d>, Without<RenderLayers>, Without<BattlefieldCamera>)>,
+    parents: Query<&ChildOf>,
+    planes: Query<(), With<PlaneRoot>>,
+) {
+    for e in &meshes {
+        let on_a_plane = parents.iter_ancestors(e).any(|a| planes.contains(a));
+        let mut ec = commands.entity(e);
+        ec.insert(Layered);
+        if on_a_plane {
+            ec.insert(RenderLayers::layer(DRONES));
+        }
+    }
+    for e in &cameras {
+        commands.entity(e).insert(RenderLayers::from_layers(&[0, DRONES]));
+    }
+}
+
+/// The world frame of the view (x east, y up, z south) of a field point (north, east, up).
+fn world(p: glam::Vec3) -> Vec3 {
+    Vec3::new(p.y, p.z, -p.x)
+}
+
+fn place(eye: &Eye) -> Transform {
+    let (forward, _, up) = eye.axes();
+    Transform::from_translation(world(eye.position())).looking_to(world(forward), world(up))
+}
+
+/// Each battlefield camera follows the app's requests, and renders full size only while the app
+/// is connected.
+fn update(
+    mut commands: Commands,
+    links: Res<Links>,
+    mut cams: ResMut<Cams>,
+    mut images: ResMut<Assets<Image>>,
+    mut cameras: Query<(&BattlefieldCamera, &mut Transform, &mut Projection)>,
+    state: Res<State<AppState>>,
+) {
+    // Until the valley has loaded, the world is a placeholder: no picture of it goes out.
+    let loaded = *state.get() == AppState::Running;
+    for (BattlefieldCamera(i), mut t, mut projection) in &mut cameras {
+        let shared = &links.0[*i];
+        let request = *shared.request.lock().unwrap();
+        let live = loaded && shared.clients.load(Ordering::Relaxed) > 0 && request.is_some();
+        let cam = &mut cams.0[*i];
+        cam.ticks = cam.ticks.wrapping_add(1);
+        let want = match request.filter(|_| live) {
+            Some(r) => {
+                *t = place(&r.eye);
+                if let Projection::Perspective(p) = projection.as_mut() {
+                    p.fov = r.eye.vfov.to_radians();
+                }
+                cam.eyes.push((r, cam.ticks));
+                if cam.eyes.len() > 8 {
+                    cam.eyes.remove(0);
+                }
+                UVec2::new(r.width.clamp(16, MAX_SIZE.0) as u32, r.height.clamp(16, MAX_SIZE.1) as u32)
+            }
+            None => IDLE_SIZE,
+        };
+        let handle = cam.image.clone();
+        if images.get(&handle).is_some_and(|img| img.size() != want)
+            && let Some(mut img) = images.get_mut(&handle)
+        {
+            img.resize(Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 });
+        }
+        match (live, cam.readback) {
+            (true, None) => {
+                let i = *i;
+                let e = commands
+                    .spawn(Readback::texture(handle))
+                    .observe(move |ev: On<ReadbackComplete>, links: Res<Links>, mut cams: ResMut<Cams>| {
+                        on_readback(i, &ev, &links, &mut cams)
+                    })
+                    .id();
+                cam.readback = Some(e);
+            }
+            (false, Some(e)) => {
+                commands.entity(e).despawn();
+                cam.readback = None;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn on_readback(i: usize, ev: &ReadbackComplete, links: &Links, cams: &mut Cams) {
+    let cam = &mut cams.0[i];
+    if cam.last_sent.is_some_and(|t| t.elapsed().as_secs_f64() < 1.0 / MAX_FPS - 0.004) {
+        return;
+    }
+    // The newest eye whose size matches the picture: the readback trails the camera by a frame or
+    // two. Texture readbacks pad each row to 256 bytes.
+    let Some((r, _)) = cam.eyes.iter().rev().skip(1).chain(cam.eyes.last()).find(|(r, _)| {
+        let stride = (r.width as u32 * 4).div_ceil(256) * 256;
+        ev.data.len() == (stride * r.height as u32) as usize
+    }) else {
+        return; // a frame from before a resize
+    };
+    let (w, h) = (r.width.clamp(16, MAX_SIZE.0), r.height.clamp(16, MAX_SIZE.1));
+    let stride = (w as u32 * 4).div_ceil(256) * 256;
+    cam.last_sent = Some(Instant::now());
+    cam.frame = cam.frame.wrapping_add(1);
+    let frame = Frame { width: w, height: h, stride, frame: cam.frame, eye: r.eye };
+    let shared = &links.0[i];
+    *shared.latest.lock().unwrap() = Some((frame, Arc::new(ev.data.clone())));
+    shared.new_frame.notify_all();
+}
