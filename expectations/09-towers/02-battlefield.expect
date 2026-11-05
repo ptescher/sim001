@@ -1,0 +1,61 @@
+Feature: The battlefield
+  The battlefield is the big picture in the middle of the app. It shows the valley in 3D, as
+  your camera sees it from above: the forest, the lanes, the lake and the mountains. The app
+  draws the towers, your drones, the enemy drones that your team sees and the [[fog]] on the
+  picture.
+
+  The picture comes from the 3D view of the game. It has no drones in it, so it does not show
+  what the fog hides. Each drone on the battlefield stands on a line from its shadow on the
+  ground, so you can see how high it flies. Without the 3D view, the app draws the plain map of
+  the valley in the same perspective.
+
+  At the start, the camera looks at the base of your team, towards the enemy. W, A, S and D, or
+  the arrow keys, move the camera. If you put the mouse at an edge of the battlefield, the camera
+  moves that way. Q and E turn the camera 45° to the left and to the right. The mouse wheel moves
+  the camera nearer to the ground, or further from it.
+
+  The minimap is at the left of the bottom bar. It shows the whole field and the area that the
+  camera sees. Click the minimap, and the camera looks at that point. Space moves the camera to
+  the selected drones.
+
+  Expectation: The battlefield shows the valley in 3D
+    The 3D view loads the valley first. That takes some minutes after a game starts, and the app
+    shows the plain map until then.
+
+    When the commander waits for the battlefield
+    Then the battlefield picture in the app is live
+
+  Expectation: The camera starts at the base of the team
+    When the commander joins the game
+    Then the point of the battlefield camera is the Blue base
+    And the heading of the battlefield camera is 0 deg
+
+  Expectation: A click on the minimap moves the camera there
+    When the commander clicks the west tower on the minimap
+    Then the point of the battlefield camera is the west tower
+
+  Expectation: The keys move the camera across the field
+    Given the point of the battlefield camera is the Blue base
+    When the commander pans the battlefield to the front
+    Then the distance from the Blue base to the battlefield camera's point is at least 100 m
+
+  Expectation: The mouse at the edge of the battlefield moves the camera
+    Given the point of the battlefield camera is the Blue base
+    When the commander moves the mouse to the top edge of the battlefield
+    Then the distance from the Blue base to the battlefield camera's point is at least 100 m
+
+  Expectation: E turns the camera to the right
+    Given the heading of the battlefield camera is 0 deg
+    When the commander turns the battlefield camera to the right
+    Then the heading of the battlefield camera is 45 deg
+
+  Expectation: The mouse wheel moves the camera nearer to the ground
+    Given the height of the battlefield camera is 600 m
+    When the commander zooms the battlefield in
+    Then the height of the battlefield camera is at most 500 m
+
+  Expectation: Space moves the camera to the selected drone
+    Given the first Blue drone is in the west circle
+    And the selected drone is the first Blue drone
+    When the commander centres the battlefield on the selected drone
+    Then the point of the battlefield camera is the west tower

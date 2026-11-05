@@ -1,25 +1,18 @@
 Feature: Commanding from the app
-  The commander app is the seat of a person. It shows the map of your team: the field, the
-  towers as your team last saw them, your drones, and the enemy drones that your team sees or
-  saw. The rest of the field is dark: that is the fog. The top bar shows the clock and the
-  score of each team.
+  The commander app is the seat of a person. It looks like the screen of a real-time strategy
+  game. The [[The battlefield|battlefield]] fills the window: the valley in 3D, with the towers as your team last
+  saw them, your drones, and the enemy drones that your team sees or saw. The rest of the field
+  is dark: that is the fog.
 
-  To give an order, click a drone in the list of drones or on the map, or press its number; drag a
-  box on the map to select several drones, and hold Shift to add to the selection. Then right-click
-  a tower on the map, and the drones go to take it. Right-click anywhere else on the field, and the
-  drones go there and circle. HOLD makes the drone circle where it is. HOME sends it back over its base.
-  The list of drones shows the order that the server has for each drone. Until you give a drone
-  an order, it circles over its base: HOME.
+  To give an order, click a drone on the battlefield or its card, or press its number. Drag a
+  box on the battlefield to select several drones, and hold Shift to add to the selection. Then
+  right-click a tower on the battlefield, and the drones go to take it. Right-click anywhere
+  else on the field, and the drones go there and circle. The command card has the buttons for
+  the other orders, each with its key. HOLD (H) makes the drone circle where it is. HOME (B) sends
+  it back over its base. Until you give a drone an order, it circles over its base: HOME.
 
-  When a drone is selected, the UNIT panel shows its details: a small icon of the drone and its
-  basic numbers. They are its class, its weight on a tower, its mass, its speed, its altitude
-  and its state. The icon is a quadcopter for a light drone, and a plane for a standard or a
-  heavy drone.
-
-  LOW makes the selected drone fly [[low]], along the lanes and below the treetops. Click LOW
-  again, and the drone flies high. CAMERAS shows the picture from the camera of each of your
-  drones, the same [[sensor feed]] that the ground station shows. Click a picture to select
-  its drone.
+  LOW (L) makes the selected drone fly [[low]], along the lanes and below the treetops. Click LOW
+  again, and the drone flies high.
 
   Expectation: The app takes the Blue seat
     When the commander joins the game
@@ -29,16 +22,6 @@ Feature: Commanding from the app
   Expectation: A click on a drone selects it
     When the commander selects the first Blue drone
     Then the selected drone is the first Blue drone
-
-  Expectation: With no drone selected, there is no UNIT panel
-    Given the selected drone is none
-    Then the unit panel of the app is hidden
-
-  Expectation: The UNIT panel shows the details of the selected drone
-    Given the selected drone is the first Blue drone
-    Then the unit panel of the app is shown
-    And the class in the unit panel is standard
-    And the mass in the unit panel is 1.1 kg
 
   Expectation: A right-click on a tower sends the selected drone to take it
     Given the selected drone is the first Blue drone
@@ -108,14 +91,3 @@ Feature: Commanding from the app
     And the flight of the first Blue drone is low
     When the game runs for 3 minutes
     Then the west tower on the Blue map is held by Blue
-
-  Expectation: CAMERAS shows the camera of each drone
-    The pictures come when the 3D view has loaded the valley. That takes some minutes after a
-    game starts, and the game goes on meanwhile.
-
-    When the commander waits for the cameras
-    Then the camera feeds in the app are 5
-
-  Expectation: A click on a camera selects its drone
-    When the commander clicks the camera of the second Blue drone
-    Then the selected drone is the second Blue drone
