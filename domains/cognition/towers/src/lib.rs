@@ -9,11 +9,13 @@
 
 mod autonomy;
 mod edge;
+mod formation;
 
 pub use autonomy::{
     After, Autonomy, Comparison, Failsafe, Persist, Prepared, Surface, compare, compare_captains, compare_with,
 };
 pub use edge::{Edge, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
+pub use formation::{Formation, Post};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
