@@ -22,6 +22,23 @@ The numbers, what each does and its bounds: `domains/cognition/executor/src/tuni
 
 {{history}}
 
+
+## How to work here (read this first)
+
+- Your shell allows only plain commands that start with `cargo run --release -p cognition_league ...`, `cargo build`. No `mkdir`, `cat`, heredocs, pipes (`| tail`), `&&`, `2>&1` or `timeout`: a command with any of them is refused, and then you cannot test anything. Create files with the Write tool (`.league/` already exists), read output as the command prints it. Run one command per call.
+- Untested ideas are worth nothing here: the league plays your proposals against the champion on fresh seeds. Play every idea yourself first with `judge` (128 seeds) before you keep it.
+
+## Be creative
+
+The champion's numbers are probably near a local optimum: nudging one or two of them has been tried, and tends to be noise (a +0.5 mean over 10 games was a mean of -0.05 over 128). Look for something structurally different, and say in your notes what the idea was:
+
+- a different way to choose who to chase or whom to flee (predict where a plane will be, not where it is; chase the plane that was just tagged; stay away from the pack's centre when it);
+- using the arena: altitude bands, the fence, energy (trade height for speed), approaching from behind and above;
+- how the executor flies a pursuit or an evasion: lead pursuit, a turn that does not bleed speed, a break turn when a pilot closes;
+- reading the logs of the games: trace the games it loses worst (`ARENA_TRACE=SEED` before `play --seed-list SEED`) and fix what you see there.
+
+Try several ideas, keep the one that wins in `judge`, and drop the rest. A change that wins by +0.15 over 128 seeds is a good result; one that wins by +0.5 on 10 seeds is not.
+
 ## Your job
 
 1. Read the report and the code, and form a hypothesis about what costs the champion points (time as it, crashes, the envelope's work).
