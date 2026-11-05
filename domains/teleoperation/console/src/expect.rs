@@ -8,9 +8,8 @@
 //! and the vehicle's telemetry. The runner needs a vehicle, so start the whole station:
 //! `cargo run --release -- --station --expect`.
 //!
-//! Not driven yet (their tests report "not supported yet"): the mission file, the terrain
-//! check, the survey grid and measuring (the console has no such features), and anything in the
-//! sim's window (throwing the plane).
+//! Not driven yet (their tests report "not supported yet"): calibrating the radio (F2, in the
+//! sim's window; the stand-in radio of the station is never calibrated).
 
 use crate::link::Cmd;
 use crate::ui::app::{self, Gcs};
@@ -118,6 +117,10 @@ enum Act {
     Key(Key),
     /// Wait for the game's countdown to reach GO.
     Go,
+    /// MEASURE, then a click at each of two points of the map, apart.
+    Measure,
+    /// GRID, a click at each of the four corners of an area, and FILL GRID.
+    Survey,
 }
 
 const EVENTS: &[(&str, Act)] = &[
@@ -125,6 +128,11 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator toggles the fly-to tool", Act::Button("goto")),
     ("operator clicks the map", Act::Map(MouseButton::Left)),
     ("operator right-clicks the map", Act::Map(MouseButton::Right)),
+    ("operator measures between two points", Act::Measure),
+    ("operator draws a survey grid", Act::Survey),
+    ("operator checks the heights against the terrain", Act::Button("check-heights")),
+    ("operator saves the plan to a file", Act::Button("save-plan")),
+    ("operator loads the plan from the file", Act::Button("load-plan")),
     ("operator raises the plan altitude", Act::Button("alt-up")),
     ("operator lowers the plan altitude", Act::Button("alt-dn")),
     ("operator adds a takeoff", Act::Button("tkof")),
@@ -136,8 +144,8 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator restarts the mission", Act::Button("restart")),
     ("operator arms the vehicle", Act::Arm),
     ("operator disarms the vehicle", Act::Button("disarm")),
-    ("operator switches to AUTO", Act::Button("mode-AUTO")),
-    ("operator switches to AUTO anyway", Act::Twice("mode-AUTO")),
+    ("operator switches to auto", Act::Button("mode-AUTO")),
+    ("operator switches to auto anyway", Act::Twice("mode-AUTO")),
     ("operator takes off vertically", Act::Button("vtol-tkof")),
     ("operator switches to forward flight", Act::Button("mode-CRUISE")),
     ("operator switches to hover", Act::Button("mode-QLOITER")),
@@ -160,10 +168,16 @@ const EVENTS: &[(&str, Act)] = &[
     ),
     ("pilot switches to cruise", Act::Radios(&[RadioMove::Throttle(STICK_TOP), RadioMove::Mode("CRUISE")])),
     ("pilot sends the plane home", Act::Radio(RadioMove::Mode("QRTL"))),
+    ("pilot throws the plane in the sim", Act::Key(Key::Throw)),
     ("pilot starts a race", Act::Key(Key::Race)),
     ("pilot starts a game of tag", Act::Key(Key::Tag)),
     ("countdown ends", Act::Go),
 ];
+
+/// What the plane does by itself, and the driver waits for.
+const WAITS: &[&str] = &["plane reaches a waypoint", "plane reaches the last item"];
+/// How long the plane has to get to the next waypoint, or to the last item, flying the mission.
+const FLY_SECS: u64 = 240;
 
 /// States the driver can read (and put in place). Those the console has no feature for are
 /// always at their starting value, so a test that needs them to change needs an event below
@@ -190,6 +204,7 @@ const STATES: &[&str] = &[
     "height above home",
     "battery current",
     "battery voltage",
+    "radio",
     "radio line",
     "tx15 screen mode",
     "tx15 screen arming",
@@ -204,8 +219,15 @@ const STATES: &[&str] = &[
     "opponents",
 ];
 /// States an action can change directly (the others change through events).
-const SETTABLE: &[&str] =
-    &["autopilot mode", "plan altitude", "throttle stick", "aileron stick", "arm switch", "mode switch"];
+const SETTABLE: &[&str] = &[
+    "autopilot mode",
+    "plan altitude",
+    "last plan item",
+    "throttle stick",
+    "aileron stick",
+    "arm switch",
+    "mode switch",
+];
 
 const MODE_IDS: [&str; 10] = [
     "mode-MANUAL",
@@ -251,6 +273,10 @@ type Job = Box<dyn FnOnce(&mut App, WindowHandle<Gcs>) + Send>;
 
 /// Load and check the suite before anything opens, then start the runner thread.
 pub fn start(cx: &mut App, console: WindowHandle<Gcs>, config: Config) {
+    // The tests save the plan in a file of their own, not in the pilot's.
+    let dir = std::env::temp_dir().join(format!("sim001-console-expect-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    crate::wpfile::use_path(dir.join("mission.wpl"));
     let Config { suite, docs, only, vtol, rc_modes, radio, vehicle } = config;
     let mut acceptance = match Acceptance::load_for(&suite, "desktop") {
         Ok(a) => a.with_coverage(),
@@ -616,7 +642,7 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
         "map tool" => Value::from(match g.map.tool {
             Tool::Plan => "PLAN",
             Tool::Goto => "GOTO",
-            Tool::Pan | Tool::Look => "pan",
+            Tool::Pan | Tool::Look | Tool::Measure | Tool::Survey => "pan",
         }),
         "plan" => Value::from(plan.len() as f64),
         "plan altitude" => Value::from(g.map.plan_alt),
@@ -665,9 +691,13 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
             None => "none yet",
         }),
         "opponents" => Value::from(opponents(&v)),
-        "waypoints" => Value::from("unchecked"),
-        "mission file" => Value::from("missing"),
-        "measured distance" => Value::from("hidden"),
+        "waypoints" => Value::from(match g.map.checked {
+            Some((items, true)) if items == plan.len() => "clear of the terrain",
+            Some((items, false)) if items == plan.len() => "too low somewhere",
+            _ => "unchecked",
+        }),
+        "mission file" => Value::from(crate::wpfile::state(&crate::wpfile::path(), &g.map.plan)),
+        "measured distance" => Value::from(if g.map.measure.len() == 2 { "shown" } else { "hidden" }),
         other => return Err(format!("no way to observe `{other}`")),
     })
 }
@@ -923,6 +953,11 @@ impl ConsoleDriver {
         if key == "radio line" {
             return Ok(Value::from(if self.serial_line() { "serial" } else { "USB" }));
         }
+        if key == "radio" {
+            // The station's stand-in radio goes straight to the channels, past the sim's
+            // calibration (F2, in the sim's window): it is never a calibrated one.
+            return Ok(Value::from("not calibrated"));
+        }
         if key == "tx15 screen mode" || key == "tx15 screen arming" {
             let lamps = self.tx15_lamps()?;
             return Ok(Value::from(if key == "tx15 screen mode" {
@@ -1150,7 +1185,40 @@ impl ConsoleDriver {
         Ok(())
     }
 
+    /// GRID, a click at each corner of a rectangle in the middle of the map, and FILL GRID.
+    fn survey(&self) -> Result<(), String> {
+        self.press("survey")?;
+        let centre = self.call(|g, _, _| g.map_bounds.get().center())?;
+        for (dx, dy) in [(-110.0, -60.0), (110.0, -60.0), (110.0, 60.0), (-110.0, 60.0)] {
+            let at = Point::new(centre.x + gpui::px(dx), centre.y + gpui::px(dy));
+            self.with_window(move |w, cx| click(w, cx, at, MouseButton::Left))?;
+            std::thread::sleep(FRAME);
+        }
+        self.press("fill-grid")
+    }
+
+    /// MEASURE, then a click at each of two points of the map, apart.
+    fn measure(&self) -> Result<(), String> {
+        self.press("measure")?;
+        let centre = self.call(|g, _, _| g.map_bounds.get().center())?;
+        for dx in [-80.0, 80.0] {
+            let at = Point::new(centre.x + gpui::px(dx), centre.y);
+            self.with_window(move |w, cx| click(w, cx, at, MouseButton::Left))?;
+            std::thread::sleep(FRAME);
+        }
+        Ok(())
+    }
+
     fn press(&self, id: &'static str) -> Result<(), String> {
+        // A window too narrow for a row of buttons cuts it to one line behind MORE, and a click on
+        // a button on the lines that are cut would land on the map under it: open the rows first.
+        let opened = self.with_window(|w, cx| {
+            let cut = app::rows_cut_short();
+            cut.iter().try_for_each(|row| click_button(w, cx, &format!("more-{row}"))).map(|()| !cut.is_empty())
+        })??;
+        if opened {
+            std::thread::sleep(SETTLE);
+        }
         self.with_window(move |w, cx| click_button(w, cx, id))??;
         std::thread::sleep(FRAME);
         Ok(())
@@ -1193,6 +1261,10 @@ impl Driver for ConsoleDriver {
         self.call(|g, _, _| {
             g.map.tool = Tool::Pan;
             g.map.plan.clear();
+            g.map.measure.clear();
+            g.map.survey.clear();
+            g.map.checked = None;
+            let _ = std::fs::remove_file(crate::wpfile::path());
             g.map.plan_alt = 40.0;
             g.map.follow = true;
         })?;
@@ -1255,6 +1327,10 @@ impl Driver for ConsoleDriver {
                     return Ok(());
                 }
                 self.arrange_mode(&mode)
+            }
+            "radio" => {
+                let want = name()?;
+                self.check(key, &want, " (the station's stand-in radio is never calibrated)")
             }
             "radio line" => {
                 let want = name()?;
@@ -1389,10 +1465,43 @@ impl Driver for ConsoleDriver {
                 }
                 Ok(())
             }
-            "waypoints" | "mission file" | "measured distance" => {
-                let want = name()?;
-                self.check(key, &want, " (the console can't do anything else yet)")
+            "measured distance" => match name()?.as_str() {
+                "shown" => self.measure(),
+                _ => self.call(|g, _, _| g.map.measure.clear()),
+            },
+            // A file that has the plan, one that has another, or none.
+            "mission file" => {
+                let home = self.call(|g, _, _| {
+                    let v = g.vehicle.lock().unwrap();
+                    v.home.map_or_else(|| g.origin.to_ll(0.0, 0.0), |h| (h.0, h.1))
+                })?;
+                let path = crate::wpfile::path();
+                match name()?.as_str() {
+                    "missing" => {
+                        let _ = std::fs::remove_file(&path);
+                        Ok(())
+                    }
+                    "up to date" => self
+                        .call(move |g, _, _| crate::wpfile::save(&path, &g.map.plan, home))?
+                        .map_err(|e| e.to_string()),
+                    _ => self
+                        .call(move |g, _, _| {
+                            // The plan and one more item: what is in the file is not the plan.
+                            let mut other = g.map.plan.clone();
+                            other.push(Waypoint { kind: WpKind::Waypoint, lat: home.0, lon: home.1, alt: 10.0 });
+                            crate::wpfile::save(&path, &other, home)
+                        })?
+                        .map_err(|e| e.to_string()),
+                }
             }
+            "waypoints" => match name()?.as_str() {
+                "unchecked" => self.call(|g, _, _| g.map.checked = None),
+                "clear of the terrain" => {
+                    self.press("check-heights")?;
+                    self.check(key, "clear of the terrain", " (is there a terrain map?)")
+                }
+                _ => self.check(key, "too low somewhere", ""),
+            },
             // No game: press the key of the one being played, which stops it.
             "game clock" | "game" if matches!(name()?.as_str(), "off" | "free flight") => {
                 if let Some(game) = self.call(|g, _, _| g.sensor.as_ref().and_then(|s| s.game()))? {
@@ -1426,6 +1535,17 @@ impl Driver for ConsoleDriver {
                 }
                 Ok(())
             }
+            // CMD changes the command of the last item to the next one: press it until it is the one.
+            "last plan item" => {
+                let want = enum_value(value)?;
+                for _ in 0..=5 {
+                    if self.read("last plan item")?.as_str() == Some(want.as_str()) {
+                        return Ok(());
+                    }
+                    self.press("cmd")?;
+                }
+                Err(format!("CMD does not change the last item to {want}"))
+            }
             // The radio's three inputs are put in place the way the pilot moves them.
             "throttle stick" | "aileron stick" | "arm switch" | "mode switch" => self.arrange(var, value),
             other => Err(format!("{other} isn't something to set")),
@@ -1433,6 +1553,23 @@ impl Driver for ConsoleDriver {
     }
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
+        match event.key.as_str() {
+            // The mission goes on to its next item.
+            "plane reaches a waypoint" => {
+                let from = self.call(|g, _, _| g.vehicle.lock().unwrap().mission_seq)?;
+                return self.wait_for(FLY_SECS, "the plane reaching a waypoint", move |g| {
+                    g.vehicle.lock().unwrap().mission_seq > from
+                });
+            }
+            // The mission is on its last item (the first is home).
+            "plane reaches the last item" => {
+                return self.wait_for(FLY_SECS, "the plane reaching the last item", |g| {
+                    let v = g.vehicle.lock().unwrap();
+                    v.mission.len() > 1 && usize::from(v.mission_seq) + 1 >= v.mission.len()
+                });
+            }
+            _ => {}
+        }
         let act = EVENTS.iter().find(|(k, _)| *k == event.key).map(|(_, a)| a).ok_or("no way to do it")?;
         match *act {
             Act::Button(id) => self.press(id),
@@ -1465,6 +1602,8 @@ impl Driver for ConsoleDriver {
             Act::Go => self.wait_for(30, "GO", |g| {
                 g.sensor.as_ref().and_then(|s| s.game()).is_some_and(|x| x.clock == GameClock::Running)
             }),
+            Act::Measure => self.measure(),
+            Act::Survey => self.survey(),
             Act::Map(button) => {
                 let at = self.call(|g, _, _| map_point(g))??;
                 self.with_window(move |w, cx| click(w, cx, at, button))?;
@@ -1515,11 +1654,16 @@ impl Driver for ConsoleDriver {
     }
 
     fn supports(&self, need: Need<'_>) -> bool {
-        match need {
-            Need::Observe(v) | Need::Arrange(v) => STATES.contains(&v.key.as_str()),
-            Need::Set(v) => SETTABLE.contains(&v.key.as_str()),
-            Need::Perform(e) => EVENTS.iter().any(|(k, _)| *k == e.key),
-        }
+        supported(need)
+    }
+}
+
+/// What the driver can do: the states it reads, the ones it sets and the events it performs.
+fn supported(need: Need<'_>) -> bool {
+    match need {
+        Need::Observe(v) | Need::Arrange(v) => STATES.contains(&v.key.as_str()),
+        Need::Set(v) => SETTABLE.contains(&v.key.as_str()),
+        Need::Perform(e) => EVENTS.iter().any(|(k, _)| *k == e.key) || WAITS.contains(&e.key.as_str()),
     }
 }
 
@@ -1616,5 +1760,38 @@ mod tests {
         let n = plans.iter().filter(|p| supported(p)).count();
         println!("{n} of {} console tests are supported", plans.len());
         assert!(n >= 16, "only {n} of {} console tests are supported", plans.len());
+    }
+
+    /// Lists, in the file named by `SIM001_LIST_UNSUPPORTED`, the plans of the suite that the
+    /// driver cannot run and what each lacks (run it with `--ignored`).
+    #[test]
+    #[ignore]
+    fn list_the_plans_the_driver_cannot_run() {
+        struct Dry;
+        impl Driver for Dry {
+            fn set(&mut self, _: &Variable, _: &Value) -> Result<(), String> {
+                Err("dry".into())
+            }
+            fn perform(&mut self, _: &Event) -> Result<(), String> {
+                Err("dry".into())
+            }
+            fn observe(&mut self, _: &Variable) -> Result<Value, String> {
+                Err("dry".into())
+            }
+            fn supports(&self, need: Need<'_>) -> bool {
+                supported(need)
+            }
+        }
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
+        let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
+        let report = a.run(&mut Dry, &RunOptions { patience: 1, controls: false, ..Default::default() });
+        let mut out = String::new();
+        for (p, r) in a.plans.iter().zip(&report.results) {
+            let ours = a.suite.sections.iter().any(|s| s.slug == "gcs" && a.suite.subtree(s.id).contains(&p.section));
+            if ours {
+                out += &format!("{:?}\t{}\t{}\n", r.status, p.title, r.start.error.clone().unwrap_or_default());
+            }
+        }
+        std::fs::write(std::env::var("SIM001_LIST_UNSUPPORTED").expect("a path"), out).unwrap();
     }
 }

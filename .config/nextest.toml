@@ -1,0 +1,11 @@
+# cargo nextest: runs the test binaries side by side (cargo test runs them one after another,
+# and the acceptance suites take most of a minute each). CI runs `cargo nextest run --profile ci`.
+
+[profile.ci]
+# The league's acceptance suite plays ~12 500 games (about 12 minutes on a 10-core laptop, see
+# LEAGUE_SECS in tools/tasks/src/docs.rs): `tasks docs` runs it, CI runs the league's unit tests.
+default-filter = "not (package(cognition_league) & binary(acceptance))"
+fail-fast = false
+# Say which tests are slow, and stop one that hangs (the suites budget themselves to 120 s).
+slow-timeout = { period = "60s", terminate-after = 5 }
+failure-output = "immediate-final"

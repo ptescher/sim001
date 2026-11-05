@@ -39,6 +39,12 @@ pub const SIM_SECS: u64 = 240;
 /// 3D view of a game takes about 2.5 minutes to load the valley, which the test of the cameras
 /// waits for. The suite takes ~305 s; 420 s leaves room for a slower box.
 pub const COMMAND_SECS: u64 = 420;
+/// What the console's suite gets (`tasks console`, which is a task of its own): its tests fly a
+/// plane against a real ArduPilot, and a fresh plane takes a minute. The tutorials that fly take 5
+/// to 10 minutes each, twice when they fail (the runner tries a failed test once more), and the
+/// generated plans around them a minute each: the run measured ~65 minutes for its first ten
+/// results. 4 hours is an upper bound, not a plan.
+pub const CONSOLE_SECS: u64 = 14400;
 /// What a suite gets on top, to write its results and shut down; past it the runner is killed.
 const GRACE_SECS: u64 = 30;
 
@@ -97,8 +103,10 @@ fn acceptance(name: &'static str, root: &Path, docs_env: &(String, String), pack
 }
 
 /// The steps of `tasks docs`: everything is built first, so that each suite's clock runs on the
-/// tests and not on the compiler; then the suites, each within its budget; then the manual.
-pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
+/// tests and not on the compiler; then the suites, each within its budget; then the manual. The
+/// console's suite is not among them (`tasks console` runs it, and the manual takes the results it
+/// saved last).
+pub fn steps(root: &Path) -> Vec<Step> {
     let docs = root.join("docs");
     let docs_arg = docs.display().to_string();
     let docs_env = ("SIM001_DOCS".to_string(), docs_arg.clone());
@@ -112,14 +120,7 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     test_build.extend(["--test", "acceptance"]);
     out.push(cargo("build the tests", root, &test_build, 3600));
     out.push(cargo("build the sim", root, &["build", "--release"], 3600));
-    for (name, dir) in [
-        ("build the launcher", "launcher"),
-        ("build the Towers commander app", "command"),
-        ("build the console", "console"),
-    ] {
-        if dir == "console" && no_station {
-            continue;
-        }
+    for (name, dir) in [("build the launcher", "launcher"), ("build the Towers commander app", "command")] {
         out.push(cargo(name, &root.join("domains/teleoperation").join(dir), &["build", "--release"], 3600));
     }
 
@@ -175,16 +176,42 @@ pub fn steps(root: &Path, no_station: bool) -> Vec<Step> {
     out.push(app("the launcher", "launcher", &[], SUITE_SECS));
     // The commander app of Towers, each test on a fresh game of its own server.
     out.push(app("the Towers commander app", "command", &[], COMMAND_SECS));
-    if !no_station {
-        out.push(app("the console (the station)", "console", &["--station"], SUITE_SECS));
-    }
-    out.push(cargo(
-        "the manual",
-        root,
-        &["run", "-q", "-p", "expectation", "--", "docs", "expectations", &docs_arg],
-        600,
-    ));
+    out.push(the_manual(root, &docs_arg));
     out
+}
+
+fn the_manual(root: &Path, docs_arg: &str) -> Step {
+    cargo("the manual", root, &["run", "-q", "-p", "expectation", "--", "docs", "expectations", docs_arg], 600)
+}
+
+/// The steps of `tasks console`: the console's own suite (the station: the console, the sim and an
+/// ArduPilot, with the tests clicking the console's window), within `CONSOLE_SECS`, and then the
+/// manual, which takes the results of the other suites as they were last saved. `only` runs the
+/// tests whose title has that text.
+pub fn console_steps(root: &Path, only: Option<&str>) -> Vec<Step> {
+    let docs_arg = root.join("docs").display().to_string();
+    let console = root.join("domains/teleoperation/console");
+    let mut args = s(&["run", "--release", "--", "--station", "--expect", "--docs", &docs_arg]);
+    if let Some(text) = only {
+        args.extend(s(&["--only", text]));
+    }
+    vec![
+        cargo("build the sim", root, &["build", "--release"], 3600),
+        cargo("build the console", &console, &["build", "--release"], 3600),
+        suite_for(
+            Step {
+                name: "the console (the station)",
+                program: "cargo".into(),
+                args,
+                dir: console,
+                env: vec![],
+                limit: Duration::ZERO,
+                may_fail: true,
+            },
+            CONSOLE_SECS,
+        ),
+        the_manual(root, &docs_arg),
+    ]
 }
 
 fn command(step: &Step) -> Command {
@@ -205,7 +232,7 @@ pub fn missing_sitl(root: &Path, docker_up: bool) -> Option<String> {
     Some(format!(
         "there is no ArduPlane SITL to fly the VTOL: {} is missing and Docker is not running.\n\
          Build it (ardupilot/build_native.sh), link .ardupilot to the main checkout's if this is a worktree, \
-         or start Docker. `tasks docs --no-station` leaves out the console's tests.",
+         or start Docker. `tasks docs --no-sitl` runs the suites anyway: those that fly the VTOL say \"not supported yet\".",
         native.display()
     ))
 }
@@ -219,12 +246,26 @@ fn docker_up() -> bool {
         .is_ok_and(|s| s.success())
 }
 
-pub fn run(root: &Path, no_station: bool) -> i32 {
-    if let Some(why) = missing_sitl(root, docker_up()).filter(|_| !no_station) {
+/// `tasks docs`: every suite but the console's, then the manual.
+pub fn run(root: &Path, no_sitl: bool) -> i32 {
+    if let Some(why) = missing_sitl(root, docker_up()).filter(|_| !no_sitl) {
         eprintln!("== not starting: {why}");
         return 1;
     }
-    for step in steps(root, no_station) {
+    run_steps(steps(root))
+}
+
+/// `tasks console [--only TEXT]`: the console's suite, then the manual.
+pub fn run_console(root: &Path, only: Option<&str>) -> i32 {
+    if let Some(why) = missing_sitl(root, docker_up()) {
+        eprintln!("== not starting: {why}");
+        return 1;
+    }
+    run_steps(console_steps(root, only))
+}
+
+fn run_steps(steps: Vec<Step>) -> i32 {
+    for step in steps {
         println!("== {}", step.name);
         let ended = run_limited(&mut command(&step), step.limit);
         match (&ended, step.may_fail) {
@@ -257,7 +298,7 @@ mod tests {
     /// The runners go in the order their results are merged, and the manual is written last.
     #[test]
     fn the_runners_go_in_order_and_the_manual_is_last() {
-        let all = steps(&root(), false);
+        let all = steps(&root());
         assert_eq!(
             names(&all),
             [
@@ -265,7 +306,6 @@ mod tests {
                 "build the sim",
                 "build the launcher",
                 "build the Towers commander app",
-                "build the console",
                 "the domains with no window",
                 "the league",
                 "the AGENT mode in ArduPilot SITL",
@@ -276,25 +316,37 @@ mod tests {
                 "the sim with a flight controller",
                 "the launcher",
                 "the Towers commander app",
-                "the console (the station)",
                 "the manual"
             ]
         );
     }
 
-    /// The console's tests need Docker and take a while: they can be left out.
+    /// The console's tests take hours: they are a task of their own, and `tasks docs` leaves them out.
     #[test]
-    fn the_stations_tests_can_be_left_out() {
-        let all = steps(&root(), true);
-        assert!(!names(&all).iter().any(|n| n.contains("console")));
-        assert_eq!(names(&all).last(), Some(&"the manual"));
+    fn the_console_has_a_task_of_its_own() {
+        assert!(!names(&steps(&root())).iter().any(|n| n.contains("console")));
+        let own = console_steps(&root(), None);
+        assert_eq!(names(&own), ["build the sim", "build the console", "the console (the station)", "the manual"]);
+        let run = own.iter().find(|s| s.name == "the console (the station)").unwrap();
+        assert!(run.args.contains(&"--station".to_string()) && !run.args.contains(&"--only".to_string()));
+        assert!(run.env.contains(&("SIM001_SUITE_BUDGET".to_string(), CONSOLE_SECS.to_string())));
+        assert_eq!(run.limit, Duration::from_secs(CONSOLE_SECS + GRACE_SECS));
+    }
+
+    /// `tasks console --only TEXT` runs the console's tests whose title has TEXT.
+    #[test]
+    fn the_console_task_can_run_some_of_the_tests() {
+        let own = console_steps(&root(), Some("Measuring"));
+        let run = own.iter().find(|s| s.name == "the console (the station)").unwrap();
+        let at = run.args.iter().position(|a| a == "--only").expect("--only");
+        assert_eq!(run.args[at + 1], "Measuring");
     }
 
     /// Nothing is a script: every step is a program of the build, and ArduPilot is not started
     /// here (the runner asks the framework for it), so no step names a shell or `.sh`.
     #[test]
     fn no_step_is_a_shell_script() {
-        for step in steps(&root(), false) {
+        for step in steps(&root()) {
             let line = format!("{} {}", step.program, step.args.join(" "));
             assert!(!line.contains(".sh"), "{}: {line}", step.name);
             assert!(!["sh", "bash", "zsh"].contains(&step.program.as_str()), "{}", step.name);
@@ -305,7 +357,7 @@ mod tests {
     /// the sticks (`--direct`) while ArduPilot runs beside it.
     #[test]
     fn the_vtol_runs_are_the_two_ways_of_flying_it() {
-        let all = steps(&root(), true);
+        let all = steps(&root());
         let find = |n: &str| all.iter().find(|s| s.name == n).unwrap();
         let alone = find("the VTOL on its own");
         assert!(alone.args.contains(&"t1s-vtol".to_string()) && !alone.args.contains(&"--direct".to_string()));
@@ -315,11 +367,12 @@ mod tests {
         assert!(beside.args.contains(&"--direct".to_string()));
     }
 
-    /// Every suite has the same budget, and is killed a little after it, except the league and the
-    /// Towers commander app and the runs of the sim, which have the longer ones that LEAGUE_SECS, COMMAND_SECS and SIM_SECS explain.
+    /// Every suite has the same budget, and is killed a little after it, except the league, the
+    /// Towers commander app and the runs of the sim, which have the longer ones that LEAGUE_SECS,
+    /// COMMAND_SECS and SIM_SECS explain.
     #[test]
     fn every_suite_has_two_minutes_and_a_grace() {
-        for step in steps(&root(), false).iter().filter(|s| s.may_fail) {
+        for step in steps(&root()).iter().filter(|s| s.may_fail) {
             let secs = match step.name {
                 "the league" => LEAGUE_SECS,
                 "the Towers commander app" => COMMAND_SECS,
@@ -342,7 +395,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let why = missing_sitl(&dir, false).expect("nothing to fly the VTOL with");
-        assert!(why.contains("build_native.sh") && why.contains("--no-station"), "{why}");
+        assert!(why.contains("build_native.sh") && why.contains("--no-sitl"), "{why}");
         assert!(missing_sitl(&dir, true).is_none(), "Docker is enough");
         std::fs::create_dir_all(dir.join(".ardupilot/build/sitl/bin")).unwrap();
         std::fs::write(dir.join(".ardupilot/build/sitl/bin/arduplane"), "").unwrap();
@@ -352,7 +405,7 @@ mod tests {
 
     #[test]
     fn only_the_tests_may_fail() {
-        for step in steps(&root(), false) {
+        for step in steps(&root()) {
             let chore = step.name.starts_with("build ") || step.name == "the manual";
             assert_eq!(step.may_fail, !chore, "{}", step.name);
         }
@@ -360,7 +413,7 @@ mod tests {
 
     #[test]
     fn the_runners_write_their_results_where_the_manual_reads_them() {
-        for step in steps(&root(), false) {
+        for step in steps(&root()) {
             let writes = step.args.iter().any(|a| a == "/checkout/docs")
                 || step.env.iter().any(|(k, v)| k == "SIM001_DOCS" && v == "/checkout/docs");
             let is_runner = !step.name.starts_with("build ");
@@ -378,7 +431,9 @@ mod every_runner {
     #[test]
     fn every_acceptance_runner_of_the_repository_is_a_step() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
-        let all = steps(&root, false);
+        // `tasks docs` and `tasks console` between them.
+        let mut all = steps(&root);
+        all.extend(console_steps(&root, None));
         let line = |st: &Step| format!("{} {} {}", st.dir.display(), st.program, st.args.join(" "));
         let lines: Vec<String> = all.iter().map(line).collect();
         let runs = |what: &str| lines.iter().any(|l| l.contains(what));
@@ -394,7 +449,7 @@ mod every_runner {
                     let n = name(&path).unwrap();
                     assert!(
                         runs(&format!("-p {n} ")) || runs(&format!("-p {n}")),
-                        "{n}'s acceptance tests are not run by `tasks docs`"
+                        "{n}'s acceptance tests are not run by `tasks docs` or `tasks console`"
                     );
                 }
                 let main = path.join("src/main.rs");
