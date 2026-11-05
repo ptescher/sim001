@@ -218,7 +218,7 @@ impl Default for Rules {
             decay_time: 100.0,
             win_score: 600.0,
             tower_score: 1.0,
-            spire_score: 2.0,
+            spire_score: 1.5,
             duration: 600.0,
             jam_radius: 160.0,
             spire_jam_radius: 200.0,
@@ -937,7 +937,7 @@ mod tests {
         );
         let r = g.rules;
         assert_eq!([r.shadow(Kind::Fort), r.shadow(Kind::Spire), r.shadow(Kind::Depot)], [160.0, 200.0, 120.0]);
-        assert_eq!([r.points(Kind::Fort), r.points(Kind::Spire), r.points(Kind::Depot)], [1.0, 2.0, 1.0]);
+        assert_eq!([r.points(Kind::Fort), r.points(Kind::Spire), r.points(Kind::Depot)], [1.0, 1.5, 1.0]);
     }
 
     #[test]
@@ -1217,6 +1217,16 @@ mod tests {
         assert_eq!(g.towers[west].holder, Some(Team::Red));
         run(&mut g, 0.1);
         assert_eq!(g.towers[west].holder, None);
+    }
+
+    #[test]
+    fn the_spire_scores_one_and_a_half_points_a_second() {
+        let mut g = Game::new(Rules::default());
+        let centre = g.tower("centre");
+        g.towers[centre].holder = Some(Team::Blue);
+        g.towers[centre].control = 1.0;
+        run(&mut g, 10.0);
+        assert!((g.score[0] - 25.0).abs() < 1e-3, "home 10 and spire 15: {:?}", g.score);
     }
 
     #[test]
