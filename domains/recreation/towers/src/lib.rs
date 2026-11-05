@@ -199,6 +199,9 @@ pub struct Rules {
     pub spire_vision: f32,
     pub drone_vision: f32,
     pub base_vision: f32,
+    /// Where the towers stand.
+    #[serde(default)]
+    pub layout: map::LayoutKind,
 }
 
 impl Default for Rules {
@@ -240,6 +243,7 @@ impl Default for Rules {
             spire_vision: 250.0,
             drone_vision: 150.0,
             base_vision: 150.0,
+            layout: map::LayoutKind::Valley,
         }
     }
 }
@@ -435,7 +439,7 @@ pub struct Game {
 }
 
 impl Game {
-    /// The start: the five towers, each team holding its home tower, and every drone on the
+    /// The start: the layout's towers, each team holding its home tower, and every drone on the
     /// ground at its base.
     pub fn new(rules: Rules) -> Game {
         let map = Map::new(&rules);
@@ -447,13 +451,7 @@ impl Game {
             holder,
             contested: false,
         };
-        let towers = vec![
-            tower("Blue home", Kind::Fort, map.towers[0], Some(Team::Blue)),
-            tower("west", Kind::Depot, map.towers[1], None),
-            tower("centre", Kind::Spire, map.towers[2], None),
-            tower("east", Kind::Depot, map.towers[3], None),
-            tower("Red home", Kind::Fort, map.towers[4], Some(Team::Red)),
-        ];
+        let towers: Vec<Tower> = map.layout.towers.iter().map(|t| tower(&t.name, t.kind, t.at, t.holder)).collect();
         let drones: Vec<Drone> = Team::BOTH
             .into_iter()
             .flat_map(|team| {
