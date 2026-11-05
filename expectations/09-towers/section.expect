@@ -148,6 +148,8 @@ Vocabulary:
     Say: wait 45 seconds
   Event: the game runs for 20 seconds
     Say: wait 20 seconds
+  Event: the game runs for 25 seconds
+    Say: wait 25 seconds
   Event: the game runs for 1 minute
     Say: wait 1 minute
   Event: the Red scout flies into the fog for 10 seconds

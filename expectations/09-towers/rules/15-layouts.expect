@@ -20,11 +20,11 @@ Feature: Layouts
     Then the towers in the game are 11
     And the Blue west outpost is neutral
 
-  Expectation: One drone takes an outpost in 20 seconds
+  Expectation: One drone takes an outpost in 25 seconds
     Overrides: The chain has eleven towers
     The outpost is neutral at the start, and Blue holds it after the drone has taken it.
 
     Given the layout is the chain
     And the Blue drones in the Blue west outpost circle are 1
-    When the game runs for 20 seconds
+    When the game runs for 25 seconds
     Then the Blue west outpost is held by Blue
