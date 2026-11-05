@@ -363,10 +363,10 @@ impl Strategy for Claude {
 
         let tools = match self.role {
             Role::Tuner => {
-                "Read Glob Grep Write(.league/**) Bash(cargo run --release -p cognition_league:*) Bash(cargo build:*)"
+                "Read Glob Grep Edit(.league/**) Bash(cargo run --release -p cognition_league:*) Bash(cargo run --release -q -p cognition_league:*) Bash(cargo build:*)"
             }
             Role::Engineer => {
-                "Read Glob Grep Edit Write Bash(cargo test:*) Bash(cargo run --release -p cognition_league:*) Bash(cargo build:*) Bash(git diff:*) Bash(git status:*)"
+                "Read Glob Grep Edit Write Bash(cargo test:*) Bash(cargo run --release -p cognition_league:*) Bash(cargo run --release -q -p cognition_league:*) Bash(cargo build:*) Bash(git diff:*) Bash(git status:*)"
             }
         };
         let mut cmd = Command::new(&self.command);
