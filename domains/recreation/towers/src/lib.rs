@@ -45,8 +45,10 @@ pub enum Kind {
     Fort,
     /// The centre tower: the widest shadow, the longest sight and the most points.
     Spire,
-    /// A flank tower: the narrowest shadow.
+    /// A flank tower: a narrow shadow, and it recharges the drones.
     Depot,
+    /// A small tower on a lane of the chain, between two bigger ones: a shadow of 50 m.
+    Outpost,
 }
 
 /// A side.
@@ -168,6 +170,7 @@ pub struct Rules {
     pub jam_radius: f32,
     pub spire_jam_radius: f32,
     pub depot_jam_radius: f32,
+    pub outpost_jam_radius: f32,
     /// A drone in a radio shadow is in contact if a friend in contact is this near (m, across); 0 for
     /// no relay.
     pub mesh_range: f32,
@@ -199,6 +202,9 @@ pub struct Rules {
     pub spire_vision: f32,
     pub drone_vision: f32,
     pub base_vision: f32,
+    /// Where the towers stand.
+    #[serde(default)]
+    pub layout: map::LayoutKind,
 }
 
 impl Default for Rules {
@@ -218,11 +224,12 @@ impl Default for Rules {
             decay_time: 100.0,
             win_score: 600.0,
             tower_score: 1.0,
-            spire_score: 2.0,
+            spire_score: 1.5,
             duration: 600.0,
             jam_radius: 160.0,
             spire_jam_radius: 200.0,
             depot_jam_radius: 120.0,
+            outpost_jam_radius: 50.0,
             mesh_range: 70.0,
             mesh_hops: 3,
             link_timeout: 45.0,
@@ -240,6 +247,7 @@ impl Default for Rules {
             spire_vision: 250.0,
             drone_vision: 150.0,
             base_vision: 150.0,
+            layout: map::LayoutKind::Valley,
         }
     }
 }
@@ -291,6 +299,7 @@ impl Rules {
             Kind::Fort => self.jam_radius,
             Kind::Spire => self.spire_jam_radius,
             Kind::Depot => self.depot_jam_radius,
+            Kind::Outpost => self.outpost_jam_radius,
         }
     }
 
@@ -435,7 +444,7 @@ pub struct Game {
 }
 
 impl Game {
-    /// The start: the five towers, each team holding its home tower, and every drone on the
+    /// The start: the layout's towers, each team holding its home tower, and every drone on the
     /// ground at its base.
     pub fn new(rules: Rules) -> Game {
         let map = Map::new(&rules);
@@ -447,13 +456,7 @@ impl Game {
             holder,
             contested: false,
         };
-        let towers = vec![
-            tower("Blue home", Kind::Fort, map.towers[0], Some(Team::Blue)),
-            tower("west", Kind::Depot, map.towers[1], None),
-            tower("centre", Kind::Spire, map.towers[2], None),
-            tower("east", Kind::Depot, map.towers[3], None),
-            tower("Red home", Kind::Fort, map.towers[4], Some(Team::Red)),
-        ];
+        let towers: Vec<Tower> = map.layout.towers.iter().map(|t| tower(&t.name, t.kind, t.at, t.holder)).collect();
         let drones: Vec<Drone> = Team::BOTH
             .into_iter()
             .flat_map(|team| {
@@ -937,7 +940,7 @@ mod tests {
         );
         let r = g.rules;
         assert_eq!([r.shadow(Kind::Fort), r.shadow(Kind::Spire), r.shadow(Kind::Depot)], [160.0, 200.0, 120.0]);
-        assert_eq!([r.points(Kind::Fort), r.points(Kind::Spire), r.points(Kind::Depot)], [1.0, 2.0, 1.0]);
+        assert_eq!([r.points(Kind::Fort), r.points(Kind::Spire), r.points(Kind::Depot)], [1.0, 1.5, 1.0]);
     }
 
     #[test]
@@ -1217,6 +1220,16 @@ mod tests {
         assert_eq!(g.towers[west].holder, Some(Team::Red));
         run(&mut g, 0.1);
         assert_eq!(g.towers[west].holder, None);
+    }
+
+    #[test]
+    fn the_spire_scores_one_and_a_half_points_a_second() {
+        let mut g = Game::new(Rules::default());
+        let centre = g.tower("centre");
+        g.towers[centre].holder = Some(Team::Blue);
+        g.towers[centre].control = 1.0;
+        run(&mut g, 10.0);
+        assert!((g.score[0] - 25.0).abs() < 1e-3, "home 10 and spire 15: {:?}", g.score);
     }
 
     #[test]

@@ -15,7 +15,7 @@
 //! map is worked out from the rules alone, so that the referee, the server, the 3D view and the
 //! commander app all get the same map.
 
-use crate::Rules;
+use crate::{Kind, Rules, Team};
 use glam::Vec2;
 
 /// How wide a lane is, to each side of its middle (m).
@@ -106,11 +106,96 @@ pub struct Path {
     pub lane: Option<LaneName>,
 }
 
+/// A tower of a layout: its name, kind, place and who holds it at the start.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TowerSpec {
+    pub name: String,
+    pub kind: Kind,
+    pub at: Vec2,
+    pub holder: Option<Team>,
+}
+
+/// Where the towers stand and which lanes join them: the part of a map that differs between
+/// games. The lakes, the clearings, the forest and the mountains follow from it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Layout {
+    pub towers: Vec<TowerSpec>,
+    /// Each lane runs through towers, given by their number in `towers`, from home tower to home
+    /// tower. The roads from the bases to the home towers are not here: the map adds them.
+    pub lanes: Vec<(LaneName, Vec<usize>)>,
+}
+
+/// Which layout a game is played on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum LayoutKind {
+    /// Five towers: a home tower each, and a west, a centre and an east tower.
+    #[default]
+    Valley,
+    /// Eleven towers: the valley's five, and an outpost halfway along each lane on each side.
+    Chain,
+}
+
+impl Layout {
+    /// The layout that `rules` ask for.
+    pub fn of(rules: &Rules) -> Layout {
+        match rules.layout {
+            LayoutKind::Valley => Layout::valley(rules),
+            LayoutKind::Chain => Layout::chain(rules),
+        }
+    }
+
+    /// The chain: the valley's five towers, then an outpost halfway between a home tower and the
+    /// west, the centre and the east tower, first Blue's three, then Red's.
+    pub fn chain(rules: &Rules) -> Layout {
+        let mut layout = Layout::valley(rules);
+        let at = |k: usize| layout.towers[k].at;
+        let mut outposts = vec![];
+        for (home, side) in [(0, "Blue"), (4, "Red")] {
+            for (far, lane) in [(1, "west"), (2, "mid"), (3, "east")] {
+                outposts.push(TowerSpec {
+                    name: format!("{side} {lane} outpost"),
+                    kind: Kind::Outpost,
+                    at: (at(home) + at(far)) * 0.5,
+                    holder: None,
+                });
+            }
+        }
+        layout.towers.extend(outposts);
+        layout.lanes = vec![
+            (LaneName::West, vec![0, 5, 1, 8, 4]),
+            (LaneName::Mid, vec![0, 6, 2, 9, 4]),
+            (LaneName::East, vec![0, 7, 3, 10, 4]),
+        ];
+        layout
+    }
+
+    /// The valley: five towers, three lanes.
+    pub fn valley(rules: &Rules) -> Layout {
+        let (home, flank) = (rules.home_distance, rules.tower_distance);
+        let spec = |name: &str, kind, at, holder| TowerSpec { name: name.to_string(), kind, at, holder };
+        Layout {
+            towers: vec![
+                spec("Blue home", Kind::Fort, Vec2::new(-home, 0.0), Some(Team::Blue)),
+                spec("west", Kind::Depot, Vec2::new(45.0, -flank - 30.0), None),
+                spec("centre", Kind::Spire, Vec2::ZERO, None),
+                spec("east", Kind::Depot, Vec2::new(-35.0, flank - 30.0), None),
+                spec("Red home", Kind::Fort, Vec2::new(home, 0.0), Some(Team::Red)),
+            ],
+            lanes: vec![
+                (LaneName::West, vec![0, 1, 4]),
+                (LaneName::Mid, vec![0, 2, 4]),
+                (LaneName::East, vec![0, 3, 4]),
+            ],
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Map {
     pub field_radius: f32,
-    /// The towers: Blue home, west, centre, east, Red home.
-    pub towers: [Vec2; 5],
+    /// The towers' places, as the layout has them (the valley: Blue home, west, centre, east, Red home).
+    pub towers: Vec<Vec2>,
+    pub layout: Layout,
     pub bases: [Vec2; 2],
     pub lake: Circle,
     pub lanes: Vec<Lane>,
@@ -128,15 +213,8 @@ struct Graph {
 
 impl Map {
     pub fn new(rules: &Rules) -> Map {
-        let home = rules.home_distance;
-        let flank = rules.tower_distance;
-        let towers = [
-            Vec2::new(-home, 0.0),
-            Vec2::new(45.0, -flank - 30.0),
-            Vec2::ZERO,
-            Vec2::new(-35.0, flank - 30.0),
-            Vec2::new(home, 0.0),
-        ];
+        let layout = Layout::of(rules);
+        let towers: Vec<Vec2> = layout.towers.iter().map(|t| t.at).collect();
         let bases = [rules.base(crate::Team::Blue), rules.base(crate::Team::Red)];
         // The lake lies on the far side of the west lane from the field's centre: the lane runs
         // along its shore.
@@ -146,20 +224,24 @@ impl Map {
         let out = if out.dot(Vec2::ZERO - (a + b) * 0.5) > 0.0 { -out } else { out };
         let lake = Circle { at: (a + b) * 0.5 + out * (LAKE_RADIUS + 20.0), radius: LAKE_RADIUS };
         let lane = |name: LaneName, points: Vec<Vec2>| Lane { name, points };
-        let lanes = vec![
-            lane(LaneName::West, vec![towers[0], towers[1], towers[4]]),
-            lane(LaneName::Mid, vec![towers[0], towers[2], towers[4]]),
-            lane(LaneName::East, vec![towers[0], towers[3], towers[4]]),
-            lane(LaneName::Road, vec![bases[0], towers[0]]),
-            lane(LaneName::Road, vec![bases[1], towers[4]]),
-        ];
+        let mut lanes: Vec<Lane> = layout
+            .lanes
+            .iter()
+            .map(|(name, through)| lane(*name, through.iter().map(|&t| towers[t]).collect()))
+            .collect();
+        let homes: Vec<usize> = [Team::Blue, Team::Red]
+            .iter()
+            .map(|&t| layout.towers.iter().position(|s| s.holder == Some(t)).expect("a home tower"))
+            .collect();
+        lanes.push(lane(LaneName::Road, vec![bases[0], towers[homes[0]]]));
+        lanes.push(lane(LaneName::Road, vec![bases[1], towers[homes[1]]]));
         let clearings = towers
             .iter()
             .map(|&at| Circle { at, radius: TOWER_CLEARING })
             .chain(bases.iter().map(|&at| Circle { at, radius: BASE_CLEARING }))
             .collect();
         let graph = Graph::of(&lanes);
-        Map { field_radius: rules.field_radius, towers, bases, lake, lanes, clearings, graph }
+        Map { field_radius: rules.field_radius, towers, layout, bases, lake, lanes, clearings, graph }
     }
 
     /// Is `p` open ground: on a lane, in a clearing, or on the lake?
@@ -614,5 +696,55 @@ mod tests {
         let q = m.nearest_open(Vec2::new(-250.0, 90.0));
         assert!(m.open(q), "{q}");
         assert!(q.distance(Vec2::new(-250.0, 90.0)) < 70.0);
+    }
+
+    fn chain() -> Map {
+        Map::new(&Rules { layout: LayoutKind::Chain, ..Rules::default() })
+    }
+
+    #[test]
+    fn the_chain_is_the_valley_with_six_outposts_after_its_five_towers() {
+        let (valley, chain) = (Map::new(&Rules::default()), chain());
+        assert_eq!(chain.layout.towers.len(), 11);
+        assert_eq!(chain.layout.towers[..5], valley.layout.towers[..]);
+        assert!(chain.layout.towers[5..].iter().all(|t| t.kind == Kind::Outpost && t.holder.is_none()));
+        let names: Vec<_> = chain.layout.towers[5..].iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "Blue west outpost",
+                "Blue mid outpost",
+                "Blue east outpost",
+                "Red west outpost",
+                "Red mid outpost",
+                "Red east outpost"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_outpost_stands_halfway_along_its_lane_and_on_open_ground() {
+        let m = chain();
+        let (blue_home, red_home) = (m.towers[0], m.towers[4]);
+        for (k, far) in [(5, 1), (6, 2), (7, 3)] {
+            let blue = m.towers[k];
+            assert!(
+                (blue.distance(blue_home) - blue.distance(m.towers[far])).abs() < 1.0,
+                "{k}: halfway home to the tower"
+            );
+            assert!(m.open(blue), "{k}");
+            let red = m.towers[k + 3];
+            assert!((red.distance(red_home) - red.distance(m.towers[far])).abs() < 1.0, "{k}: halfway on Red's side");
+            assert!(m.open(red) && m.in_clearing(red));
+        }
+    }
+
+    #[test]
+    fn each_lane_of_the_chain_runs_through_its_outposts() {
+        let m = chain();
+        let west = m.lanes.iter().find(|l| l.name == LaneName::West).unwrap();
+        assert_eq!(west.points.len(), 5);
+        assert_eq!(west.points[1], m.towers[5]);
+        assert_eq!(west.points[3], m.towers[8]);
     }
 }

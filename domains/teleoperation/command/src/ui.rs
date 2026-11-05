@@ -919,8 +919,9 @@ fn paint_map(
         fill_rect(window, tx - 0.5, by - 1.0, 1.0, 7.0, c(WHITE));
         let kind = match t.kind {
             Kind::Fort => "FORT",
-            Kind::Spire => "SPIRE x2",
+            Kind::Spire => "SPIRE x1.5",
             Kind::Depot => "DEPOT",
+            Kind::Outpost => "OUTPOST",
         };
         let name = format!("{} {kind}", t.name.to_uppercase());
         let label = if t.seen { name } else { format!("{name} ({:.0} s)", t.age) };

@@ -4,7 +4,7 @@ Feature: Kinds of tower
 
   The two home towers are forts. A fort blocks the radio of the enemy 160 m round it. The centre
   tower is the spire. It blocks the radio 200 m round it, it sees 250 m when a team holds it,
-  and it gives two points each second. The west and the east tower are depots. A depot blocks
+  and it gives one and a half points each second. The west and the east tower are depots. A depot blocks
   the radio 120 m round it.
 
   Expectation: A fort blocks the radio 160 m round it

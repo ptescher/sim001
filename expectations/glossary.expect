@@ -435,10 +435,14 @@ Term: Fort
 
 Term: Spire
   In [[Towers]], the centre tower. It blocks the radio 200 m round it. A team that holds it sees
-  250 m round it. It gives two points each second.
+  250 m round it. It gives one and a half points each second.
 
 Term: Depot
   In [[Towers]], the west tower and the east tower. A depot blocks the radio 120 m round it.
+
+Term: Outpost
+  In [[Towers]], a small tower on a lane of the chain, between a home tower and the centre or a
+  flank tower. It gives one point each second. It blocks the radio of the enemy 50 m round it.
 
 Term: Battery
   In [[Towers]], the seconds that a drone can still fly. A flying drone uses 1 s each second, and

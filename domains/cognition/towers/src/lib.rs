@@ -9,11 +9,13 @@
 
 mod autonomy;
 mod edge;
+mod formation;
 
 pub use autonomy::{
     After, Autonomy, Comparison, Failsafe, Persist, Prepared, Surface, compare, compare_captains, compare_with,
 };
 pub use edge::{Edge, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
+pub use formation::{Formation, Post};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
@@ -352,9 +354,19 @@ impl Match {
     }
 }
 
+/// The rules the league plays by: the defaults, on the layout that `SIM001_LAYOUT` names
+/// (`chain`; anything else is the valley). A captain's own process reads the same variable.
+pub fn league_rules() -> Rules {
+    let layout = match std::env::var("SIM001_LAYOUT").as_deref() {
+        Ok("chain") => recreation_towers::map::LayoutKind::Chain,
+        _ => recreation_towers::map::LayoutKind::Valley,
+    };
+    Rules { layout, ..Rules::default() }
+}
+
 /// Plays one game: `blue` against `red`, on `seed`.
 pub fn play(blue: &mut dyn Captain, red: &mut dyn Captain, seed: u64) -> Result<TowersResult, String> {
-    play_with(Rules::default(), blue, red, seed)
+    play_with(league_rules(), blue, red, seed)
 }
 
 /// The same, with the rules of the game.
@@ -447,7 +459,7 @@ pub fn serve(input: impl BufRead, mut output: impl Write) -> Result<(), String> 
                     .ok()
                     .and_then(|a| CommanderTuning::from_array(&a))
                     .ok_or("a tuning out of bounds")?;
-                captain = Some(Commander::with_tuning(Rules::default(), tuning));
+                captain = Some(Commander::with_tuning(league_rules(), tuning));
                 "\"ok\"".to_string()
             }
             ToCaptain::View(view) => {

@@ -1,0 +1,30 @@
+Feature: Layouts
+  A game of Towers is played on a layout. The layout says where the towers stand and which lanes
+  join them. The valley has five towers. The chain has eleven: the five of the valley, and an
+  [[outpost]] halfway along each of the three lanes, on each side of the field. A team holds its
+  home tower at the start, and no team holds an outpost.
+
+  An outpost is a small tower. A drone takes it in the same way as any other tower: it circles
+  the tower until the control is at the end of the bar. An outpost gives one point each second.
+  Its radio shadow is only 50 m round it, so a drone can fly past it and stay in contact.
+
+  Expectation: The valley has five towers
+    Given the layout is the valley
+    Then the towers in the game are 5
+
+  Expectation: The chain has eleven towers
+    Overrides: The valley has five towers
+    The six new towers are outposts, three on each side of the field.
+
+    Given the layout is the chain
+    Then the towers in the game are 11
+    And the Blue west outpost is neutral
+
+  Expectation: One drone takes an outpost in 25 seconds
+    Overrides: The chain has eleven towers
+    The outpost is neutral at the start, and Blue holds it after the drone has taken it.
+
+    Given the layout is the chain
+    And the Blue drones in the Blue west outpost circle are 1
+    When the game runs for 25 seconds
+    Then the Blue west outpost is held by Blue

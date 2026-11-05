@@ -21,6 +21,7 @@ fn kind(k: Kind) -> &'static str {
         Kind::Fort => "fort",
         Kind::Spire => "spire",
         Kind::Depot => "depot",
+        Kind::Outpost => "outpost",
     }
 }
 

@@ -80,7 +80,7 @@ mod tests {
                 assert!(map.open_distance(at) > 0.0, "a tree on open ground at {at}");
             }
         }
-        for tower in map.towers {
+        for &tower in &map.towers {
             assert!(map.open(tower));
         }
     }

@@ -30,3 +30,120 @@ Reading it:
   anything to learn.
 - `EdgeObs` has no friends and no own class: "outnumbered" counts enemies only. A policy that
   compares the enemy's weight with its own side's in the circle needs both.
+
+## Step 1c: allocations of drones to towers (formations)
+
+The decision that matters is the captain's: which drone goes to which tower. A *formation* is a
+fixed allocation (a pure strategy): each drone flies to its post and presses on, and goes home to
+recharge when its battery is low. `cargo run --release -p cognition_towers --example formations 60`
+plays each pair on both sides of 60 seeds (120 games a cell). The cell is the row's mean score
+over the column's. Squad: three standard, a heavy, a light.
+
+| Row against column | commander | centre rush | wings | balanced | no centre | raid | turtle | heavy centre | mean |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| commander | - | +0.31 | +1.30 | −0.80 | +1.54 | −0.68 | +1.58 | +0.51 | +0.54 |
+| centre rush (all five at the centre) | −0.31 | - | +0.86 | −0.70 | +0.88 | +0.11 | +1.07 | +0.82 | +0.39 |
+| wings (2 west, 2 east, 1 centre) | −1.30 | −0.86 | - | −0.99 | −0.20 | −1.40 | +1.56 | −1.29 | −0.64 |
+| **balanced** (west, east, 3 at the centre) | +0.80 | +0.70 | +0.99 | - | +0.99 | +1.06 | +1.55 | +0.70 | **+0.97** |
+| no centre (both flanks only) | −1.54 | −0.88 | +0.20 | −0.99 | - | −1.42 | +1.56 | −1.29 | −0.62 |
+| raid (two at the enemy home) | +0.68 | −0.11 | +1.40 | −1.06 | +1.42 | - | +1.55 | +0.09 | +0.57 |
+| turtle (guards its home and the flanks) | −1.58 | −1.07 | −1.56 | −1.55 | −1.56 | −1.55 | - | −1.67 | −1.51 |
+| heavy centre | −0.51 | −0.82 | +1.29 | −0.70 | +1.29 | −0.09 | +1.67 | - | +0.30 |
+
+Reading it:
+
+- **There is no cycle: one allocation, balanced, beats every other**, and the more of the squad
+  that is at the centre, the better a team does (turtle and no centre are last). The spire is
+  worth two points a second, and the team that holds it is ahead for the whole game.
+- **"Both sides give up the centre" is not an equilibrium.** Against a team that goes to the
+  centre, a team with no centre loses by 0.9 to 1.5. For that trade to be a real choice, the
+  centre has to cost something, or pay less than it does now.
+- Numbers to try (next): the spire's points (2 a second), its shadow (200 m), a contest drain
+  that grows with the enemy weight there; each as a field in `Rules`, then this table again.
+  The target is no row that beats the rest, and some cycle between the rows.
+- These are pure strategies with no reaction. The default commander reacts (it defends, gives
+  up a lost tower) and still loses to balanced.
+
+## Step 1d: making the centre cost something
+
+The same round robin with the spire worth less (`formations 40 spire_score=X`; 80 games a cell).
+`beats every other` is a row that wins against each other row by at least 2 standard errors.
+
+| Spire points a second | Best row (mean) | Rows that beat every other | Cycles (a beats b beats c beats a) |
+| --- | --- | --- | --- |
+| 2 (now) | balanced (+0.97) | **1** (balanced) | none |
+| 1.5 | heavy centre (+0.72), raid (+0.69) | 0 | wings > balanced > raid > wings; no centre > balanced > raid > no centre |
+| 1.5, contest_drain 3 | commander (+0.68) | 0 | the same two, and heavy centre beats raid |
+| 1 | raid (+0.59), commander (+0.58), heavy centre (+0.58) | 0 | wings > balanced > raid > wings; no centre > balanced > raid > no centre |
+
+- **Making the spire worth 1.5 points a second is enough to end the dominance.** Rows beat each
+  other in cycles: a team that spreads to both flanks beats one that masses at the centre, the
+  mass beats a raid on the enemy home, and the raid beats the spread.
+- "centre rush" and "turtle" are last in every column: they are not strategies, only mistakes.
+  "no centre" now holds its own, which is the sacrifice of the centre on both sides.
+- `Rules::default()` is not changed: the specs and the commander's tuning say two points. Next:
+  set `spire_score` 1.5, regenerate the acceptance numbers, and re-tune the commander.
+
+## Step 2: layouts as data, and the chain (11 towers)
+
+`Rules::layout` picks the layout: `Valley` (five towers, as before: the allocation matrix is
+identical) or `Chain` (the valley's five, and an *outpost* halfway along each of the three lanes
+on each side: Blue west/mid/east, Red west/mid/east). An outpost is a new kind of tower: one
+point a second, no recharge, a radio shadow of 50 m (`outpost_jam_radius`). The halfway places
+are 215 m from a fort and 215 m from the centre, so an outpost's shadow clears the fort's (160 m)
+but overlaps the spire's (200 m) by a ring of 35 m. No smaller shadow fixes that on a 430 m lane,
+so the chain does not keep "no two shadows overlap" of the v2 plan.
+
+`cargo run --release -p cognition_towers --example formations 40 layout=1` (80 games a cell):
+
+| Row against column | commander | mass centre | balanced | own line | far line | raid | spread | snipe | no centre | mean |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| commander | - | +1.42 | +1.28 | +1.02 | +0.91 | +0.93 | +1.12 | +1.39 | +1.31 | **+1.17** |
+| mass centre (all five) | −1.42 | - | −0.78 | −1.12 | −0.97 | −0.56 | −0.96 | −1.33 | −1.27 | −1.05 |
+| balanced (west, east, three at the centre) | −1.28 | +0.78 | - | +0.80 | −0.46 | +0.28 | −0.60 | −0.21 | −1.17 | −0.23 |
+| own line (the three own-side outposts, two at the centre) | −1.02 | +1.12 | −0.80 | - | +1.31 | +1.21 | +0.25 | +1.35 | +1.12 | +0.57 |
+| far line (the three enemy-side outposts, two at the centre) | −0.91 | +0.97 | +0.46 | −1.31 | - | +0.69 | −0.80 | +1.22 | −0.43 | −0.01 |
+| raid (two at the enemy home) | −0.93 | +0.56 | −0.28 | −1.21 | −0.69 | - | −1.44 | +1.01 | −0.04 | −0.38 |
+| spread (own west and east outposts, the enemy's mid, centre, west) | −1.12 | +0.96 | +0.60 | −0.25 | +0.80 | +1.44 | - | +1.49 | +1.14 | +0.63 |
+| snipe (all five at the enemy-side outposts) | −1.39 | +1.33 | +0.21 | −1.35 | −1.22 | −1.01 | −1.49 | - | −1.08 | −0.75 |
+| no centre | −1.31 | +1.27 | +1.17 | −1.12 | +0.43 | +0.04 | −1.14 | +1.08 | - | +0.05 |
+
+Reading it:
+
+- **The fixed allocations cycle, none dominates.** A closed 3-cycle: balanced beats own line
+  (+0.80), own line beats far line (+1.31), far line beats balanced (+0.46). Mass centre and
+  snipe lose to nearly everything. Spread beats raid (+1.44), snipe (+1.49), no centre (+1.14)
+  and far line (+0.80), and loses only to the commander and, narrowly, to own line (−0.25).
+- **A reactive commander beats every fixed allocation** (+0.9 to +1.4). On the chain there are
+  enough towers that a team that holds what it takes and sends the next drone to the nearest
+  free tower out-scores any plan that does not react. The reaction is where the skill is.
+  Against the valley's five towers the default commander only broke even (+0.54 mean).
+- So the next question is not whether to add towers (it does what the plan wanted: no single
+  allocation wins) but whether a *captain* can beat the default commander. That is a job for the
+  captain league on the chain layout.
+
+## Step 3: the first captain that beats the commander on the chain
+
+`SIM001_LAYOUT=chain cognition_league run --game captain --strategies claude-tuner,claude-engineer
+--seeds 64` (one generation, $2.26 of Claude). The three numbers-only challengers were kept out
+(−0.05, −0.51, −0.54); the engineer's code change was promoted (+0.69, lower bound +0.52).
+
+The change (now in `commander.rs`, spec in `05-commander.expect`): **the heavy drone, which counts
+double at a tower, goes to the spire** when the team does not hold it and no drone is on it,
+instead of joining the nearest flank as a spare; and a drone recharges earlier when enemies are
+in its circle, at the contest drain's rate (without it the new rule lost 2.75 drones a game).
+
+Checked on 256 seeds that the league never saw (`judge`, challenger against the old build, both
+sides of each seed, 512 games):
+
+| Layout | Mean difference | Lower bound | Games won / lost | Points a game |
+| --- | --- | --- | --- | --- |
+| chain | **+0.754** | +0.698 | 409 / 102 (1 drawn) | 584 against 491 |
+| valley | −0.010 | −0.100 | 261 / 251 | 526 against 544 |
+
+- The idea is worth a lot on the chain (a team with five drones can use a double-weight drone
+  where it counts, and the spire is the one tower worth 1.5) and nothing on the valley, where
+  the default commander's flank spare did as well.
+- The tuner's numbers (never give up a contested tower) looked good on the seeds Claude tried
+  (+0.29) and lost on the league's: a pick among several tries on one set of seeds. The league's
+  fresh seeds are the check that catches it.
