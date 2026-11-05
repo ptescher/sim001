@@ -63,3 +63,23 @@ Reading it:
   The target is no row that beats the rest, and some cycle between the rows.
 - These are pure strategies with no reaction. The default commander reacts (it defends, gives
   up a lost tower) and still loses to balanced.
+
+## Step 1d: making the centre cost something
+
+The same round robin with the spire worth less (`formations 40 spire_score=X`; 80 games a cell).
+`beats every other` is a row that wins against each other row by at least 2 standard errors.
+
+| Spire points a second | Best row (mean) | Rows that beat every other | Cycles (a beats b beats c beats a) |
+| --- | --- | --- | --- |
+| 2 (now) | balanced (+0.97) | **1** (balanced) | none |
+| 1.5 | heavy centre (+0.72), raid (+0.69) | 0 | wings > balanced > raid > wings; no centre > balanced > raid > no centre |
+| 1.5, contest_drain 3 | commander (+0.68) | 0 | the same two, and heavy centre beats raid |
+| 1 | raid (+0.59), commander (+0.58), heavy centre (+0.58) | 0 | wings > balanced > raid > wings; no centre > balanced > raid > no centre |
+
+- **Making the spire worth 1.5 points a second is enough to end the dominance.** Rows beat each
+  other in cycles: a team that spreads to both flanks beats one that masses at the centre, the
+  mass beats a raid on the enemy home, and the raid beats the spread.
+- "centre rush" and "turtle" are last in every column: they are not strategies, only mistakes.
+  "no centre" now holds its own, which is the sacrifice of the centre on both sides.
+- `Rules::default()` is not changed: the specs and the commander's tuning say two points. Next:
+  set `spire_score` 1.5, regenerate the acceptance numbers, and re-tune the commander.
