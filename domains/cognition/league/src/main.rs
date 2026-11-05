@@ -6,6 +6,7 @@
 //! judge  --champion X --challenger Y [--seeds N] [--opponent-bin PROGRAM]
 //! run    [--generations N] [--strategies es,claude-tuner,claude-engineer] [--dir DIR] [--seeds N]
 //!        [--claude-minutes M]   (each Claude run's time, 30 unless given; past it, it is stopped)
+//!        [--claude-model NAME]  (`claude --model NAME` for each Claude run; the CLI's own default if not given)
 //! start  --champion X [--dir DIR]   (a new league: what was in DIR goes)
 //! status [--dir DIR]
 //! captain-seat                     (a captain on stdin and stdout, for the league to play)
@@ -97,9 +98,16 @@ fn main() {
             let claude_time = arg("--claude-minutes")
                 .map(|m| m.parse::<f64>().unwrap_or_else(|_| fail(format!("--claude-minutes {m}: not a number"))))
                 .map(|m| std::time::Duration::from_secs_f64(m * 60.0));
-            let claude = |c: Claude| match claude_time {
-                Some(t) => c.with_time(t),
-                None => c,
+            let claude_model = arg("--claude-model");
+            let claude = |c: Claude| {
+                let c = match claude_time {
+                    Some(t) => c.with_time(t),
+                    None => c,
+                };
+                match &claude_model {
+                    Some(m) => c.with_model(m),
+                    None => c,
+                }
             };
             let mut strategies: Vec<Box<dyn Strategy>> = names
                 .split(',')

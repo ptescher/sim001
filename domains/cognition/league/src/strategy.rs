@@ -283,6 +283,11 @@ impl Claude {
         Claude { time, ..self }
     }
 
+    /// Runs `claude --model NAME`.
+    pub fn with_model(self, name: &str) -> Claude {
+        Claude { model: Some(name.to_string()), ..self }
+    }
+
     /// The prompt, with the generation's facts filled in.
     fn prompt(&self, ctx: &Context, wt: &Path) -> String {
         let template = ctx.contest.prompt(self.role);
