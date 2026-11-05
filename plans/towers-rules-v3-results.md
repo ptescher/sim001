@@ -147,3 +147,43 @@ sides of each seed, 512 games):
 - The tuner's numbers (never give up a contested tower) looked good on the seeds Claude tried
   (+0.29) and lost on the league's: a pick among several tries on one set of seeds. The league's
   fresh seeds are the check that catches it.
+
+## Step 5: a belief about where the enemy is (`recreation_towers::Belief`)
+
+A particle filter: 128 guesses for each enemy drone. Each guess flies to a tower (those the enemy
+does not hold count double), circles it while it is unheld, and goes on with a chance of 0.01 a
+second once the team holds it. A drone the team sees collapses its cloud onto it. A place that the
+team looks at (its linked drones 150 m, its held towers 200 or 250 m, its base 150 m) and sees no
+drone in loses its guesses; if all the guesses are in such places the cloud starts again on the
+ring that the drone can have reached from its last sighting. The unit tests were written first
+(they failed against stubs); three expectations in `16-belief.expect`.
+
+`cargo run --release -p cognition_towers --example belief 40 [layout=1]`: in games of the default
+commanders, each second, for each Red drone in the air: how far Blue's belief (its average) and
+Blue's last sighting are from it, and how much of the belief is within 100 m of the drone (a
+guess that knows nothing puts 3 % there).
+
+| Chain, 40 games | Samples | Belief error | Last-seen error | Belief within 100 m | Last-seen within 100 m |
+| --- | --- | --- | --- | --- | --- |
+| seen now | 10645 | 1 m | 0 m | 100 % | 100 % |
+| unseen 0 to 10 s | 3155 | **41 m** | 64 m | 86 % | 82 % |
+| unseen 10 to 30 s | 3230 | **128 m** | 157 m | 49 % | 42 % |
+| unseen 30 s or more | 1790 | 182 m | **145 m** | 38 % | **47 %** |
+| never seen | 9049 | **158 m** | 291 m | 21 % | 15 % |
+
+| Valley, 40 games | Samples | Belief error | Last-seen error | Belief within 100 m | Last-seen within 100 m |
+| --- | --- | --- | --- | --- | --- |
+| unseen 0 to 10 s | 7722 | **40 m** | 66 m | 86 % | 83 % |
+| unseen 10 to 30 s | 10469 | **123 m** | 178 m | 57 % | 37 % |
+| unseen 30 s or more | 14452 | **217 m** | 287 m | 38 % | 22 % |
+| never seen | 6074 | **141 m** | 251 m | 19 % | 20 % |
+
+- The belief beats "stay where last seen" in every row but one. The exception is the chain, 30 s
+  or more out of sight, where the default commander's drones mostly stay at their tower; the
+  belief puts 8 points less on it.
+- The first model (a drone keeps flying between towers) lost to last-seen after 10 s: the real
+  drones are at a tower, not on the way. The setting 0.01 for the chance of leaving a held tower was
+  chosen by running the example at 0.3, 0.1, 0.03, 0.01 and 0 (0.01 and 0 were best and nearly
+  the same); it is a fit to the default commander's play, and a captain that plays differently
+  needs a different motion model.
+- The belief is not used by the commander yet. Next: a captain that looks ahead with it.

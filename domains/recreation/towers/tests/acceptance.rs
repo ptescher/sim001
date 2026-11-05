@@ -10,7 +10,7 @@ use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
 use recreation_towers::{
-    Advice, AdviceKind, Advisor, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase, Rules,
+    Advice, AdviceKind, Advisor, Belief, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase, Rules,
     Standing, Team,
 };
 use std::path::Path;
@@ -39,6 +39,9 @@ struct World {
     plan: Option<Plan>,
     /// What the first Blue drone was told: its order, and its standing order.
     told: Instruction,
+    /// What Blue believes about where the Red drones are, and the time it was last updated.
+    belief: Belief,
+    belief_at: f32,
 }
 
 impl World {
@@ -53,6 +56,8 @@ impl World {
             scout_place: None,
             plan: None,
             told: Instruction::default(),
+            belief: Belief::new(rules, Team::Blue),
+            belief_at: 0.0,
         }
     }
 
@@ -76,6 +81,10 @@ impl World {
         let blue = self.game.drone(Team::Blue, 0);
         for _ in 0..(secs / DT).round() as usize {
             self.game.step(DT);
+            if self.game.time >= self.belief_at {
+                self.belief_at = self.game.time + 1.0;
+                self.belief.update(&self.game.view(Team::Blue));
+            }
             self.told.tick(
                 self.game.silent[blue],
                 self.game.rules.link_timeout,
@@ -83,6 +92,13 @@ impl World {
                 self.game.rules.bingo,
             );
         }
+    }
+
+    /// Blue's belief, brought up to date with the map now.
+    fn believed(&self) -> Belief {
+        let mut b = self.belief.clone();
+        b.update(&self.game.view(Team::Blue));
+        b
     }
 
     /// The advisor looks at the Blue map.
@@ -643,6 +659,11 @@ fn bindings() -> Bindings<World> {
         })
         .arrange("the Blue drones in the Blue west outpost circle", move |w, v| {
             w.in_circle(Team::Blue, "Blue west outpost", count(v), true)
+        })
+        .observe("the spread of the Blue belief of the Red scout", |w| w.believed().spread(SCOUT).round() as f64)
+        .observe("the chance on the Blue belief of the Red scout near the first Blue drone", |w| {
+            let blue = w.game.drones[w.game.drone(Team::Blue, 0)].at;
+            (100.0 * w.believed().chance_within(SCOUT, blue, w.game.rules.drone_vision)).round() as f64
         })
         .observe("the batteries", |w| if w.game.rules.standard_battery > 0.0 { "on" } else { "off" })
         .arrange("the batteries", |w, v| {

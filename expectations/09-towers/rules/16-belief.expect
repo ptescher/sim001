@@ -1,0 +1,30 @@
+Feature: What a team believes about the enemy
+  A team sees an enemy drone only near its own drones, its towers and its base. For the rest of the
+  time it has the place where it last saw the drone, and a guess. The guess is a cloud of
+  possible places. A drone that the team does not see flies on to a tower, as an enemy drone
+  does, and the cloud spreads out. The cloud has the same chance in each of its places, so a
+  commander can ask how likely it is that an enemy drone is near a tower.
+
+  A place that the team looks at, and sees no drone in, is not a place for the drone. The
+  guesses that were in the place go. Thus the team can tell where a drone is not.
+
+  Expectation: A drone that the team sees is where the team sees it
+    Given the Red scout is near a Blue drone
+    Then the spread of the Blue belief of the Red scout is at most 20 m
+
+  Expectation: The team is less sure of a drone that it cannot see
+    Overrides: A drone that the team sees is where the team sees it
+    The Red scout flies away from the Blue drone. The Blue drone does not see it for 10 s.
+
+    Given the Red scout is near a Blue drone
+    When the Red scout flies into the fog for 10 seconds
+    Then the spread of the Blue belief of the Red scout is at least 40 m
+
+  Expectation: Where the team looks and sees no drone, the drone is not believed to be
+    Overrides: The team is less sure of a drone that it cannot see
+    The first Blue drone looks 150 m round it. It does not see the Red scout, so the Red scout
+    is not there.
+
+    Given the Red scout is near a Blue drone
+    When the Red scout flies into the fog for 10 seconds
+    Then the chance on the Blue belief of the Red scout near the first Blue drone is at most 5 %
