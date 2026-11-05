@@ -49,7 +49,7 @@ fn main() {
     });
     let mut driver = driver::IosDriver::new(bridge, CONTROL_PORT);
     // Screenshots go in this platform's tree of the manual.
-    let opts = RunOptions { docs_dir: docs.as_ref().map(|d| acceptance.tree(d)), patience: 200 };
+    let opts = RunOptions { docs_dir: docs.as_ref().map(|d| acceptance.tree(d)), patience: 200, ..Default::default() };
     let mut report = expectation_story::Report::default();
     for plan in &acceptance.plans {
         let began = Instant::now();

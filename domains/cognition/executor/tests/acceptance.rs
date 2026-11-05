@@ -49,7 +49,7 @@ fn limits(fence_radius: f32, separation: f32) -> Limits {
         pitch_min: -25f32.to_radians(),
         // AIRSPEED_MIN 11 + AGENT_ASPD_MRG 2
         airspeed_min: 13.0,
-        airspeed_cruise: 15.0,
+        airspeed_cruise: 18.0,
         airspeed_max: 22.0,
         separation,
         grace: 0.0,
@@ -242,7 +242,7 @@ impl World {
             "a dive at the ground" => Plane::new(n, e, 16.0, 0.0, 22.0),
             "a steep climb" => Plane::new(n, e, 56.0, 0.0, 24.0),
             "a slow climb" => Plane::new(n, e, 22.0, 0.0, 10.0),
-            "a run at the fence" => Plane::new(n + 50.0, e, 30.0, 0.0, 15.0),
+            "a run at the fence" => Plane::new(n + 40.0, e, 30.0, 0.0, 15.0),
             _ => Plane::new(n, e, 30.0, 0.0, 15.0),
         };
         p.pitch = match self.start.as_str() {
@@ -351,19 +351,20 @@ impl World {
         };
         self.reply = "accepted";
         let plan = decoded.to_plan(HOME.0, HOME.1);
-        let new = self.plan.map(|p| p.id) != Some(plan.id);
-        self.plan = Some(plan);
-        if new {
-            self.point = match decoded.primitive {
-                Primitive::Goto | Primitive::Orbit | Primitive::Band => Some([plan.point[0], plan.point[1]]),
-                _ => None,
-            };
-            self.loiter_pending = decoded.primitive == Primitive::Loiter;
-            self.closest_to_point = f32::MAX;
-            self.samples.clear();
-            self.trail.clear();
-            self.other_trail.clear();
+        // a repeated id is not a new plan: the plane keeps the one it has
+        if self.plan.map(|p| p.id) == Some(plan.id) {
+            return;
         }
+        self.plan = Some(plan);
+        self.point = match decoded.primitive {
+            Primitive::Goto | Primitive::Orbit | Primitive::Band => Some([plan.point[0], plan.point[1]]),
+            _ => None,
+        };
+        self.loiter_pending = decoded.primitive == Primitive::Loiter;
+        self.closest_to_point = f32::MAX;
+        self.samples.clear();
+        self.trail.clear();
+        self.other_trail.clear();
     }
 
     /// A standing plan as the console sends it: `standing PRIMITIVE NORTH EAST ALT RADIUS AFTER`,
@@ -815,21 +816,6 @@ fn driver() -> Windowless {
     Windowless(bindings(), false)
 }
 
-/// Tests that fail because the system does not do what the spec says yet. Each is a bug to fix;
-/// remove it from here when it passes.
-///
-/// - «A repeated plan id changes nothing»: `ModeAgent::handle_plan` copies every accepted plan
-///   over the one it holds, so AG_PRIM reports the primitive of a repeated id although the
-///   executor (rightly) goes on flying the first plan. `cognition_plan::status_names::PRIMITIVE`
-///   says AG_PRIM is the primitive being flown.
-///
-/// - «The envelope leaves a safe plan alone»: with `ardupilot/t1s.parm` the cruise airspeed
-///   (`AIRSPEED_CRUISE` 15) is the edge of the executor's stall margin (`AIRSPEED_MIN` 11 +
-///   `AGENT_ASPD_MRG` 2 + `safety::STALL_MARGIN` 2), so the stall rule changes the demand on about
-///   one step in eight of a calm orbit. With a cruise of 18 m/s it never does. The fix is in the
-///   tuning (the parameters or the margin), not the spec.
-const KNOWN_FAILURES: &[&str] = &["A repeated plan id changes nothing", "The envelope leaves a safe plan alone"];
-
 fn suite() -> Acceptance {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
     Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage()
@@ -854,19 +840,12 @@ fn every_test_of_the_section_passes_with_no_window() {
     println!("{}", report.failures(&a.suite, &a.plans));
     let passed = ran.iter().filter(|(_, r)| r.status == Status::Passed).count();
     assert!(passed >= 15, "only {passed} tests of the section ran and passed");
-    let known = |title: &str| KNOWN_FAILURES.iter().any(|k| title.contains(k));
     let bad: Vec<_> = ran
         .iter()
-        .filter(|(p, r)| r.status == Status::Failed && !known(&p.title))
+        .filter(|(_, r)| r.status == Status::Failed)
         .map(|(p, r)| format!("{}: {:?}", p.title, r.status))
         .collect();
     assert!(bad.is_empty(), "{}\n{}", bad.join("\n"), report.failures(&a.suite, &a.plans));
-    let fixed: Vec<_> = ran
-        .iter()
-        .filter(|(p, r)| known(&p.title) && r.status == Status::Passed)
-        .map(|(p, _)| p.title.clone())
-        .collect();
-    assert!(fixed.is_empty(), "these pass now; take them out of KNOWN_FAILURES: {fixed:?}");
 }
 
 /// The same, with a top view of the flight at each step. With SIM001_DOCS=DIR the results and

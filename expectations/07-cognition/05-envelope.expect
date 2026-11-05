@@ -28,11 +28,9 @@ Feature: What the envelope prevents
     rise of AG_ENV shows a problem. A ground control agent that the envelope must often
     correct flies too near the limits.
 
-    The rule below is what the plane must do. With the parameters of `ardupilot/t1s.parm`, it
-    does not do it yet. Their cruise airspeed, 15 m/s, is at the edge of the stall margin. Thus
-    the envelope changes the throttle and the pitch on about one step in three. AG_ENV goes up
-    by hundreds each minute, also on a safe orbit. With a cruise airspeed of 18 m/s, AG_ENV
-    stays the same.
+    The cruise airspeed of `ardupilot/t1s.parm`, 18 m/s, is well over the stall margin. At
+    15 m/s it was at the edge of it: the envelope changed the throttle and the pitch on about
+    one step in three, and AG_ENV went up by hundreds each minute, also on a safe orbit.
 
     Given the reported primitive is orbit
     When the plane flies on for 10 minutes
@@ -42,7 +40,8 @@ Feature: What the envelope prevents
     The envelope looks ahead. If a turn back that starts now only just stays inside the fence,
     the envelope starts the turn at full bank. It allows for the wind.
 
-    Given the start is a run at the fence
+    Given the flight mode of the plane is AGENT
+    And the start is a run at the fence
     And the other aircraft is far away
     When the plane flies on for 30 seconds
     Then the farthest distance from the arena centre is at most 85 m
@@ -52,7 +51,8 @@ Feature: What the envelope prevents
     Near the floor, the envelope lifts the nose and opens the throttle. Below the floor, it
     also makes the bank smaller, and AG_FALL shows a [[recovery]].
 
-    Given the start is a dive at the ground
+    Given the flight mode of the plane is AGENT
+    And the start is a dive at the ground
     And the other aircraft is far away
     When the plane flies on for 30 seconds
     Then the lowest height of the flight is above 12 m

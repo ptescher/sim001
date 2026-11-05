@@ -10,7 +10,8 @@ Feature: Other aircraft and bad data
     a dive, or two of them. Of two planes in conflict, the upper one climbs and the lower one
     dives.
 
-    Given the other aircraft is across your path
+    Given the flight mode of the plane is AGENT
+    And the other aircraft is across your path
     When the plane flies on for 30 seconds
     Then the closest distance to the other aircraft is above 4 m
 
@@ -20,6 +21,7 @@ Feature: Other aircraft and bad data
     happens if the EKF of ArduPilot loses the position of the plane. The plane ignores a bad track, and it
     refuses a bad plan.
 
+    Given the flight mode of the plane is AGENT
     When the plane loses its position estimate
     Then the reported fallback is bad input
     And the throttle of the plane is the pilot's

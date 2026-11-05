@@ -89,7 +89,10 @@ impl Write for Line {
 /// CRSF runs at 420 000 baud.
 pub const BAUD: u32 = 420_000;
 
-#[cfg(target_os = "macos")]
+/// The line in raw mode (no echo, no line editing, no CR/NL translation: CRSF is binary) and
+/// non-blocking, as the loop that reads it expects. On macOS the speed is set too; elsewhere the
+/// device keeps the speed it has (a pseudo-terminal has none).
+#[cfg(unix)]
 fn open_device(path: &str) -> std::io::Result<Line> {
     use std::os::fd::AsRawFd;
     use std::os::unix::fs::OpenOptionsExt;
@@ -99,7 +102,7 @@ fn open_device(path: &str) -> std::io::Result<Line> {
         .custom_flags(libc::O_NOCTTY | libc::O_NONBLOCK)
         .open(path)?;
     let fd = f.as_raw_fd();
-    // SAFETY: fd is open; termios is plain data; IOSSIOSPEED takes a pointer to a speed_t.
+    // SAFETY: fd is open; termios is plain data.
     unsafe {
         let mut t: libc::termios = std::mem::zeroed();
         if libc::tcgetattr(fd, &mut t) != 0 {
@@ -112,17 +115,16 @@ fn open_device(path: &str) -> std::io::Result<Line> {
         if libc::tcsetattr(fd, libc::TCSANOW, &t) != 0 {
             return Err(std::io::Error::last_os_error());
         }
+    }
+    #[cfg(target_os = "macos")]
+    // SAFETY: fd is open; IOSSIOSPEED takes a pointer to a speed_t.
+    unsafe {
         const IOSSIOSPEED: libc::c_ulong = 0x8004_5402;
         let speed: libc::speed_t = BAUD as libc::speed_t;
         // A pseudo-terminal has no speed to set: ignore the failure.
         let _ = libc::ioctl(fd, IOSSIOSPEED, &speed);
     }
     Ok(Line::Device(f))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn open_device(path: &str) -> std::io::Result<Line> {
-    Ok(Line::Device(std::fs::OpenOptions::new().read(true).write(true).open(path)?))
 }
 
 #[cfg(not(unix))]
@@ -526,6 +528,7 @@ mod tests {
         let mut channels = [1500u16; 16];
         channels[0] = 1900;
         let (mut framer, mut seen, mut carried) = (crsf::Framer::default(), vec![], vec![]);
+        let mut heard = false;
         let end = Instant::now() + Duration::from_secs(4);
         let mut buf = [0u8; 4096];
         while Instant::now() < end {
@@ -556,6 +559,11 @@ mod tests {
             if let Ok(n) = ground_station.read(&mut got)
                 && got[..n].windows(16).any(|w| w == b"telemetry for th")
             {
+                heard = true;
+            }
+            // The command shares the radio's thin MAVLink allowance (1000 bytes a second), so it can
+            // come down a few ticks after the telemetry went up: wait for both.
+            if heard && carried.len() >= b"a command from the ground station".len() {
                 assert!(seen.contains(&crsf::TYPE_ATTITUDE), "attitude came down the cable: {seen:?}");
                 assert!(seen.contains(&crsf::TYPE_BATTERY), "battery came down the cable");
                 assert_eq!(
@@ -566,7 +574,7 @@ mod tests {
                 return;
             }
         }
-        panic!("the radio's telemetry for the ground station never came out (seen {seen:?}, carried {carried:?})");
+        panic!("the ground station heard the telemetry: {heard}; seen {seen:?}, carried {carried:?}");
     }
 
     /// computer gives them to ArduPilot as radio channels, ArduPilot's MAVLink comes back down the
@@ -583,7 +591,11 @@ mod tests {
         let ap = TcpListener::bind("127.0.0.1:0").unwrap();
         let ap_addr = ap.local_addr().unwrap().to_string();
         let received = Arc::new(Mutex::new(vec![]));
-        let hello: Vec<u8> = (0..100u8).collect();
+        // One whole MAVLink 2 message (ATTITUDE, 88 bytes of payload): the flight computer passes
+        // on whole messages only, never a stream of bytes cut anywhere.
+        let mut hello = vec![0xFD, 88, 0, 0, 0, 1, 1, 30, 0, 0];
+        hello.extend((0..88u8).map(|b| b + 1));
+        hello.extend([0, 0]);
         {
             let (received, hello) = (received.clone(), hello.clone());
             std::thread::spawn(move || {

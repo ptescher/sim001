@@ -16,13 +16,13 @@ Feature: Flying to a point and round it
 
   Expectation: Go to flies over the point, then circles it
     The plane flies straight to the point. When it is over the point, it circles the point at
-    the [[loiter]] radius, about 35 m for the T1-S. It holds the height of the plan.
+    the [[loiter]] radius, about 49 m for the T1-S. It holds the height of the plan.
 
     Given the reported primitive is go to
     And the time to live of the plan is 600 s
     When the plane flies on for 2 minutes
     Then the closest approach to the point is at most 10 m
-    And the greatest distance from the point in the last minute is at most 45 m
+    And the greatest distance from the point in the last minute is at most 50 m
     And the lowest height in the last minute is at least 38 m
     And the highest height in the last minute is at most 42 m
 
@@ -78,5 +78,5 @@ Feature: Flying to a point and round it
 
     Given the reported primitive is loiter
     When the plane flies on for 2 minutes
-    Then the least distance from the point in the last minute is at least 25 m
-    And the greatest distance from the point in the last minute is at most 45 m
+    Then the least distance from the point in the last minute is at least 40 m
+    And the greatest distance from the point in the last minute is at most 50 m

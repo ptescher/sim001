@@ -32,7 +32,7 @@ FLTMODE6 12
 # (AIRSPEED_MIN/MAX replaced ARSPD_FBW_MIN/MAX in ArduPilot 4.5; the old names are ignored.)
 AIRSPEED_MIN 11
 AIRSPEED_MAX 22
-AIRSPEED_CRUISE 15
+AIRSPEED_CRUISE 18
 # Note: in AUTO, holding the throttle stick above half raises the target airspeed toward
 # AIRSPEED_MAX (THROTTLE_NUDGE). Set THROTTLE_NUDGE 0 to have AUTO ignore the stick.
 TRIM_THROTTLE 50

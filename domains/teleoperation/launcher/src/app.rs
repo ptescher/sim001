@@ -566,7 +566,7 @@ impl Launcher {
                                 this.run(
                                     "Tests and docs",
                                     "cargo",
-                                    ["run", "--release", "-p", "sim001_tasks", "--", "docs", "--no-station"].map(String::from).to_vec(),
+                                    ["run", "--release", "-p", "sim001_tasks", "--", "docs", "--no-sitl"].map(String::from).to_vec(),
                                     layout().home.clone(),
                                 );
                                 cx.notify();

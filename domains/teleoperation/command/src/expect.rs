@@ -73,6 +73,7 @@ const START: &[(&str, &str)] = &[
 
 const EVENTS: &[&str] = &[
     "the commander joins the game",
+    "the commander waits for the cameras",
     "the commander selects the first Blue drone",
     "the commander sends the selected drone to the west tower",
     "the commander holds the selected drone",
@@ -403,6 +404,8 @@ impl Driver for AppDriver {
         self.note(format!("perform: {}", event.text));
         match event.text.to_lowercase().as_str() {
             "the commander joins the game" => self.seated(),
+            // The check that follows waits for the pictures.
+            "the commander waits for the cameras" => Ok(()),
             "the commander selects the first blue drone" => self.click_button("drone-0"),
             "the commander sends the selected drone to the west tower" => self.click_tower("west"),
             "the commander holds the selected drone" => self.click_button("hold"),

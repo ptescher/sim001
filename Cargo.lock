@@ -2943,6 +2943,7 @@ dependencies = [
  "expectation_model",
  "expectation_story",
  "fastrand 2.5.0",
+ "libc",
  "recreation_towers",
  "serde",
  "serde_json",
@@ -3945,7 +3946,7 @@ dependencies = [
 [[package]]
 name = "expectation_cli"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 dependencies = [
  "expectation_docs",
  "expectation_graph",
@@ -3957,7 +3958,7 @@ dependencies = [
 [[package]]
 name = "expectation_docs"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 dependencies = [
  "expectation_graph",
  "expectation_model",
@@ -3968,7 +3969,7 @@ dependencies = [
 [[package]]
 name = "expectation_graph"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 dependencies = [
  "expectation_model",
  "expectation_theme",
@@ -3977,7 +3978,7 @@ dependencies = [
 [[package]]
 name = "expectation_harness"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 dependencies = [
  "expectation_docs",
  "expectation_graph",
@@ -3990,7 +3991,7 @@ dependencies = [
 [[package]]
 name = "expectation_language"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 dependencies = [
  "expectation_model",
 ]
@@ -3998,17 +3999,17 @@ dependencies = [
 [[package]]
 name = "expectation_model"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 
 [[package]]
 name = "expectation_service"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 
 [[package]]
 name = "expectation_story"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 dependencies = [
  "expectation_graph",
  "expectation_model",
@@ -4017,7 +4018,7 @@ dependencies = [
 [[package]]
 name = "expectation_theme"
 version = "0.1.0"
-source = "git+https://github.com/ptescher/expectation#e3e38c2c850e49623bc3d37de27d5bc408bd60e1"
+source = "git+https://github.com/ptescher/expectation#99017585e368958c5481b780469964c8ca7ac604"
 
 [[package]]
 name = "exr"

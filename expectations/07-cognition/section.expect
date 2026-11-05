@@ -57,7 +57,7 @@ Vocabulary:
     Shows: a dive at the ground: the plane dives at 22 m/s and 34 degrees, 16 m over the arena centre
     Shows: a steep climb: the plane climbs at 24 m/s and 29 degrees, 56 m over the arena centre
     Shows: a slow climb: the plane climbs at 10 m/s and 23 degrees, 22 m over the arena centre
-    Shows: a run at the fence: the plane flies north at 15 m/s, 30 m high and 50 m north of the arena centre
+    Shows: a run at the fence: the plane flies north at 15 m/s, 30 m high and 40 m north of the arena centre
   State: the other aircraft is far away | round the arena | after your plane | across your path
     Shows: far away: no other aircraft is near
     Shows: round the arena: the other aircraft circles the arena centre at 16 m/s and 35 m, 40 m from the centre
@@ -113,9 +113,7 @@ Vocabulary:
     Shows: at most 10 m: the plane flies over the point, within 10 m of it
   State: the least distance from the point in the last minute is 0..5000 m
     Shows: at least 40 m: in the last minute, the plane is always at least 40 m from the point
-    Shows: at least 25 m: in the last minute, the plane is always at least 25 m from the point
   State: the greatest distance from the point in the last minute is 0..5000 m
-    Shows: at most 45 m: in the last minute, the plane stays within 45 m of the point
     Shows: at most 50 m: in the last minute, the plane stays within 50 m of the point
   State: the lowest height in the last minute is 0..500 m
     Shows: at least 34 m: in the last minute, the plane is always at least 34 m above home

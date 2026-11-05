@@ -2,8 +2,7 @@
 # operator sees it. Modelled on Mission Planner's planning docs (ardupilot.org/planner):
 # where the console does something already, these say what it does; elsewhere they say what
 # it should do. The console's driver (domains/teleoperation/console/src/expect.rs, `--station --expect`) clicks the real
-# console; tests that need the mission file, the terrain check, the survey grid, measuring or
-# the sim's window aren't supported yet.
+# console; tests that need the sim's window (calibrating the radio with F2) aren't supported yet.
 
 Section: Ground control station
   The ground station flies the T1-S VTOL, the default plane of the sim, through [[ArduPilot]].
@@ -110,10 +109,15 @@ Vocabulary:
   Event: the operator switches to AUTO anyway
     Say: press AUTO. The button shows AUTO: NO MISSION? for four seconds. In that time, press it again
   Event: the operator saves the plan to a file
+    Say: press SAVE. The console writes the plan to `mission.wpl`, in the format of Mission Planner's Save WP File
   Event: the operator loads the plan from the file
+    Say: press LOAD. The plan becomes the one in `mission.wpl`. With no file, nothing changes
   Event: the operator checks the heights against the terrain
+    Say: press CHECK HT. Each waypoint that is less than 30 m above the ground below it goes up to 30 m above it
   Event: the operator draws a survey grid
+    Say: press GRID, click the corners of the area on the map, and press FILL GRID. The lines of the grid run along the first side that you drew and are 40 m apart
   Event: the operator measures between two points
+    Say: press MEASURE and click the two points on the map
   Event: the pilot throws the plane in the sim
     Say: click the sim window. Then press Space to throw the plane
   Event: the plane reaches a waypoint
