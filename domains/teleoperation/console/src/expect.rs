@@ -121,6 +121,10 @@ enum Act {
     Measure,
     /// GRID, a click at each of the four corners of an area, and FILL GRID.
     Survey,
+    /// A right-click on the battlefield, with Shift or not.
+    Battlefield { shift: bool },
+    /// Wait for the sim's picture of the battlefield.
+    WaitBattlefield,
 }
 
 const EVENTS: &[(&str, Act)] = &[
@@ -172,6 +176,10 @@ const EVENTS: &[(&str, Act)] = &[
     ("pilot starts a race", Act::Key(Key::Race)),
     ("pilot starts a game of tag", Act::Key(Key::Tag)),
     ("countdown ends", Act::Go),
+    ("operator switches the view", Act::Button("view")),
+    ("operator waits for the battlefield", Act::WaitBattlefield),
+    ("operator right-clicks the battlefield", Act::Battlefield { shift: false }),
+    ("operator adds a waypoint on the battlefield", Act::Battlefield { shift: true }),
 ];
 
 /// What the plane does by itself, and the driver waits for.
@@ -217,6 +225,9 @@ const STATES: &[&str] = &[
     "game",
     "game clock",
     "opponents",
+    "console view",
+    "battlefield picture in the console",
+    "point of the console's camera",
 ];
 /// States an action can change directly (the others change through events).
 const SETTABLE: &[&str] = &[
@@ -525,6 +536,33 @@ fn click_button(window: &mut Window, cx: &mut App, id: &str) -> Result<(), Strin
     Ok(())
 }
 
+/// A right-click on the battlefield at `at`, with Shift or not.
+fn right_click(window: &mut Window, cx: &mut App, at: Point<Pixels>, shift: bool) {
+    let modifiers = Modifiers { shift, ..Default::default() };
+    let mut send = |e: PlatformInput| {
+        let _ = window.dispatch_event(e, cx);
+    };
+    send(PlatformInput::MouseMove(MouseMoveEvent { position: at, pressed_button: None, modifiers }));
+    send(PlatformInput::MouseDown(MouseDownEvent {
+        button: MouseButton::Right,
+        position: at,
+        modifiers,
+        click_count: 1,
+        first_mouse: false,
+    }));
+    send(PlatformInput::MouseUp(MouseUpEvent { button: MouseButton::Right, position: at, modifiers, click_count: 1 }));
+}
+
+/// Where to right-click the battlefield next: ahead of the middle, somewhere new each time.
+fn battlefield_point(g: &Gcs) -> Result<Point<Pixels>, String> {
+    let b = g.battlefield_bounds();
+    if b.size.width <= Pixels::ZERO || g.view != app::View::Battlefield {
+        return Err("the battlefield isn't on screen".into());
+    }
+    let n = g.map.plan.len() as f32;
+    Ok(Point::new(b.center().x + gpui::px(50.0 * ((n % 5.0) - 2.0)), b.center().y - gpui::px(40.0 + 20.0 * (n % 3.0))))
+}
+
 /// Where to click the map next: somewhere new each time, so the plan's points are apart.
 fn map_point(g: &Gcs) -> Result<Point<Pixels>, String> {
     let b = g.map_bounds.get();
@@ -698,6 +736,24 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
         }),
         "mission file" => Value::from(crate::wpfile::state(&crate::wpfile::path(), &g.map.plan)),
         "measured distance" => Value::from(if g.map.measure.len() == 2 { "shown" } else { "hidden" }),
+        "console view" => Value::from(match g.view {
+            app::View::Screens => "the screens",
+            app::View::Battlefield => "the battlefield",
+        }),
+        "battlefield picture in the console" => Value::from(if g.battlefield_live() { "live" } else { "missing" }),
+        "point of the console's camera" => {
+            let look = g.camera_look();
+            let near = |p: (f32, f32)| (look.0 - p.0).hypot(look.1 - p.1) < 60.0;
+            let plane = v.have_position.then(|| g.origin.to_ne(v.lat, v.lon));
+            let home = v.home.map(|h| g.origin.to_ne(h.0, h.1));
+            Value::from(if plane.is_some_and(near) {
+                "the plane"
+            } else if home.is_some_and(near) {
+                "home"
+            } else {
+                "another place"
+            })
+        }
         other => return Err(format!("no way to observe `{other}`")),
     })
 }
@@ -707,6 +763,13 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
 fn arrange_model(g: &mut Gcs, key: &str, value: &Value) -> Result<(), String> {
     let name = || enum_value(value);
     match key {
+        // As VIEW would.
+        "console view" => {
+            let want = if name()? == "the battlefield" { app::View::Battlefield } else { app::View::Screens };
+            if g.view != want {
+                g.switch_view();
+            }
+        }
         "map tool" => {
             g.map.tool = match name()?.as_str() {
                 "PLAN" => Tool::Plan,
@@ -1604,6 +1667,17 @@ impl Driver for ConsoleDriver {
             }),
             Act::Measure => self.measure(),
             Act::Survey => self.survey(),
+            Act::WaitBattlefield => {
+                self.wait_for(240, "the sim's picture of the battlefield", |g| g.battlefield_live())
+            }
+            Act::Battlefield { shift } => {
+                // Drawn first, so that the battlefield is where the last frame put it.
+                self.with_window(|w, cx| w.draw(cx).clear())?;
+                let at = self.call(|g, _, _| battlefield_point(g))??;
+                self.with_window(move |w, cx| right_click(w, cx, at, shift))?;
+                std::thread::sleep(FRAME);
+                Ok(())
+            }
             Act::Map(button) => {
                 let at = self.call(|g, _, _| map_point(g))??;
                 self.with_window(move |w, cx| click(w, cx, at, button))?;

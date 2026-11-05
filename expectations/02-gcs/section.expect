@@ -72,6 +72,23 @@ Vocabulary:
     Shows: goes up by 1: the next item becomes the current item, which is magenta on the map
     Shows: stays the same: the current item does not change
 
+  State: the console view is the screens | the battlefield
+    Set: press VIEW until the console shows {value}
+    Shows: the screens: the console shows its screens, with the tactical map in the middle
+    Shows: the battlefield: the battlefield fills the console, with the bars at the top and the bottom
+  State: the battlefield picture in the console is live | missing
+    Shows: live: the battlefield shows the valley in 3D, with the plane in it
+    Shows: missing: the battlefield shows the plain ground
+  State: the point of the console's camera is the plane | home | another place
+    Shows: the plane: the plane is in the middle of the battlefield
+  Event: the operator switches the view
+    Say: press VIEW
+  Event: the operator waits for the battlefield
+    Say: wait until the sim has loaded the valley
+  Event: the operator right-clicks the battlefield
+    Say: right-click a point of the battlefield
+  Event: the operator adds a waypoint on the battlefield
+    Say: hold Shift and right-click a point of the battlefield
   Event: the operator toggles the planning tool
     Say: press PLAN
   Event: the operator toggles the fly-to tool

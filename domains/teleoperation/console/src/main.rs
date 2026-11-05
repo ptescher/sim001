@@ -42,6 +42,7 @@ sim001_gcs [options]
   --layout single    with --station: tile all three on the main display even with several
   --raytrace         with --station: run the sim with ray tracing
   --sensor           open the sensor feed window (sim already running with --feed)
+  --battlefield      the battlefield view's 3D picture from a 3D view already running (sim001_view --battlefield)
   --feed HOST:PORT   sensor feed address (default 127.0.0.1:5600)
   --worker N         with --station: this is station N (default 0), for tests that run several at once:
                      its ports, SITL instances, containers and log folders are its own
@@ -161,8 +162,17 @@ fn main() {
         autotest::spawn(vehicle.clone(), tx.clone(), origin);
     }
     let sensor = (station_mode || flag("--sensor"))
-        .then(|| feed::spawn(feed_addr, vehicle.clone(), tx.clone(), origin, terrain.clone()));
+        .then(|| feed::spawn(feed_addr.clone(), vehicle.clone(), tx.clone(), origin, terrain.clone()));
 
+    // The battlefield: the 3D picture of the place from the sim (with the station or the sensor
+    // feed), or from `sim001_view --battlefield` for a real flight (`--battlefield`).
+    let battlefield = if station_mode || flag("--sensor") || flag("--battlefield") {
+        let host = feed_addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string();
+        let first = feed_addr.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(ports.feed());
+        teleoperation_battlefield::Battlefield::connect(&host, first, 0)
+    } else {
+        teleoperation_battlefield::Battlefield::none()
+    };
     let expect = flag("--expect").then(|| {
         let suite =
             args.iter().position(|a| a == "--expect").and_then(|i| args.get(i + 1)).filter(|a| !a.starts_with("--"));
@@ -210,7 +220,18 @@ fn main() {
         let console = cx
             .open_window(window_options("SIM001 Ground Control", console_bounds, (800.0, 540.0)), |window, cx| {
                 screens::hide_window_buttons(window);
-                cx.new(|cx| ui::app::Gcs::new(vehicle.clone(), tx, origin, terrain.clone(), sensor.clone(), vtol, cx))
+                cx.new(|cx| {
+                    ui::app::Gcs::new(
+                        vehicle.clone(),
+                        tx,
+                        origin,
+                        terrain.clone(),
+                        sensor.clone(),
+                        battlefield.clone(),
+                        vtol,
+                        cx,
+                    )
+                })
             })
             .expect("open console window");
 
