@@ -19,7 +19,7 @@ pub use formation::{Formation, Post};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
-use recreation_towers::flight::{ORBIT_RADIUS, orbit_height};
+use recreation_towers::flight::{ORBIT_RADIUS, low_height, orbit_height};
 use recreation_towers::{
     Commander, CommanderTuning, EdgeObs, Game, Instruction, Order, Outcome, Phase, Rules, Standing, Team, TeamView,
 };
@@ -483,7 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn a_drone_flies_to_its_tower_and_circles_it_in_the_circle() {
+    fn a_drone_flies_to_its_tower_and_circles_it_low_in_the_circle() {
         let game = Game::new(Rules::default());
         let mut f = Flyer {
             team: Team::Blue,
@@ -505,7 +505,8 @@ mod tests {
             }
         }
         assert!(inside > 550, "in the west tower's circle for {inside} of the last 600 steps");
-        assert!((f.alt - orbit_height(Team::Blue, 0)).abs() < 1.0, "{}", f.alt);
+        // Low, below the treetops: only a low drone takes a tower.
+        assert!((f.alt - low_height(Team::Blue, 0)).abs() < 1.0 && f.alt < game.rules.treetop, "{}", f.alt);
     }
 
     #[test]

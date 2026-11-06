@@ -891,6 +891,24 @@ mod tests {
         g.drones[i] = Drone { at, alt: 12.0, phase: Phase::Flying, ..g.drones[i] };
     }
 
+    /// Only a drone below the treetops takes a tower: one that circles above the trees watches it.
+    #[test]
+    fn only_a_drone_below_the_treetops_takes_a_tower() {
+        let mut g = Game::new(Rules::default());
+        let west = g.tower("west");
+        let at = g.towers[west].at + Vec2::new(40.0, 0.0);
+        fly(&mut g, Team::Blue, 0, at);
+        for _ in 0..100 {
+            g.step(0.1);
+        }
+        assert_eq!(g.towers[west].control, 0.0, "a drone 50 m high moved the control");
+        fly_low(&mut g, Team::Blue, 0, at);
+        for _ in 0..100 {
+            g.step(0.1);
+        }
+        assert!((g.towers[west].control - 0.5).abs() < 0.01, "a low drone moves it 5 % a second");
+    }
+
     #[test]
     fn the_start_has_each_home_tower_held_and_the_rest_neutral() {
         let g = Game::new(Rules { drones: 3, ..Rules::default() });

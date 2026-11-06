@@ -71,6 +71,11 @@ pub fn plan(map: &Map, from: Vec2, target: Vec2, low: bool) -> Plan {
     }
 }
 
+/// The plan for a drone at `from` sent to take the tower at `tower`, `low` or high.
+pub fn take(map: &Map, from: Vec2, tower: Vec2, low: bool) -> Plan {
+    plan(map, from, tower, low)
+}
+
 /// What a drone is told to do now.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Leg {
@@ -296,5 +301,33 @@ mod tests {
             pos += (l.point - pos).normalize_or_zero() * 15.0;
             assert!(m.open(pos), "a drone flying straight at its aim is off the lane at {pos}");
         }
+    }
+
+    /// A drone sent high to take a tower crosses the forest high, and circles the tower low: only
+    /// a low drone takes it. It comes down only once it is on its circle in the tower's clearing,
+    /// so it never sinks into the trees; and once low there, it stays low.
+    #[test]
+    fn a_take_order_flown_high_comes_down_to_circle_the_tower() {
+        let (m, rules) = (map(), Rules::default());
+        let (team, k) = (Team::Blue, 1);
+        let west = m.towers[1];
+        let base = rules.base(team);
+        let p = take(&m, base, west, false);
+        assert!(p.path.is_empty() && p.circle_low, "{p:?}");
+        let far = leg(&m, &p, team, k, base, 60.0);
+        assert!(far.orbit && far.point == west && far.alt == orbit_height(team, k), "{far:?}");
+        // Over the forest near the tower, still high.
+        let near = west + (base - west).normalize() * 120.0;
+        assert!(!m.in_clearing(near) || near.distance(west) > ORBIT_RADIUS + 20.0);
+        assert_eq!(leg(&m, &p, team, k, near, 60.0).alt, orbit_height(team, k));
+        // On its circle, it comes down, and stays down.
+        let on = west + Vec2::new(ORBIT_RADIUS, 0.0);
+        for alt in [60.0, 17.0] {
+            let l = leg(&m, &p, team, k, on, alt);
+            assert!(l.orbit && l.point.distance(west) < 1.0 && l.alt == low_height(team, k), "at {alt} m: {l:?}");
+            assert!(l.alt < rules.circle_ceiling);
+        }
+        // Flown low, it circles low too.
+        assert!(take(&m, base, west, true).circle_low);
     }
 }
