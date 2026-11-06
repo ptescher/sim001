@@ -1312,11 +1312,13 @@ mod tests {
         // Blue's home tower sees down its lanes: leave it out of this.
         g.towers[0].holder = None;
         // Blue's drone is low in the mid lane; Red's is low in the east lane, 130 m off.
-        fly_low(&mut g, Team::Blue, 0, Vec2::new(-200.0, 0.0));
-        let east = &g.map.lanes.iter().find(|l| l.name == map::LaneName::East).unwrap().through;
-        let p = east[0].lerp(east[1], 0.35);
+        let lane = |name| g.map.lanes.iter().find(|l| l.name == name).unwrap().clone();
+        let (mid, east) = (lane(map::LaneName::Mid), lane(map::LaneName::East));
+        let blue = mid.at(230.0);
+        fly_low(&mut g, Team::Blue, 0, blue);
+        let p = east.at(0.35 * east.through[0].distance(east.through[1]));
         fly_low(&mut g, Team::Red, 0, p);
-        assert!(p.distance(Vec2::new(-200.0, 0.0)) < 150.0 && !g.map.line_open(p, Vec2::new(-200.0, 0.0)));
+        assert!(p.distance(blue) < 150.0 && !g.map.line_open(p, blue));
         g.look();
         assert!(!sees(&g), "the trees are between them");
         // The same drone above the trees is seen.
@@ -1324,7 +1326,7 @@ mod tests {
         g.look();
         assert!(sees(&g));
         // Low in the same lane, it is seen along the lane.
-        fly_low(&mut g, Team::Red, 0, Vec2::new(-100.0, 0.0));
+        fly_low(&mut g, Team::Red, 0, mid.at(330.0));
         g.look();
         assert!(sees(&g));
         // A drone above the trees looks down on a low drone near it, but only near.

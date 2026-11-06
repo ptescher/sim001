@@ -27,11 +27,14 @@ pub fn set(rules: &Rules) -> Result<(), String> {
         .collect();
     let mountains = map.clone();
     let lake = world(map.lake.at);
-    let lake_radius = map.lake.radius;
+    let lake_radius = map.lake.outline(72).iter().map(|p| p.distance(map.lake.at)).fold(0.0, f32::max);
+    let shape = map.lake;
     terrain::set_arena(Arena {
         radius: rules.field_radius,
         lake_centre: lake,
         lake_radius,
+        // A world direction (x east, z south) is the field direction (north, east) = (-z, x).
+        lake_shore: Box::new(move |d| shape.shore(glam::Vec2::new(-d.y, d.x))),
         trees,
         open_distance: Box::new(move |x, z| map.open_distance(glam::Vec2::new(-z, x))),
         mountains: Box::new(move |x, z| mountains.mountain_height(glam::Vec2::new(-z, x))),
@@ -55,11 +58,12 @@ mod tests {
         let map = valley();
         let at = world(map.lake.at);
         assert!(terrain::is_water(at.x, at.y));
-        // Just inside and just outside the game's circle, on all sides.
+        // Just inside and just outside the game's shore, on all sides.
         for k in 0..8 {
             let dir = Vec2::from_angle(k as f32 * std::f32::consts::FRAC_PI_4);
-            let inside = at + dir * (map.lake.radius - 6.0);
-            let outside = at + dir * (map.lake.radius + 6.0);
+            let shore = map.lake.shore(glam::Vec2::new(-dir.y, dir.x));
+            let inside = at + dir * (shore - 6.0);
+            let outside = at + dir * (shore + 6.0);
             assert!(terrain::is_water(inside.x, inside.y), "inside, direction {k}");
             assert!(!terrain::is_water(outside.x, outside.y), "outside, direction {k}");
         }
