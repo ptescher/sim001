@@ -75,6 +75,8 @@ const CRUISE: f32 = 16.0;
 /// this margin (s); it goes back to work when the battery is this much full.
 const REFUEL_MARGIN: f32 = 15.0;
 const BACK_TO_WORK: f32 = 0.9;
+/// A commander that thinks ahead does so this often (s).
+const LOOK_EVERY: f32 = 5.0;
 
 /// A computer in a team's seat.
 #[derive(Clone, Debug)]
@@ -91,6 +93,10 @@ pub struct Commander {
     recharging: Vec<bool>,
     /// The game time of the last decision.
     last: Option<f32>,
+    /// Thinks ahead: a belief about the enemy, and when the model last changed an order.
+    look: Option<(crate::Belief, f32)>,
+    /// For measuring: the belief is never updated, so the model knows nothing of the enemy.
+    blind: bool,
 }
 
 impl Commander {
@@ -108,7 +114,24 @@ impl Commander {
             away: vec![None; n],
             recharging: vec![false; n],
             last: None,
+            look: None,
+            blind: false,
         }
+    }
+
+    /// A commander that thinks ahead (crate::lookahead): once in a while it rolls a model of the
+    /// game forward from what it believes about the enemy, and changes an order if that is better.
+    pub fn with_lookahead(mut self, on: bool) -> Commander {
+        self.look = on.then(|| (crate::Belief::new(self.rules, crate::Team::Blue), f32::NEG_INFINITY));
+        self
+    }
+
+    /// Thinks ahead if `SIM001_LOOKAHEAD` is `1`.
+    pub fn lookahead_from_env(self) -> Commander {
+        let setting = std::env::var("SIM001_LOOKAHEAD").unwrap_or_default();
+        let mut c = self.with_lookahead(setting == "1" || setting == "blind");
+        c.blind = setting == "blind";
+        c
     }
 
     pub fn tuning(&self) -> CommanderTuning {
@@ -283,6 +306,21 @@ impl Commander {
                 .filter(|&&t| !away[k][t])
                 .min_by(|&&a, &&b| view.towers[a].at.distance(at).total_cmp(&view.towers[b].at.distance(at)));
             *order = spare.map(|&t| Order::Take(t));
+        }
+        if let Some((belief, last_look)) = &mut self.look {
+            if belief.team() != view.team {
+                *belief = crate::Belief::new(self.rules, view.team);
+            }
+            if !self.blind {
+                belief.update(view);
+            }
+            if view.time - *last_look >= LOOK_EVERY {
+                *last_look = view.time;
+                let free: Vec<bool> = (0..self.orders.len()).map(|k| up[k] && charge[k].is_none()).collect();
+                if let Some((k, t)) = crate::lookahead::best_change(&self.rules, view, &self.orders, &free, belief) {
+                    self.orders[k] = Some(Order::Take(t));
+                }
+            }
         }
         for (k, order) in charge.into_iter().enumerate() {
             if order.is_some() {
