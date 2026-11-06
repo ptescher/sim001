@@ -81,6 +81,10 @@ Vocabulary:
     Shows: missing: the battlefield shows the plain ground
   State: the point of the console's camera is the plane | home | another place
     Shows: the plane: the plane is in the middle of the battlefield
+  State: the radius of the plane's GUIDED circle is 0..1000 m
+    Shows: the battlefield shows the GUIDED circle {value} m out, and the plane flies round it
+  Event: the operator draws a circle of 120 m on the battlefield
+    Say: press CIRCLE, or C. Press the mouse on the point, drag out 120 m, and let go
   Event: the operator switches the view
     Say: press VIEW
   Event: the operator waits for the battlefield

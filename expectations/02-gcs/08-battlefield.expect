@@ -19,6 +19,12 @@ Feature: The battlefield view
   orders. Right-click a point, and the plane flies there in [[GUIDED]]. Hold Shift and right-click,
   and the point becomes the next waypoint of the plan.
 
+  CIRCLE, or C, makes the plane circle a point at the distance that you choose, as in the commander
+  app of [[Towers]]. Press the mouse on the point, and drag out to the distance. The battlefield shows
+  the circle while you drag. Let go of the mouse, and the plane flies there in [[GUIDED]] and circles
+  the point at that distance, from 30 m to 1000 m. A route is the plan: Shift and a right-click add
+  its waypoints.
+
   The bottom bar has the minimap, the card of the plane with the picture of its camera, the flight
   display, and the buttons of the vehicle command screen and the map tools.
 
@@ -60,3 +66,11 @@ Feature: The battlefield view
     When the operator adds a waypoint on the battlefield
     Then the plan has 1 item
     And the newest waypoint is at the plan altitude
+
+  Expectation: CIRCLE flies the plane round a point at the distance that you drag
+    Given the console view is the battlefield
+    And the vehicle is armed
+    When the operator draws a circle of 120 m on the battlefield
+    Then the autopilot mode is GUIDED
+    And the radius of the plane's GUIDED circle is at least 100 m
+    And the radius of the plane's GUIDED circle is at most 140 m

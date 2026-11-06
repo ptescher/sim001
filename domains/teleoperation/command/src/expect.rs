@@ -90,6 +90,8 @@ const EVENTS: &[&str] = &[
     "the commander turns the battlefield camera to the right",
     "the commander zooms the battlefield in",
     "the commander centres the battlefield on the selected drone",
+    "the commander draws a circle of 120 m on the battlefield",
+    "the commander adds a point to the route of the selected drone",
 ];
 
 const OBSERVED: &[&str] = &[
@@ -110,6 +112,9 @@ const OBSERVED: &[&str] = &[
     "the maps of the game that the game server sent the app",
     "the towers held by Blue in the top bar",
     "the first Blue drone",
+    "the radius of the circle of the first Blue drone",
+    "the distance of the first Blue drone from the centre of its circle",
+    "the points in the route of the first Blue drone",
     "the picture in the portrait",
     "the battlefield picture in the app",
     "the point of the battlefield camera",
@@ -151,6 +156,7 @@ fn order_name(order: Option<Order>, view: &TeamView) -> String {
         Some(Order::Hold) => "hold".into(),
         Some(Order::Home) => "go home".into(),
         Some(Order::Goto(_)) => "go to a point".into(),
+        Some(Order::Circle(..)) => "circle a point".into(),
     }
 }
 
@@ -188,6 +194,48 @@ fn tap(window: &mut Window, cx: &mut App, k: &str) {
 fn hover(window: &mut Window, cx: &mut App, at: Point<Pixels>) {
     let e = MouseMoveEvent { position: at, pressed_button: None, modifiers: Modifiers::default() };
     let _ = window.dispatch_event(PlatformInput::MouseMove(e), cx);
+}
+
+/// A press of the left button at `from`, a drag to `to`, and a let-go there.
+fn drag(window: &mut Window, cx: &mut App, from: Point<Pixels>, to: Point<Pixels>) {
+    let modifiers = Modifiers::default();
+    let mut send = |e: PlatformInput| {
+        let _ = window.dispatch_event(e, cx);
+    };
+    send(PlatformInput::MouseMove(MouseMoveEvent { position: from, pressed_button: None, modifiers }));
+    send(PlatformInput::MouseDown(MouseDownEvent {
+        button: MouseButton::Left,
+        position: from,
+        modifiers,
+        click_count: 1,
+        first_mouse: false,
+    }));
+    for i in 1..=8 {
+        let at = from + (to - from) * (i as f32 / 8.0);
+        send(PlatformInput::MouseMove(MouseMoveEvent {
+            position: at,
+            pressed_button: Some(MouseButton::Left),
+            modifiers,
+        }));
+    }
+    send(PlatformInput::MouseUp(MouseUpEvent { button: MouseButton::Left, position: to, modifiers, click_count: 1 }));
+}
+
+/// A right-click with Shift held.
+fn shift_right_click(window: &mut Window, cx: &mut App, at: Point<Pixels>) {
+    let modifiers = Modifiers { shift: true, ..Default::default() };
+    let mut send = |e: PlatformInput| {
+        let _ = window.dispatch_event(e, cx);
+    };
+    send(PlatformInput::MouseMove(MouseMoveEvent { position: at, pressed_button: None, modifiers }));
+    send(PlatformInput::MouseDown(MouseDownEvent {
+        button: MouseButton::Right,
+        position: at,
+        modifiers,
+        click_count: 1,
+        first_mouse: false,
+    }));
+    send(PlatformInput::MouseUp(MouseUpEvent { button: MouseButton::Right, position: at, modifiers, click_count: 1 }));
 }
 
 /// A click with `button`.
@@ -409,6 +457,53 @@ impl AppDriver {
         Ok((eye, rules.ok_or("the app has no rules yet")?))
     }
 
+    /// The ground point of the battlefield for the next point of a route or the centre of a circle:
+    /// ahead of the camera's point, apart from the last, and away from the towers.
+    fn open_point(&self) -> Result<glam::Vec2, String> {
+        self.call(|v, _, _| {
+            let s = v.seat.state();
+            let view = s.view.clone();
+            drop(s);
+            let look = v.rig.eye.look;
+            let h = v.rig.eye.heading.to_radians();
+            let (ahead, side) = (glam::Vec2::new(h.cos(), h.sin()), glam::Vec2::new(-h.sin(), h.cos()));
+            let towers: Vec<glam::Vec2> =
+                view.as_ref().map(|m| m.towers.iter().map(|t| t.at).collect()).unwrap_or_default();
+            // Away from the first drone and the points it already has, so that each is a new goal.
+            let mut taken: Vec<glam::Vec2> = v.route(0).to_vec();
+            taken.extend(view.as_ref().and_then(|m| m.drones.first()).map(|d| d.at));
+            (0..12)
+                .flat_map(|i| [0.0f32, -1.0, 1.0].map(move |j| (i, j)))
+                .map(|(i, j)| look + ahead * (120.0 + 40.0 * i as f32) + side * (200.0 * j))
+                .find(|p| towers.iter().all(|t| t.distance(*p) > 120.0) && taken.iter().all(|t| t.distance(*p) > 250.0))
+                .ok_or_else(|| "no open ground ahead of the camera".to_string())
+        })?
+    }
+
+    /// CIRCLE (C), then a drag on the battlefield from an open point out to `radius` metres.
+    fn draw_circle(&self, radius: f32) -> Result<(), String> {
+        let centre = self.open_point()?;
+        self.press_key("c")?;
+        let (from, to) = self
+            .call(move |v, _, _| {
+                let h = v.rig.eye.heading.to_radians();
+                let side = glam::Vec2::new(-h.sin(), h.cos());
+                Some((v.screen_of(centre)?, v.screen_of(centre + side * radius)?))
+            })?
+            .ok_or("the circle is not on the battlefield")?;
+        self.with_window(move |w, cx| drag(w, cx, point(px(from.0), px(from.1)), point(px(to.0), px(to.1))))
+    }
+
+    /// Shift and a right-click on an open point of the battlefield.
+    fn add_route_point(&self) -> Result<(), String> {
+        let at = self.open_point()?;
+        self.with_window(|w, cx| w.draw(cx).clear())?;
+        let (x, y) = self.call(move |v, _, _| v.screen_of(at))?.ok_or("the point is not on the battlefield")?;
+        self.with_window(move |w, cx| shift_right_click(w, cx, point(px(x), px(y))))?;
+        std::thread::sleep(Duration::from_millis(200));
+        Ok(())
+    }
+
     /// Waits for the server's echo of drone `k`'s order.
     fn echoed(&self, k: usize, want: &'static str) -> Result<(), String> {
         let want = want.to_string();
@@ -453,6 +548,26 @@ impl Driver for AppDriver {
         if is(subject, "the selected drone") || CAMERA.iter().any(|c| is(subject, c)) {
             return self.set(var, value);
         }
+        if is(subject, "the order of the first Blue drone") && text(value) == "circle a point" {
+            // As a commander does: B1 selected, and a circle drawn.
+            self.click_button("drone-0")?;
+            self.draw_circle(120.0)?;
+            return self.echoed(0, "circle a point");
+        }
+        if is(subject, "the points in the route of the first Blue drone") {
+            let want = value.as_f64().ok_or("a number of points")? as usize;
+            let have = self.call(|v, _, _| v.route_len(0))?;
+            if want < have {
+                return Err("the app can't take points out of a route".into());
+            }
+            if want > have {
+                self.click_button("drone-0")?;
+                for _ in have..want {
+                    self.add_route_point()?;
+                }
+            }
+            return Ok(());
+        }
         if is(subject, "the first Blue drone") && text(value) == "in the west circle" {
             // Sent to the west tower, as a commander does, and on its way until it circles it.
             self.call(|v, _, _| {
@@ -494,7 +609,9 @@ impl Driver for AppDriver {
             || is(subject, "the selected drone")
             || CAMERA.iter().any(|c| is(subject, c))
             || (is(subject, "the first Blue drone") && text(value) == "in the west circle")
-            || (is(subject, "the order of the first Blue drone") && text(value) == "take the west tower")
+            || (is(subject, "the order of the first Blue drone")
+                && (text(value) == "take the west tower" || text(value) == "circle a point"))
+            || is(subject, "the points in the route of the first Blue drone")
             || is(subject, "the flight of the first Blue drone")
     }
 
@@ -580,6 +697,8 @@ impl Driver for AppDriver {
                 })
             }
             "the commander centres the battlefield on the selected drone" => self.press_key("space"),
+            "the commander draws a circle of 120 m on the battlefield" => self.draw_circle(120.0),
+            "the commander adds a point to the route of the selected drone" => self.add_route_point(),
             e @ ("the game runs for 2 minutes" | "the game runs for 3 minutes") => {
                 let minutes: f32 = if e.ends_with("2 minutes") { 2.0 } else { 3.0 };
                 let from = self.view()?.map_or(0.0, |v| v.time);
@@ -673,6 +792,20 @@ impl Driver for AppDriver {
             let inside = view.drones.first().is_some_and(|d| d.at.distance(west.at) < circle + 20.0);
             return Ok(Value::from(if inside { "in the west circle" } else { "somewhere else" }));
         }
+        if lower == "the points in the route of the first blue drone" {
+            return Ok(Value::from(self.call(|v, _, _| v.route_len(0))? as f64));
+        }
+        if lower == "the radius of the circle of the first blue drone"
+            || lower == "the distance of the first blue drone from the centre of its circle"
+        {
+            let view = self.view()?.ok_or("the app has no map yet")?;
+            let d = view.drones.first().ok_or("no first drone")?;
+            let Some(Order::Circle(centre, radius)) = d.order else {
+                return Ok(Value::from(0.0));
+            };
+            let x = if lower.starts_with("the radius") { radius } else { d.at.distance(centre) };
+            return Ok(Value::from(x.round() as f64));
+        }
         if lower == "the towers held by blue in the top bar" {
             self.with_window(|w, cx| w.draw(cx).clear())?;
             let chips = self.call(|v, _, _| v.chips.borrow().clone())?;
@@ -755,6 +888,7 @@ impl Driver for AppDriver {
                     || CAMERA.iter().any(|c| is(&v.subject, c))
                     || is(&v.subject, "the order of the first Blue drone")
                     || is(&v.subject, "the flight of the first Blue drone")
+                    || is(&v.subject, "the points in the route of the first Blue drone")
             }
             Need::Set(v) => is(&v.subject, "the selected drone") || CAMERA.iter().any(|c| is(&v.subject, c)),
             Need::Perform(e) => EVENTS.iter().any(|s| is(&e.text, s)),

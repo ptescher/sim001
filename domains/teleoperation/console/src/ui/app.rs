@@ -20,6 +20,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use teleoperation_battlefield::orders::CircleTool;
 use teleoperation_battlefield::{Battlefield, Eye, Flat, Lens, Rig};
 use teleoperation_core::debug::{self, Level, Source};
 
@@ -141,6 +142,10 @@ pub struct Gcs {
     bf_drag: Option<((f32, f32), Lens, Vec2)>,
     minimap_drag: bool,
     focus: FocusHandle,
+    /// CIRCLE: armed, or being dragged on the battlefield.
+    circle: CircleTool,
+    /// The radius of the GUIDED circle the console last asked for (0: the autopilot's own).
+    guided_radius: f32,
 }
 
 /// Below this window width the console drops to two columns; with a sensor window open the
@@ -210,6 +215,8 @@ impl Gcs {
             bf_drag: None,
             minimap_drag: false,
             focus: cx.focus_handle(),
+            circle: CircleTool::default(),
+            guided_radius: 0.0,
         }
     }
 
@@ -249,6 +256,27 @@ impl Gcs {
         (self.rig.eye.look.x, self.rig.eye.look.y)
     }
 
+    /// The radius of the GUIDED circle that the console last asked for (0: the autopilot's own).
+    pub(crate) fn guided_radius(&self) -> f32 {
+        self.guided_radius
+    }
+
+    /// CIRCLE (C): the next press on the battlefield is the centre of the plane's circle.
+    fn arm_circle(&mut self) {
+        self.circle.arm();
+    }
+
+    /// The ground under the screen point `p` of the battlefield, for the tests.
+    pub(crate) fn battlefield_ground_at(&self, p: (f32, f32)) -> Option<(f32, f32)> {
+        self.battlefield_ground(p)
+    }
+
+    /// Where the ground at the field point (`n`, `e`) is on the battlefield.
+    pub(crate) fn battlefield_screen(&self, at: (f32, f32)) -> Option<(f32, f32)> {
+        let h = bf::ground(self.terrain.as_deref(), Vec2::new(at.0, at.1));
+        self.lens().at(glam::Vec3::new(at.0, at.1, h))
+    }
+
     /// The battlefield through the camera now.
     fn lens(&self) -> Lens {
         Lens::new(self.rig.eye, self.bf_bounds.get())
@@ -272,18 +300,29 @@ impl Gcs {
 
     /// GOTO: the aircraft flies to the field point (`n`, `e`) at its altitude (or the plan's, low down).
     fn goto(&mut self, n: f32, e: f32) {
+        self.circle_at(n, e, 0.0);
+    }
+
+    /// GUIDED: the aircraft flies to the field point (`n`, `e`) and circles it `radius` metres out
+    /// (0: the autopilot's own radius), at its altitude (or the plan's, low down).
+    fn circle_at(&mut self, n: f32, e: f32, radius: f32) {
         let (lat, lon) = self.origin.to_ll(n, e);
         let alt = {
             let v = self.vehicle.lock().unwrap();
             if v.alt_rel > 15.0 { v.alt_rel.round() } else { self.map.plan_alt }
         };
-        self.send(Cmd::Goto { lat, lon, alt });
+        self.guided_radius = radius;
+        self.send(Cmd::Goto { lat, lon, alt, radius });
     }
 
     fn bf_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
         let p = (f32::from(ev.position.x), f32::from(ev.position.y));
         let Some((n, e)) = self.battlefield_ground(p) else { return };
+        if ev.button == MouseButton::Left && self.circle.press(Vec2::new(n, e)) {
+            cx.notify();
+            return;
+        }
         match (ev.button, self.map.tool) {
             // The strategy game's orders: a right-click flies there, with Shift it plans there.
             (MouseButton::Right, Tool::Pan) if ev.modifiers.shift => {
@@ -301,6 +340,11 @@ impl Gcs {
     fn bf_mouse_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
         let p = (f32::from(ev.position.x), f32::from(ev.position.y));
         let inside = self.bf_bounds.get().contains(&ev.position);
+        if self.circle.preview().is_some()
+            && let Some((n, e)) = self.battlefield_ground(p)
+        {
+            self.circle.drag(Vec2::new(n, e));
+        }
         if let Some((_, lens, grabbed)) = self.bf_drag {
             if ev.dragging() {
                 let terrain = self.terrain.clone();
@@ -329,10 +373,12 @@ impl Gcs {
         }
         let key = ev.keystroke.key.as_str();
         if !self.rig.key_down(key, ev.keystroke.modifiers) {
-            if key != "space" {
-                return;
+            match key {
+                "space" => self.look_at_aircraft(),
+                "c" => self.arm_circle(),
+                "escape" => self.circle.cancel(),
+                _ => return,
             }
-            self.look_at_aircraft();
         }
         cx.notify();
     }
@@ -1296,6 +1342,9 @@ impl Render for Gcs {
     }
 }
 
+/// The widest circle the plane is sent round (m).
+const CIRCLE_MAX: f32 = 1000.0;
+
 /// The battlefield's bottom bar is this tall, and its minimap this wide (px).
 const BAR: f32 = 236.0;
 const MINIMAP: f32 = 190.0;
@@ -1371,7 +1420,35 @@ impl Gcs {
         let toolbar = self.map_toolbar(cx);
         let plan = bf::plan_points(&self.map.plan, self.origin);
         let (measure, survey) = (self.map.measure.clone(), self.map.survey.clone());
+        let (guided_radius, circle) = (self.guided_radius, self.circle.preview());
 
+        // The aircraft's camera: the portrait, over the battlefield.
+        let feed = self.feed_picture(window);
+        let camera = canvas(
+            |_, _, _| {},
+            move |b, _, window, cx| {
+                let (x, y, w, h) = super::draw::rect(b);
+                super::draw::fill_rect(window, x, y, w, h, c(0x000000));
+                match &feed {
+                    Some(img) => {
+                        let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
+                    }
+                    None => {
+                        super::draw::text(
+                            window,
+                            cx,
+                            "NO CAMERA",
+                            x + w * 0.5,
+                            y + h * 0.5,
+                            10.0,
+                            c(GREY),
+                            super::draw::Align::Center,
+                        );
+                    }
+                }
+            },
+        )
+        .size_full();
         let picture = self.battlefield_picture(window);
         let link = self.battlefield.clone();
         let bounds = self.bf_bounds.clone();
@@ -1388,22 +1465,53 @@ impl Gcs {
                     Some((img, at)) => (Some(img.clone()), Lens::new(*at, b)),
                     None => (None, Lens::new(eye, b)),
                 };
-                let scene =
-                    bf::Scene { picture: image, alt, velocity, plan: &plan, measure: &measure, survey: &survey };
+                let scene = bf::Scene {
+                    picture: image,
+                    alt,
+                    velocity,
+                    plan: &plan,
+                    measure: &measure,
+                    survey: &survey,
+                    guided_radius,
+                    circle,
+                };
                 bf::paint_battlefield(b, lens, &map_data, &scene, terrain.as_deref(), window, cx);
             },
         )
         .size_full();
         let field = div()
             .id("battlefield")
+            .relative()
             .flex_1()
             .min_h(px(0.0))
             .rounded(px(PANEL_RADIUS))
             .overflow_hidden()
             .child(field)
+            // The aircraft's camera, as the portrait of a strategy game: over the battlefield, top right.
+            .children(self.sensor.is_some().then(|| {
+                div()
+                    .absolute()
+                    .top(px(8.0))
+                    .right(px(8.0))
+                    .w(px(256.0))
+                    .h(px(144.0))
+                    .border_1()
+                    .border_color(c(BEZEL_EDGE))
+                    .child(camera)
+            }))
             .on_mouse_down(MouseButton::Left, cx.listener(|this, ev, window, cx| this.bf_mouse_down(ev, window, cx)))
             .on_mouse_down(MouseButton::Right, cx.listener(|this, ev, window, cx| this.bf_mouse_down(ev, window, cx)))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, _| this.bf_drag = None))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    this.bf_drag = None;
+                    // CIRCLE let go: the plane circles there, as far out as it was dragged.
+                    if let Some((centre, radius)) = this.circle.release(CIRCLE_MAX) {
+                        this.circle_at(centre.x, centre.y, radius);
+                    }
+                    cx.notify();
+                }),
+            )
             .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
                 this.rig.scroll(ev.delta);
                 cx.notify();
@@ -1436,33 +1544,6 @@ impl Gcs {
             )
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, _| this.minimap_drag = false));
 
-        // The aircraft's camera, and the flight display.
-        let feed = self.feed_picture(window);
-        let camera = canvas(
-            |_, _, _| {},
-            move |b, _, window, cx| {
-                let (x, y, w, h) = super::draw::rect(b);
-                super::draw::fill_rect(window, x, y, w, h, c(0x000000));
-                match &feed {
-                    Some(img) => {
-                        let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
-                    }
-                    None => {
-                        super::draw::text(
-                            window,
-                            cx,
-                            "NO CAMERA",
-                            x + w * 0.5,
-                            y + h * 0.5,
-                            10.0,
-                            c(GREY),
-                            super::draw::Align::Center,
-                        );
-                    }
-                }
-            },
-        )
-        .size_full();
         let flight =
             canvas(|_, _, _| {}, move |b, _, window, cx| hud::paint(b, &hud_data, hud::HudOpts::default(), window, cx))
                 .size_full();
@@ -1473,10 +1554,34 @@ impl Gcs {
             .h(px(BAR))
             .gap(px(6.0))
             .child(screen("MAP", None, minimap.into_any_element()).w(px(MINIMAP + 14.0)).flex_none())
-            .child(screen("CAMERA", None, camera.into_any_element()).w(px(250.0)).flex_none())
             .child(screen("FLIGHT", None, flight.into_any_element()).w(px(280.0)).flex_none())
             .child(scrolling("VEHICLE COMMAND", None, command.into_any_element()).flex_1().min_w(px(0.0)))
-            .child(scrolling("MAP TOOLS", None, toolbar.into_any_element()).w(px(330.0)).flex_none());
+            .child(
+                scrolling(
+                    "MAP TOOLS",
+                    None,
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.0))
+                        .child(
+                            button(
+                                "circle",
+                                "CIRCLE (C)",
+                                if self.circle.armed() { Style::Active } else { Style::Normal },
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.arm_circle();
+                                window.focus(&this.focus);
+                                cx.notify();
+                            })),
+                        )
+                        .child(toolbar)
+                        .into_any_element(),
+                )
+                .w(px(330.0))
+                .flex_none(),
+            );
 
         div()
             .track_focus(&self.focus)

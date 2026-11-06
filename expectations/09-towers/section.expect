@@ -234,15 +234,15 @@ Vocabulary:
 
   # The computer commander of a team (recreation_towers::Commander): its orders to the Blue
   # drones. The first Blue drone stands at the west end of the Blue base, the third at the east end.
-  State: the order of the first Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
+  State: the order of the first Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point | circle a point
     Shows: the first Blue drone gets the order to {value}. In the app, the card of B1 shows the order
-  State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
+  State: the order of the second Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point | circle a point
     Shows: the second Blue drone gets the order to {value}
   State: the towers with a Blue drone on the way are 0..5
     Shows: 4: the commander has sent a drone to each of the four towers that Blue does not hold
-  State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
+  State: the order of the third Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point | circle a point
     Shows: the third Blue drone gets the order to {value}
-  State: the order of the fourth Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point
+  State: the order of the fourth Blue drone is none | take the west tower | take the centre tower | take the east tower | take the Blue home tower | take the Red home tower | hold | go home | go to a point | circle a point
     Shows: the fourth Blue drone, the heavy one, gets the order to {value}
   # The advisor of a team (recreation_towers::Advisor): what it says to a person who commands.
   Event: the advisor of Blue looks
@@ -282,6 +282,18 @@ Vocabulary:
   State: the picture in the portrait is nothing | the camera of the first Blue drone | the camera of the second Blue drone | the camera of the third Blue drone
     Shows: the camera of the first Blue drone: the PORTRAIT in the bottom bar shows the picture from the camera of B1
     Shows: nothing: the bottom bar has no PORTRAIT
+  # Circles and routes (04-circles-and-routes), the same orders as the ground station's.
+  State: the radius of the circle of the first Blue drone is 0..500 m
+    Shows: the first Blue drone circles its point {value} m out, and the battlefield shows that circle
+  State: the distance of the first Blue drone from the centre of its circle is 0..3000 m
+    Shows: the first Blue drone flies {value} m from the centre of its circle
+  State: the points in the route of the first Blue drone are 0..20
+    Set: hold Shift and right-click the battlefield until the route of B1 has {value} points
+    Shows: the battlefield shows the route of B1 as a dashed line with {value} numbered points
+  Event: the commander draws a circle of 120 m on the battlefield
+    Say: press CIRCLE, or C. Press the mouse on the point, drag out 120 m, and let go
+  Event: the commander adds a point to the route of the selected drone
+    Say: hold Shift and right-click a point of the battlefield
   # The battlefield: the 3D view of the valley, from the commander's camera (02-battlefield).
   State: the battlefield picture in the app is live | missing
     Shows: live: the battlefield shows the valley in 3D, with the forest, the lanes, the lake and the mountains
@@ -396,3 +408,4 @@ Vocabulary:
     And the Red drones in the east circle are 0
     And the east tower on the Blue map is neutral
     And the Red scout is at its base
+    And the points in the route of the first Blue drone are 0

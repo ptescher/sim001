@@ -51,6 +51,10 @@ pub struct Scene<'a> {
     pub drag: Option<Drag>,
     /// Where the last right-click ordered the drones to, and when.
     pub ping: Option<(Vec2, Instant)>,
+    /// The routes of the drones that have one.
+    pub routes: &'a std::collections::HashMap<usize, Vec<Vec2>>,
+    /// CIRCLE while it is dragged: its centre and its distance.
+    pub circle: Option<(Vec2, f32)>,
 }
 
 /// The battlefield: the picture of the valley (or the plain map), the fog, the towers, the drones
@@ -97,6 +101,10 @@ pub fn paint_battlefield(
         }
         paint_tower_grounds(window, lens, v, rules);
         paint_orders(window, lens, v, rules, scene.selected);
+        paint_routes(window, cx, lens, v, scene.routes);
+        if let Some((centre, r)) = scene.circle {
+            paint::circle_preview(window, cx, lens, centre, r, &|_| 0.0);
+        }
         paint_drones(window, cx, lens, v, scene.selected);
         paint_towers(window, cx, lens, v);
         if let Some((at, when)) = scene.ping {
@@ -258,6 +266,11 @@ fn paint_orders(window: &mut Window, lens: Lens, v: &TeamView, rules: &Rules, se
         let to = match d.order {
             Some(Order::Take(t)) => v.towers.get(t).map(|t| t.at),
             Some(Order::Goto(p)) => Some(p),
+            Some(Order::Circle(p, r)) => {
+                let alpha = if selected.contains(&d.k) { 0.9 } else { 0.4 };
+                paint::ground_ring(window, lens, p, r, &|_| 0.0, 1.5, true, ca(colour, alpha));
+                Some(p)
+            }
             Some(Order::Home) => Some(rules.base(v.team)),
             _ => None,
         };
@@ -290,6 +303,23 @@ fn paint_drones(window: &mut Window, cx: &mut App, lens: Lens, v: &TeamView, sel
         if let Some((ax, ay)) = paint::vehicle(window, lens, e.at, e.alt, e.vel, colour, e.seen, false) {
             text(window, cx, &name, ax + 14.0, ay - 10.0, 10.0, colour, Align::Left);
         }
+    }
+}
+
+/// The routes: a dashed line from each drone through the points it has still to fly to, numbered.
+fn paint_routes(
+    window: &mut Window,
+    cx: &mut App,
+    lens: Lens,
+    v: &TeamView,
+    routes: &std::collections::HashMap<usize, Vec<Vec2>>,
+) {
+    for (k, route) in routes {
+        let Some(d) = v.drones.get(*k) else { continue };
+        let points: Vec<(Vec2, f32, String)> =
+            route.iter().enumerate().map(|(i, p)| (*p, d.alt.max(30.0), format!("{}", i + 1))).collect();
+        let from = Some(glam::Vec3::new(d.at.x, d.at.y, d.alt));
+        paint::route(window, cx, lens, from, &points, &|_| 0.0, ca(tint(v.team), 0.9), true, None);
     }
 }
 

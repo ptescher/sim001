@@ -74,6 +74,7 @@ impl World {
             Some(Order::Hold) => "hold".into(),
             Some(Order::Home) => "go home".into(),
             Some(Order::Goto(_)) => "go to a point".into(),
+            Some(Order::Circle(..)) => "circle a point".into(),
         }
     }
 
@@ -472,6 +473,9 @@ fn bindings() -> Bindings<World> {
             }
         })
         .arrange("the Red scout", |w, v| w.place_scout(v))
+        // Routes are the commander app's: with no app, no drone has one.
+        .observe("the points in the route of the first Blue drone", |_| 0.0)
+        .arrange("the points in the route of the first Blue drone", |_, _| {})
         .observe("the Red scout on the Blue map", |w| w.scout_seen())
         .observe("the age of the Red scout on the Blue map", |w| {
             w.game.maps[Team::Blue.index()].drones[w.scout()].map_or(0.0, |s| tenth(w.game.time - s.time))

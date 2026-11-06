@@ -27,11 +27,13 @@ pub enum Cmd {
     /// Restart ArduPilot (forced, so it works armed too): clears confused estimators.
     Reboot,
     SetMode(u32),
-    /// Fly to and loiter at a point (GUIDED), altitude relative to home.
+    /// Fly to and loiter at a point (GUIDED), altitude relative to home, `radius` metres out (0: the
+    /// autopilot's own WP_LOITER_RAD).
     Goto {
         lat: f64,
         lon: f64,
         alt: f32,
+        radius: f32,
     },
     /// Replace the vehicle's mission (home is inserted as item 0).
     Upload(Vec<Waypoint>),
@@ -324,13 +326,15 @@ impl Session {
                 // param1 = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, param2 = custom mode.
                 self.command_long(vehicle, MavCmd::MAV_CMD_DO_SET_MODE, [1.0, m as f32, 0.0, 0.0, 0.0, 0.0, 0.0]);
             }
-            Cmd::Goto { lat, lon, alt } => {
-                log(6, format!("Command: fly to {lat:.6}, {lon:.6} at {alt:.0} m"));
+            Cmd::Goto { lat, lon, alt, radius } => {
+                let circle = if radius > 0.0 { format!(", circle {radius:.0} m out") } else { String::new() };
+                log(6, format!("Command: fly to {lat:.6}, {lon:.6} at {alt:.0} m{circle}"));
                 vehicle.lock().unwrap().guided_target = Some((lat, lon, alt));
                 self.send(MavMessage::COMMAND_INT(COMMAND_INT_DATA {
                     param1: -1.0, // default ground speed
                     param2: 1.0,  // MAV_DO_REPOSITION_FLAGS_CHANGE_MODE: switch to GUIDED
-                    param3: 0.0,
+                    // ArduPlane: the loiter radius in GUIDED (0 leaves WP_LOITER_RAD).
+                    param3: radius,
                     param4: f32::NAN,
                     x: (lat * 1e7) as i32,
                     y: (lon * 1e7) as i32,

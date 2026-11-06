@@ -28,6 +28,10 @@ pub struct Scene<'a> {
     pub plan: &'a [(WpKind, Vec2, f32)],
     pub measure: &'a [(f32, f32)],
     pub survey: &'a [(f32, f32)],
+    /// How far out the GUIDED circle is (0: the autopilot's own radius).
+    pub guided_radius: f32,
+    /// CIRCLE while it is dragged: its centre and its distance.
+    pub circle: Option<(Vec2, f32)>,
 }
 
 /// The ground under a field point, above home (m): from the sim's exported heights.
@@ -107,7 +111,8 @@ pub fn paint_battlefield(
         route(window, cx, lens, terrain, &plan, ca(AMBER, 0.95), true, None);
         // The GUIDED target: a circle at the aircraft's height.
         if let Some(t) = data.guided.map(v2) {
-            loiter(window, lens, t, scene.alt.max(g(t) + 10.0), ca(MAGENTA, 0.9));
+            let r = if scene.guided_radius > 0.0 { scene.guided_radius } else { LOITER_RADIUS };
+            loiter(window, lens, t, r, scene.alt.max(g(t) + 10.0), ca(MAGENTA, 0.9));
             pin(window, lens, terrain, t, scene.alt, c(MAGENTA));
         }
         // What the camera of the aircraft looks at.
@@ -135,6 +140,9 @@ pub fn paint_battlefield(
                 s.push(s[0]);
             }
             dashed(window, &s, 1.5, 5.0, c(AMBER));
+        }
+        if let Some((centre, r)) = scene.circle {
+            paint::circle_preview(window, cx, lens, centre, r, &|p| ground(terrain, p));
         }
         // The other aircraft that the radio tells the station about.
         for t in &data.traffic {
@@ -186,7 +194,7 @@ fn route(
     for &(i, kind, at, alt) in items {
         let here = if current == Some(i) { c(MAGENTA) } else { colour };
         if matches!(kind, WpKind::LoiterUnlim | WpKind::LoiterTurns) {
-            loiter(window, lens, at, alt, here);
+            loiter(window, lens, at, LOITER_RADIUS, alt, here);
         }
         if let Some((px_, py_)) = pin(window, lens, terrain, at, alt, here) {
             let name = match kind {
@@ -221,11 +229,11 @@ fn pin(
 }
 
 /// A loiter circle at height `alt` round `at`.
-fn loiter(window: &mut Window, lens: Lens, at: Vec2, alt: f32, colour: Hsla) {
+fn loiter(window: &mut Window, lens: Lens, at: Vec2, r: f32, alt: f32, colour: Hsla) {
     let ring: Option<Vec<_>> = (0..=48)
         .map(|i| {
             let a = i as f32 / 48.0 * std::f32::consts::TAU;
-            lens.at((at + Vec2::new(a.cos(), a.sin()) * LOITER_RADIUS).extend(alt))
+            lens.at((at + Vec2::new(a.cos(), a.sin()) * r).extend(alt))
         })
         .collect();
     if let Some(ring) = ring {

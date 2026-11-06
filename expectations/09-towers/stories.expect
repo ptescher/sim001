@@ -57,3 +57,31 @@ Story: Watch your drone on the battlefield
     Then the heading of the battlefield camera is 45 deg
     When the commander centres the battlefield on the selected drone
     Then the point of the battlefield camera is the west tower
+
+Story: Circle a point, then fly a route
+  As a commander of a team
+  I want to give a drone the orders of a ground station
+  So that it watches a place, and then patrols
+
+  You send a drone to circle a point ahead of your base, 120 m out. Then you give it a route of two
+  points. It flies to the first and then to the second, and it circles the last one. At the end,
+  you send it to a tower, and the route ends.
+
+  Scenario: A circle, a route, and a tower
+    When the commander joins the game
+    Then the seat of the app is Blue
+    When the commander selects the first Blue drone
+    Then the selected drone is the first Blue drone
+    When the commander draws a circle of 120 m on the battlefield
+    Then the order of the first Blue drone is circle a point
+    When the game runs for 2 minutes
+    Then the distance of the first Blue drone from the centre of its circle is at least 80 m
+    And the distance of the first Blue drone from the centre of its circle is at most 170 m
+    When the commander adds a point to the route of the selected drone
+    Then the points in the route of the first Blue drone are 1
+    When the commander adds a point to the route of the selected drone
+    Then the points in the route of the first Blue drone are 2
+    When the game runs for 2 minutes
+    Then the points in the route of the first Blue drone are 1
+    When the commander sends the selected drone to the west tower
+    Then the points in the route of the first Blue drone are 0
