@@ -28,6 +28,23 @@ struct Progress {
     done: f32,
 }
 
+/// The views of every `--at NAME=x,agl,z,tx,tagl,tz[,fov]` in `args` (a view with no name is
+/// `view`).
+pub fn views_from_args(args: &[String]) -> Vec<(String, View)> {
+    args.iter()
+        .enumerate()
+        .filter(|(_, a)| *a == "--at")
+        .filter_map(|(i, _)| args.get(i + 1))
+        .map(|s| {
+            let (name, v) = s.split_once('=').unwrap_or(("view", s));
+            (
+                name.to_string(),
+                View::parse(v).unwrap_or_else(|| panic!("--at {s}: expected NAME=x,agl,z,tx,tagl,tz[,fov]")),
+            )
+        })
+        .collect()
+}
+
 pub fn plugin(app: &mut App, capture: Capture) {
     std::fs::create_dir_all(&capture.dir).ok();
     // Old pictures would look like new ones saved.

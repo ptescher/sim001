@@ -23,7 +23,6 @@ use std::io::Read;
 use std::net::{TcpStream, UdpSocket};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use visualization_engine::camera::View;
 use visualization_engine::{EnginePlugin, EngineSet, Pose, Scene, ViewInput, capture, terrain};
 use visualization_telemetry::{Home, Watcher};
 
@@ -80,19 +79,7 @@ fn main() {
         }
     };
 
-    let views: Vec<(String, View)> = args
-        .iter()
-        .enumerate()
-        .filter(|(_, a)| *a == "--at")
-        .filter_map(|(i, _)| args.get(i + 1))
-        .map(|s| {
-            let (name, v) = s.split_once('=').unwrap_or(("view", s));
-            (
-                name.to_string(),
-                View::parse(v).unwrap_or_else(|| panic!("--at {s}: expected NAME=x,agl,z,tx,tagl,tz[,fov]")),
-            )
-        })
-        .collect();
+    let views = capture::views_from_args(&args);
 
     let mut app = App::new();
     if std::env::var_os("SIM001_FPS").is_some() {
