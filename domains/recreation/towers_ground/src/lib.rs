@@ -412,7 +412,11 @@ pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
         let alt = if low { flight::low_height(team, k) } else { flight::orbit_height(team, k) };
         flight::Leg { orbit: false, point: d.at, alt, radius: 0.0 }
     } else {
-        let plan = flight::plan(&game.map, d.at, target, low);
+        let plan = match order {
+            // A drone sent to take a tower circles it low, however it gets there.
+            Order::Take(_) => flight::take(&game.map, d.at, target, low),
+            _ => flight::plan(&game.map, d.at, target, low),
+        };
         let leg = flight::leg(&game.map, &plan, team, k, d.at, d.alt);
         // CIRCLE: the circle is as wide as the commander drew it.
         match order {

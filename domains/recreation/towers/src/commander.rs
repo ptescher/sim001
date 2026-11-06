@@ -470,7 +470,7 @@ mod tests {
         for (team, k) in [(Team::Blue, 0), (Team::Red, 1)] {
             let i = g.drone(team, k);
             g.drones[i] =
-                crate::Drone { at: at + Vec2::new(0.0, 40.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+                crate::Drone { at: at + Vec2::new(0.0, 40.0), alt: 15.0, phase: Phase::Flying, ..g.drones[i] };
         }
         let mut c = Commander::new(g.rules).with_lookahead(false);
         c.assign(0, Some(Order::Take(west)));

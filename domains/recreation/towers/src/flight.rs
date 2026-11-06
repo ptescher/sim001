@@ -71,6 +71,13 @@ pub fn plan(map: &Map, from: Vec2, target: Vec2, low: bool) -> Plan {
     }
 }
 
+/// The plan for a drone at `from` sent to take the tower at `tower`, `low` or high.
+/// Flown high it goes straight over the forest; flown low, along the lanes. Either way it circles
+/// the tower low: only a low drone takes a tower.
+pub fn take(map: &Map, from: Vec2, tower: Vec2, low: bool) -> Plan {
+    Plan { circle_low: true, ..plan(map, from, tower, low) }
+}
+
 /// What a drone is told to do now.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Leg {
@@ -87,6 +94,11 @@ pub fn leg(map: &Map, plan: &Plan, team: Team, k: usize, pos: Vec2, alt: f32) ->
     let high = orbit_height(team, k);
     let circle = |point: Vec2, alt: f32| Leg { orbit: true, point, alt, radius: ORBIT_RADIUS };
     if !plan.low || plan.path.is_empty() {
+        // A drone that came over the forest to circle low comes down once it is on its circle,
+        // in the clearing, and stays down.
+        if plan.circle_low && pos.distance(plan.target) <= ORBIT_RADIUS + 20.0 {
+            return circle(plan.target, low_height(team, k));
+        }
         // A drone that is still below the treetops (it has just taken off, or it was flying low)
         // climbs before it goes: in the clearing it is in, or along the lane to the nearest one.
         if alt < CLEAR {
@@ -188,7 +200,8 @@ mod tests {
         let mut heights: Vec<f32> = Team::BOTH.iter().flat_map(|&t| (0..3).map(move |k| orbit_height(t, k))).collect();
         heights.sort_by(f32::total_cmp);
         assert!(heights.windows(2).all(|w| w[1] - w[0] >= 4.0), "{heights:?}");
-        assert!(heights[0] >= rules.treetop + 30.0 && heights[5] < rules.circle_ceiling);
+        // High, well over the trees: a drone that circles there watches a tower, it does not take it.
+        assert!(heights[0] >= rules.treetop + 30.0 && heights[0] > rules.circle_ceiling);
     }
 
     #[test]
@@ -296,5 +309,33 @@ mod tests {
             pos += (l.point - pos).normalize_or_zero() * 15.0;
             assert!(m.open(pos), "a drone flying straight at its aim is off the lane at {pos}");
         }
+    }
+
+    /// A drone sent high to take a tower crosses the forest high, and circles the tower low: only
+    /// a low drone takes it. It comes down only once it is on its circle in the tower's clearing,
+    /// so it never sinks into the trees; and once low there, it stays low.
+    #[test]
+    fn a_take_order_flown_high_comes_down_to_circle_the_tower() {
+        let (m, rules) = (map(), Rules::default());
+        let (team, k) = (Team::Blue, 1);
+        let west = m.towers[1];
+        let base = rules.base(team);
+        let p = take(&m, base, west, false);
+        assert!(p.path.is_empty() && p.circle_low, "{p:?}");
+        let far = leg(&m, &p, team, k, base, 60.0);
+        assert!(far.orbit && far.point == west && far.alt == orbit_height(team, k), "{far:?}");
+        // Over the forest near the tower, still high.
+        let near = west + (base - west).normalize() * 120.0;
+        assert!(!m.in_clearing(near) || near.distance(west) > ORBIT_RADIUS + 20.0);
+        assert_eq!(leg(&m, &p, team, k, near, 60.0).alt, orbit_height(team, k));
+        // On its circle, it comes down, and stays down.
+        let on = west + Vec2::new(ORBIT_RADIUS, 0.0);
+        for alt in [60.0, 17.0] {
+            let l = leg(&m, &p, team, k, on, alt);
+            assert!(l.orbit && l.point.distance(west) < 1.0 && l.alt == low_height(team, k), "at {alt} m: {l:?}");
+            assert!(l.alt < rules.circle_ceiling);
+        }
+        // Flown low, it circles low too.
+        assert!(take(&m, base, west, true).circle_low);
     }
 }
