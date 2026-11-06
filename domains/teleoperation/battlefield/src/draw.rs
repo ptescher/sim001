@@ -1,6 +1,6 @@
 //! Immediate-mode drawing on a canvas: lines, shapes and text (after the console's).
 
-use super::theme::FONT;
+use crate::theme::FONT;
 use gpui::{
     App, Bounds, Hsla, PathBuilder, Pixels, Point, SharedString, TextRun, Window, font, point, px, quad,
     transparent_black,

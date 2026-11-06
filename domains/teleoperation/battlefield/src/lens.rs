@@ -4,7 +4,7 @@
 use crate::draw::rect;
 use glam::{Vec2, Vec3};
 use gpui::{Bounds, Pixels};
-use recreation_towers::battlefield::Eye;
+use teleoperation_shared::battlefield::Eye;
 
 /// The battlefield: the field as the camera `eye` sees it, in the screen rectangle of the picture.
 #[derive(Clone, Copy)]
@@ -35,6 +35,35 @@ impl Lens {
     /// The ground under the screen point (`sx`, `sy`), or `None` in the sky.
     pub fn to_field(self, sx: f32, sy: f32) -> Option<Vec2> {
         self.eye.ground(sx - self.x, sy - self.y, self.w, self.h)
+    }
+
+    /// The ground under the screen point (`sx`, `sy`) on terrain of `height` (m above the origin,
+    /// at a field point): where the line of sight first meets it, or `None` in the sky.
+    pub fn to_terrain(self, sx: f32, sy: f32, height: impl Fn(Vec2) -> f32) -> Option<Vec2> {
+        let (forward, right, up) = self.eye.axes();
+        let f = self.h * 0.5 / (self.eye.vfov.to_radians() * 0.5).tan();
+        let ray = (forward + right * ((sx - self.x - self.w * 0.5) / f) - up * ((sy - self.y - self.h * 0.5) / f))
+            .normalize();
+        let from = self.eye.position();
+        let above = |t: f32| {
+            let p = from + ray * t;
+            p.z - height(p.truncate())
+        };
+        // March along the line of sight in steps of 4 m, then halve the step where it went under.
+        let (mut t0, step, far) = (0.0f32, 4.0f32, 20_000.0f32);
+        while t0 < far {
+            let t1 = t0 + step;
+            if above(t1) <= 0.0 {
+                let (mut a, mut b) = (t0, t1);
+                for _ in 0..20 {
+                    let m = 0.5 * (a + b);
+                    if above(m) > 0.0 { a = m } else { b = m }
+                }
+                return Some((from + ray * b).truncate());
+            }
+            t0 = t1;
+        }
+        None
     }
 
     /// A circle of radius `r` on the ground round `at`, on screen (closed), if all of it is in
@@ -123,6 +152,20 @@ mod tests {
         // Further ahead than the point, as a trapezoid wider at the top.
         assert!(middle.x > 0.0 && middle.y.abs() < 1.0, "{middle}");
         assert!(f[0].distance(f[1]) > f[2].distance(f[3]));
+    }
+
+    #[test]
+    fn a_click_on_a_hill_finds_the_hill_not_the_plain_under_it() {
+        let lens = Lens::new(Eye::default(), bounds());
+        // A hill 80 m high from 150 m north of the camera's point.
+        let hill = |p: Vec2| if p.x > 150.0 { 80.0 } else { 0.0 };
+        let on_top = Vec2::new(200.0, 0.0);
+        let (sx, sy) = lens.at(on_top.extend(80.0)).unwrap();
+        let found = lens.to_terrain(sx, sy, hill).unwrap();
+        assert!(found.distance(on_top) < 2.0, "{found}");
+        // Flat ground is what to_field gives.
+        let (fx, fy) = lens.ground(Vec2::new(50.0, 10.0)).unwrap();
+        assert!(lens.to_terrain(fx, fy, |_| 0.0).unwrap().distance(Vec2::new(50.0, 10.0)) < 0.5);
     }
 
     #[test]

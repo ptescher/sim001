@@ -14,58 +14,36 @@
 //! battlefield; Q and E turn it by 45°; the wheel takes it nearer to the ground or further; a click
 //! on the minimap looks there; Space looks at the selected drones.
 
-use crate::battlefield::Battlefield;
 use crate::cameras::Cameras;
-use crate::draw::*;
-use crate::field::{self, Drag, PING, Scene, team_name};
+use crate::field::{self, Drag, PING, Scene, team_colour, team_name};
 use crate::ground::Ground;
-use crate::lens::{Flat, Lens};
 use crate::seat::{Seat, Status};
-use crate::theme::*;
 use glam::Vec2;
 use gpui::{
-    Bounds, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful,
-    Window, canvas, div, prelude::*, px,
+    Bounds, Context, Div, FocusHandle, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, ScrollWheelEvent, SharedString, Window, canvas, div,
+    prelude::*, px,
 };
-use recreation_towers::battlefield::Eye;
 use recreation_towers::map::Map;
 use recreation_towers::seat::Join;
 use recreation_towers::{Class, Order, Phase, Rules, Team, TeamView};
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use teleoperation_battlefield::draw::*;
+use teleoperation_battlefield::theme::*;
+use teleoperation_battlefield::widgets::{camera_tile, command, panel, recorder};
+use teleoperation_battlefield::{Battlefield, Flat, Lens, Rig};
+use teleoperation_shared::battlefield::Eye;
 
-thread_local! {
-    /// Where each button was last painted, by id, so `--expect` can click it the way a person
-    /// would. Written while painting, read between frames; both on the UI thread.
-    static BUTTONS: RefCell<HashMap<SharedString, Bounds<Pixels>>> = RefCell::new(HashMap::new());
-}
-
-/// Where the button with this id is on screen now, if it is.
-pub fn button_bounds(id: &str) -> Option<Bounds<Pixels>> {
-    BUTTONS.with(|b| b.borrow().get(id).copied())
-}
+pub use teleoperation_battlefield::widgets::button_bounds;
 
 /// A drone on the battlefield is clicked when the click is this near it (screen pixels).
 const PICK: f32 = 16.0;
 
 /// A left button press that moves less than this (screen pixels) is a click, not a box.
 const DRAG: f32 = 4.0;
-
-/// The mouse this near an edge of the battlefield moves the camera (screen pixels).
-const EDGE: f32 = 14.0;
-
-/// How the camera looks down, and how near and how far from the ground it goes (m).
-const PITCH: f32 = 50.0;
-const HEIGHT_MIN: f32 = 20.0;
-const HEIGHT_MAX: f32 = 2500.0;
-/// One step of the wheel takes the camera this much nearer.
-const WHEEL_STEP: f32 = 0.8;
-/// Q and E turn the camera this far (deg).
-const TURN: f32 = 45.0;
 
 /// The height of the bottom bar, and the side of its minimap (px).
 const BAR: f32 = 212.0;
@@ -96,14 +74,7 @@ pub struct CommanderView {
     picture: Option<(Arc<RenderImage>, Eye)>,
     focus: FocusHandle,
     /// The commander's camera over the battlefield.
-    pub eye: Eye,
-    /// The camera has been put over the team's base.
-    eye_placed: bool,
-    /// The keys that move the camera, held down now.
-    held: HashSet<String>,
-    /// The mouse on the battlefield, for the edges (screen pixels).
-    hover: Option<(f32, f32)>,
-    last_tick: Instant,
+    pub rig: Rig,
     /// Where the last right-click sent the drones, and when.
     ping: Option<(Vec2, Instant)>,
     /// The tower chips of the top bar, as last drawn: the team that holds each.
@@ -151,11 +122,7 @@ impl CommanderView {
             battlefield,
             picture: None,
             focus,
-            eye: Eye { pitch: PITCH, ..Eye::default() },
-            eye_placed: false,
-            held: HashSet::new(),
-            hover: None,
-            last_tick: Instant::now(),
+            rig: Rig::default(),
             ping: None,
             chips: RefCell::default(),
             portrait: Cell::new(None),
@@ -165,9 +132,7 @@ impl CommanderView {
     /// As on a fresh start of the app: nothing selected, and the camera over the team's base.
     pub fn fresh(&mut self) {
         self.selected.clear();
-        self.eye_placed = false;
-        self.held.clear();
-        self.hover = None;
+        self.rig.reset();
     }
 
     /// The battlefield shows the picture of the 3D view (not the plain map).
@@ -177,7 +142,7 @@ impl CommanderView {
 
     /// The battlefield through the camera now.
     fn lens(&self) -> Lens {
-        Lens::new(self.eye, self.map_bounds.get())
+        Lens::new(self.rig.eye, self.map_bounds.get())
     }
 
     /// Where the field point `at` is on the battlefield now.
@@ -321,95 +286,27 @@ impl CommanderView {
 
     /// Puts the camera over the team's base, looking towards the enemy, once the rules arrive.
     fn place_eye(&mut self) {
-        if self.eye_placed {
-            return;
-        }
         let Some(rules) = self.seat.state().rules else { return };
         let team = match self.seat.join() {
             Join::Command(t) | Join::Watch(t) => t,
             Join::Spectate => Team::Blue,
         };
-        self.eye = Eye {
-            look: rules.base(team),
-            // Blue's base is in the south: Blue looks north, Red south.
-            heading: if rules.base(team).x < 0.0 { 0.0 } else { 180.0 },
-            pitch: PITCH,
-            distance: 450.0,
-            ..Eye::default()
-        };
-        self.eye_placed = true;
+        self.rig.limit = rules.field_radius * 1.3;
+        // Blue's base is in the south: Blue looks north, Red south.
+        let base = rules.base(team);
+        self.rig.place(base, if base.x < 0.0 { 0.0 } else { 180.0 });
     }
 
     /// Moves the camera by the keys held and the mouse at an edge.
     fn tick(&mut self) {
-        let dt = self.last_tick.elapsed().as_secs_f32().min(0.1);
-        self.last_tick = Instant::now();
-        let held = |k: &[&str]| k.iter().any(|k| self.held.contains(*k));
-        let (mut fwd, mut right) = (0.0f32, 0.0f32);
-        if held(&["w", "up"]) {
-            fwd += 1.0;
-        }
-        if held(&["s", "down"]) {
-            fwd -= 1.0;
-        }
-        if held(&["d", "right"]) {
-            right += 1.0;
-        }
-        if held(&["a", "left"]) {
-            right -= 1.0;
-        }
-        if let Some((x, y)) = self.hover {
-            let (bx, by, bw, bh) = rect(self.map_bounds.get());
-            if x < bx + EDGE {
-                right -= 1.0;
-            }
-            if x > bx + bw - EDGE {
-                right += 1.0;
-            }
-            if y < by + EDGE {
-                fwd += 1.0;
-            }
-            if y > by + bh - EDGE {
-                fwd -= 1.0;
-            }
-        }
-        if fwd == 0.0 && right == 0.0 {
-            return;
-        }
-        let h = self.eye.heading.to_radians();
-        let (ahead, side) = (Vec2::new(h.cos(), h.sin()), Vec2::new(-h.sin(), h.cos()));
-        // Faster the higher the camera is, as in a strategy game.
-        let speed = (self.eye.height() * 1.3).max(120.0);
-        let to = self.eye.look + (ahead * fwd + side * right).normalize_or_zero() * speed * dt;
-        self.look_at(to);
-    }
-
-    /// The camera looks at `at`, kept over the field.
-    fn look_at(&mut self, at: Vec2) {
-        let limit = self.seat.state().rules.map_or(1000.0, |r| r.field_radius * 1.3);
-        self.eye.look = at.clamp_length_max(limit);
-    }
-
-    /// Q and E: the camera turns `by` degrees, to a multiple of 45°.
-    fn turn(&mut self, by: f32) {
-        self.eye.heading = ((self.eye.heading + by) / TURN).round() * TURN;
-        self.eye.heading = self.eye.heading.rem_euclid(360.0);
-    }
-
-    /// The camera goes nearer to the ground (`factor` < 1) or further.
-    fn zoom(&mut self, factor: f32) {
-        let s = self.eye.pitch.to_radians().sin();
-        self.eye.distance = (self.eye.distance * factor).clamp(HEIGHT_MIN / s, HEIGHT_MAX / s);
+        self.rig.tick(self.map_bounds.get());
     }
 
     /// Space: the camera looks at the middle of the selected drones.
     fn focus_selection(&mut self) {
         let Some(view) = self.seat.state().view.clone() else { return };
         let at: Vec<Vec2> = view.drones.iter().filter(|d| self.selected.contains(&d.k)).map(|d| d.at).collect();
-        if !at.is_empty() {
-            let mid = at.iter().copied().sum::<Vec2>() / at.len() as f32;
-            self.look_at(mid);
-        }
+        self.rig.focus(&at);
     }
 
     fn key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
@@ -426,11 +323,7 @@ impl CommanderView {
                 let all: Vec<usize> = (0..self.drone_count()).collect();
                 self.select_many(&all, false)
             }
-            "w" | "a" | "s" | "d" | "up" | "down" | "left" | "right" => {
-                self.held.insert(key.to_string());
-            }
-            "q" => self.turn(-TURN),
-            "e" => self.turn(TURN),
+            k if self.rig.key_down(k, m) => {}
             "space" => self.focus_selection(),
             "h" => self.give(Order::Hold),
             "b" => self.give(Order::Home),
@@ -442,16 +335,12 @@ impl CommanderView {
     }
 
     fn key_up(&mut self, ev: &KeyUpEvent) {
-        self.held.remove(ev.keystroke.key.as_str());
+        self.rig.key_up(ev.keystroke.key.as_str());
     }
 
     /// The wheel takes the camera nearer to the ground, or further.
     fn map_scroll(&mut self, ev: &ScrollWheelEvent, cx: &mut Context<Self>) {
-        let factor = match ev.delta {
-            ScrollDelta::Pixels(p) => (-f(p.y) * 0.004).exp(),
-            ScrollDelta::Lines(l) => WHEEL_STEP.powf(l.y),
-        };
-        self.zoom(factor);
+        self.rig.scroll(ev.delta);
         cx.notify();
     }
 
@@ -471,7 +360,7 @@ impl CommanderView {
 
     fn map_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
         let p = (f(ev.position.x), f(ev.position.y));
-        self.hover = self.map_bounds.get().contains(&ev.position).then_some(p);
+        self.rig.hover(self.map_bounds.get().contains(&ev.position).then_some(p));
         if let Some((_, to, _)) = &mut self.drag {
             if ev.dragging() {
                 *to = p;
@@ -499,7 +388,7 @@ impl CommanderView {
         let b = self.minimap_bounds.get();
         let Some(flat) = self.flat() else { return };
         let (x, y, w, h) = rect(b);
-        self.look_at(flat.to_field(f(p.x).clamp(x, x + w), f(p.y).clamp(y, y + h)));
+        self.rig.look_at(flat.to_field(f(p.x).clamp(x, x + w), f(p.y).clamp(y, y + h)));
     }
 }
 
@@ -519,54 +408,8 @@ fn clock(secs: f32) -> String {
     format!("{:02}:{:02}", s / 60, s % 60)
 }
 
-/// Records where the element with `id` is painted, for `--expect`.
-fn recorder(id: SharedString) -> impl IntoElement {
-    canvas(move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(id, b)), |_, _, _, _| {}).absolute().inset_0()
-}
-
-/// A button of the command card: a square with its name, and its key in the corner.
-fn command(id: &'static str, name: &'static str, key: &'static str, active: bool) -> Stateful<Div> {
-    let (bg, fg, border) = if active { (ACTIVE_FILL, GREEN, GREEN_DIM) } else { (CONTROL, WHITE, BEZEL_EDGE) };
-    div()
-        .id(id)
-        .relative()
-        .w(px(62.0))
-        .h(px(52.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .bg(c(bg))
-        .text_color(c(fg))
-        .text_sm()
-        .border_1()
-        .border_color(c(border))
-        .rounded(px(CONTROL_RADIUS))
-        .cursor_pointer()
-        .hover(|s| s.bg(c(CONTROL_HOVER)))
-        .active(|s| s.opacity(0.7))
-        .child(name)
-        .child(div().absolute().top(px(2.0)).right(px(4.0)).text_xs().text_color(c(AMBER)).child(key))
-        .child(recorder(id.into()))
-}
-
-/// A titled panel of the bars, as on the console.
-fn panel(title: &'static str, body: impl IntoElement) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .min_h(px(0.0))
-        .bg(c(BEZEL))
-        .border_1()
-        .border_color(c(BEZEL_EDGE))
-        .rounded(px(PANEL_RADIUS))
-        .p(px(BEZEL_PAD))
-        .gap(px(4.0))
-        .child(div().px_2().bg(c(TITLE_BG)).text_color(c(GREY)).text_xs().child(title))
-        .child(div().flex_1().min_h(px(0.0)).bg(c(SCREEN)).rounded(px(SCREEN_RADIUS)).overflow_hidden().child(body))
-}
-
 fn theme_team(t: Team) -> u32 {
-    crate::theme::team(t)
+    team_colour(t)
 }
 
 impl CommanderView {
@@ -813,7 +656,7 @@ impl Render for CommanderView {
         let battlefield = self.battlefield.clone();
         let bounds = self.map_bounds.clone();
         let selected = self.selected.clone();
-        let (drag, ping, eye) = (self.drag, self.ping.filter(|(_, t)| t.elapsed().as_secs_f32() < PING), self.eye);
+        let (drag, ping, eye) = (self.drag, self.ping.filter(|(_, t)| t.elapsed().as_secs_f32() < PING), self.rig.eye);
         let (v2, r2, valley) = (view.clone(), rules, self.valley.clone());
         let map_canvas = canvas(
             |_, _, _| {},
@@ -1007,50 +850,6 @@ impl Render for CommanderView {
             .child(map)
             .child(bottom)
     }
-}
-
-/// One drone's picture (or NO SIGNAL), `w` by `h` pixels, with its name over it.
-fn camera_tile(
-    id: String,
-    label: &str,
-    image: Option<Arc<RenderImage>>,
-    no_link: bool,
-    w: f32,
-    h: f32,
-    selected: bool,
-) -> Stateful<Div> {
-    let recorded: SharedString = id.clone().into();
-    let label = label.to_string();
-    div()
-        .id(SharedString::from(id))
-        .relative()
-        .w(px(w))
-        .h(px(h))
-        .flex_none()
-        .border_1()
-        .border_color(c(if selected { WHITE } else { BEZEL_EDGE }))
-        .cursor_pointer()
-        .child(
-            canvas(
-                move |b, _, _| BUTTONS.with(|m| m.borrow_mut().insert(recorded, b)),
-                move |b, _, window, cx| {
-                    let (x, y, w, h) = rect(b);
-                    fill_rect(window, x, y, w, h, c(0x000000));
-                    match &image {
-                        Some(img) => {
-                            let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
-                        }
-                        None => {
-                            let message = if no_link { "NO LINK" } else { "NO SIGNAL" };
-                            text(window, cx, message, x + w * 0.5, y + h * 0.5, 10.0, c(GREY), Align::Center)
-                        }
-                    }
-                    text(window, cx, &label, x + 6.0, y + 9.0, 10.0, c(WHITE), Align::Left);
-                },
-            )
-            .absolute()
-            .inset_0(),
-        )
 }
 
 /// A top-down silhouette of a drone of `class`, nose up, centred on (`x`, `y`) in an 84 pixel square.

@@ -1,0 +1,62 @@
+Feature: The battlefield view
+  On: desktop
+  VIEW changes the console to the battlefield view, the screen of a real-time strategy game. It
+  is the same screen as the commander app of [[Towers]]. Press VIEW again to go back to the
+  screens.
+
+  The battlefield fills the window. It shows the valley in 3D, as your camera sees it from above,
+  with the plane in it. The sim renders the picture. For a real flight, `sim001_view` renders the
+  real place. The console draws home, the [[mission]] on the plane, the plan, the GUIDED target and
+  the ground track on the picture. The plane stands on a line from its shadow, so you can see how
+  high it flies.
+
+  The camera starts over the plane. W, A, S and D, or the arrow keys, move the camera. If you put
+  the mouse at an edge of the battlefield, the camera moves that way. Q and E turn the camera, and
+  the mouse wheel moves it nearer to the ground or further from it. Drag the battlefield to move
+  the camera. Space moves the camera back to the plane.
+
+  The map tools work on the battlefield as on the [[tactical map]]. There are two more ways to give
+  orders. Right-click a point, and the plane flies there in [[GUIDED]]. Hold Shift and right-click,
+  and the point becomes the next waypoint of the plan.
+
+  The bottom bar has the minimap, the card of the plane with the picture of its camera, the flight
+  display, and the buttons of the vehicle command screen and the map tools.
+
+  Expectation: VIEW changes to the battlefield
+    Given the console view is the screens
+    When the operator switches the view
+    Then the console view is the battlefield
+
+  Expectation: VIEW again changes back to the screens
+    Given the console view is the battlefield
+    When the operator switches the view
+    Then the console view is the screens
+
+  Expectation: The sim renders the battlefield in 3D
+    The sim loads the valley first, and the console shows the plain ground until then.
+
+    Given the console view is the battlefield
+    When the operator waits for the battlefield
+    Then the battlefield picture in the console is live
+
+  Expectation: The camera starts over the plane
+    Given the console view is the screens
+    When the operator switches the view
+    Then the point of the console's camera is the plane
+
+  Expectation: A right-click on the battlefield flies the plane there
+    The plane flies to the point at its current altitude, and then it circles the point.
+
+    Given the console view is the battlefield
+    And the vehicle is armed
+    When the operator right-clicks the battlefield
+    Then the autopilot mode is GUIDED
+
+  Expectation: Shift and a right-click add a waypoint to the plan
+    The new waypoint is at the plan altitude.
+
+    Given the console view is the battlefield
+    And the plan has 0 items
+    When the operator adds a waypoint on the battlefield
+    Then the plan has 1 item
+    And the newest waypoint is at the plan altitude

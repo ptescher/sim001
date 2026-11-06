@@ -1,0 +1,12 @@
+[package]
+name = "visualization_battlefield"
+version = "0.1.0"
+edition = "2024"
+description = "Visualization domain: the battlefield, the 3D picture of the field from an operator's camera, rendered offscreen and sent to the app that steers the camera (the ground station, or the commander app of Towers)"
+
+[dependencies]
+visualization_engine = { path = "../engine" }
+# The battlefield's camera and the link to the app.
+teleoperation_shared = { path = "../../teleoperation/shared" }
+bevy.workspace = true
+glam.workspace = true

@@ -1,16 +1,16 @@
 //! The battlefield and the minimap: what the app draws of the team's map, on the 3D view's picture
 //! of the valley (or on the plain map of it), and on the minimap.
 
-use crate::draw::*;
 use crate::ground::Ground;
-use crate::lens::{Flat, Lens};
-use crate::theme::*;
 use glam::{Vec2, Vec3};
-use gpui::{App, Bounds, ContentMask, Corners, Hsla, Pixels, RenderImage, Window, px};
+use gpui::{App, Bounds, ContentMask, Corners, Pixels, RenderImage, Window, px};
 use recreation_towers::map::{LANE_HALF_WIDTH, Map};
 use recreation_towers::{Kind, Order, Outcome, Phase, Rules, Team, TeamView};
 use std::sync::Arc;
 use std::time::Instant;
+use teleoperation_battlefield::draw::*;
+use teleoperation_battlefield::theme::*;
+use teleoperation_battlefield::{Flat, Lens, paint};
 
 /// A box being dragged: where the button went down, where the mouse is now (screen pixels), and
 /// whether Shift was held.
@@ -32,8 +32,16 @@ pub fn team_name(t: Team) -> &'static str {
     }
 }
 
+/// The colour of team `t`.
+pub fn team_colour(t: Team) -> u32 {
+    match t {
+        Team::Blue => BLUE,
+        Team::Red => RED,
+    }
+}
+
 fn tint(t: Team) -> u32 {
-    crate::theme::team(t)
+    team_colour(t)
 }
 
 /// What the battlefield shows besides the team's map.
@@ -84,7 +92,7 @@ pub fn paint_battlefield(
                 polyline(window, &closed, 1.5, ca(tint(team), 0.9));
             }
             if let Some((bx, by)) = lens.ground(base) {
-                label(window, cx, &format!("{} BASE", team_name(team)), bx, by + 18.0, ca(tint(team), 0.95));
+                paint::label(window, cx, &format!("{} BASE", team_name(team)), bx, by + 18.0, ca(tint(team), 0.95));
             }
         }
         paint_tower_grounds(window, lens, v, rules);
@@ -113,13 +121,6 @@ pub fn paint_battlefield(
             text(window, cx, &banner, x + w * 0.5, y + h * 0.4, 30.0, c(AMBER), Align::Center);
         }
     });
-}
-
-/// A label with a dark backing, centred on (`x`, `y`).
-fn label(window: &mut Window, cx: &mut App, s: &str, x: f32, y: f32, colour: Hsla) {
-    let w = s.len() as f32 * 6.2 + 8.0;
-    fill_rect(window, x - w * 0.5, y - 7.0, w, 14.0, ca(0x000000, 0.55));
-    text(window, cx, s, x, y, 10.0, colour, Align::Center);
 }
 
 /// The plain map of the valley in perspective: the ground, the lake, the lanes and the clearings.
@@ -246,7 +247,7 @@ fn paint_towers(window: &mut Window, cx: &mut App, lens: Lens, v: &TeamView) {
         };
         let name = format!("{} {kind}", t.name.to_uppercase());
         let name = if t.seen { name } else { format!("{name} ({:.0} s)", t.age) };
-        label(window, cx, &name, top.0, by - 12.0, ca(WHITE, alpha));
+        paint::label(window, cx, &name, top.0, by - 12.0, ca(WHITE, alpha));
     }
 }
 
@@ -271,63 +272,13 @@ fn paint_orders(window: &mut Window, lens: Lens, v: &TeamView, rules: &Rules, se
     }
 }
 
-/// A drone in the air: its shadow on the ground, the line down to it, and its mark.
-#[allow(clippy::too_many_arguments)]
-fn paint_drone(
-    window: &mut Window,
-    lens: Lens,
-    at: Vec2,
-    alt: f32,
-    vel: Vec2,
-    colour: Hsla,
-    filled: bool,
-    selected: bool,
-) -> Option<(f32, f32)> {
-    let air = lens.at(at.extend(alt))?;
-    if let Some(shadow) = lens.ring(at, 4.0) {
-        fill_poly(window, &shadow, ca(0x000000, 0.45));
-    }
-    if selected && let Some(ring) = lens.ring(at, 16.0) {
-        polyline(window, &ring, 1.5, ca(GREEN, 0.9));
-    }
-    if let Some(foot) = lens.ground(at)
-        && alt > 1.0
-    {
-        dashed(window, &[foot, air], 1.0, 3.0, ca(0x000000, 0.5));
-        dashed(window, &[foot, air], 0.6, 3.0, ca(WHITE, 0.6));
-    }
-    // The way it flies, on screen.
-    let dir = if vel.length() > 1.0 { vel.normalize() } else { lens.eye.axes().0.truncate().normalize() };
-    let ahead = lens.at((at + dir * 10.0).extend(alt)).unwrap_or(air);
-    let (dx, dy) = (ahead.0 - air.0, ahead.1 - air.1);
-    let len = dx.hypot(dy).max(1e-3);
-    let (fx, fy) = (dx / len, dy / len);
-    let (sx, sy) = (-fy, fx);
-    let pts = [
-        (air.0 + fx * 11.0, air.1 + fy * 11.0),
-        (air.0 - fx * 7.0 + sx * 7.0, air.1 - fy * 7.0 + sy * 7.0),
-        (air.0 - fx * 3.0, air.1 - fy * 3.0),
-        (air.0 - fx * 7.0 - sx * 7.0, air.1 - fy * 7.0 - sy * 7.0),
-    ];
-    if filled {
-        fill_poly(window, &pts, colour);
-        polyline(window, &[pts[0], pts[1], pts[2], pts[3], pts[0]], 1.0, ca(0x000000, 0.7));
-    } else {
-        polyline(window, &[pts[0], pts[1], pts[2], pts[3], pts[0]], 1.2, colour);
-    }
-    if selected {
-        circle(window, air.0, air.1, 14.0, 1.5, c(GREEN));
-    }
-    Some(air)
-}
-
 fn paint_drones(window: &mut Window, cx: &mut App, lens: Lens, v: &TeamView, selected: &[usize]) {
     let own = tint(v.team);
     for d in &v.drones {
         let dim = d.phase == Phase::Down || !d.linked;
         let colour = if d.phase == Phase::Down { ca(GREY, 0.6) } else { ca(own, if dim { 0.5 } else { 1.0 }) };
         let picked = selected.contains(&d.k);
-        if let Some((ax, ay)) = paint_drone(window, lens, d.at, d.alt, d.vel, colour, !dim, picked) {
+        if let Some((ax, ay)) = paint::vehicle(window, lens, d.at, d.alt, d.vel, colour, !dim, picked) {
             let name = format!("{}{}", &team_name(v.team)[..1], d.k + 1);
             text(window, cx, &name, ax + 14.0, ay - 10.0, 10.0, colour, Align::Left);
         }
@@ -336,7 +287,7 @@ fn paint_drones(window: &mut Window, cx: &mut App, lens: Lens, v: &TeamView, sel
     for e in &v.enemies {
         let name = format!("{}{}", &team_name(v.team.other())[..1], e.k + 1);
         let (colour, name) = if e.seen { (c(enemy), name) } else { (ca(enemy, 0.5), format!("{name} {:.0} s", e.age)) };
-        if let Some((ax, ay)) = paint_drone(window, lens, e.at, e.alt, e.vel, colour, e.seen, false) {
+        if let Some((ax, ay)) = paint::vehicle(window, lens, e.at, e.alt, e.vel, colour, e.seen, false) {
             text(window, cx, &name, ax + 14.0, ay - 10.0, 10.0, colour, Align::Left);
         }
     }
@@ -390,20 +341,6 @@ pub fn paint_minimap(
             let (x, y) = flat.to_screen(d.at);
             fill_circle(window, x, y, 2.5, c(tint(v.team)));
         }
-        // The area the battlefield shows.
-        let mut quad: Vec<(f32, f32)> =
-            lens.footprint(rules.field_radius * 3.0).iter().map(|&p| flat.to_screen(p)).collect();
-        quad.push(quad[0]);
-        polyline(window, &quad, 1.5, ca(WHITE, 0.9));
-        // The compass: the way the camera looks.
-        let (ax, ay, r) = (mx + mw - 16.0, my + 16.0, 10.0);
-        fill_circle(window, ax, ay, r + 3.0, ca(0x000000, 0.6));
-        let hd = lens.eye.heading.to_radians();
-        let (fx, fy) = (hd.sin(), -hd.cos());
-        fill_poly(
-            window,
-            &[(ax + fx * r, ay + fy * r), (ax - fy * 4.0, ay + fx * 4.0), (ax + fy * 4.0, ay - fx * 4.0)],
-            c(AMBER),
-        );
+        paint::minimap_view(window, b, flat, lens, rules.field_radius * 3.0);
     });
 }

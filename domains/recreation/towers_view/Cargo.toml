@@ -11,6 +11,8 @@ path = "src/main.rs"
 [dependencies]
 recreation_towers = { path = "../towers" }
 visualization_engine = { path = "../../visualization/engine" }
+# The battlefield of each team, for its commander app.
+visualization_battlefield = { path = "../../visualization/battlefield" }
 visualization_world = { path = "../../visualization/world" }
 # The sensor feed protocol: the camera of each drone is sent the way the sim's sensor camera is.
 teleoperation_shared = { path = "../../teleoperation/shared" }

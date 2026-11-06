@@ -1,28 +1,29 @@
-//! The battlefield of each team (`recreation_towers::battlefield`): the valley as the camera of
-//! the team's commander sees it, rendered offscreen and sent while the commander app is connected.
-//! The app steers the camera with its requests; each picture goes back with the eye that it was
-//! rendered from, so the app draws its map on it in the right place.
+//! The battlefield (`teleoperation_shared::battlefield`): the field as an operator's camera sees
+//! it, rendered offscreen and sent while the app that steers the camera is connected: the ground
+//! station from the sim or from `sim001_view`, or each team's commander app from the game's
+//! `towers_view`. Each picture goes back with the eye that it was rendered from, so the app draws
+//! its map on it in the right place.
 //!
-//! The picture has no drones in it: the drones are on a render layer of their own, which the
-//! battlefield cameras do not see, so the picture shows nothing that the team's fog hides.
+//! With `hide_vehicles`, the picture has no planes in it: they are on a render layer of their own,
+//! which the battlefield cameras do not see, so a game's picture shows nothing that a team's fog
+//! hides. The app draws the vehicles itself.
 
 use bevy::camera::RenderTarget;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::render::gpu_readback::{Readback, ReadbackComplete};
 use bevy::render::render_resource::{Extent3d, TextureFormat, TextureUsages};
-use recreation_towers::Team;
-use recreation_towers::battlefield::{self, Eye, Frame, MAX_SIZE, Request, write_frame};
 use std::io::Read;
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
+use teleoperation_shared::battlefield::{self, Eye, Frame, MAX_SIZE, Request, write_frame};
 use visualization_engine::camera::scene_look;
 use visualization_engine::loading::AppState;
 use visualization_engine::model::PlaneRoot;
 
-/// The layer of the drones: every camera but the battlefields' sees it.
+/// The layer of the planes, when they are hidden: every camera but the battlefields' sees it.
 const DRONES: usize = 1;
 const IDLE_SIZE: UVec2 = UVec2::new(64, 36);
 const MAX_FPS: f64 = 30.0;
@@ -35,17 +36,47 @@ struct Shared {
     new_frame: Condvar,
 }
 
-/// The servers of the two battlefields, Blue's then Red's.
-#[derive(Resource, Clone)]
-pub struct Links(Vec<Arc<Shared>>);
+/// The battlefields: `slots` of them, each on `battlefield::port(first_feed_port, slot)` (a game
+/// has one for each team, the ground station one).
+pub struct BattlefieldPlugin {
+    pub first_feed_port: u16,
+    pub slots: usize,
+    pub hide_vehicles: bool,
+    /// Where the origin of the field's frame (north, east, up) is in the world: the game's field
+    /// centre, or the ground station's home (the pilot box).
+    pub origin: Vec3,
+}
 
-/// Starts the servers: the team's battlefield on `battlefield::port(first_feed_port, team)`.
-pub fn serve(first_feed_port: u16) -> Links {
-    let links: Vec<Arc<Shared>> = Team::BOTH.iter().map(|_| Arc::new(Shared::default())).collect();
-    for (team, shared) in Team::BOTH.into_iter().zip(&links) {
-        let (shared, port) = (shared.clone(), battlefield::port(first_feed_port, team));
+/// The world point of the field's origin.
+#[derive(Resource, Clone, Copy)]
+struct Origin(Vec3);
+
+impl Plugin for BattlefieldPlugin {
+    fn build(&self, app: &mut App) {
+        let links = serve(self.first_feed_port, self.slots);
+        let slots = self.slots;
+        app.insert_resource(links)
+            .insert_resource(Origin(self.origin))
+            .add_systems(Startup, move |commands: Commands, images: ResMut<Assets<Image>>| {
+                spawn(commands, images, slots)
+            })
+            .add_systems(Update, update.after(visualization_engine::EngineSet::Draw));
+        if self.hide_vehicles {
+            app.add_systems(Update, layers);
+        }
+    }
+}
+
+/// The servers of the battlefields, by slot.
+#[derive(Resource, Clone)]
+struct Links(Vec<Arc<Shared>>);
+
+fn serve(first_feed_port: u16, slots: usize) -> Links {
+    let links: Vec<Arc<Shared>> = (0..slots).map(|_| Arc::new(Shared::default())).collect();
+    for (slot, shared) in links.iter().enumerate() {
+        let (shared, port) = (shared.clone(), battlefield::port(first_feed_port, slot));
         std::thread::Builder::new()
-            .name(format!("battlefield-{}", team.index()))
+            .name(format!("battlefield-{slot}"))
             .spawn(move || listen(shared, port))
             .expect("spawn a battlefield server");
     }
@@ -126,13 +157,9 @@ struct Cam {
 #[derive(Resource)]
 struct Cams(Vec<Cam>);
 
-pub fn plugin(app: &mut App) {
-    app.add_systems(Startup, spawn).add_systems(Update, (layers, update.after(visualization_engine::EngineSet::Draw)));
-}
-
-fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>, slots: usize) {
     let mut cams = Vec::new();
-    for i in 0..Team::BOTH.len() {
+    for i in 0..slots {
         let mut target = Image::new_target_texture(IDLE_SIZE.x, IDLE_SIZE.y, TextureFormat::Bgra8UnormSrgb, None);
         target.texture_descriptor.usage |= TextureUsages::COPY_SRC;
         let image = images.add(target);
@@ -151,7 +178,7 @@ fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.insert_resource(Cams(cams));
 }
 
-/// The drones go on a layer of their own, which every camera sees but the battlefields'.
+/// The planes go on a layer of their own, which every camera sees but the battlefields'.
 #[allow(clippy::type_complexity)]
 fn layers(
     mut commands: Commands,
@@ -178,9 +205,9 @@ fn world(p: glam::Vec3) -> Vec3 {
     Vec3::new(p.y, p.z, -p.x)
 }
 
-fn place(eye: &Eye) -> Transform {
+fn place(eye: &Eye, origin: Vec3) -> Transform {
     let (forward, _, up) = eye.axes();
-    Transform::from_translation(world(eye.position())).looking_to(world(forward), world(up))
+    Transform::from_translation(origin + world(eye.position())).looking_to(world(forward), world(up))
 }
 
 /// Each battlefield camera follows the app's requests, and renders full size only while the app
@@ -192,6 +219,7 @@ fn update(
     mut images: ResMut<Assets<Image>>,
     mut cameras: Query<(&BattlefieldCamera, &mut Transform, &mut Projection)>,
     state: Res<State<AppState>>,
+    origin: Res<Origin>,
 ) {
     // Until the valley has loaded, the world is a placeholder: no picture of it goes out.
     let loaded = *state.get() == AppState::Running;
@@ -203,7 +231,7 @@ fn update(
         cam.ticks = cam.ticks.wrapping_add(1);
         let want = match request.filter(|_| live) {
             Some(r) => {
-                *t = place(&r.eye);
+                *t = place(&r.eye, origin.0);
                 if let Projection::Perspective(p) = projection.as_mut() {
                     p.fov = r.eye.vfov.to_radians();
                 }

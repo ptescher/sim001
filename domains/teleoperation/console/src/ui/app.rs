@@ -3,14 +3,16 @@
 use super::draw::round_corners;
 use super::map::{MapData, MapState, Tool};
 use super::theme::*;
-use super::{charts, hud, map};
+use super::{battlefield as bf, charts, hud, map};
 use crate::feed::Sensor;
 use crate::geo::{Origin, TerrainMap, wrap360};
 use crate::link::{Cmd, Shared};
 use crate::vehicle::{Vehicle, Waypoint, WpKind, mode_number};
+use glam::Vec2;
 use gpui::{
-    AnyElement, Bounds, Context, Div, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Render, RenderImage, ScrollDelta, ScrollWheelEvent, SharedString, Stateful, Window, canvas, div, prelude::*, px,
+    AnyElement, Bounds, Context, Corners, Div, FocusHandle, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, RenderImage, ScrollDelta, ScrollWheelEvent,
+    SharedString, Stateful, Window, canvas, div, prelude::*, px,
 };
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -18,6 +20,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use teleoperation_battlefield::{Battlefield, Eye, Flat, Lens, Rig};
 use teleoperation_core::debug::{self, Level, Source};
 
 thread_local! {
@@ -93,6 +96,13 @@ const Q_MODE_BUTTONS: [&str; 5] = ["QSTABILIZE", "QHOVER", "QLOITER", "QLAND", "
 const MODE_BUTTONS: [&str; 10] =
     ["MANUAL", "FBWA", "FBWB", "CRUISE", "AUTO", "RTL", "LOITER", "CIRCLE", "GUIDED", "TAKEOFF"];
 
+/// What the console shows: its screens, or the battlefield of a real-time strategy screen.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum View {
+    Screens,
+    Battlefield,
+}
+
 pub struct Gcs {
     pub(crate) vehicle: Shared,
     pub(crate) tx: Sender<Cmd>,
@@ -116,6 +126,21 @@ pub struct Gcs {
     pub(crate) debug_view: bool,
     /// The last lines of the autopilot's own output, read once a second.
     proc_log: (Option<Instant>, Vec<String>),
+    /// The screens, or the battlefield.
+    pub(crate) view: View,
+    /// The battlefield: the camera, the 3D picture from the sim (or `sim001_view`), and the one
+    /// the window has on its atlas.
+    pub(crate) rig: Rig,
+    battlefield: Arc<Battlefield>,
+    picture: Option<(Arc<RenderImage>, Eye)>,
+    /// The picture from the aircraft's camera that the window has on its atlas.
+    feed_shown: Option<Arc<RenderImage>>,
+    bf_bounds: Rc<Cell<Bounds<Pixels>>>,
+    minimap_bounds: Rc<Cell<Bounds<Pixels>>>,
+    /// A drag of the battlefield: where it began on screen, the camera then, and the ground there.
+    bf_drag: Option<((f32, f32), Lens, Vec2)>,
+    minimap_drag: bool,
+    focus: FocusHandle,
 }
 
 /// Below this window width the console drops to two columns; with a sensor window open the
@@ -123,12 +148,14 @@ pub struct Gcs {
 const COMPACT_WIDTH: f32 = 1500.0;
 
 impl Gcs {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vehicle: Shared,
         tx: Sender<Cmd>,
         origin: Origin,
         terrain: Option<Arc<TerrainMap>>,
         sensor: Option<Arc<Sensor>>,
+        battlefield: Arc<Battlefield>,
         vtol: bool,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -140,7 +167,13 @@ impl Gcs {
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_millis(33)).await;
-                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                let ticked = this.update(cx, |g, cx| {
+                    if g.view == View::Battlefield {
+                        g.rig.tick(g.bf_bounds.get());
+                    }
+                    cx.notify()
+                });
+                if ticked.is_err() {
                     break;
                 }
             }
@@ -163,7 +196,145 @@ impl Gcs {
             // SIM001_DEBUG_VIEW=1 opens on the debug view (for a screenshot of it, and while debugging).
             debug_view: std::env::var_os("SIM001_DEBUG_VIEW").is_some(),
             proc_log: (None, vec![]),
+            view: View::Screens,
+            rig: {
+                let mut rig = Rig::default();
+                rig.limit = 5000.0;
+                rig
+            },
+            battlefield,
+            picture: None,
+            feed_shown: None,
+            bf_bounds: Rc::new(Cell::new(Bounds::default())),
+            minimap_bounds: Rc::new(Cell::new(Bounds::default())),
+            bf_drag: None,
+            minimap_drag: false,
+            focus: cx.focus_handle(),
         }
+    }
+
+    /// VIEW: the screens, or the battlefield.
+    /// The battlefield's camera goes over the aircraft (or home), looking the way it flies.
+    pub(crate) fn switch_view(&mut self) {
+        self.view = match self.view {
+            View::Screens => View::Battlefield,
+            View::Battlefield => View::Screens,
+        };
+        if self.view == View::Battlefield {
+            let v = self.vehicle.lock().unwrap();
+            let at = if v.have_position {
+                self.origin.to_ne(v.lat, v.lon)
+            } else {
+                v.home.map_or((0.0, 0.0), |h| self.origin.to_ne(h.0, h.1))
+            };
+            let heading = (v.heading / 45.0).round() * 45.0;
+            drop(v);
+            self.rig.reset();
+            self.rig.place(Vec2::new(at.0, at.1), wrap360(heading));
+        }
+    }
+
+    /// The battlefield shows the 3D picture of the place.
+    pub(crate) fn battlefield_live(&self) -> bool {
+        self.battlefield.picture().is_some()
+    }
+
+    /// Where the battlefield is on screen.
+    pub(crate) fn battlefield_bounds(&self) -> Bounds<Pixels> {
+        self.bf_bounds.get()
+    }
+
+    /// The point of the field that the battlefield's camera looks at (north, east of the origin).
+    pub(crate) fn camera_look(&self) -> (f32, f32) {
+        (self.rig.eye.look.x, self.rig.eye.look.y)
+    }
+
+    /// The battlefield through the camera now.
+    fn lens(&self) -> Lens {
+        Lens::new(self.rig.eye, self.bf_bounds.get())
+    }
+
+    /// The ground under the screen point `p` of the battlefield (north, east of the origin).
+    fn battlefield_ground(&self, p: (f32, f32)) -> Option<(f32, f32)> {
+        let terrain = self.terrain.clone();
+        self.lens().to_terrain(p.0, p.1, |at| bf::ground(terrain.as_deref(), at)).map(|g| (g.x, g.y))
+    }
+
+    /// Space: the camera looks at the aircraft.
+    fn look_at_aircraft(&mut self) {
+        let v = self.vehicle.lock().unwrap();
+        if v.have_position {
+            let (n, e) = self.origin.to_ne(v.lat, v.lon);
+            drop(v);
+            self.rig.look_at(Vec2::new(n, e));
+        }
+    }
+
+    /// GOTO: the aircraft flies to the field point (`n`, `e`) at its altitude (or the plan's, low down).
+    fn goto(&mut self, n: f32, e: f32) {
+        let (lat, lon) = self.origin.to_ll(n, e);
+        let alt = {
+            let v = self.vehicle.lock().unwrap();
+            if v.alt_rel > 15.0 { v.alt_rel.round() } else { self.map.plan_alt }
+        };
+        self.send(Cmd::Goto { lat, lon, alt });
+    }
+
+    fn bf_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus);
+        let p = (f32::from(ev.position.x), f32::from(ev.position.y));
+        let Some((n, e)) = self.battlefield_ground(p) else { return };
+        match (ev.button, self.map.tool) {
+            // The strategy game's orders: a right-click flies there, with Shift it plans there.
+            (MouseButton::Right, Tool::Pan) if ev.modifiers.shift => {
+                let (lat, lon) = self.origin.to_ll(n, e);
+                self.map.plan.push(Waypoint { kind: WpKind::Waypoint, lat, lon, alt: self.map.plan_alt });
+            }
+            (MouseButton::Right, Tool::Pan) => self.goto(n, e),
+            // Drag the ground to move the camera.
+            (MouseButton::Left, Tool::Pan) => self.bf_drag = Some((p, self.lens(), Vec2::new(n, e))),
+            (button, _) => self.tool_click(button, n, e),
+        }
+        cx.notify();
+    }
+
+    fn bf_mouse_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
+        let p = (f32::from(ev.position.x), f32::from(ev.position.y));
+        let inside = self.bf_bounds.get().contains(&ev.position);
+        if let Some((_, lens, grabbed)) = self.bf_drag {
+            if ev.dragging() {
+                let terrain = self.terrain.clone();
+                if let Some(now) = lens.to_terrain(p.0, p.1, |at| bf::ground(terrain.as_deref(), at)) {
+                    self.rig.look_at(lens.eye.look + (grabbed - now));
+                }
+            } else {
+                self.bf_drag = None;
+            }
+        }
+        // While a drag moves the camera, the edges do not.
+        self.rig.hover((inside && self.bf_drag.is_none()).then_some(p));
+        self.map.cursor = if inside { self.battlefield_ground(p) } else { None };
+        cx.notify();
+    }
+
+    fn minimap_look(&mut self, p: gpui::Point<Pixels>) {
+        let b = self.minimap_bounds.get();
+        let flat = Flat::new(b, 1500.0);
+        self.rig.look_at(flat.to_field(f32::from(p.x), f32::from(p.y)));
+    }
+
+    fn key_down(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
+        if self.view != View::Battlefield {
+            return;
+        }
+        let key = ev.keystroke.key.as_str();
+        if !self.rig.key_down(key, ev.keystroke.modifiers) {
+            if key != "space" {
+                return;
+            }
+            self.look_at_aircraft();
+        }
+        cx.notify();
     }
 
     fn send(&self, cmd: Cmd) {
@@ -190,14 +361,19 @@ impl Gcs {
         self.map.bounds = self.map_bounds.get();
         let (sx, sy) = (f32::from(ev.position.x), f32::from(ev.position.y));
         let (n, e) = self.map.screen_to_ne(sx, sy);
-        match (ev.button, self.map.tool) {
+        if (ev.button, self.map.tool) == (MouseButton::Left, Tool::Pan) {
+            self.map.drag = Some(((sx, sy), self.map.centre));
+        } else {
+            self.tool_click(ev.button, n, e);
+        }
+        cx.notify();
+    }
+
+    /// A click of the map tool at the field point (`n`, `e`), on the tactical map or the battlefield.
+    fn tool_click(&mut self, button: MouseButton, n: f32, e: f32) {
+        match (button, self.map.tool) {
             (MouseButton::Left, Tool::Goto) => {
-                let (lat, lon) = self.origin.to_ll(n, e);
-                let alt = {
-                    let v = self.vehicle.lock().unwrap();
-                    if v.alt_rel > 15.0 { v.alt_rel.round() } else { self.map.plan_alt }
-                };
-                self.send(Cmd::Goto { lat, lon, alt });
+                self.goto(n, e);
                 self.map.tool = Tool::Pan;
             }
             (MouseButton::Left, Tool::Survey) => self.map.survey.push((n, e)),
@@ -228,12 +404,8 @@ impl Gcs {
             (MouseButton::Right, Tool::Plan) => {
                 self.map.plan.pop();
             }
-            (MouseButton::Left, Tool::Pan) => {
-                self.map.drag = Some(((sx, sy), self.map.centre));
-            }
             _ => {}
         }
-        cx.notify();
     }
 
     fn map_mouse_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
@@ -944,6 +1116,9 @@ impl Gcs {
 
 impl Render for Gcs {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.view == View::Battlefield {
+            return self.render_battlefield(window, cx).into_any_element();
+        }
         let compact = f32::from(window.viewport_size().width) < COMPACT_WIDTH;
         let right_w = if compact { 340.0 } else { 400.0 };
         let vehicle = self.vehicle.clone();
@@ -1115,8 +1290,220 @@ impl Render for Gcs {
             .font_family(FONT)
             .text_size(px(12.0))
             .text_color(c(WHITE))
-            .child(top)
+            .child(self.with_view_button(top, cx))
             .child(body)
+            .into_any_element()
+    }
+}
+
+/// The battlefield's bottom bar is this tall, and its minimap this wide (px).
+const BAR: f32 = 236.0;
+const MINIMAP: f32 = 190.0;
+
+impl Gcs {
+    /// The top bar with VIEW at its end: the screens, or the battlefield.
+    fn with_view_button(&self, top: Div, cx: &mut Context<Self>) -> Div {
+        let battlefield = self.view == View::Battlefield;
+        let view = button("view", "VIEW", if battlefield { Style::Active } else { Style::Normal }).on_click(
+            cx.listener(|this, _, window, cx| {
+                this.switch_view();
+                window.focus(&this.focus);
+                cx.notify();
+            }),
+        );
+        div().flex().gap(px(6.0)).items_center().child(top.flex_1()).child(view)
+    }
+
+    /// What the map draws, with what the aircraft's camera adds to it.
+    fn map_data(&self, v: &Vehicle) -> MapData {
+        let mut map_data = MapData::from(v, self.origin);
+        if let Some(s) = &self.sensor {
+            map_data.spi = s.spi(v).map(|p| (p.north, p.east));
+            map_data.track = s.track.lock().unwrap().map(|t| (t.0, t.1));
+            if let Some(a) = s.frame.lock().unwrap().as_ref().and_then(|f| f.header.arena) {
+                map_data.cones = a.cones();
+            }
+        }
+        map_data
+    }
+
+    /// The newest picture of the battlefield; the one the window had is freed from its atlas.
+    fn battlefield_picture(&mut self, window: &mut Window) -> Option<(Arc<RenderImage>, Eye)> {
+        let new = self.battlefield.picture();
+        let same = match (&self.picture, &new) {
+            (Some((a, _)), Some((b, _))) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same && let Some((old, _)) = std::mem::replace(&mut self.picture, new.clone()) {
+            let _ = window.drop_image(old);
+        }
+        new
+    }
+
+    /// The newest picture from the aircraft's camera; the one the window had is freed from its atlas.
+    fn feed_picture(&mut self, window: &mut Window) -> Option<Arc<RenderImage>> {
+        let new = self.sensor.as_ref().and_then(|s| s.frame.lock().unwrap().as_ref().map(|f| f.image.clone()));
+        let same = match (&self.feed_shown, &new) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same && let Some(old) = std::mem::replace(&mut self.feed_shown, new.clone()) {
+            let _ = window.drop_image(old);
+        }
+        new
+    }
+
+    /// The battlefield view: the top bar, the battlefield, and the bottom bar with the minimap, the
+    /// aircraft's camera, the flight display, the vehicle's commands and the map's tools.
+    fn render_battlefield(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let vehicle = self.vehicle.clone();
+        let v = vehicle.lock().unwrap();
+        let agl = self.agl(&v);
+        let hud_data = hud::HudData::from(&v, agl);
+        let map_data = self.map_data(&v);
+        let mini_data = self.map_data(&v);
+        let (alt, velocity) = (v.alt_rel, Vec2::new(v.vn, v.ve));
+        let top = self.top_bar(&v);
+        let command = self.command_panel(&v, cx);
+        drop(v);
+        let toolbar = self.map_toolbar(cx);
+        let plan = bf::plan_points(&self.map.plan, self.origin);
+        let (measure, survey) = (self.map.measure.clone(), self.map.survey.clone());
+
+        let picture = self.battlefield_picture(window);
+        let link = self.battlefield.clone();
+        let bounds = self.bf_bounds.clone();
+        let terrain = self.terrain.clone();
+        let eye = self.rig.eye;
+        let field = canvas(
+            |_, _, _| {},
+            move |b, _, window, cx| {
+                bounds.set(b);
+                let (_, _, w, h) = super::draw::rect(b);
+                link.ask(eye, w.round() as u16, h.round() as u16);
+                // The picture's own eye, so that the map lies on it where it was rendered.
+                let (image, lens) = match &picture {
+                    Some((img, at)) => (Some(img.clone()), Lens::new(*at, b)),
+                    None => (None, Lens::new(eye, b)),
+                };
+                let scene =
+                    bf::Scene { picture: image, alt, velocity, plan: &plan, measure: &measure, survey: &survey };
+                bf::paint_battlefield(b, lens, &map_data, &scene, terrain.as_deref(), window, cx);
+            },
+        )
+        .size_full();
+        let field = div()
+            .id("battlefield")
+            .flex_1()
+            .min_h(px(0.0))
+            .rounded(px(PANEL_RADIUS))
+            .overflow_hidden()
+            .child(field)
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, ev, window, cx| this.bf_mouse_down(ev, window, cx)))
+            .on_mouse_down(MouseButton::Right, cx.listener(|this, ev, window, cx| this.bf_mouse_down(ev, window, cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, _| this.bf_drag = None))
+            .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
+                this.rig.scroll(ev.delta);
+                cx.notify();
+            }));
+
+        // The minimap.
+        let mini_bounds = self.minimap_bounds.clone();
+        let (terrain, image, lens) = (self.terrain.clone(), self.map_image.clone(), self.lens());
+        let minimap = div()
+            .id("minimap")
+            .size(px(MINIMAP))
+            .child(
+                canvas(
+                    |_, _, _| {},
+                    move |b, _, window, _| {
+                        mini_bounds.set(b);
+                        let flat = Flat::new(b, 1500.0);
+                        bf::paint_minimap(window, b, flat, &mini_data, terrain.as_deref(), image.as_ref(), lens);
+                    },
+                )
+                .size_full(),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                    this.minimap_drag = true;
+                    this.minimap_look(ev.position);
+                    cx.notify();
+                }),
+            )
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, _| this.minimap_drag = false));
+
+        // The aircraft's camera, and the flight display.
+        let feed = self.feed_picture(window);
+        let camera = canvas(
+            |_, _, _| {},
+            move |b, _, window, cx| {
+                let (x, y, w, h) = super::draw::rect(b);
+                super::draw::fill_rect(window, x, y, w, h, c(0x000000));
+                match &feed {
+                    Some(img) => {
+                        let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
+                    }
+                    None => {
+                        super::draw::text(
+                            window,
+                            cx,
+                            "NO CAMERA",
+                            x + w * 0.5,
+                            y + h * 0.5,
+                            10.0,
+                            c(GREY),
+                            super::draw::Align::Center,
+                        );
+                    }
+                }
+            },
+        )
+        .size_full();
+        let flight =
+            canvas(|_, _, _| {}, move |b, _, window, cx| hud::paint(b, &hud_data, hud::HudOpts::default(), window, cx))
+                .size_full();
+
+        let bottom = div()
+            .flex()
+            .flex_none()
+            .h(px(BAR))
+            .gap(px(6.0))
+            .child(screen("MAP", None, minimap.into_any_element()).w(px(MINIMAP + 14.0)).flex_none())
+            .child(screen("CAMERA", None, camera.into_any_element()).w(px(250.0)).flex_none())
+            .child(screen("FLIGHT", None, flight.into_any_element()).w(px(280.0)).flex_none())
+            .child(scrolling("VEHICLE COMMAND", None, command.into_any_element()).flex_1().min_w(px(0.0)))
+            .child(scrolling("MAP TOOLS", None, toolbar.into_any_element()).w(px(330.0)).flex_none());
+
+        div()
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(|this, ev, _, cx| this.key_down(ev, cx)))
+            .on_key_up(cx.listener(|this, ev: &KeyUpEvent, _, _| this.rig.key_up(ev.keystroke.key.as_str())))
+            .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
+                if this.minimap_drag {
+                    if ev.dragging() {
+                        this.minimap_look(ev.position);
+                    } else {
+                        this.minimap_drag = false;
+                    }
+                }
+                this.bf_mouse_move(ev, cx);
+            }))
+            .size_full()
+            .flex()
+            .flex_col()
+            .gap(px(GAP))
+            .p(px(GAP))
+            .bg(c(CONSOLE))
+            .font_family(FONT)
+            .text_size(px(12.0))
+            .text_color(c(WHITE))
+            .child(self.with_view_button(top, cx))
+            .child(field)
+            .child(bottom)
     }
 }
 

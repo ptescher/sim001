@@ -2,6 +2,8 @@
 name = "teleoperation_shared"
 version = "0.1.0"
 edition = "2024"
-description = "Shared between sim001 and the ground station console: the sensor video feed protocol and the window layout planner"
+description = "Shared between sim001 and the ground station console: the sensor video feed protocol, the battlefield camera and its link, and the window layout planner"
 
 [dependencies]
+# The battlefield's camera (battlefield.rs).
+glam.workspace = true

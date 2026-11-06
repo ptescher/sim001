@@ -1,0 +1,11 @@
+# sim001 map export. Map centre is given in metres north/east of home (the pilot box).
+size_m=3200
+map_px=2560
+centre_north=20
+centre_east=-10
+height_n=321
+runway_north=50
+runway_east=-10
+runway_length=140
+runway_width=12
+runway_heading=0

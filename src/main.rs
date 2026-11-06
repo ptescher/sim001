@@ -6,6 +6,8 @@
 //!   cargo run --release --bin sim001 -- --selftest   headless flight-model checks
 //!   cargo run --release -- --export-map domains/teleoperation/console/assets   map + heights for the ground station
 //!   cargo run --release --bin sim001 -- --ardupilot --feed  also stream the sensor camera (TCP 5600)
+//!   --battlefield                               serve the ground station's battlefield: the 3D picture of the field
+//!                                               from its camera (TCP 5620, see visualization_battlefield)
 //!   --window-rect x,y,w,h [--title-bar N]       window frame in points (set by `sim001_gcs --station`)
 //!   --frameless                                 transparent title bar, no title or buttons
 //!   --test-radio                                a TX15 stand-in that the ground station's tests move
@@ -321,6 +323,19 @@ fn main() {
     }
     if let Some(cfg) = feed {
         feed::feed_plugin(&mut app, cfg, core.clone());
+    }
+    // The ground station's battlefield: the field from its camera, with the planes in it.
+    if flag("--battlefield") {
+        app.add_plugins(visualization_battlefield::BattlefieldPlugin {
+            first_feed_port: teleoperation_shared::feed::DEFAULT_PORT,
+            slots: 1,
+            hide_vehicles: false,
+            // The ground station's frame: metres from home, the pilot box.
+            origin: {
+                let p = terrain::pilot_pos();
+                Vec3::new(p.x, terrain::ground_height(p.x, p.z), p.z)
+            },
+        });
     }
     if let Some(r) = window_rect {
         app.insert_resource(placement::WindowRect(r, title_bar)).add_systems(Update, placement::place_window);

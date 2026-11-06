@@ -47,6 +47,8 @@ simulation_physics = { path = "domains/simulation/physics" }
 simulation_sitl = { path = "domains/simulation/sitl" }
 # The 3D view and the place it shows: see domains/visualization.
 visualization_engine = { path = "domains/visualization/engine" }
+# The ground station's battlefield (--battlefield).
+visualization_battlefield = { path = "domains/visualization/battlefield" }
 # Games against computer pilots: see domains/recreation.
 recreation_games = { path = "domains/recreation/games" }
 # Map packs (real places): aerial photos and land cover.

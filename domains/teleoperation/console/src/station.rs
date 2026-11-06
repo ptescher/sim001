@@ -596,6 +596,8 @@ pub fn start_sim(opts: &Options, rect: Option<Rect>, home: (f64, f64, f32)) -> R
         &format!("127.0.0.1:{}", ports.mavlink()),
         "--feed",
         &opts.feed_port.to_string(),
+        // The console's battlefield view: the valley in 3D from its camera.
+        "--battlefield",
         "--exit-with-parent",
     ]);
     if opts.raytrace {

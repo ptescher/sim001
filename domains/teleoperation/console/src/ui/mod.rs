@@ -1,4 +1,5 @@
 pub mod app;
+pub mod battlefield;
 pub mod charts;
 pub mod draw;
 pub mod hud;
