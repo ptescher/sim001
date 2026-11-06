@@ -16,10 +16,11 @@ pub fn orbit_height(team: Team, k: usize) -> f32 {
     55.0 + 8.0 * k as f32 + if team == Team::Red { 4.0 } else { 0.0 }
 }
 
-/// The height drone `k` of `team` circles at when it flies low (m): below the treetops (20 m) and
-/// over the AGENT envelope's least height (its floor of 8 m and 8 m more), each its own.
+/// The height drone `k` of `team` circles at when it flies low (m): below the treetops (20 m),
+/// where it takes a tower, and over the AGENT envelope's least height (its floor of 8 m and 8 m
+/// more), each its own: all five drones of a team fit in the 4 m between.
 pub fn low_height(team: Team, k: usize) -> f32 {
-    16.0 + 1.5 * k as f32 + if team == Team::Red { 0.75 } else { 0.0 }
+    16.0 + 0.7 * k as f32 + if team == Team::Red { 0.35 } else { 0.0 }
 }
 
 /// How far ahead along its way a drone aims, so that it follows a lane (m).
@@ -207,10 +208,12 @@ mod tests {
     #[test]
     fn a_low_drone_flies_below_the_treetops_and_above_the_floor_each_at_a_height_of_its_own() {
         let rules = Rules::default();
-        let mut heights: Vec<f32> = Team::BOTH.iter().flat_map(|&t| (0..3).map(move |k| low_height(t, k))).collect();
+        // Every drone of each team: a low drone above the treetops could not take a tower.
+        let n = rules.drones;
+        let mut heights: Vec<f32> = Team::BOTH.iter().flat_map(|&t| (0..n).map(move |k| low_height(t, k))).collect();
         heights.sort_by(f32::total_cmp);
-        assert!(heights.windows(2).all(|w| w[1] - w[0] >= 0.75), "{heights:?}");
-        assert!(heights[0] >= 16.0 && heights[5] < rules.treetop, "{heights:?}");
+        assert!(heights.windows(2).all(|w| w[1] - w[0] >= 0.3), "{heights:?}");
+        assert!(heights[0] >= 16.0 && heights[2 * n - 1] < rules.circle_ceiling, "{heights:?}");
     }
 
     #[test]
