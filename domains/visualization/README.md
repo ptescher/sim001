@@ -92,6 +92,11 @@ grain only show in flight, so they are not here):
 
 ![Houses and relief, before and after](../../docs/realism_before_after_2.jpg)
 
+And the cliffs, in the Towers valley (rasterized, as `towers_view` draws it) and on the Alpine
+Valley's north faces (ray traced):
+
+![Cliffs, before and after](../../docs/realism_cliffs.jpg)
+
 What it does not do yet:
 
 - **Clouds in the lake, and cloud shadows.** The clouds are camera-facing puffs, which the ray
