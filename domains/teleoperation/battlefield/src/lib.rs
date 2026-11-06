@@ -12,6 +12,7 @@ pub mod camera;
 pub mod draw;
 pub mod lens;
 pub mod link;
+pub mod orders;
 pub mod paint;
 pub mod theme;
 pub mod widgets;

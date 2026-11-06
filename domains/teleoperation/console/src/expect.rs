@@ -125,6 +125,8 @@ enum Act {
     Battlefield { shift: bool },
     /// Wait for the sim's picture of the battlefield.
     WaitBattlefield,
+    /// CIRCLE (C), and a drag on the battlefield out to this many metres.
+    Circle(f32),
 }
 
 const EVENTS: &[(&str, Act)] = &[
@@ -180,6 +182,7 @@ const EVENTS: &[(&str, Act)] = &[
     ("operator waits for the battlefield", Act::WaitBattlefield),
     ("operator right-clicks the battlefield", Act::Battlefield { shift: false }),
     ("operator adds a waypoint on the battlefield", Act::Battlefield { shift: true }),
+    ("operator draws a circle of 120 m on the battlefield", Act::Circle(120.0)),
 ];
 
 /// What the plane does by itself, and the driver waits for.
@@ -228,6 +231,7 @@ const STATES: &[&str] = &[
     "console view",
     "battlefield picture in the console",
     "point of the console's camera",
+    "radius of the plane's guided circle",
 ];
 /// States an action can change directly (the others change through events).
 const SETTABLE: &[&str] = &[
@@ -740,6 +744,7 @@ fn observe(g: &mut Gcs, key: &str) -> Result<Value, String> {
             app::View::Screens => "the screens",
             app::View::Battlefield => "the battlefield",
         }),
+        "radius of the plane's guided circle" => Value::from(g.guided_radius().round() as f64),
         "battlefield picture in the console" => Value::from(if g.battlefield_live() { "live" } else { "missing" }),
         "point of the console's camera" => {
             let look = g.camera_look();
@@ -1669,6 +1674,59 @@ impl Driver for ConsoleDriver {
             Act::Survey => self.survey(),
             Act::WaitBattlefield => {
                 self.wait_for(240, "the sim's picture of the battlefield", |g| g.battlefield_live())
+            }
+            Act::Circle(radius) => {
+                self.with_window(|w, cx| {
+                    w.draw(cx).clear();
+                    let keystroke = gpui::Keystroke::parse("c").expect("a key");
+                    let _ = w.dispatch_event(
+                        PlatformInput::KeyDown(gpui::KeyDownEvent { keystroke: keystroke.clone(), is_held: false }),
+                        cx,
+                    );
+                    let _ = w.dispatch_event(PlatformInput::KeyUp(gpui::KeyUpEvent { keystroke }), cx);
+                })?;
+                let (from, to) = self
+                    .call(move |g, _, _| {
+                        let b = g.battlefield_bounds();
+                        let centre =
+                            g.battlefield_ground_at((f32::from(b.center().x), f32::from(b.center().y) - 40.0))?;
+                        let h = g.rig.eye.heading.to_radians();
+                        let edge = (centre.0 - h.sin() * radius, centre.1 + h.cos() * radius);
+                        Some((g.battlefield_screen(centre)?, g.battlefield_screen(edge)?))
+                    })?
+                    .ok_or("the circle is not on the battlefield")?;
+                self.with_window(move |w, cx| {
+                    let (from, to) =
+                        (Point::new(gpui::px(from.0), gpui::px(from.1)), Point::new(gpui::px(to.0), gpui::px(to.1)));
+                    let modifiers = Modifiers::default();
+                    let mut send = |e: PlatformInput| {
+                        let _ = w.dispatch_event(e, cx);
+                    };
+                    send(PlatformInput::MouseMove(MouseMoveEvent { position: from, pressed_button: None, modifiers }));
+                    send(PlatformInput::MouseDown(MouseDownEvent {
+                        button: MouseButton::Left,
+                        position: from,
+                        modifiers,
+                        click_count: 1,
+                        first_mouse: false,
+                    }));
+                    for i in 1..=8 {
+                        let at = from + (to - from) * (i as f32 / 8.0);
+                        send(PlatformInput::MouseMove(MouseMoveEvent {
+                            position: at,
+                            pressed_button: Some(MouseButton::Left),
+                            modifiers,
+                        }));
+                    }
+                    send(PlatformInput::MouseUp(MouseUpEvent {
+                        button: MouseButton::Left,
+                        position: to,
+                        modifiers,
+                        click_count: 1,
+                    }));
+                })?;
+                std::thread::sleep(FRAME);
+                Ok(())
             }
             Act::Battlefield { shift } => {
                 // Drawn first, so that the battlefield is where the last frame put it.

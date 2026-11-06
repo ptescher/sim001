@@ -28,10 +28,12 @@ use recreation_towers::map::Map;
 use recreation_towers::seat::Join;
 use recreation_towers::{Class, Order, Phase, Rules, Team, TeamView};
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use teleoperation_battlefield::draw::*;
+use teleoperation_battlefield::orders::CircleTool;
 use teleoperation_battlefield::theme::*;
 use teleoperation_battlefield::widgets::{camera_tile, command, panel, recorder};
 use teleoperation_battlefield::{Battlefield, Flat, Lens, Rig};
@@ -44,6 +46,11 @@ const PICK: f32 = 16.0;
 
 /// A left button press that moves less than this (screen pixels) is a click, not a box.
 const DRAG: f32 = 4.0;
+
+/// The widest circle a drone is sent round (m).
+const CIRCLE_MAX: f32 = 300.0;
+/// A drone on a route is at its point this near it (m), and goes on to the next.
+const ROUTE_ARRIVED: f32 = 60.0;
 
 /// The height of the bottom bar, and the side of its minimap (px).
 const BAR: f32 = 212.0;
@@ -77,6 +84,10 @@ pub struct CommanderView {
     pub rig: Rig,
     /// Where the last right-click sent the drones, and when.
     ping: Option<(Vec2, Instant)>,
+    /// CIRCLE: armed, or being dragged on the battlefield.
+    circle: CircleTool,
+    /// The route of each drone that has one: the point it flies to now, then the others in turn.
+    routes: HashMap<usize, Vec<Vec2>>,
     /// The tower chips of the top bar, as last drawn: the team that holds each.
     pub chips: RefCell<Vec<Option<Team>>>,
     /// The drone whose camera the PORTRAIT showed when last drawn.
@@ -124,6 +135,8 @@ impl CommanderView {
             focus,
             rig: Rig::default(),
             ping: None,
+            circle: CircleTool::default(),
+            routes: HashMap::new(),
             chips: RefCell::default(),
             portrait: Cell::new(None),
         }
@@ -158,6 +171,49 @@ impl CommanderView {
     /// Where the field point `at` is on the minimap now.
     pub fn minimap_screen(&self, at: Vec2) -> Option<(f32, f32)> {
         Some(self.flat()?.to_screen(at))
+    }
+
+    /// How many points are in the route of drone `k`.
+    pub fn route_len(&self, k: usize) -> usize {
+        self.routes.get(&k).map_or(0, Vec::len)
+    }
+
+    /// The points of the route of drone `k`.
+    pub fn route(&self, k: usize) -> &[Vec2] {
+        self.routes.get(&k).map_or(&[], Vec::as_slice)
+    }
+
+    /// Shift and a right-click at `at`: the next point of the route of each selected drone. The
+    /// first point is the drone's goal at once.
+    fn add_route_point(&mut self, at: Vec2) {
+        if !self.commands() {
+            return;
+        }
+        let Some(rules) = self.seat.state().rules else { return };
+        let at = at.clamp_length_max(rules.field_radius - 40.0);
+        for &k in &self.selected.clone() {
+            let route = self.routes.entry(k).or_default();
+            route.push(at);
+            if route.len() == 1 {
+                let low = self.low_of(k);
+                self.seat.order(k, Order::Goto(at), low);
+            }
+        }
+        if !self.selected.is_empty() {
+            self.ping = Some((at, Instant::now()));
+        }
+    }
+
+    /// The drones on a route that have got to their point go on to the next; the last they circle.
+    fn advance_routes(&mut self) {
+        let Some(view) = self.seat.state().view.clone() else { return };
+        for (k, route) in self.routes.iter_mut() {
+            let Some(d) = view.drones.get(*k) else { continue };
+            if route.len() > 1 && d.order == Some(Order::Goto(route[0])) && d.at.distance(route[0]) < ROUTE_ARRIVED {
+                route.remove(0);
+                self.seat.order(*k, Order::Goto(route[0]), d.low);
+            }
+        }
     }
 
     /// How many drones the team has.
@@ -200,6 +256,8 @@ impl CommanderView {
             return;
         }
         for &k in &self.selected {
+            // Any other order ends the route.
+            self.routes.remove(&k);
             let low = self.low_of(k);
             self.seat.order(k, order, low);
         }
@@ -300,6 +358,7 @@ impl CommanderView {
     /// Moves the camera by the keys held and the mouse at an edge.
     fn tick(&mut self) {
         self.rig.tick(self.map_bounds.get());
+        self.advance_routes();
     }
 
     /// Space: the camera looks at the middle of the selected drones.
@@ -328,10 +387,21 @@ impl CommanderView {
             "h" => self.give(Order::Hold),
             "b" => self.give(Order::Home),
             "l" => self.toggle_low(),
-            "escape" => self.selected.clear(),
+            "c" => self.arm_circle(),
+            "escape" => {
+                self.circle.cancel();
+                self.selected.clear()
+            }
             _ => return,
         }
         cx.notify();
+    }
+
+    /// CIRCLE (C): the next press on the battlefield is the centre of a circle for the selected drones.
+    fn arm_circle(&mut self) {
+        if self.commands() && !self.selected.is_empty() {
+            self.circle.arm();
+        }
     }
 
     fn key_up(&mut self, ev: &KeyUpEvent) {
@@ -346,13 +416,15 @@ impl CommanderView {
 
     fn map_down(&mut self, ev: &MouseDownEvent, cx: &mut Context<Self>) {
         let p = (f(ev.position.x), f(ev.position.y));
+        let ground = self.lens().to_field(p.0, p.1);
         match ev.button {
+            MouseButton::Left if ground.is_some_and(|at| self.circle.press(at)) => {}
             MouseButton::Left => self.drag = Some((p, p, ev.modifiers.shift)),
-            MouseButton::Right => {
-                if let Some(at) = self.lens().to_field(p.0, p.1) {
-                    self.order_field(at);
-                }
-            }
+            MouseButton::Right => match ground {
+                Some(at) if ev.modifiers.shift => self.add_route_point(at),
+                Some(at) => self.order_field(at),
+                None => {}
+            },
             _ => {}
         }
         cx.notify();
@@ -361,6 +433,12 @@ impl CommanderView {
     fn map_move(&mut self, ev: &MouseMoveEvent, cx: &mut Context<Self>) {
         let p = (f(ev.position.x), f(ev.position.y));
         self.rig.hover(self.map_bounds.get().contains(&ev.position).then_some(p));
+        if self.circle.preview().is_some()
+            && let Some(at) = self.lens().to_field(p.0, p.1)
+        {
+            self.circle.drag(at);
+            cx.notify();
+        }
         if let Some((_, to, _)) = &mut self.drag {
             if ev.dragging() {
                 *to = p;
@@ -373,6 +451,12 @@ impl CommanderView {
 
     /// The button went up: a click selects the drone under it; a drag selects the drones in its box.
     fn map_up(&mut self, ev: &MouseUpEvent, cx: &mut Context<Self>) {
+        if let Some((centre, radius)) = self.circle.release(CIRCLE_MAX) {
+            self.give(Order::Circle(centre, radius));
+            self.ping = Some((centre, Instant::now()));
+            cx.notify();
+            return;
+        }
         let Some((from, _, add)) = self.drag.take() else { return };
         let to = (f(ev.position.x), f(ev.position.y));
         if (to.0 - from.0).hypot(to.1 - from.1) < DRAG {
@@ -398,6 +482,7 @@ pub fn order_text(order: Option<Order>, view: &TeamView) -> String {
         None => "NO ORDER".into(),
         Some(Order::Take(t)) => format!("TAKE {}", view.towers.get(t).map_or("?".into(), |t| t.name.to_uppercase())),
         Some(Order::Goto(_)) => "GO TO A POINT".into(),
+        Some(Order::Circle(_, r)) => format!("CIRCLE {r:.0} M"),
         Some(Order::Hold) => "HOLD".into(),
         Some(Order::Home) => "HOME".into(),
     }
@@ -658,6 +743,7 @@ impl Render for CommanderView {
         let selected = self.selected.clone();
         let (drag, ping, eye) = (self.drag, self.ping.filter(|(_, t)| t.elapsed().as_secs_f32() < PING), self.rig.eye);
         let (v2, r2, valley) = (view.clone(), rules, self.valley.clone());
+        let (routes, circle_preview) = (self.routes.clone(), self.circle.preview());
         let map_canvas = canvas(
             |_, _, _| {},
             move |b, _, window, cx| {
@@ -670,7 +756,14 @@ impl Render for CommanderView {
                     None => (None, Lens::new(eye, b)),
                 };
                 if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
-                    let scene = Scene { picture: image, selected: &selected, drag, ping };
+                    let scene = Scene {
+                        picture: image,
+                        selected: &selected,
+                        drag,
+                        ping,
+                        routes: &routes,
+                        circle: circle_preview,
+                    };
                     field::paint_battlefield(b, lens, v, r, m, &scene, window, cx);
                 } else {
                     let (x, y, w, h) = rect(b);
@@ -777,6 +870,10 @@ impl Render for CommanderView {
             })))
             .child(command("low", "LOW", "L", all_low).on_click(cx.listener(|this, _, _, cx| {
                 this.toggle_low();
+                cx.notify();
+            })))
+            .child(command("circle", "CIRCLE", "C", self.circle.armed()).on_click(cx.listener(|this, _, _, cx| {
+                this.arm_circle();
                 cx.notify();
             })))
             .child(command("all", "ALL", "^A", false).on_click(cx.listener(|this, _, _, cx| {

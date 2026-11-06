@@ -136,7 +136,7 @@ fn run(vehicle: &Shared, tx: &Sender<Cmd>, origin: Origin) -> bool {
 
     let (lat, lon) = origin.to_ll(hn + 350.0, he + 300.0);
     say(vehicle, "GUIDED goto 350 m N, 300 m E at 60 m".into());
-    let _ = tx.send(Cmd::Goto { lat, lon, alt: 60.0 });
+    let _ = tx.send(Cmd::Goto { lat, lon, alt: 60.0, radius: 0.0 });
     if !wait(vehicle, 10, |v| v.mode() == "GUIDED") {
         say(vehicle, "goto did not switch to GUIDED".into());
         return false;

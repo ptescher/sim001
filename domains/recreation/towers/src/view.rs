@@ -11,6 +11,8 @@ pub enum Order {
     Take(usize),
     /// Fly to a point (north, east of the centre, m) and circle it.
     Goto(Vec2),
+    /// Fly to a point and circle it this far out (m): the ground station's CIRCLE.
+    Circle(Vec2, f32),
     /// Circle where it is.
     Hold,
     /// Circle over its base.

@@ -402,7 +402,7 @@ pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
     let (team, k) = (d.team, i % game.rules.drones);
     let target = match order {
         Order::Take(t) => game.towers[t].at,
-        Order::Goto(p) => p,
+        Order::Goto(p) | Order::Circle(p, _) => p,
         Order::Hold => d.at,
         Order::Home => game.rules.base(team),
     };
@@ -413,7 +413,12 @@ pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
         flight::Leg { orbit: false, point: d.at, alt, radius: 0.0 }
     } else {
         let plan = flight::plan(&game.map, d.at, target, low);
-        flight::leg(&game.map, &plan, team, k, d.at, d.alt)
+        let leg = flight::leg(&game.map, &plan, team, k, d.at, d.alt);
+        // CIRCLE: the circle is as wide as the commander drew it.
+        match order {
+            Order::Circle(_, radius) if leg.orbit => flight::Leg { radius, ..leg },
+            _ => leg,
+        }
     }
 }
 

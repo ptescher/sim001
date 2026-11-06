@@ -104,6 +104,7 @@ impl Flyer {
         match self.order {
             Some(Order::Take(t)) => (game.towers[t].at, ORBIT_RADIUS),
             Some(Order::Goto(p)) => (p, ORBIT_RADIUS),
+            Some(Order::Circle(p, r)) => (p, r),
             Some(Order::Home) => (game.rules.base(self.team), ORBIT_RADIUS),
             Some(Order::Hold) => (self.hold, ORBIT_RADIUS),
             // As the server: a drone its seat has not ordered yet circles over its base.

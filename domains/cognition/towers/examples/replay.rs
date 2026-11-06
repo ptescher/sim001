@@ -53,6 +53,7 @@ fn main() -> Result<(), String> {
                         None => "-".to_string(),
                         Some(Order::Take(t)) => format!("take {}", tower_names[t]),
                         Some(Order::Goto(_)) => "go to a point".into(),
+                        Some(Order::Circle(_, r)) => format!("circle a point {r:.0} m out"),
                         Some(Order::Hold) => "hold".into(),
                         Some(Order::Home) => "home".into(),
                     };
