@@ -154,6 +154,24 @@ fn gully(x: f32, z: f32, down: Vec2) -> f32 {
     g / 8.0
 }
 
+/// The relief at (x, z) that the mesh is too coarse for (m, up from the mesh).
+fn relief(x: f32, z: f32, f: &[f32; NF]) -> f32 {
+    let _ = (x, z, f);
+    0.0
+}
+
+/// The slope of the fine relief at (x, z) (rise per metre along x and z), over `step` metres.
+pub fn relief_slope(x: f32, z: f32, step: f32) -> Vec2 {
+    let _ = (relief(x, z, &[0.0; NF]), step);
+    Vec2::ZERO
+}
+
+/// A tangent-space normal map texel (x along +x, y along +z) for a relief rising at `slope`.
+fn encode_normal(slope: Vec2) -> [u8; 2] {
+    let _ = slope;
+    [128, 128]
+}
+
 /// Per-texel detail on top of the interpolated coarse fields.
 fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
     // Grass: four-tone alpine meadow green (deep, lush, sunny yellow-green, dry) mixed at
@@ -841,5 +859,94 @@ mod tests {
         let (across, down) = (across_sum / faces as f32, down_sum / faces as f32);
         assert!(across >= 0.12, "across a face the rock varies by only {:.1}%", across * 100.0);
         assert!(across > down, "across {:.3}, down {:.3}: not streaked", across, down);
+    }
+
+    /// Bare rock faces, below the snow, whose ±`reach` m stay on the rock.
+    fn rock_faces(reach: f32) -> Vec<Vec2> {
+        let mut out = vec![];
+        for k in 0..4000 {
+            let (x, z) = (-2400.0 + (k % 80) as f32 * 61.0, -2400.0 + (k / 80) as f32 * 97.0);
+            let n = terrain::ground_normal(x, z);
+            let h = terrain::ground_height(x, z);
+            if 1.0 - n.y < 0.45 || !(200.0..270.0).contains(&h) {
+                continue;
+            }
+            let on_rock = |p: Vec2| {
+                let h = terrain::ground_height(p.x, p.y);
+                coarse_fields(p.x, p.y, h, terrain::ground_normal(p.x, p.y))[F_ROCK] > 0.97
+            };
+            let c = Vec2::new(x, z);
+            if [Vec2::X, -Vec2::X, Vec2::Y, -Vec2::Y].iter().all(|d| on_rock(c + *d * reach)) && on_rock(c) {
+                out.push(c);
+            }
+            if out.len() == 30 {
+                break;
+            }
+        }
+        out
+    }
+
+    /// From a few hundred metres up, a mountainside is not a smooth blob: the rock is broken into
+    /// ribs and runnels a few metres across, finer than the far terrain's 6 m mesh cells.
+    #[test]
+    fn rock_has_relief_finer_than_the_far_mesh() {
+        let faces = rock_faces(12.0);
+        assert!(faces.len() >= 15, "only {} rock faces", faces.len());
+        let (mut tilt, mut change, mut n) = (0.0, 0.0, 0.0);
+        for c in faces {
+            for i in -12..=12 {
+                for dir in [Vec2::X, Vec2::Y] {
+                    let p = c + dir * i as f32;
+                    let s = relief_slope(p.x, p.y, 1.0);
+                    let s3 = relief_slope(p.x + dir.x * 3.0, p.y + dir.y * 3.0, 1.0);
+                    tilt += s.length_squared();
+                    change += (s3 - s).length_squared();
+                    n += 1.0;
+                }
+            }
+        }
+        let (tilt, change) = ((tilt / n).sqrt(), (change / n).sqrt());
+        assert!(tilt >= 0.2, "the rock's relief tilts by only {:.1}° (rms)", tilt.atan().to_degrees());
+        assert!(change >= 0.5 * tilt, "it changes by {change:.2} in 3 m against {tilt:.2}: too smooth");
+    }
+
+    /// The runnels on a rock face run down the fall line, like its streaks: the relief rises and
+    /// falls more across the face than down it.
+    #[test]
+    fn rock_relief_is_grooved_down_the_fall_line() {
+        let faces = rock_faces(12.0);
+        assert!(faces.len() >= 15, "only {} rock faces", faces.len());
+        let (mut across, mut down) = (0.0, 0.0);
+        for c in faces {
+            let d = fall_line(c.x, c.y);
+            let a = Vec2::new(-d.y, d.x);
+            for i in -12..=12 {
+                let p = c + a * i as f32;
+                let s = relief_slope(p.x, p.y, 1.0);
+                across += s.dot(a).abs();
+                down += s.dot(d).abs();
+            }
+        }
+        assert!(across > 1.3 * down, "across {across:.1}, down {down:.1}: not grooved");
+    }
+
+    /// The mown field is a lawn: a few centimetres of bumps, no more.
+    #[test]
+    fn a_mown_field_stays_smooth() {
+        for (x, z) in field() {
+            let s = relief_slope(x, z, 0.5);
+            assert!(s.length() < 0.06, "the field tilts {:.1}° at ({x}, {z})", s.length().atan().to_degrees());
+        }
+    }
+
+    /// A rise towards +x tilts the normal towards -x, which the map stores below the middle of
+    /// its red channel; the map's green channel is +z, along the chunk's v.
+    #[test]
+    fn the_normal_map_tilts_away_from_the_rise() {
+        assert_eq!(encode_normal(Vec2::ZERO), [128, 128]);
+        let [x, z] = encode_normal(Vec2::new(0.5, 0.0));
+        assert!(x < 100 && z == 128, "a rise along x: [{x}, {z}]");
+        let [x, z] = encode_normal(Vec2::new(0.0, -0.5));
+        assert!(x == 128 && z > 156, "a fall along z: [{x}, {z}]");
     }
 }
