@@ -12,6 +12,7 @@
 // Bevy systems take many parameters and nested queries.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
+pub mod building;
 pub mod camera;
 pub mod capture;
 pub mod clouds;
