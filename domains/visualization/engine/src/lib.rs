@@ -15,6 +15,7 @@
 pub mod building;
 pub mod camera;
 pub mod capture;
+pub mod cliff;
 pub mod clouds;
 
 pub mod field;
