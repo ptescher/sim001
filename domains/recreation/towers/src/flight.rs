@@ -72,8 +72,10 @@ pub fn plan(map: &Map, from: Vec2, target: Vec2, low: bool) -> Plan {
 }
 
 /// The plan for a drone at `from` sent to take the tower at `tower`, `low` or high.
+/// Flown high it goes straight over the forest; flown low, along the lanes. Either way it circles
+/// the tower low: only a low drone takes a tower.
 pub fn take(map: &Map, from: Vec2, tower: Vec2, low: bool) -> Plan {
-    plan(map, from, tower, low)
+    Plan { circle_low: true, ..plan(map, from, tower, low) }
 }
 
 /// What a drone is told to do now.
@@ -92,6 +94,11 @@ pub fn leg(map: &Map, plan: &Plan, team: Team, k: usize, pos: Vec2, alt: f32) ->
     let high = orbit_height(team, k);
     let circle = |point: Vec2, alt: f32| Leg { orbit: true, point, alt, radius: ORBIT_RADIUS };
     if !plan.low || plan.path.is_empty() {
+        // A drone that came over the forest to circle low comes down once it is on its circle,
+        // in the clearing, and stays down.
+        if plan.circle_low && pos.distance(plan.target) <= ORBIT_RADIUS + 20.0 {
+            return circle(plan.target, low_height(team, k));
+        }
         // A drone that is still below the treetops (it has just taken off, or it was flying low)
         // climbs before it goes: in the clearing it is in, or along the lane to the nearest one.
         if alt < CLEAR {
@@ -193,7 +200,8 @@ mod tests {
         let mut heights: Vec<f32> = Team::BOTH.iter().flat_map(|&t| (0..3).map(move |k| orbit_height(t, k))).collect();
         heights.sort_by(f32::total_cmp);
         assert!(heights.windows(2).all(|w| w[1] - w[0] >= 4.0), "{heights:?}");
-        assert!(heights[0] >= rules.treetop + 30.0 && heights[5] < rules.circle_ceiling);
+        // High, well over the trees: a drone that circles there watches a tower, it does not take it.
+        assert!(heights[0] >= rules.treetop + 30.0 && heights[0] > rules.circle_ceiling);
     }
 
     #[test]

@@ -137,7 +137,10 @@ impl Flyer {
         self.heading += (1.5 * err).clamp(-max_rate, max_rate) * dt;
         let air = Vec2::new(self.heading.cos(), self.heading.sin()) * self.speed;
         self.at += (air + wind) * dt;
-        let target = orbit_height(self.team, self.k);
+        // On its circle at a tower it takes, it comes down below the treetops: only a low drone
+        // takes a tower.
+        let taking = matches!(self.order, Some(Order::Take(_))) && d <= radius + 20.0;
+        let target = if taking { low_height(self.team, self.k) } else { orbit_height(self.team, self.k) };
         self.alt += (target - self.alt).clamp(-VERTICAL * dt, VERTICAL * dt);
     }
 }

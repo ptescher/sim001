@@ -444,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn a_take_order_circles_the_tower_inside_its_circle_at_the_drones_own_height() {
+    fn a_take_order_circles_the_tower_inside_its_circle_low_at_the_drones_own_height() {
         let mut w = world();
         let rules = w.game.rules;
         let home = (-35.363261, 149.165230);
@@ -455,10 +455,15 @@ mod tests {
         w.game.drones[red].phase = Referee::Flying;
         let plan = plan_for(&w.game, red, Order::Take(west), false, home, 7);
         assert_eq!((plan.primitive, plan.radius, plan.id, plan.alt), (Primitive::Orbit, flight::ORBIT_RADIUS, 7, 67.0));
-        assert!(plan.radius < rules.circle_radius && plan.alt < rules.circle_ceiling);
+        assert!(plan.radius < rules.circle_radius);
         let (n, e) = cognition_plan::to_local(home.0, home.1, plan.lat, plan.lon);
         let at = w.game.towers[west].at;
         assert!((n - at.x).abs() < 0.1 && (e - at.y).abs() < 0.1, "{n} {e}");
+        // On its circle at the tower it comes down below the treetops: only a low drone takes it.
+        w.game.drones[red].at = at + Vec2::new(flight::ORBIT_RADIUS, 0.0);
+        let plan = plan_for(&w.game, red, Order::Take(west), false, home, 8);
+        assert_eq!(plan.alt, flight::low_height(Team::Red, 1));
+        assert!(plan.alt < rules.circle_ceiling);
     }
 
     #[test]
