@@ -9,6 +9,7 @@ use bevy::light::AtmosphereEnvironmentMapLight;
 use bevy::pbr::AtmosphereSettings;
 use bevy::post_process::auto_exposure::{AutoExposure, AutoExposureCompensationCurve};
 use bevy::post_process::bloom::Bloom;
+use bevy::post_process::effect_stack::{ChromaticAberration, LensDistortion, Vignette};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureUsages;
 use bevy::solari::prelude::SolariLighting;
@@ -481,6 +482,11 @@ pub fn update_camera(
     }
 }
 
+/// The lens of a view: the nose camera's, or none.
+pub fn lens(_mode: CamMode) -> Option<(LensDistortion, Vignette, ChromaticAberration)> {
+    None
+}
+
 /// ReSTIR shares light samples between pixels and frames. It costs about 40% more per frame and
 /// removes the speckle on shaded surfaces, which is worth more than the pixels it costs when the
 /// resolution is made up by the upscaler. SIM001_RESTIR=0 turns it off.
@@ -547,6 +553,30 @@ mod tests {
             assert_eq!((s.contrast, s.saturation), (1.0, 1.0), "only the midtones are graded");
         }
         assert!(world.get::<AutoExposure>(e).is_some(), "the exposure follows the light");
+    }
+
+    /// The nose camera is an FPV camera: a wide lens that bows straight lines outwards (barrel
+    /// distortion), darkens the corners and fringes edges with a little colour, as the pictures
+    /// in a pilot's goggles do. The other views are a person's eyes and a good camera: none of it.
+    #[test]
+    fn the_nose_camera_has_an_fpv_lens() {
+        let (bend, corners, fringe) = lens(CamMode::Fpv).expect("the nose camera has a lens");
+        assert!(bend.intensity > 0.1 && bend.intensity < 0.5, "barrel distortion {}", bend.intensity);
+        assert!(bend.scale > 1.0, "the bowed edges are cropped, not stretched");
+        assert!(corners.intensity > 0.0 && corners.intensity <= 0.6, "vignette {}", corners.intensity);
+        assert!(fringe.intensity > 0.0 && fringe.intensity <= 0.03, "colour fringes {}", fringe.intensity);
+        assert!(lens(CamMode::LineOfSight).is_none());
+        assert!(lens(CamMode::Chase).is_none());
+    }
+
+    /// A clean lens glows a little round the sun and bright clouds, but it doesn't lay a veil
+    /// over the whole picture: shadows stay dark.
+    #[test]
+    fn the_lens_glows_but_does_not_veil_the_picture() {
+        let mut world = World::new();
+        let e = world.spawn(scene_look()).id();
+        let bloom = world.get::<Bloom>(e).expect("a glow");
+        assert!(bloom.intensity > 0.0 && bloom.intensity <= 0.08, "bloom {}", bloom.intensity);
     }
 
     /// P1 zooms the line-of-sight camera: all the way down is the widest view, all the way up the

@@ -334,6 +334,11 @@ pub fn trees() -> Vec<Tree> {
     out
 }
 
+/// How much of the sky a tree's crown hides at (x, z): 1 at a tree's foot, 0 past its crown.
+pub fn canopy(_x: f32, _z: f32) -> f32 {
+    0.0
+}
+
 /// Out to here the trees are on the fine grid.
 const NEAR_WOODS: f32 = 1000.0;
 
@@ -578,6 +583,24 @@ mod tests {
         // The tenth-thickest hectare, so one odd square doesn't decide it.
         let thick = per_hectare[per_hectare.len().saturating_sub(10)];
         assert!(thick >= 120, "the thickest woods have {thick} trees a hectare");
+    }
+
+    /// Under a crown the ground is in its shade and covered in what falls from it; out in a gap
+    /// between crowns it is open to the sky. `canopy` says which: 1 at a tree's foot, falling to
+    /// 0 past the edge of its crown.
+    #[test]
+    fn canopy_is_under_the_crowns_and_not_in_the_gaps() {
+        let trees = trees();
+        let t = trees.iter().find(|t| t.height > 18.0 && t.pos.x.hypot(t.pos.z) < 800.0).expect("a tall tree");
+        assert!(canopy(t.pos.x, t.pos.z) > 0.9, "at the foot of a tree: {}", canopy(t.pos.x, t.pos.z));
+        // A point well away from every tree.
+        let open = (0..2000)
+            .map(|k| (300.0 + (k % 40) as f32 * 9.7, -600.0 + (k / 40) as f32 * 9.3))
+            .find(|&(x, z)| trees.iter().all(|t| (t.pos.x - x).hypot(t.pos.z - z) > t.height * 0.5 + 2.0))
+            .expect("a gap");
+        assert_eq!(canopy(open.0, open.1), 0.0, "in a gap at {open:?}");
+        // The middle of the field has no trees at all.
+        assert_eq!(canopy(0.0, 0.0), 0.0);
     }
 
     /// Here and there a conifer is dead and still standing, more of them where the trees are

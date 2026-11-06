@@ -72,6 +72,16 @@ const F_STRATA: usize = 12;
 const F_SNOW: usize = 13;
 const NF: usize = 14;
 
+#[cfg_attr(not(test), allow(dead_code))]
+/// Which way is downhill at (x, z), on the ground, seen at the scale of a rock face (60 m), not
+/// of every bump in it.
+fn fall_line(x: f32, z: f32) -> Vec2 {
+    let d = 30.0;
+    let gx = terrain::ground_height(x + d, z) - terrain::ground_height(x - d, z);
+    let gz = terrain::ground_height(x, z + d) - terrain::ground_height(x, z - d);
+    -Vec2::new(gx, gz).normalize_or_zero()
+}
+
 fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
     let mut f = [0.0f32; NF];
     let slope = 1.0 - n.y.clamp(0.0, 1.0);
@@ -668,5 +678,134 @@ mod tests {
         let (lo, hi) = strips.iter().fold((f32::MAX, 0.0f32), |(a, b), &v| (a.min(v), b.max(v)));
         assert!(hi / lo > 1.02, "there are stripes ({:.3})", hi / lo);
         assert!(hi / lo <= 1.06, "the light stripes are {:.0}% brighter than the dark", (hi / lo - 1.0) * 100.0);
+    }
+
+    /// A point at the foot of a tall tree in the woods, and a gap in the same woods (no crown
+    /// over it), within 40 m.
+    fn crown_and_gap() -> (Vec2, Vec2) {
+        for t in terrain::trees() {
+            let r = t.pos.x.hypot(t.pos.z);
+            if t.dead || !t.conifer || t.height < 16.0 || !(250.0..800.0).contains(&r) {
+                continue;
+            }
+            let foot = Vec2::new(t.pos.x + 0.8, t.pos.z);
+            for k in 0..64 {
+                let a = k as f32 * 0.7;
+                let d = 8.0 + (k % 8) as f32 * 4.0;
+                let gap = Vec2::new(t.pos.x + a.cos() * d, t.pos.z + a.sin() * d);
+                if terrain::canopy(gap.x, gap.y) == 0.0 && terrain::forest_density(gap.x, gap.y) > 0.3 {
+                    return (foot, gap);
+                }
+            }
+        }
+        panic!("no tree with a gap beside it");
+    }
+
+    fn albedo(p: Vec2) -> [f32; 3] {
+        surface_color(p.x, p.y, terrain::ground_height(p.x, p.y), terrain::ground_normal(p.x, p.y))
+    }
+
+    /// In real woods the ground under a crown is dark needle litter and moss, and the sunny gaps
+    /// between the crowns are grassy: the floor follows the trees, not a smooth blur of them.
+    #[test]
+    fn the_forest_floor_is_litter_under_the_crowns_and_grass_in_the_gaps() {
+        let (foot, gap) = crown_and_gap();
+        let (u, g) = (albedo(foot), albedo(gap));
+        let l = |c: [f32; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        assert!(l(u) < 0.7 * l(g), "under the crown {u:?} is not darker than the gap {g:?}");
+        assert!(u[0] / u[1] > g[0] / g[1], "under the crown {u:?} is not browner than the gap {g:?}");
+        assert!(g[1] > 1.6 * g[0], "the gap {g:?} is not green");
+    }
+
+    /// A lone tree out in the meadow drops too few needles to bury the grass: there is no brown
+    /// disc round it, only a shade darker turf.
+    #[test]
+    fn a_lone_tree_stands_in_the_grass() {
+        let trees = terrain::trees();
+        let lone = trees
+            .iter()
+            .find(|t| {
+                !t.dead
+                    && t.height > 12.0
+                    && terrain::forest_density(t.pos.x, t.pos.z) < -0.2
+                    && trees.iter().all(|o| std::ptr::eq(*t, o) || (o.pos - t.pos).length() > 25.0)
+            })
+            .expect("a lone tree");
+        // Averaged over a 1.5 m square, so a flower or two doesn't decide it.
+        let around = |p: Vec2| {
+            let mut c = [0.0f32; 3];
+            for i in 0..25 {
+                let a = albedo(p + Vec2::new((i % 5) as f32 * 0.3 - 0.6, (i / 5) as f32 * 0.3 - 0.6));
+                (0..3).for_each(|k| c[k] += a[k] / 25.0);
+            }
+            c
+        };
+        let (u, g) =
+            (around(Vec2::new(lone.pos.x + 1.2, lone.pos.z)), around(Vec2::new(lone.pos.x + 14.0, lone.pos.z)));
+        let l = |c: [f32; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        assert!(l(u) > 0.75 * l(g), "under the lone tree {u:?}, in the open {g:?}");
+        assert!(u[1] / u[0] > 0.85 * g[1] / g[0], "under the lone tree {u:?} is browner than the open {g:?}");
+    }
+
+    /// Grass grows in the light: thick in the gaps between the crowns, sparse under them.
+    #[test]
+    fn grass_grows_in_the_gaps_more_than_under_the_crowns() {
+        let (foot, gap) = crown_and_gap();
+        let (under, open) = (ground_cover(foot.x, foot.y).density, ground_cover(gap.x, gap.y).density);
+        assert!(open >= 6.0, "the gap has only {open} grass");
+        assert!(under < 0.3 * open, "under the crown {under}, in the gap {open}");
+    }
+
+    /// Rock faces are not smooth grey: water and falling stones cut gullies and leave ribs
+    /// between them, so the rock's colour changes across a face, and more across it than down it.
+    /// (The valley's faces are bumpy, and their fall line turns within a few tens of metres, so
+    /// the streaks are short ones.)
+    #[test]
+    fn rock_faces_are_streaked_down_the_fall_line() {
+        let mut across_sum = 0.0;
+        let mut down_sum = 0.0;
+        let mut faces = 0;
+        for k in 0..4000 {
+            let (x, z) = (-2400.0 + (k % 80) as f32 * 61.0, -2400.0 + (k / 80) as f32 * 97.0);
+            let n = terrain::ground_normal(x, z);
+            let h = terrain::ground_height(x, z);
+            // Bare rock, below the snow.
+            if 1.0 - n.y < 0.45 || !(200.0..270.0).contains(&h) {
+                continue;
+            }
+            // Down the slope, and across it, on the ground.
+            let down = fall_line(x, z);
+            let across = Vec2::new(-down.y, down.x);
+            // Only lines that stay on the rock: where a face ends in meadow, the colour changes
+            // down the slope for another reason.
+            let line = |dir: Vec2| (-6..=6).map(move |i| Vec2::new(x, z) + dir * i as f32 * 2.5);
+            let on_rock = |p: Vec2| {
+                let h = terrain::ground_height(p.x, p.y);
+                coarse_fields(p.x, p.y, h, terrain::ground_normal(p.x, p.y))[F_ROCK] > 0.97
+            };
+            if !line(down).chain(line(across)).all(on_rock) {
+                continue;
+            }
+            let spread = |dir: Vec2| {
+                let v: Vec<f32> = line(dir)
+                    .map(|p| {
+                        let c = albedo(p);
+                        0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+                    })
+                    .collect();
+                let m = v.iter().sum::<f32>() / v.len() as f32;
+                (v.iter().map(|a| (a - m).powi(2)).sum::<f32>() / v.len() as f32).sqrt() / m
+            };
+            across_sum += spread(across);
+            down_sum += spread(down);
+            faces += 1;
+            if faces == 30 {
+                break;
+            }
+        }
+        assert!(faces >= 15, "only {faces} rock faces");
+        let (across, down) = (across_sum / faces as f32, down_sum / faces as f32);
+        assert!(across >= 0.12, "across a face the rock varies by only {:.1}%", across * 100.0);
+        assert!(across > down, "across {:.3}, down {:.3}: not streaked", across, down);
     }
 }
