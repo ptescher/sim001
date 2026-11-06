@@ -23,9 +23,16 @@ const RING_TEX: [u32; 5] = [4096, 2048, 1024, 512, 512];
 /// the field, 1.1 m on the far mountains.
 const RING_RELIEF: [u32; 5] = [1024, 1024, 1024, 512, 512];
 
-/// A chunk of terrain, built in the background: its mesh, colour, and relief (a normal map;
-/// none at a real place, whose lidar heights are the relief).
-pub type Chunk = (Mesh, Image, Option<Image>);
+/// A chunk of terrain, built in the background.
+pub struct Chunk {
+    /// The ground, with its colour baked on from above.
+    pub mesh: Mesh,
+    pub color: Image,
+    /// The relief finer than the mesh (none at a real place, whose lidar heights are the relief).
+    pub relief: Option<Image>,
+    /// Its faces steeper than 60°, drawn as rock that runs up the face (see `cliff`).
+    pub cliffs: Option<Mesh>,
+}
 
 /// Worker threads for world generation: leave headroom so the app keeps rendering.
 pub fn worker_threads() -> usize {
@@ -417,8 +424,9 @@ fn bake<T: Copy + Send>(
     out
 }
 
-/// A normal map from its texels, with a mip chain (linear, not sRGB: these are directions).
-fn to_normal_image(texels: Vec<[u8; 2]>, res: u32) -> Image {
+/// A normal map from its texels, with a mip chain (linear, not sRGB: these are directions),
+/// repeating or clamped at its edges.
+pub(crate) fn normal_image(texels: Vec<[u8; 2]>, res: u32, repeat: bool) -> Image {
     let mut level = texels;
     let mut s = res as usize;
     let mut data = Vec::with_capacity(s * s * 2 * 4 / 3 + 16);
@@ -457,9 +465,10 @@ fn to_normal_image(texels: Vec<[u8; 2]>, res: u32) -> Image {
     );
     image.data = Some(data);
     image.texture_descriptor.mip_level_count = mips;
+    let edge = if repeat { ImageAddressMode::Repeat } else { ImageAddressMode::ClampToEdge };
     image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
-        address_mode_u: ImageAddressMode::ClampToEdge,
-        address_mode_v: ImageAddressMode::ClampToEdge,
+        address_mode_u: edge,
+        address_mode_v: edge,
         mag_filter: ImageFilterMode::Linear,
         min_filter: ImageFilterMode::Linear,
         mipmap_filter: ImageFilterMode::Linear,
@@ -640,8 +649,9 @@ pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<Chunk> {
     let mut out = Vec::with_capacity(total);
     for (k, (&(x0, z0, _, res, _, relief_res), mesh)) in specs.iter().zip(chunk_meshes).enumerate() {
         let relief =
-            terrain::real().is_none().then(|| to_normal_image(bake_relief(x0, z0, size, relief_res), relief_res));
-        out.push((mesh, to_image(bake_chunk(x0, z0, size, res), res), relief));
+            terrain::real().is_none().then(|| normal_image(bake_relief(x0, z0, size, relief_res), relief_res, false));
+        let (mesh, cliffs) = crate::cliff::split(&mesh);
+        out.push(Chunk { mesh, color: to_image(bake_chunk(x0, z0, size, res), res), relief, cliffs });
         texels += res as u64 * res as u64;
         progress(k + 1, total);
     }
@@ -656,10 +666,25 @@ pub fn spawn_terrain_chunks(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     images: &mut Assets<Image>,
+    cliff: &mut Option<Handle<StandardMaterial>>,
 ) {
-    for (mesh, image, relief) in chunks {
+    for Chunk { mesh, color, relief, cliffs } in chunks {
+        if let Some(cliffs) = cliffs {
+            let rock = cliff
+                .get_or_insert_with(|| {
+                    materials.add(StandardMaterial {
+                        base_color_texture: Some(images.add(crate::cliff::rock_texture())),
+                        normal_map_texture: Some(images.add(crate::cliff::rock_normals())),
+                        perceptual_roughness: 0.9,
+                        reflectance: 0.3,
+                        ..default()
+                    })
+                })
+                .clone();
+            commands.spawn(rt(meshes.add(cliffs), rock, Transform::IDENTITY));
+        }
         let mat = materials.add(StandardMaterial {
-            base_color_texture: Some(images.add(image)),
+            base_color_texture: Some(images.add(color)),
             normal_map_texture: relief.map(|r| images.add(r)),
             perceptual_roughness: 0.93,
             reflectance: 0.25,

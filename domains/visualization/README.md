@@ -53,7 +53,7 @@ Each `--at NAME=x,agl,z,tx,tagl,tz[,fov]` is a camera (east, height above the gr
 the point it looks at, with a vertical field of view in degrees. Once the world has loaded, each
 view is held for four seconds so the ray tracer settles, and the 3D view is saved at full
 resolution, with no HUD, as `shots/NAME.png`. The sim's `SIM001_VIEW` environment variable pins its
-camera the same way.
+camera the same way. `towers_view` takes the same options for the Towers valley (rasterized), with no game server running.
 
 ## Looking like a photo
 
@@ -79,6 +79,7 @@ far ridges. What the view does for each:
 | A clean lens | A little bloom (0.06): a glow round the sun and bright clouds, not a veil over the shadows |
 | The FPV camera's picture | The nose camera has a small wide-angle lens: barrel distortion (cropped at the edges), dark corners and faint colour fringes. Its sensor (`sensor.rs`) has a shutter open for 1/150 s, so what moves across the picture smears along its motion (the same at any frame rate, and read where the upscaled main pass drew it), and a grain that moves every frame: about 3% at mid grey, 13% in deep shade. The other views, the sensor feed and pinned pictures have none of these |
 | Rock that is broken, not smooth | Each terrain chunk has a normal map of the relief its mesh is too coarse for: crags and runnels down the fall line on rock (the grooves of the gullies), filled in by snow; a few centimetres of bumps in soil |
+| Cliffs, not drapes | Faces steeper than 60° are split from their chunk (`cliff.rs`) and drawn as rock laid on from the side, so it runs up the face instead of hanging from the top: a 48 m tile of cracks and ledges the colour of the baked rock, with its normals turned as if the face stood out in buttresses and fell back in gullies. The shape is the terrain's to the vertex. It matters most on the walls round the Towers valley (400 m in 100 m) |
 | Houses, not boxes | A building fills its box under a 30° gable roof (ridge along the long side, 0.5 m overhang), or a flat one if its short side is over 20 m. Plastered walls, a window in every 3 m bay of every storey, a darker plinth; matte clay, slate or wood roofs. At a real place the roof keeps the aerial photo's colour |
 
 Before and after (ray traced, pinned views, so without the FPV lens): the drone over the field and

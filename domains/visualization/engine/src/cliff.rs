@@ -8,35 +8,148 @@
 //! baked rock, with a normal map of its cracks and ledges. The shape is the terrain's, to the
 //! vertex: what a drone hits is what it sees.
 
+use crate::terrain::{fbm, gradient_noise};
+use bevy::asset::RenderAssetUsages;
+use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::prelude::*;
 
 /// A triangle whose normal is less upright than this is a cliff (60° and steeper).
 pub const STEEP: f32 = 0.5;
 /// The rock texture covers this many metres, along and up a face.
-pub const TILE: f32 = 24.0;
+pub const TILE: f32 = 48.0;
 
 /// Splits a terrain chunk into its ground and its cliffs (none if it has no steep face).
 pub fn split(mesh: &Mesh) -> (Mesh, Option<Mesh>) {
-    (mesh.clone(), None)
+    let (Some(VertexAttributeValues::Float32x3(pos)), Some(VertexAttributeValues::Float32x3(nrm))) =
+        (mesh.attribute(Mesh::ATTRIBUTE_POSITION), mesh.attribute(Mesh::ATTRIBUTE_NORMAL))
+    else {
+        return (mesh.clone(), None);
+    };
+    let idx: Vec<u32> = match mesh.indices() {
+        Some(i) => i.iter().map(|k| k as u32).collect(),
+        None => (0..pos.len() as u32).collect(),
+    };
+    let p = |k: u32| Vec3::from_array(pos[k as usize]);
+    let (mut ground, mut cliff) = (Vec::with_capacity(idx.len()), vec![]);
+    for t in idx.as_chunks::<3>().0 {
+        let n = (p(t[1]) - p(t[0])).cross(p(t[2]) - p(t[0])).normalize_or_zero();
+        if n.y.abs() < STEEP { cliff.push(*t) } else { ground.extend_from_slice(t) }
+    }
+    if cliff.is_empty() {
+        return (mesh.clone(), None);
+    }
+    let mut g = mesh.clone();
+    g.insert_indices(Indices::U32(ground));
+    // Each cliff triangle on its own corners, laid on from the side it faces most: from the east
+    // (u along z) or from the south (u along x), with v down the face.
+    let (mut cp, mut cn, mut cuv) = (vec![], vec![], vec![]);
+    for t in cliff {
+        let n = (p(t[1]) - p(t[0])).cross(p(t[2]) - p(t[0]));
+        let east = n.x.abs() >= n.z.abs();
+        for k in t {
+            let q = p(k);
+            cp.push(q.to_array());
+            cn.push(buttressed(q, Vec3::from_array(nrm[k as usize])).to_array());
+            cuv.push([if east { q.z } else { q.x } / TILE, -q.y / TILE]);
+        }
+    }
+    let count = cp.len() as u32;
+    let c = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, cp)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, cn)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, cuv)
+        .with_inserted_indices(Indices::U32((0..count).collect()))
+        .with_generated_tangents()
+        .expect("cliff tangents");
+    (g, Some(c))
 }
 
-/// The cliff rock's albedo at (u, v) of its tile (0 to 1 each way; it repeats).
-pub fn rock_albedo(u: f32, v: f32) -> [f32; 3] {
-    let _ = (u, v);
-    [0.0; 3]
+/// How a cliff's light turns at `q` (normal `n`): as if it stood out in buttresses and fell back
+/// in gullies tens of metres across, running up the face. A function of where the point is, so
+/// neighbouring triangles agree.
+fn buttressed(q: Vec3, n: Vec3) -> Vec3 {
+    let along = Vec3::Y.cross(n).normalize_or_zero();
+    if along == Vec3::ZERO {
+        return n;
+    }
+    let g = |p: Vec3| {
+        gradient_noise(p.x / 34.0 + 3.0, p.z / 34.0 - 8.0)
+            + 0.45 * gradient_noise((p.x + p.z) / 13.0 + p.y / 400.0, p.y / 70.0 + 2.0)
+    };
+    // The slope of the buttresses along the face, over a metre.
+    let slope = g(q + along) - g(q - along);
+    // At most about 50°: a buttress, not a fin.
+    (n - along * (slope * 14.0).clamp(-1.2, 1.2)).normalize()
 }
 
-/// The height of the cliff rock's cracks and ledges at (u, v) of its tile (m; it repeats).
+/// `f` made to repeat over the unit square: four copies, shifted by a tile, blended so that
+/// each edge is the same as the one across from it.
+fn tiled(u: f32, v: f32, f: impl Fn(f32, f32) -> f32) -> f32 {
+    let (u, v) = (u.rem_euclid(1.0), v.rem_euclid(1.0));
+    f(u, v) * (1.0 - u) * (1.0 - v)
+        + f(u - 1.0, v) * u * (1.0 - v)
+        + f(u, v - 1.0) * (1.0 - u) * v
+        + f(u - 1.0, v - 1.0) * u * v
+}
+
+/// The cracks of the rock at (u, v) of a tile: 0 to 1, low in a crack.
+fn cracks(u: f32, v: f32) -> f32 {
+    tiled(u, v, |u, v| fbm(u * TILE / 5.0 + 7.0, v * TILE / 5.0 - 2.0, 4))
+}
+
+/// The ledges: the rock breaks into steps a few metres tall (v is down the face).
+fn ledges(u: f32, v: f32) -> f32 {
+    tiled(u, v, |u, v| {
+        let y = v * TILE / 3.2
+            + 2.2 * gradient_noise(u * TILE / 14.0, v * TILE / 20.0 + 4.0)
+            + 0.6 * gradient_noise(u * TILE / 4.0 + 9.0, v * TILE / 5.0);
+        // A rounded step: no jumps, so it tiles and mips cleanly.
+        smoothstep(-0.3, 0.9, (y * std::f32::consts::TAU).sin())
+    })
+}
+
 pub fn rock_height(u: f32, v: f32) -> f32 {
-    let _ = (u, v);
-    0.0
+    2.4 * (cracks(u, v) - 0.5) + 0.4 * ledges(u, v)
+}
+
+pub fn rock_albedo(u: f32, v: f32) -> [f32; 3] {
+    let tone = tiled(u, v, |u, v| fbm(u * TILE / 11.0 - 5.0, v * TILE / 11.0 + 1.0, 3));
+    let hollow = smoothstep(0.42, 0.25, cracks(u, v));
+    let lit_ledge = smoothstep(0.75, 0.95, ledges(u, v));
+    let t = 0.24 * (0.7 + 0.8 * (tone - 0.5) + 0.25 * lit_ledge) * (1.0 - 0.45 * hollow);
+    [t * 1.05, t * 0.97, t * 0.87]
+}
+
+fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// The rock's colour, one tile, repeating.
+pub fn rock_texture() -> Image {
+    crate::mesh_util::texture(1024, rock_albedo)
+}
+
+/// The rock's cracks and ledges as a normal map, one tile, repeating.
+pub fn rock_normals() -> Image {
+    let res = 1024u32;
+    let d = 1.0 / res as f32;
+    let metres = d * TILE;
+    let texels = (0..res * res)
+        .map(|k| {
+            let (u, v) = ((k % res) as f32 * d, (k / res) as f32 * d);
+            let h = rock_height(u, v);
+            let slope = Vec2::new(rock_height(u + d, v) - h, rock_height(u, v + d) - h) / metres;
+            let n = Vec3::new(-slope.x, -slope.y, 1.0).normalize();
+            [((n.x * 0.5 + 0.5) * 255.0).round() as u8, ((n.y * 0.5 + 0.5) * 255.0).round() as u8]
+        })
+        .collect();
+    crate::terrain_render::normal_image(texels, res, true)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::asset::RenderAssetUsages;
-    use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 
     /// A terrain mesh of `y(x, z)`, 40 m square, in 1 m cells, as the terrain builds them.
     fn ground(y: fn(f32, f32) -> f32) -> Mesh {
@@ -124,20 +237,31 @@ mod tests {
         }
     }
 
-    /// The rock tiles with no seam: its left edge meets its right, its top its bottom.
+    /// The rock tiles with no seam: its left edge is its right, its top its bottom, and the step
+    /// across an edge is no bigger than the steps inside the tile.
     #[test]
     fn the_rock_tiles_without_a_seam() {
+        let lum = |u: f32, v: f32| {
+            let c = rock_albedo(u, v);
+            0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+        };
         let step = 1.0 / 512.0;
-        let mut worst = 0.0f32;
-        for k in 0..64 {
-            let s = k as f32 / 64.0;
-            for (a, b) in [((0.0, s), (1.0 - step, s)), ((s, 0.0), (s, 1.0 - step))] {
-                let (ca, cb) = (rock_albedo(a.0, a.1), rock_albedo(b.0, b.1));
-                worst = worst.max((0..3).map(|i| (ca[i] - cb[i]).abs()).fold(0.0, f32::max));
-                worst = worst.max((rock_height(a.0, a.1) - rock_height(b.0, b.1)).abs() / 2.0);
+        for f in [&lum as &dyn Fn(f32, f32) -> f32, &rock_height] {
+            for k in 0..64 {
+                let s = k as f32 / 64.0;
+                assert!(
+                    (f(0.0, s) - f(1.0, s)).abs() < 1e-4 && (f(s, 0.0) - f(s, 1.0)).abs() < 1e-4,
+                    "edges differ at {s}"
+                );
+                for across in [false, true] {
+                    let at = |t: f32| if across { f(s, t) } else { f(t, s) };
+                    let inside =
+                        (1..511).map(|i| (at((i + 1) as f32 * step) - at(i as f32 * step)).abs()).fold(0.0, f32::max);
+                    let seam = (at(0.0) - at(1.0 - step)).abs();
+                    assert!(seam <= 1.5 * inside + 1e-4, "a step of {seam:.3} at the edge, at most {inside:.3} inside");
+                }
             }
         }
-        assert!(worst < 0.02, "a seam of {worst:.3}");
     }
 
     /// Where a cliff meets the baked rock above or below it, they are one rock: the cliff's
@@ -155,5 +279,48 @@ mod tests {
         let relief = (0..n * n).map(|k| rock_height((k % n) as f32 / n as f32, (k / n) as f32 / n as f32));
         let (lo, hi) = relief.fold((f32::MAX, f32::MIN), |(lo, hi), h| (lo.min(h), hi.max(h)));
         assert!(hi - lo >= 0.5, "the cracks and ledges are {:.2} m deep", hi - lo);
+    }
+
+    /// A real cliff is not a smooth curtain: buttresses and gullies tens of metres across catch
+    /// and lose the light. The shape stays the terrain's (what a drone hits); the cliff's normals
+    /// turn as if it had them, and still face out of the rock.
+    #[test]
+    fn the_cliff_is_shaded_as_buttresses_and_gullies() {
+        let big = |x: f32, _z: f32| (x - 5.0).max(0.0) * 4.0;
+        let n = 161;
+        let mut pos = vec![];
+        for j in 0..n {
+            for i in 0..n {
+                let (x, z) = (i as f32 * 0.25 - 20.0, j as f32 * 2.5 - 200.0);
+                pos.push([x, big(x, z), z]);
+            }
+        }
+        let mut idx = vec![];
+        for j in 0..n - 1 {
+            for i in 0..n - 1 {
+                let a = (j * n + i) as u32;
+                let (b, c) = (a + 1, a + n as u32);
+                idx.extend_from_slice(&[a, c, b, b, c, c + 1]);
+            }
+        }
+        let face = Vec3::new(-4.0, 1.0, 0.0).normalize();
+        let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![face.to_array(); pos.len()])
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0f32, 0.0]; pos.len()])
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, pos)
+            .with_inserted_indices(Indices::U32(idx));
+        let cliffs = split(&mesh).1.expect("cliffs");
+        let Some(VertexAttributeValues::Float32x3(normals)) = cliffs.attribute(Mesh::ATTRIBUTE_NORMAL) else {
+            panic!()
+        };
+        let angles: Vec<f32> =
+            normals.iter().map(|v| Vec3::from_array(*v).dot(face).clamp(-1.0, 1.0).acos().to_degrees()).collect();
+        let rms = (angles.iter().map(|a| a * a).sum::<f32>() / angles.len() as f32).sqrt();
+        assert!(rms >= 10.0, "the cliff's light turns by {rms:.1}° (rms)");
+        assert!(
+            angles.iter().all(|a| *a < 60.0),
+            "a normal turns {:.0}° from the face",
+            angles.iter().cloned().fold(0.0, f32::max)
+        );
     }
 }
