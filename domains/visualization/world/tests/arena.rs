@@ -10,6 +10,7 @@ fn arena() -> Arena {
         radius: 600.0,
         lake_centre: Vec2::new(-250.0, 280.0),
         lake_radius: 85.0,
+        lake_shore: Box::new(|_| 85.0),
         trees,
         // Open ground: a lane along the x axis.
         open_distance: Box::new(|_, z| z.abs() - 30.0),

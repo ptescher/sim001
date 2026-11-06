@@ -53,7 +53,7 @@ Each `--at NAME=x,agl,z,tx,tagl,tz[,fov]` is a camera (east, height above the gr
 the point it looks at, with a vertical field of view in degrees. Once the world has loaded, each
 view is held for four seconds so the ray tracer settles, and the 3D view is saved at full
 resolution, with no HUD, as `shots/NAME.png`. The sim's `SIM001_VIEW` environment variable pins its
-camera the same way.
+camera the same way. `towers_view` takes the same options for the Towers valley (rasterized), with no game server running.
 
 ## Looking like a photo
 
@@ -77,12 +77,25 @@ far ridges. What the view does for each:
 | Needles under the trees, grass in the gaps | `canopy` (in the world) says how much of the sky the crowns hide at a point. Under the crowns of the woods is brown needle litter and moss, and the grass is thin; the sunny gaps between them are meadow. A lone tree in the meadow drops too little to bury the grass |
 | Gullies down the rock faces | Noise smeared down the fall line (seen over 60 m, not every bump), per texel: dark runnels and pale ribs. The horizontal strata are fainter |
 | A clean lens | A little bloom (0.06): a glow round the sun and bright clouds, not a veil over the shadows |
-| The FPV camera's picture | The nose camera has a small wide-angle lens: barrel distortion (cropped at the edges), dark corners and faint colour fringes. The other views, the sensor feed and pinned pictures have none |
+| The FPV camera's picture | The nose camera has a small wide-angle lens: barrel distortion (cropped at the edges), dark corners and faint colour fringes. Its sensor (`sensor.rs`) has a shutter open for 1/150 s, so what moves across the picture smears along its motion (the same at any frame rate, and read where the upscaled main pass drew it), and a grain that moves every frame: about 3% at mid grey, 13% in deep shade. The other views, the sensor feed and pinned pictures have none of these |
+| Rock that is broken, not smooth | Each terrain chunk has a normal map of the relief its mesh is too coarse for: crags and runnels down the fall line on rock (the grooves of the gullies), filled in by snow; a few centimetres of bumps in soil |
+| Cliffs, not drapes | Faces steeper than 60° are split from their chunk (`cliff.rs`) and drawn as rock laid on from the side, so it runs up the face instead of hanging from the top: a 48 m tile of cracks and ledges the colour of the baked rock, with its normals turned as if the face stood out in buttresses and fell back in gullies. The shape is the terrain's to the vertex. It matters most on the walls round the Towers valley (400 m in 100 m) |
+| Houses, not boxes | A building fills its box under a 30° gable roof (ridge along the long side, 0.5 m overhang), or a flat one if its short side is over 20 m. Plastered walls, a window in every 3 m bay of every storey, a darker plinth; matte clay, slate or wood roofs. At a real place the roof keeps the aerial photo's colour |
 
 Before and after (ray traced, pinned views, so without the FPV lens): the drone over the field and
 low over the meadow, 250 m up, the peaks, the creek and the woods:
 
 ![Before and after](../../docs/realism_before_after.jpg)
+
+Then the houses and the rock's relief (left before, right after; the FPV camera's shutter and
+grain only show in flight, so they are not here):
+
+![Houses and relief, before and after](../../docs/realism_before_after_2.jpg)
+
+And the cliffs, in the Towers valley (rasterized, as `towers_view` draws it) and on the Alpine
+Valley's north faces (ray traced):
+
+![Cliffs, before and after](../../docs/realism_cliffs.jpg)
 
 What it does not do yet:
 
@@ -90,7 +103,7 @@ What it does not do yet:
   tracer cannot see. Solid stand-ins reflect as dark rocks, since a solid has none of a cloud's
   inner glow. Emissive ones become lights in Solari and take the sun's samples, which darkens
   the whole scene.
-- **Rocky mountain faces.** The mountains are smooth and grey at a distance, without the
-  gullies, scree and scattered trees of real ones.
+- **Scree and trees on the mountain faces.** The rock has gullies and relief, but no scree
+  fans below it and no trees scattered across it.
 - **Haze in the rasterized view** uses Bevy's `DistanceFog`, which is close to the ray-traced
   pass but not the same.

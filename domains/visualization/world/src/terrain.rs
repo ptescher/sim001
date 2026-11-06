@@ -17,7 +17,11 @@ pub struct Arena {
     /// The ground is flat within this distance of the origin (m).
     pub radius: f32,
     pub lake_centre: Vec2,
+    /// The farthest the shore is from `lake_centre` (m).
     pub lake_radius: f32,
+    /// How far the shore is from `lake_centre` in the direction (x, z) (m): the lake need not be
+    /// round.
+    pub lake_shore: Box<dyn Fn(Vec2) -> f32 + Send + Sync>,
     /// The forest: every tree on the field.
     pub trees: Vec<Tree>,
     /// How far a point is from the nearest open ground (a lane, a clearing, the lake): below 0 on
@@ -192,9 +196,9 @@ pub fn lake_factor(x: f32, z: f32) -> f32 {
         return 9.0;
     }
     let d = Vec2::new(x, z) - lake_center();
-    // The Towers lake is the game's circle: what the referee and the maps say is water is water.
-    if arena().is_some() {
-        return d.length() / lake_radius();
+    // The Towers lake is the game's: what the referee and the maps say is water is water.
+    if let Some(a) = arena() {
+        return d.length() / (a.lake_shore)(d).max(1.0);
     }
     let a = d.y.atan2(d.x);
     let wobble = 1.0

@@ -44,12 +44,16 @@ const ROCK_CELL: f32 = 15.0;
 /// map shows it everywhere, dim in the fog.
 fn valley_svg(map: &Map, scale: f32, at: &dyn Fn(Vec2) -> (f32, f32)) -> String {
     let mut s = mountains_svg(map, scale, at);
-    let (lx, ly) = at(map.lake.at);
-    let _ = write!(
-        s,
-        r##"<circle cx="{lx:.1}" cy="{ly:.1}" r="{:.1}" fill="{LAKE}" fill-opacity="0.8"/>"##,
-        map.lake.radius * scale
-    );
+    let shore = map
+        .lake
+        .outline(72)
+        .iter()
+        .map(|&p| at(p))
+        .map(|(x, y)| format!("{x:.1},{y:.1}"))
+        .collect::<Vec<_>>()
+        .join(" L");
+    // A path, not a polygon: the drones are the map's polygons.
+    let _ = write!(s, r##"<path d="M{shore} Z" fill="{LAKE}" fill-opacity="0.8"/>"##);
     for lane in &map.lanes {
         let pts =
             lane.points.iter().map(|&p| at(p)).map(|(x, y)| format!("{x:.1},{y:.1}")).collect::<Vec<_>>().join(" ");

@@ -12,8 +12,10 @@
 // Bevy systems take many parameters and nested queries.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
+pub mod building;
 pub mod camera;
 pub mod capture;
+pub mod cliff;
 pub mod clouds;
 
 pub mod field;
@@ -30,6 +32,7 @@ pub mod optics;
 pub mod pod;
 pub mod rocks;
 pub mod scenery;
+pub mod sensor;
 pub mod terrain_render;
 pub mod theme;
 pub mod treegen;
@@ -141,7 +144,11 @@ impl Plugin for EnginePlugin {
         if self.raytracing {
             app.add_plugins((bevy::solari::SolariPlugins, haze::HazePlugin, upscale::TemporalUpscalePlugin));
         }
-        app.add_plugins((bevy::post_process::auto_exposure::AutoExposurePlugin, clouds::CloudsPlugin));
+        app.add_plugins((
+            bevy::post_process::auto_exposure::AutoExposurePlugin,
+            clouds::CloudsPlugin,
+            sensor::SensorPlugin,
+        ));
         app.world_mut()
             .resource_mut::<Assets<bevy::post_process::auto_exposure::AutoExposureCompensationCurve>>()
             .insert(&camera::METERING, camera::metering_curve())

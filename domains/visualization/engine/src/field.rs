@@ -86,26 +86,40 @@ pub fn spawn_world(
     crate::scenery::spawn_scenery(commands, meshes, materials, images);
 
     // ---- buildings ----
-    let wall = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.75, 0.72, 0.66),
-        perceptual_roughness: 0.8,
-        ..default()
-    });
-    let roof = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.45, 0.12, 0.08),
-        perceptual_roughness: 0.6,
-        metallic: 0.3,
-        ..default()
-    });
-    let unit = meshes.add(cuboid(Vec3::ONE));
+    // Plastered walls with windows under a pitched roof (`building`); houses of the same size
+    // share their meshes.
+    let plaster = images.add(crate::building::wall_texture());
+    // Matte roofs of clay tile, slate and old wood, and walls of white, cream and ochre plaster,
+    // picked per house.
+    let roofs: Vec<Handle<StandardMaterial>> = [[0.36, 0.13, 0.08], [0.16, 0.16, 0.17], [0.27, 0.17, 0.11]]
+        .map(|c| {
+            materials.add(StandardMaterial {
+                base_color: Color::srgb(c[0], c[1], c[2]),
+                perceptual_roughness: 0.8,
+                ..default()
+            })
+        })
+        .into();
+    let walls: Vec<Handle<StandardMaterial>> = [[0.95, 0.93, 0.88], [0.93, 0.87, 0.74], [0.90, 0.80, 0.62]]
+        .map(|c| {
+            materials.add(StandardMaterial {
+                base_color: Color::srgb(c[0], c[1], c[2]),
+                base_color_texture: Some(plaster.clone()),
+                perceptual_roughness: 0.85,
+                ..default()
+            })
+        })
+        .into();
     // At a real place, roofs take their colour from the aerial photo (it sees them from above),
     // quantized so similar roofs share a material; walls are a light neutral.
     let mut roof_mats: std::collections::HashMap<[u8; 3], Handle<StandardMaterial>> = Default::default();
     let real_wall = materials.add(StandardMaterial {
-        base_color: Color::linear_rgb(0.30, 0.29, 0.27),
+        base_color: Color::linear_rgb(0.36, 0.35, 0.33),
+        base_color_texture: Some(plaster),
         perceptual_roughness: 0.85,
         ..default()
     });
+    let mut houses: std::collections::HashMap<[i32; 3], (Handle<Mesh>, Handle<Mesh>)> = Default::default();
     for b in terrain::buildings() {
         let rot = Quat::from_rotation_y(b.yaw);
         let (wall, roof) = match terrain::real() {
@@ -125,20 +139,22 @@ pub fn spawn_world(
                     .clone();
                 (real_wall.clone(), mat)
             }
-            None => (wall.clone(), roof.clone()),
+            None => {
+                let pick = (b.center.x * 0.37 + b.center.z * 0.61).abs() as usize;
+                (walls[pick % walls.len()].clone(), roofs[(pick / 3) % roofs.len()].clone())
+            }
         };
-        commands.spawn(rt(
-            unit.clone(),
-            wall,
-            Transform::from_translation(b.center).with_rotation(rot).with_scale(b.size),
-        ));
-        commands.spawn(rt(
-            unit.clone(),
-            roof,
-            Transform::from_translation(b.center + Vec3::Y * (b.size.y * 0.5 + 0.15))
-                .with_rotation(rot)
-                .with_scale(Vec3::new(b.size.x + 0.6, 0.3, b.size.z + 0.6)),
-        ));
+        let key = (b.size * 10.0).round().as_ivec3().to_array();
+        let (walls, top) = houses
+            .entry(key)
+            .or_insert_with(|| {
+                let h = crate::building::house(key.map(|k| k as f32 / 10.0).into());
+                (meshes.add(h.walls), meshes.add(h.roof))
+            })
+            .clone();
+        let at = Transform::from_translation(b.center).with_rotation(rot);
+        commands.spawn(rt(walls, wall, at));
+        commands.spawn(rt(top, roof, at));
     }
 
     // ---- field furniture: pylons, pilot, windsock ----

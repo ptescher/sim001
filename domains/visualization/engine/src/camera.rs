@@ -483,16 +483,25 @@ pub fn update_camera(
     }
 }
 
-/// The lens of a view: the nose camera's, or none.
-pub fn lens(mode: CamMode) -> Option<(LensDistortion, Vignette, ChromaticAberration)> {
-    (mode == CamMode::Fpv).then(|| {
-        (
-            // A small wide-angle FPV lens: straight lines bow outwards, and the stretched edges
-            // are cropped off.
-            LensDistortion { intensity: 0.22, scale: 1.08, ..default() },
-            Vignette { intensity: 0.45, radius: 0.85, smoothness: 3.0, ..default() },
-            ChromaticAberration { intensity: 0.012, ..default() },
-        )
+/// The FPV camera's lens and sensor: a small wide-angle lens, and a small sensor whose shutter is
+/// open for part of each frame (what moves fast smears) and whose picture has a grain.
+#[derive(Bundle, Clone)]
+pub struct Lens {
+    pub bend: LensDistortion,
+    pub corners: Vignette,
+    pub fringe: ChromaticAberration,
+    pub sensor: crate::sensor::Sensor,
+}
+
+/// The lens of the view `mode`: the nose camera has one, the others are clean.
+pub fn lens(mode: CamMode) -> Option<Lens> {
+    (mode == CamMode::Fpv).then(|| Lens {
+        // A small wide-angle FPV lens: straight lines bow outwards, and the stretched edges are
+        // cropped off.
+        bend: LensDistortion { intensity: 0.22, scale: 1.08, ..default() },
+        corners: Vignette { intensity: 0.45, radius: 0.85, smoothness: 3.0, ..default() },
+        fringe: ChromaticAberration { intensity: 0.012, ..default() },
+        sensor: crate::sensor::Sensor::fpv(),
     })
 }
 
@@ -510,7 +519,7 @@ fn fit_lens(
                 commands.entity(e).insert(l.clone());
             }
             (None, true) => {
-                commands.entity(e).remove::<(LensDistortion, Vignette, ChromaticAberration)>();
+                commands.entity(e).remove::<Lens>();
             }
             _ => {}
         }
@@ -590,13 +599,26 @@ mod tests {
     /// in a pilot's goggles do. The other views are a person's eyes and a good camera: none of it.
     #[test]
     fn the_nose_camera_has_an_fpv_lens() {
-        let (bend, corners, fringe) = lens(CamMode::Fpv).expect("the nose camera has a lens");
+        let Lens { bend, corners, fringe, .. } = lens(CamMode::Fpv).expect("the nose camera has a lens");
         assert!(bend.intensity > 0.1 && bend.intensity < 0.5, "barrel distortion {}", bend.intensity);
         assert!(bend.scale > 1.0, "the bowed edges are cropped, not stretched");
         assert!(corners.intensity > 0.0 && corners.intensity <= 0.6, "vignette {}", corners.intensity);
         assert!(fringe.intensity > 0.0 && fringe.intensity <= 0.03, "colour fringes {}", fringe.intensity);
         assert!(lens(CamMode::LineOfSight).is_none());
         assert!(lens(CamMode::Chase).is_none());
+    }
+
+    /// The nose camera's shutter is open for part of each frame: what moves fast across the
+    /// picture smears along its path, as in a real FPV video, but a still scene stays sharp.
+    #[test]
+    fn the_nose_camera_smears_what_moves_fast() {
+        let s = lens(CamMode::Fpv).expect("the nose camera has a lens").sensor;
+        assert!(
+            (1.0 / 250.0..=1.0 / 60.0).contains(&s.exposure),
+            "the shutter is open for 1/{:.0} s",
+            1.0 / s.exposure
+        );
+        assert!(s.samples >= 2, "{} samples each way: a smear, not a few ghosts", s.samples);
     }
 
     /// A clean lens glows a little round the sun and bright clouds, but it doesn't lay a veil

@@ -225,21 +225,28 @@ impl World {
         self.game.drone(Team::Red, SCOUT)
     }
 
+    /// A point 210 m along the middle of the mid lane from the Blue home tower.
     fn mid_lane(&self) -> Vec2 {
-        Vec2::new(-220.0, 0.0)
+        self.lane(LaneName::Mid).at(210.0)
+    }
+
+    fn lane(&self, name: LaneName) -> &recreation_towers::map::Lane {
+        self.game.map.lanes.iter().find(|l| l.name == name).unwrap()
     }
 
     /// A point on the east lane, as far out from the Blue home tower as `mid_lane` is on the mid
     /// lane (210 m, past the sight of the home tower): about 143 m from it, with the forest between.
     fn east_lane(&self) -> Vec2 {
-        let lane = self.game.map.lanes.iter().find(|l| l.name == LaneName::East).unwrap();
-        lane.points[0] + (lane.points[1] - lane.points[0]).normalize() * 210.0
+        self.lane(LaneName::East).at(210.0)
     }
 
-    /// Where the west lane is nearest the lake.
+    /// Where the middle of the west lane is nearest the lake.
     fn shore(&self) -> Vec2 {
-        let m = &self.game.map;
-        (m.towers[0] + m.towers[1]) * 0.5
+        let (lane, lake) = (self.lane(LaneName::West), self.game.map.lake.at);
+        (0..lane.length() as usize)
+            .map(|m| lane.at(m as f32))
+            .min_by(|a, b| a.distance(lake).total_cmp(&b.distance(lake)))
+            .unwrap()
     }
 
     /// A point 100 m from the Red home tower, towards the middle of the field.
@@ -291,7 +298,7 @@ impl World {
             }
             "low in the mid lane, ahead of the first Blue drone" => (
                 new("low in the mid lane, ahead of the first Blue drone"),
-                self.mid_lane() + Vec2::new(120.0, 0.0),
+                self.lane(LaneName::Mid).at(330.0),
                 Some(LOW),
             ),
             "low over the lake" => (new("low over the lake"), self.game.map.lake.at, Some(LOW)),

@@ -3,6 +3,7 @@
 //!   cargo run --release -p recreation_towers_view -- [--server ADDR] [--feed-port N] [--feed-size WxH]
 //!                                                    [--stop-with-stdin]
 //!   cargo run --release -p recreation_towers_view -- --export-map DIR
+//!   cargo run --release -p recreation_towers_view -- --capture DIR --at NAME=x,agl,z,tx,tagl,tz[,fov] ...
 //!
 //! The view takes the seat of a spectator on the game server (default 127.0.0.1:5955), draws the
 //! valley (forest, lanes, lake) with the six drones where the game has them, and sends the picture
@@ -17,6 +18,9 @@
 //! and `terrain_map.txt`, as `sim001 --export-map` writes the sim's) and exits. It is the ground of
 //! this view, drawn from the same trees and lake, in metres north and east of the field's centre
 //! (SITL's home), so the commander app and the ground station draw it where the game has it.
+//!
+//! `--capture DIR` saves a picture of the valley from each `--at` view as `DIR/NAME.png` and
+//! exits, as `sim001_view --capture` does (see the visualization domain's README).
 
 mod feeds;
 mod valley;
@@ -98,6 +102,16 @@ fn main() {
     .insert_resource(links)
     .add_systems(Update, publish.before(EngineSet::Draw));
     feeds::plugin(&mut app, size);
+    if let Some(dir) = arg("--capture") {
+        visualization_engine::capture::plugin(
+            &mut app,
+            visualization_engine::capture::Capture {
+                dir: dir.into(),
+                views: visualization_engine::capture::views_from_args(&args),
+                settle_secs: std::env::var("SIM001_SETTLE").ok().and_then(|v| v.parse().ok()).unwrap_or(4.0),
+            },
+        );
+    }
     // The battlefield of each team, with no drones in it: the fog hides them from the commander.
     app.add_plugins(visualization_battlefield::BattlefieldPlugin {
         first_feed_port: first_port,

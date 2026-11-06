@@ -85,8 +85,9 @@ mod tests {
         let forest = Forest::new(&map.trees());
         let mut near = vec![];
         // Along the middle of the mid lane from the Blue home tower to the centre.
+        let mid = map.lanes.iter().find(|l| l.name == recreation_towers::map::LaneName::Mid).unwrap();
         for k in 0..43 {
-            let at = Vec2::new(-430.0 + 10.0 * k as f32, 0.0);
+            let at = mid.at(10.0 * k as f32);
             let p = crate::world::to_world(at, 12.0);
             forest.near(p, &mut near);
             assert!(

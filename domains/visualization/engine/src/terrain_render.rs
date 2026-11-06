@@ -19,6 +19,20 @@ const CHUNKS: i32 = 9; // odd, so the field sits in the middle of the centre chu
 /// for vertex and can be stitched watertight (no skirts, which the ray tracer would see).
 const RING_CELLS: [usize; 5] = [384, 192, 192, 96, 96];
 const RING_TEX: [u32; 5] = [4096, 2048, 1024, 512, 512];
+/// Normal map size per ring, for the relief finer than the mesh (`relief`): 56 cm texels near
+/// the field, 1.1 m on the far mountains.
+const RING_RELIEF: [u32; 5] = [1024, 1024, 1024, 512, 512];
+
+/// A chunk of terrain, built in the background.
+pub struct Chunk {
+    /// The ground, with its colour baked on from above.
+    pub mesh: Mesh,
+    pub color: Image,
+    /// The relief finer than the mesh (none at a real place, whose lidar heights are the relief).
+    pub relief: Option<Image>,
+    /// Its faces steeper than 60°, drawn as rock that runs up the face (see `cliff`).
+    pub cliffs: Option<Mesh>,
+}
 
 /// Worker threads for world generation: leave headroom so the app keeps rendering.
 pub fn worker_threads() -> usize {
@@ -152,6 +166,43 @@ fn gully(x: f32, z: f32, down: Vec2) -> f32 {
         g += gradient_noise(q.x / 6.0, q.y / 6.0) + 0.6 * gradient_noise(q.x / 15.0 + 4.0, q.y / 15.0);
     }
     g / 8.0
+}
+
+/// The relief at (x, z) that the mesh is too coarse for (m, up from the mesh). Rock is broken
+/// into crags and cut by runnels that run down the fall line (the grooves of the gullies that
+/// streak its colour); snow fills them in. Soil has bumps of a few centimetres, which the mown
+/// field hardly has.
+fn relief(x: f32, z: f32, f: &[f32; NF]) -> f32 {
+    let soil =
+        0.05 * gradient_noise(x / 3.0 + 1.7, z / 3.0 - 4.1) * (1.0 + 2.0 * f[F_FOREST]) * (1.0 - 0.8 * f[F_FIELD]);
+    let rock = f[F_ROCK] * (1.0 - 0.7 * f[F_SNOW]);
+    if rock < 0.01 {
+        return soil;
+    }
+    let down = Vec2::new(f[F_DOWN_X], f[F_DOWN_Z]);
+    let crags = 1.0 * gradient_noise(x / 9.0 + 2.0, z / 9.0 - 6.0) + 0.35 * gradient_noise(x / 3.5, z / 3.5 + 8.0);
+    let grooves = -2.4 * gully(x, z, down);
+    soil + (crags + grooves - soil) * rock
+}
+
+/// The slope of `relief` at (x, z) with the fields `f`, over `step` metres.
+fn relief_slope_with(x: f32, z: f32, step: f32, f: &[f32; NF]) -> Vec2 {
+    let r = relief(x, z, f);
+    Vec2::new(relief(x + step, z, f) - r, relief(x, z + step, f) - r) / step
+}
+
+/// The slope of the fine relief at (x, z) (rise per metre along x and z), over `step` metres.
+pub fn relief_slope(x: f32, z: f32, step: f32) -> Vec2 {
+    let f = coarse_fields(x, z, terrain::ground_height(x, z), terrain::ground_normal(x, z));
+    relief_slope_with(x, z, step, &f)
+}
+
+/// A tangent-space normal map texel (x along +x, y along +z) for a relief rising at `slope`.
+/// The chunk's u runs along +x and its v along +z, so the mesh's tangent is +x and its
+/// bitangent +z; the third component is rebuilt from these two.
+fn encode_normal(slope: Vec2) -> [u8; 2] {
+    let n = Vec3::new(-slope.x, -slope.y, 1.0).normalize();
+    [((n.x * 0.5 + 0.5) * 255.0).round() as u8, ((n.y * 0.5 + 0.5) * 255.0).round() as u8]
 }
 
 /// Per-texel detail on top of the interpolated coarse fields.
@@ -301,6 +352,26 @@ fn bake_chunk(x0: f32, z0: f32, size: f32, res: u32) -> Vec<[f32; 3]> {
     if let Some(site) = terrain::real() {
         return bake_real(site, x0, z0, size, res);
     }
+    bake(x0, z0, size, res, [0.0; 3], fine_color)
+}
+
+/// Bakes one chunk's relief into a normal map (see `relief`), over a texel.
+fn bake_relief(x0: f32, z0: f32, size: f32, res: u32) -> Vec<[u8; 2]> {
+    let step = size / res as f32;
+    bake(x0, z0, size, res, [128; 2], |x, z, f| encode_normal(relief_slope_with(x, z, step, f)))
+}
+
+/// Bakes `texel(x, z, fields)` over a chunk, `res` texels square. Slow-varying fields are
+/// evaluated on a coarse grid (in parallel) and interpolated; only the detail runs per texel.
+/// Rows are baked in parallel.
+fn bake<T: Copy + Send>(
+    x0: f32,
+    z0: f32,
+    size: f32,
+    res: u32,
+    zero: T,
+    texel: impl Fn(f32, f32, &[f32; NF]) -> T + Sync,
+) -> Vec<T> {
     let g = (res / 8).max(16) as usize; // coarse grid cells
     let threads = worker_threads();
     let gw = g + 1;
@@ -320,11 +391,11 @@ fn bake_chunk(x0: f32, z0: f32, size: f32, res: u32) -> Vec<[f32; 3]> {
         }
     });
     let res = res as usize;
-    let mut out = vec![[0.0f32; 3]; res * res];
+    let mut out = vec![zero; res * res];
     let rows_per = res.div_ceil(threads);
     std::thread::scope(|s| {
         for (t, chunk) in out.chunks_mut(rows_per * res).enumerate() {
-            let coarse = &coarse;
+            let (coarse, texel) = (&coarse, &texel);
             s.spawn(move || {
                 background_priority();
                 let mut f = [0.0f32; NF];
@@ -345,12 +416,66 @@ fn bake_chunk(x0: f32, z0: f32, size: f32, res: u32) -> Vec<[f32; 3]> {
                     for q in 0..NF {
                         f[q] = (a[q] * (1.0 - fx) + b[q] * fx) * (1.0 - fz) + (c[q] * (1.0 - fx) + d[q] * fx) * fz;
                     }
-                    *px = fine_color(x0 + u * size, z0 + v * size, &f);
+                    *px = texel(x0 + u * size, z0 + v * size, &f);
                 }
             });
         }
     });
     out
+}
+
+/// A normal map from its texels, with a mip chain (linear, not sRGB: these are directions),
+/// repeating or clamped at its edges.
+pub(crate) fn normal_image(texels: Vec<[u8; 2]>, res: u32, repeat: bool) -> Image {
+    let mut level = texels;
+    let mut s = res as usize;
+    let mut data = Vec::with_capacity(s * s * 2 * 4 / 3 + 16);
+    let mut mips = 0;
+    loop {
+        for t in &level {
+            data.extend_from_slice(t);
+        }
+        mips += 1;
+        if s == 1 {
+            break;
+        }
+        let ns = s / 2;
+        let mut next = Vec::with_capacity(ns * ns);
+        for y in 0..ns {
+            for x in 0..ns {
+                let mut acc = [0u32; 2];
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let p = level[(y * 2 + dy) * s + x * 2 + dx];
+                    acc[0] += p[0] as u32;
+                    acc[1] += p[1] as u32;
+                }
+                next.push([((acc[0] + 2) / 4) as u8, ((acc[1] + 2) / 4) as u8]);
+            }
+        }
+        level = next;
+        s = ns;
+    }
+    let mip0 = (res * res * 2) as usize;
+    let mut image = Image::new(
+        Extent3d { width: res, height: res, depth_or_array_layers: 1 },
+        TextureDimension::D2,
+        data[..mip0].to_vec(),
+        TextureFormat::Rg8Unorm,
+        RenderAssetUsages::default(),
+    );
+    image.data = Some(data);
+    image.texture_descriptor.mip_level_count = mips;
+    let edge = if repeat { ImageAddressMode::Repeat } else { ImageAddressMode::ClampToEdge };
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: edge,
+        address_mode_v: edge,
+        mag_filter: ImageFilterMode::Linear,
+        min_filter: ImageFilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Linear,
+        anisotropy_clamp: 16,
+        ..ImageSamplerDescriptor::linear()
+    });
+    image
 }
 
 fn to_image(texels: Vec<[f32; 3]>, res: u32) -> Image {
@@ -479,7 +604,7 @@ fn chunk_mesh(x0: f32, z0: f32, size: f32, cells: usize, neighbours: [usize; 4])
 
 /// CPU work for the whole terrain (background thread): chunk meshes and baked textures.
 /// `progress(done, total)` is called after each chunk.
-pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<(Mesh, Image)> {
+pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<Chunk> {
     let t0 = std::time::Instant::now();
     let size = 2.0 * terrain::half_size() / CHUNKS as f32;
     let half = CHUNKS / 2;
@@ -497,6 +622,7 @@ pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<(Mesh, Image
                 RING_CELLS[ring],
                 RING_TEX[ring],
                 neighbours,
+                RING_RELIEF[ring],
             ));
         }
     }
@@ -509,7 +635,10 @@ pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<(Mesh, Image
             .map(|group| {
                 s.spawn(move || {
                     background_priority();
-                    group.iter().map(|&(x0, z0, cells, _, nb)| chunk_mesh(x0, z0, size, cells, nb)).collect::<Vec<_>>()
+                    group
+                        .iter()
+                        .map(|&(x0, z0, cells, _, nb, _)| chunk_mesh(x0, z0, size, cells, nb))
+                        .collect::<Vec<_>>()
                 })
             })
             .collect();
@@ -518,8 +647,11 @@ pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<(Mesh, Image
     let total = specs.len();
     let mut texels = 0u64;
     let mut out = Vec::with_capacity(total);
-    for (k, (&(x0, z0, _, res, _), mesh)) in specs.iter().zip(chunk_meshes).enumerate() {
-        out.push((mesh, to_image(bake_chunk(x0, z0, size, res), res)));
+    for (k, (&(x0, z0, _, res, _, relief_res), mesh)) in specs.iter().zip(chunk_meshes).enumerate() {
+        let relief =
+            terrain::real().is_none().then(|| normal_image(bake_relief(x0, z0, size, relief_res), relief_res, false));
+        let (mesh, cliffs) = crate::cliff::split(&mesh);
+        out.push(Chunk { mesh, color: to_image(bake_chunk(x0, z0, size, res), res), relief, cliffs });
         texels += res as u64 * res as u64;
         progress(k + 1, total);
     }
@@ -529,15 +661,31 @@ pub fn build_terrain(mut progress: impl FnMut(usize, usize)) -> Vec<(Mesh, Image
 
 /// Main thread: add the baked chunks as assets and spawn them.
 pub fn spawn_terrain_chunks(
-    chunks: Vec<(Mesh, Image)>,
+    chunks: Vec<Chunk>,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     images: &mut Assets<Image>,
+    cliff: &mut Option<Handle<StandardMaterial>>,
 ) {
-    for (mesh, image) in chunks {
+    for Chunk { mesh, color, relief, cliffs } in chunks {
+        if let Some(cliffs) = cliffs {
+            let rock = cliff
+                .get_or_insert_with(|| {
+                    materials.add(StandardMaterial {
+                        base_color_texture: Some(images.add(crate::cliff::rock_texture())),
+                        normal_map_texture: Some(images.add(crate::cliff::rock_normals())),
+                        perceptual_roughness: 0.9,
+                        reflectance: 0.3,
+                        ..default()
+                    })
+                })
+                .clone();
+            commands.spawn(rt(meshes.add(cliffs), rock, Transform::IDENTITY));
+        }
         let mat = materials.add(StandardMaterial {
-            base_color_texture: Some(images.add(image)),
+            base_color_texture: Some(images.add(color)),
+            normal_map_texture: relief.map(|r| images.add(r)),
             perceptual_roughness: 0.93,
             reflectance: 0.25,
             ..default()
@@ -841,5 +989,94 @@ mod tests {
         let (across, down) = (across_sum / faces as f32, down_sum / faces as f32);
         assert!(across >= 0.12, "across a face the rock varies by only {:.1}%", across * 100.0);
         assert!(across > down, "across {:.3}, down {:.3}: not streaked", across, down);
+    }
+
+    /// Bare rock faces, below the snow, whose ±`reach` m stay on the rock.
+    fn rock_faces(reach: f32) -> Vec<Vec2> {
+        let mut out = vec![];
+        for k in 0..4000 {
+            let (x, z) = (-2400.0 + (k % 80) as f32 * 61.0, -2400.0 + (k / 80) as f32 * 97.0);
+            let n = terrain::ground_normal(x, z);
+            let h = terrain::ground_height(x, z);
+            if 1.0 - n.y < 0.45 || !(200.0..270.0).contains(&h) {
+                continue;
+            }
+            let on_rock = |p: Vec2| {
+                let h = terrain::ground_height(p.x, p.y);
+                coarse_fields(p.x, p.y, h, terrain::ground_normal(p.x, p.y))[F_ROCK] > 0.97
+            };
+            let c = Vec2::new(x, z);
+            if [Vec2::X, -Vec2::X, Vec2::Y, -Vec2::Y].iter().all(|d| on_rock(c + *d * reach)) && on_rock(c) {
+                out.push(c);
+            }
+            if out.len() == 30 {
+                break;
+            }
+        }
+        out
+    }
+
+    /// From a few hundred metres up, a mountainside is not a smooth blob: the rock is broken into
+    /// ribs and runnels a few metres across, finer than the far terrain's 6 m mesh cells.
+    #[test]
+    fn rock_has_relief_finer_than_the_far_mesh() {
+        let faces = rock_faces(12.0);
+        assert!(faces.len() >= 15, "only {} rock faces", faces.len());
+        let (mut tilt, mut change, mut n) = (0.0, 0.0, 0.0);
+        for c in faces {
+            for i in -12..=12 {
+                for dir in [Vec2::X, Vec2::Y] {
+                    let p = c + dir * i as f32;
+                    let s = relief_slope(p.x, p.y, 1.0);
+                    let s3 = relief_slope(p.x + dir.x * 3.0, p.y + dir.y * 3.0, 1.0);
+                    tilt += s.length_squared();
+                    change += (s3 - s).length_squared();
+                    n += 1.0;
+                }
+            }
+        }
+        let (tilt, change) = ((tilt / n).sqrt(), (change / n).sqrt());
+        assert!(tilt >= 0.2, "the rock's relief tilts by only {:.1}° (rms)", tilt.atan().to_degrees());
+        assert!(change >= 0.5 * tilt, "it changes by {change:.2} in 3 m against {tilt:.2}: too smooth");
+    }
+
+    /// The runnels on a rock face run down the fall line, like its streaks: the relief rises and
+    /// falls more across the face than down it.
+    #[test]
+    fn rock_relief_is_grooved_down_the_fall_line() {
+        let faces = rock_faces(12.0);
+        assert!(faces.len() >= 15, "only {} rock faces", faces.len());
+        let (mut across, mut down) = (0.0, 0.0);
+        for c in faces {
+            let d = fall_line(c.x, c.y);
+            let a = Vec2::new(-d.y, d.x);
+            for i in -12..=12 {
+                let p = c + a * i as f32;
+                let s = relief_slope(p.x, p.y, 1.0);
+                across += s.dot(a).abs();
+                down += s.dot(d).abs();
+            }
+        }
+        assert!(across > 1.3 * down, "across {across:.1}, down {down:.1}: not grooved");
+    }
+
+    /// The mown field is a lawn: a few centimetres of bumps, no more.
+    #[test]
+    fn a_mown_field_stays_smooth() {
+        for (x, z) in field() {
+            let s = relief_slope(x, z, 0.5);
+            assert!(s.length() < 0.06, "the field tilts {:.1}° at ({x}, {z})", s.length().atan().to_degrees());
+        }
+    }
+
+    /// A rise towards +x tilts the normal towards -x, which the map stores below the middle of
+    /// its red channel; the map's green channel is +z, along the chunk's v.
+    #[test]
+    fn the_normal_map_tilts_away_from_the_rise() {
+        assert_eq!(encode_normal(Vec2::ZERO), [128, 128]);
+        let [x, z] = encode_normal(Vec2::new(0.5, 0.0));
+        assert!(x < 100 && z == 128, "a rise along x: [{x}, {z}]");
+        let [x, z] = encode_normal(Vec2::new(0.0, -0.5));
+        assert!(x == 128 && z > 156, "a fall along z: [{x}, {z}]");
     }
 }

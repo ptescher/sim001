@@ -22,7 +22,7 @@ pub enum AppState {
 
 /// Everything heavy, produced off the main thread.
 pub struct WorldBuild {
-    terrain: Vec<(Mesh, Image)>,
+    terrain: Vec<terrain_render::Chunk>,
     trees: Vec<Tree>,
     plants: Vec<Plant>,
     obstacles: Vec<Obstacle>,
@@ -42,7 +42,7 @@ enum Phase {
     Generating,
     /// Uploading terrain chunks to the GPU, a texel budget per frame.
     Uploading {
-        terrain: Vec<(Mesh, Image)>,
+        terrain: Vec<terrain_render::Chunk>,
         total: usize,
         trees: Vec<Tree>,
         plants: Vec<Plant>,
@@ -135,6 +135,7 @@ fn advance_loading(
     mut render_scale: ResMut<RenderScale>,
     mut next_state: ResMut<NextState<AppState>>,
     settings: Res<crate::RenderSettings>,
+    mut cliff: Local<Option<Handle<StandardMaterial>>>,
 ) {
     let loading = &mut *loading;
     match &mut loading.phase {
@@ -158,15 +159,22 @@ fn advance_loading(
             // ~6 Mtexels per frame keeps upload hitches small (the centre chunk goes alone).
             let mut budget: u64 = 6_000_000;
             let mut batch = Vec::new();
-            while let Some((_, img)) = terrain.last() {
-                let texels = img.width() as u64 * img.height() as u64;
+            while let Some(chunk) = terrain.last() {
+                let texels = chunk.color.width() as u64 * chunk.color.height() as u64;
                 if !batch.is_empty() && texels > budget {
                     break;
                 }
                 budget = budget.saturating_sub(texels);
                 batch.push(terrain.pop().unwrap());
             }
-            terrain_render::spawn_terrain_chunks(batch, &mut commands, &mut meshes, &mut materials, &mut images);
+            terrain_render::spawn_terrain_chunks(
+                batch,
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                &mut images,
+                &mut cliff,
+            );
             let done = *total - terrain.len();
             set_stage(
                 &loading.shared,
