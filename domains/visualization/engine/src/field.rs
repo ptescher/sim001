@@ -223,3 +223,26 @@ pub fn sun_dir() -> Vec3 {
     let azimuth = 140f32.to_radians(); // clockwise from north (-Z)
     Vec3::new(azimuth.sin() * elevation.cos(), elevation.sin(), -azimuth.cos() * elevation.cos()).normalize()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::sun_dir;
+
+    /// Elevation and azimuth (clockwise from north) of the sun, in degrees.
+    fn sun() -> (f32, f32) {
+        let s = sun_dir();
+        let elevation = s.y.asin().to_degrees();
+        let azimuth = s.x.atan2(-s.z).to_degrees().rem_euclid(360.0);
+        (elevation, azimuth)
+    }
+
+    /// A photo looks real when the light models the ground: a sun low enough to cast long
+    /// shadows, and off to the side of the views up the valley (north), so the shadows fall
+    /// across the picture and not behind what casts them.
+    #[test]
+    fn an_afternoon_sun_lights_the_valley_from_the_side() {
+        let (elevation, azimuth) = sun();
+        assert!((30.0..=45.0).contains(&elevation), "the sun is {elevation:.0} deg high");
+        assert!((235.0..=285.0).contains(&azimuth), "the sun is at {azimuth:.0} deg, not in the west");
+    }
+}

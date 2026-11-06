@@ -562,6 +562,20 @@ mod tests {
         assert!(near < far * 0.8, "neighbours differ by {near:.2} m, strangers by {far:.2} m");
     }
 
+    /// Seen from the air, real woods are a canopy, not a park: a stand of subalpine fir and
+    /// spruce has a few hundred trees a hectare. The thickest hectares within a kilometre of the
+    /// field are that dense.
+    #[test]
+    fn the_thickest_woods_are_a_canopy() {
+        let trees = trees();
+        let g = grid(trees.iter().filter(|t| t.pos.x.hypot(t.pos.z) < 1000.0).map(|t| (t.pos.x, t.pos.z, 0)), 100.0);
+        let mut per_hectare: Vec<usize> = g.values().map(|v| v.len()).collect();
+        per_hectare.sort_unstable();
+        // The tenth-thickest hectare, so one odd square doesn't decide it.
+        let thick = per_hectare[per_hectare.len().saturating_sub(10)];
+        assert!(thick >= 120, "the thickest woods have {thick} trees a hectare");
+    }
+
     /// Here and there a conifer is dead and still standing, more of them where the trees are
     /// hardest pressed, near the treeline.
     #[test]

@@ -522,17 +522,21 @@ mod tests {
     use bevy::render::view::ColorGrading;
 
     /// The view should look like a camera's picture, not a painting: a filmic curve that rolls
-    /// highlights off towards white, no extra saturation or contrast, and an exposure that
-    /// follows the light.
+    /// highlights off towards white, and an exposure that follows the light. A camera's standard
+    /// picture profile (an action camera's, a phone's) adds a little saturation and contrast to
+    /// what the sensor saw, so the view does too, but only a little: more reads as a cartoon.
     #[test]
     fn the_scene_looks_like_a_photo() {
         let mut world = World::new();
         let e = world.spawn(scene_look()).id();
         assert_eq!(world.get::<Tonemapping>(e), Some(&Tonemapping::AgX));
         let g = world.get::<ColorGrading>(e).expect("a colour grading");
-        assert_eq!(g.global.post_saturation, 1.0, "no saturation boost");
-        for s in [&g.shadows, &g.midtones, &g.highlights] {
-            assert_eq!((s.contrast, s.saturation), (1.0, 1.0), "no contrast or saturation boost");
+        let saturation = g.global.post_saturation;
+        assert!(saturation > 1.0 && saturation <= 1.12, "saturation {saturation}");
+        let contrast = g.midtones.contrast;
+        assert!(contrast > 1.0 && contrast <= 1.06, "contrast {contrast}");
+        for s in [&g.shadows, &g.highlights] {
+            assert_eq!((s.contrast, s.saturation), (1.0, 1.0), "only the midtones are graded");
         }
         assert!(world.get::<AutoExposure>(e).is_some(), "the exposure follows the light");
     }

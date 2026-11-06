@@ -603,4 +603,65 @@ mod tests {
         }
         assert!(worst < 1e-3, "seam gap {worst} m");
     }
+
+    /// Luminance of the ground's albedo at (x, z).
+    fn lum(x: f32, z: f32) -> f32 {
+        let c = surface_color(x, z, terrain::ground_height(x, z), terrain::ground_normal(x, z));
+        0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    }
+
+    /// The mean luminance of a `size` m square at (x, z): what a camera sees of it from far
+    /// enough that single blades blur together.
+    fn patch(x: f32, z: f32, size: f32) -> f32 {
+        let n = 12;
+        let mut s = 0.0;
+        for i in 0..n {
+            for j in 0..n {
+                s += lum(x + size * (i as f32 + 0.5) / n as f32, z + size * (j as f32 + 0.5) / n as f32);
+            }
+        }
+        s / (n * n) as f32
+    }
+
+    /// Coefficient of variation of the patches' luminance on a grid.
+    fn variation(points: &[(f32, f32)], size: f32) -> f32 {
+        let v: Vec<f32> = points.iter().map(|&(x, z)| patch(x, z, size)).collect();
+        let mean = v.iter().sum::<f32>() / v.len() as f32;
+        let var = v.iter().map(|a| (a - mean).powi(2)).sum::<f32>() / v.len() as f32;
+        var.sqrt() / mean
+    }
+
+    /// Points on the mown field round the runway, about 20 m apart.
+    fn field() -> Vec<(f32, f32)> {
+        (-4..=4).flat_map(|i| (-4..=4).map(move |j| (i as f32 * 21.0 + 3.0, j as f32 * 19.0 - 2.0))).collect()
+    }
+
+    /// A real field is not a carpet: it is greener where it's wetter, paler where it's worn or
+    /// dry, with clover and weeds in patches. Squares of one whole mowing stripe (12 m), which
+    /// hide the stripes, still differ from each other.
+    #[test]
+    fn a_mown_field_is_patchy_not_a_carpet() {
+        let cv = variation(&field(), 12.0);
+        assert!(cv >= 0.06, "the field varies by only {:.1}% from square to square", cv * 100.0);
+    }
+
+    /// Mowing leaves stripes, but faint ones: grass laid one way or the other, not paint.
+    #[test]
+    fn mowing_stripes_are_faint() {
+        // Each 1 m strip across the stripes, averaged along 80 m of them and over four mowing
+        // cycles (48 m across), so the field's patches average out and the stripes are left.
+        let strip = |x: f32| {
+            let mut s = 0.0;
+            for cycle in -2..2 {
+                for k in 0..40 {
+                    s += patch(x + cycle as f32 * 12.0, -40.0 + k as f32 * 2.0, 1.0);
+                }
+            }
+            s / 160.0
+        };
+        let strips: Vec<f32> = (0..12).map(|k| strip(k as f32 - 0.5)).collect();
+        let (lo, hi) = strips.iter().fold((f32::MAX, 0.0f32), |(a, b), &v| (a.min(v), b.max(v)));
+        assert!(hi / lo > 1.02, "there are stripes ({:.3})", hi / lo);
+        assert!(hi / lo <= 1.06, "the light stripes are {:.0}% brighter than the dark", (hi / lo - 1.0) * 100.0);
+    }
 }

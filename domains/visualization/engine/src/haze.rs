@@ -26,6 +26,10 @@ use bevy::render::{
     view::{ExtractedView, ViewDepthStencilTexture, ViewTarget, prepare_view_targets},
 };
 
+/// How far you can see (m): where the air leaves 2% of a dark ridge's contrast. The raster
+/// view's fog uses it too.
+pub const VISIBILITY: f32 = 25_000.0;
+
 /// Put it on a camera to haze what it sees. `update_haze` keeps the camera's matrices current.
 #[derive(Component, ExtractComponent, Clone, Copy, ShaderType)]
 #[extract_app(RenderApp)]
@@ -49,8 +53,7 @@ impl Default for Haze {
         Haze {
             world_from_clip: Mat4::IDENTITY,
             camera: Vec3::ZERO,
-            // About 25 km of visibility: a clear summer day in the mountains, with a little haze.
-            density: 3.9 / 25_000.0,
+            density: 3.9 / VISIBILITY,
             color: Vec3::new(0.30, 0.40, 0.56),
             scale_height: 1800.0,
             sun_dir: crate::field::sun_dir(),
@@ -207,4 +210,18 @@ fn haze(
         pass.set_viewport(0.0, 0.0, size.x as f32, size.y as f32, 0.0, 1.0);
     }
     pass.draw(0..3, 0..1);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A clear summer day in the mountains: you see 50 km and more. The far ridges are still blue
+    /// with the air in between, but the valley under a drone is not veiled.
+    #[test]
+    fn a_clear_day_in_the_mountains() {
+        let seen = 3.9 / Haze::default().density;
+        assert!((50_000.0..=80_000.0).contains(&seen), "{:.0} km of visibility", seen / 1000.0);
+        assert_eq!(seen.round(), VISIBILITY.round(), "the ray tracer's haze and the raster fog agree");
+    }
 }
