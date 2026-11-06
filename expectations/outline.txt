@@ -4,9 +4,11 @@
 # A top-level section that no part names goes into a last part, "More".
 
 Part: Getting started
+  Page: start-here [desktop]
   Page: installing [desktop]
   Section: The launcher
   Page: controls [desktop]
+  Section: Setting up the radio
 
 Part: Flying in the sim
   Section: The simulator
@@ -18,13 +20,13 @@ Part: Flying the VTOL
 
 Part: The ground station
   Section: Ground control station
-  Section: Setting up the radio
   Section: Other aircraft
   Page: ground-station-screens [desktop]
 
 Part: Games
   Section: Recreation
   Section: Games with ArduPilot
+  Section: The rules of Towers
   Section: Towers
 
 Part: For developers
