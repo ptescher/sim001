@@ -22,7 +22,7 @@ pub enum AppState {
 
 /// Everything heavy, produced off the main thread.
 pub struct WorldBuild {
-    terrain: Vec<(Mesh, Image)>,
+    terrain: Vec<terrain_render::Chunk>,
     trees: Vec<Tree>,
     plants: Vec<Plant>,
     obstacles: Vec<Obstacle>,
@@ -42,7 +42,7 @@ enum Phase {
     Generating,
     /// Uploading terrain chunks to the GPU, a texel budget per frame.
     Uploading {
-        terrain: Vec<(Mesh, Image)>,
+        terrain: Vec<terrain_render::Chunk>,
         total: usize,
         trees: Vec<Tree>,
         plants: Vec<Plant>,
@@ -158,7 +158,7 @@ fn advance_loading(
             // ~6 Mtexels per frame keeps upload hitches small (the centre chunk goes alone).
             let mut budget: u64 = 6_000_000;
             let mut batch = Vec::new();
-            while let Some((_, img)) = terrain.last() {
+            while let Some((_, img, _)) = terrain.last() {
                 let texels = img.width() as u64 * img.height() as u64;
                 if !batch.is_empty() && texels > budget {
                     break;
