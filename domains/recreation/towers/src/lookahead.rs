@@ -173,8 +173,8 @@ pub fn best_change(
     };
     let mut candidates: Vec<(usize, usize)> = vec![];
     for k in (0..orders.len()).filter(|&k| free[k]) {
-        for t in 0..towers {
-            if orders[k] != Some(Order::Take(t)) && !away[k][t] && lasts(k, t) {
+        for (t, &avoid) in away[k].iter().enumerate().take(towers) {
+            if orders[k] != Some(Order::Take(t)) && !avoid && lasts(k, t) {
                 candidates.push((k, t));
             }
         }
