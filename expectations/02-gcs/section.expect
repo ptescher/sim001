@@ -21,6 +21,8 @@ Vocabulary:
   # The suite is about the desktop console, and the iOS app does the same job. Lines tagged
   # [iOS] are what differs there; see the expectation README, "Platforms" (https://github.com/ptescher/expectation).
   Platform: desktop | iOS
+    About: desktop: the app on a Mac, Linux or Windows computer
+    About: iOS: the ground station on an iPad or iPhone
   State: the link is connected | lost
   State: the vehicle is disarmed | armed
     Shows: armed: the ARMED annunciator lights up

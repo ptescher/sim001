@@ -2,6 +2,11 @@
 # top-level directory of this suite (the name in its `Section:` line), and a Page is a
 # hand-written file in manual/. [desktop] keeps a page out of the other platforms' manuals.
 # A top-level section that no part names goes into a last part, "More".
+#
+# The manual is for readers: the reader edition leaves out the test machinery (the test report
+# stays, under "For developers"), and Next goes from tutorial to tutorial.
+Edition: reader
+Next: tutorials
 
 Part: Getting started
   Page: start-here [desktop]

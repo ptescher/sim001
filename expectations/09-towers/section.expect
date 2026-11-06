@@ -34,6 +34,8 @@ Vocabulary:
   # first platform is the default, so plain lines are about the sim: the game server with
   # simulated air and ArduPlane SITL. The field is real drones and a real radio, on a bench rig.
   Platform: sim | field
+    About: sim: the game with simulated drones, on this computer
+    About: field: real drones and a real radio
 
   State: the game of Towers is in play | won by Blue | won by Red | a draw
     Shows: in play: the clock runs, and the scores go up
