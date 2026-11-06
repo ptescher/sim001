@@ -16,7 +16,14 @@ Feature: The computer commander
   When the commander sees an enemy drone within 120 m of a tower that its team holds, it defends
   the tower first. That is two circles out: an enemy drone that circles the next tower is not a
   danger. It sends the drone that is nearest to the tower. The commander uses only the map of its
-  team. Thus it does not know about an enemy drone in the fog.
+  team. It does not see an enemy drone in the fog, but it keeps a guess of where the drone is.
+  [[What a team believes about the enemy]] tells how.
+
+  The commander also thinks ahead. Every 5 s it plays the game forward 45 s in a small model.
+  The enemy drones in the model are guesses from its belief. It tries to send each free drone to
+  each other tower. It makes the change that gives most points, if the gain is more than 2
+  points. Thus it does not send a drone to a tower where the enemy has more drones than the
+  team can bring.
 
   Expectation: At the start, the commander sends a drone to each neutral tower
     Each tower goes to the drone that wins it soonest.
@@ -50,6 +57,19 @@ Feature: The computer commander
     And the Red drones in the west circle are 1
     When the computer commander of Blue plays for 15 seconds
     Then the order of the first Blue drone is take the centre tower
+
+  Expectation: The commander does not keep a drone at a tower that the enemy holds with two drones
+    Overrides: At the start, the commander sends a drone to each neutral tower
+    The west tower is Red's, and two Red drones circle it. One Blue drone cannot take it. The
+    commander thinks ahead and sends the drone to a free tower. Here that is the east tower.
+
+    Given the west tower is held by Red
+    And the control of the west tower is -100 %
+    And the Red drones in the west circle are 2
+    And the order of the first Blue drone is take the west tower
+    And the first Blue drone is 190 m from the centre tower
+    When the computer commander of Blue plays for 15 seconds
+    Then the order of the first Blue drone is take the east tower
 
   Expectation: The commander sends a drone with a low battery home
     Overrides: At the start, the commander sends a drone to each neutral tower

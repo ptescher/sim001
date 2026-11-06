@@ -39,7 +39,7 @@ impl Seat {
     /// The captain for a new game as `team`.
     fn begin(&mut self, team: Team) -> Result<Box<dyn Captain + '_>, String> {
         Ok(match self {
-            Seat::Here(t) => Box::new(Commander::with_tuning(league_rules(), *t).lookahead_from_env()),
+            Seat::Here(t) => Box::new(Commander::with_tuning(league_rules(), *t)),
             Seat::Process(p, t) => {
                 p.start(team, t)?;
                 Box::new(p)

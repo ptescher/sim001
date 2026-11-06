@@ -222,7 +222,7 @@ guess that knows nothing puts 3 % there).
 
 ## Step 6: a captain that thinks ahead (`lookahead.rs`)
 
-Every 5 s a commander with `SIM001_LOOKAHEAD=1` (or `Commander::with_lookahead(true)`) rolls a
+Every 5 s, from 10 s into the game, a commander (it is the default; `SIM001_LOOKAHEAD=0` or `Commander::with_lookahead(false)` turns it off) rolls a
 small model of the game forward 45 s and asks whether changing one drone's order would be worth
 more than 2 points. The model (`Sim`): our drones fly to their towers at 16 m/s; a tower's bar
 moves 5 % a second for each unit of weight more in its circle; a held tower scores its points;
@@ -246,7 +246,13 @@ Judged by the league's `judge` against master's commander on 256 seeds neither s
   valley (+0.14 of +0.33). Planning with the model alone still helps on the valley.
 - It takes about 4 s to play the 256 seeds (the model is cheap), so the search can be made bigger:
   more futures, two changes at a time, a longer horizon.
-- Off by default. Turning it on in the champion is a decision for a person (the spec and the
-  numbers of `05-commander.expect` are about the commander without it).
+- **On by default** (`05-commander.expect` says so, with an expectation). Three changes were made
+  when it went on: it starts at 10 s (at the start the belief is only a prior, and two drones
+  went to the centre); it does not send a drone where its battery cannot last the flight, the
+  capture and the way home (without that, 2.75 drones went down a game); and it does not send a
+  drone back to a tower it gave up. With them, on 256 other seeds (7,000,000 and up) against
+  master's commander: **chain +0.385 (lower bound +0.320), valley +0.341 (+0.259)**.
+- The tests of the autonomy policies and the reactive rules (`give_up`, `stay_away`) play with
+  lookahead off: they measure those, not the commander's tactics.
 - Not tested: against a different opponent than master's commander; with a beaten opponent the
   belief's motion model (fitted to that commander's play) may be worse.

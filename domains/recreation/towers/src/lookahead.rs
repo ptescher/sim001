@@ -150,19 +150,31 @@ fn toward(from: Vec2, to: Vec2, step: f32) -> Vec2 {
 }
 
 /// The one change to `orders` that the model likes best: drone `k` goes to tower `t` instead. `None`
-/// if no change is worth [`MARGIN`] points. `free` says which drones may be given a new order.
+/// if no change is worth [`MARGIN`] points. `free` says which drones may be given a new order, and
+/// `away` which towers a drone must stay away from.
 pub fn best_change(
     rules: &Rules,
     view: &TeamView,
     orders: &[Option<Order>],
     free: &[bool],
+    away: &[Vec<bool>],
     belief: &Belief,
 ) -> Option<(usize, usize)> {
     let towers = view.towers.len();
+    let base = rules.base(view.team);
+    // A drone is not sent where its battery cannot last the flight, the capture and the way home.
+    let lasts = |k: usize, t: usize| {
+        let d = &view.drones[k];
+        let tower = &view.towers[t];
+        let need = 1.0 - tower.control * view.team.sign();
+        let capture = rules.capture_time * need / rules.class(k).weight();
+        rules.battery(rules.class(k)) <= 0.0
+            || d.battery >= rules.bingo + (d.at.distance(tower.at) + tower.at.distance(base)) / CRUISE + capture + 15.0
+    };
     let mut candidates: Vec<(usize, usize)> = vec![];
     for k in (0..orders.len()).filter(|&k| free[k]) {
         for t in 0..towers {
-            if orders[k] != Some(Order::Take(t)) {
+            if orders[k] != Some(Order::Take(t)) && !away[k][t] && lasts(k, t) {
                 candidates.push((k, t));
             }
         }
@@ -200,6 +212,10 @@ mod tests {
     fn fly_to(g: &mut Game, team: Team, k: usize, at: Vec2) {
         let i = g.drone(team, k);
         g.drones[i] = crate::Drone { at, alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+    }
+
+    fn no_away(view: &TeamView) -> Vec<Vec<bool>> {
+        vec![vec![false; view.towers.len()]; view.drones.len()]
     }
 
     #[test]
@@ -273,7 +289,7 @@ mod tests {
         belief.update(&view);
         let orders = vec![Some(Order::Take(west)), Some(Order::Take(0)), Some(Order::Take(0))];
         let free = vec![true, false, false];
-        let change = best_change(&rules, &view, &orders, &free, &belief);
+        let change = best_change(&rules, &view, &orders, &free, &no_away(&view), &belief);
         let centre = g.tower("centre");
         // A free tower: the east, or the centre, which is worth more. Not the west.
         assert!(matches!(change, Some((0, t)) if t == east || t == centre), "{change:?}");
@@ -287,6 +303,6 @@ mod tests {
         let centre = g.tower("centre");
         let orders = vec![Some(Order::Take(centre)), None, None];
         let free = vec![false; 3];
-        assert_eq!(best_change(&rules, &view, &orders, &free, &belief), None);
+        assert_eq!(best_change(&rules, &view, &orders, &free, &no_away(&view), &belief), None);
     }
 }

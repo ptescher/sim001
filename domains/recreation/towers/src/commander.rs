@@ -77,6 +77,8 @@ const REFUEL_MARGIN: f32 = 15.0;
 const BACK_TO_WORK: f32 = 0.9;
 /// A commander that thinks ahead does so this often (s).
 const LOOK_EVERY: f32 = 5.0;
+/// ...and not before this time in the game (s): at the start the belief is only a prior.
+const LOOK_AFTER: f32 = 10.0;
 
 /// A computer in a team's seat.
 #[derive(Clone, Debug)]
@@ -115,23 +117,17 @@ impl Commander {
             recharging: vec![false; n],
             last: None,
             look: None,
-            blind: false,
+            blind: std::env::var("SIM001_LOOKAHEAD").as_deref() == Ok("blind"),
         }
+        .with_lookahead(std::env::var("SIM001_LOOKAHEAD").as_deref() != Ok("0"))
     }
 
-    /// A commander that thinks ahead (crate::lookahead): once in a while it rolls a model of the
-    /// game forward from what it believes about the enemy, and changes an order if that is better.
+    /// Thinks ahead or not (crate::lookahead): once in a while a commander that does rolls a model of
+    /// the game forward from what it believes about the enemy, and changes an order if that is
+    /// better. A commander thinks ahead unless `SIM001_LOOKAHEAD` is `0`.
     pub fn with_lookahead(mut self, on: bool) -> Commander {
         self.look = on.then(|| (crate::Belief::new(self.rules, crate::Team::Blue), f32::NEG_INFINITY));
         self
-    }
-
-    /// Thinks ahead if `SIM001_LOOKAHEAD` is `1`.
-    pub fn lookahead_from_env(self) -> Commander {
-        let setting = std::env::var("SIM001_LOOKAHEAD").unwrap_or_default();
-        let mut c = self.with_lookahead(setting == "1" || setting == "blind");
-        c.blind = setting == "blind";
-        c
     }
 
     pub fn tuning(&self) -> CommanderTuning {
@@ -314,10 +310,12 @@ impl Commander {
             if !self.blind {
                 belief.update(view);
             }
-            if view.time - *last_look >= LOOK_EVERY {
+            if view.time >= LOOK_AFTER && view.time - *last_look >= LOOK_EVERY {
                 *last_look = view.time;
                 let free: Vec<bool> = (0..self.orders.len()).map(|k| up[k] && charge[k].is_none()).collect();
-                if let Some((k, t)) = crate::lookahead::best_change(&self.rules, view, &self.orders, &free, belief) {
+                if let Some((k, t)) =
+                    crate::lookahead::best_change(&self.rules, view, &self.orders, &free, &away, belief)
+                {
                     self.orders[k] = Some(Order::Take(t));
                 }
             }
@@ -361,7 +359,8 @@ mod tests {
     fn a_tuning_changes_how_it_plays() {
         let (mut g, mut c) = fight(-0.2);
         let mut patient =
-            Commander::with_tuning(g.rules, CommanderTuning { give_up: 60.0, ..CommanderTuning::DEFAULT });
+            Commander::with_tuning(g.rules, CommanderTuning { give_up: 60.0, ..CommanderTuning::DEFAULT })
+                .with_lookahead(false);
         patient.assign(0, c.order(0));
         let west = Some(Order::Take(g.tower("west")));
         let mut g2 = g.clone();
@@ -473,7 +472,7 @@ mod tests {
             g.drones[i] =
                 crate::Drone { at: at + Vec2::new(0.0, 40.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
         }
-        let mut c = Commander::new(g.rules);
+        let mut c = Commander::new(g.rules).with_lookahead(false);
         c.assign(0, Some(Order::Take(west)));
         (g, c)
     }

@@ -459,7 +459,7 @@ pub fn serve(input: impl BufRead, mut output: impl Write) -> Result<(), String> 
                     .ok()
                     .and_then(|a| CommanderTuning::from_array(&a))
                     .ok_or("a tuning out of bounds")?;
-                captain = Some(Commander::with_tuning(league_rules(), tuning).lookahead_from_env());
+                captain = Some(Commander::with_tuning(league_rules(), tuning));
                 "\"ok\"".to_string()
             }
             ToCaptain::View(view) => {
