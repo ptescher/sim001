@@ -216,10 +216,34 @@ pub fn update_windsock(scene: Res<Scene>, mut socks: Query<&mut Transform, With<
     }
 }
 
-/// Direction *towards* the sun: high midday sun (~52 deg) from the south-east, so the
-/// northern peaks seen from the pilot box are side-lit and slopes aren't grazed by light.
+/// Direction *towards* the sun: a mid-afternoon sun (38 deg) in the west-south-west. The views
+/// up the valley (north) are side-lit, so trees, buildings and ridges throw their shadows across
+/// the picture, and the long shadows model the ground.
 pub fn sun_dir() -> Vec3 {
-    let elevation = 52f32.to_radians();
-    let azimuth = 140f32.to_radians(); // clockwise from north (-Z)
+    let elevation = 38f32.to_radians();
+    let azimuth = 250f32.to_radians(); // clockwise from north (-Z)
     Vec3::new(azimuth.sin() * elevation.cos(), elevation.sin(), -azimuth.cos() * elevation.cos()).normalize()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sun_dir;
+
+    /// Elevation and azimuth (clockwise from north) of the sun, in degrees.
+    fn sun() -> (f32, f32) {
+        let s = sun_dir();
+        let elevation = s.y.asin().to_degrees();
+        let azimuth = s.x.atan2(-s.z).to_degrees().rem_euclid(360.0);
+        (elevation, azimuth)
+    }
+
+    /// A photo looks real when the light models the ground: a sun low enough to cast long
+    /// shadows, and off to the side of the views up the valley (north), so the shadows fall
+    /// across the picture and not behind what casts them.
+    #[test]
+    fn an_afternoon_sun_lights_the_valley_from_the_side() {
+        let (elevation, azimuth) = sun();
+        assert!((30.0..=45.0).contains(&elevation), "the sun is {elevation:.0} deg high");
+        assert!((235.0..=285.0).contains(&azimuth), "the sun is at {azimuth:.0} deg, not in the west");
+    }
 }

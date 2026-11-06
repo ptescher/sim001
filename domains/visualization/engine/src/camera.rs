@@ -9,6 +9,7 @@ use bevy::light::AtmosphereEnvironmentMapLight;
 use bevy::pbr::AtmosphereSettings;
 use bevy::post_process::auto_exposure::{AutoExposure, AutoExposureCompensationCurve};
 use bevy::post_process::bloom::Bloom;
+use bevy::post_process::effect_stack::{ChromaticAberration, LensDistortion, Vignette};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureUsages;
 use bevy::solari::prelude::SolariLighting;
@@ -162,6 +163,14 @@ pub fn metering_curve() -> AutoExposureCompensationCurve {
     .expect("a flat line is a curve")
 }
 
+/// A camera's standard picture: a little more colour and midtone contrast than the sensor saw.
+fn picture_profile() -> bevy::render::view::ColorGrading {
+    let mut g = bevy::render::view::ColorGrading::default();
+    g.global.post_saturation = 1.08;
+    g.midtones.contrast = 1.03;
+    g
+}
+
 /// Sky, exposure, grading and anti-aliasing shared by every camera that renders the scene
 /// (the main view and the aircraft's sensor camera), so they look the same.
 pub fn scene_look() -> impl Bundle {
@@ -177,10 +186,10 @@ pub fn scene_look() -> impl Bundle {
             compensation_curve: METERING,
             ..default()
         },
-        // A filmic curve and no grading on top: highlights roll off to white as on film or a
-        // sensor, and colours are as lit, not pushed.
+        // A filmic curve, and a camera's standard picture profile on top: highlights roll off to
+        // white as on a sensor, and a touch of saturation and midtone contrast, as a camera adds.
         Tonemapping::AgX,
-        bevy::render::view::ColorGrading::default(),
+        picture_profile(),
         // Aerial perspective: far ridges fade into a pale blue haze. Solari does not apply it:
         // ray-traced cameras get `haze::Haze` instead (see `add_raytracing`).
         DistanceFog {
@@ -188,13 +197,14 @@ pub fn scene_look() -> impl Bundle {
             directional_light_color: Color::srgba(1.0, 0.95, 0.85, 0.3),
             directional_light_exponent: 20.0,
             falloff: FogFalloff::from_visibility_colors(
-                25_000.0,
+                crate::haze::VISIBILITY,
                 Color::srgb(0.40, 0.48, 0.60),
                 Color::srgb(0.75, 0.83, 0.95),
             ),
         },
         crate::clouds::Clouds::default(),
-        Bloom::NATURAL,
+        // A clean lens: a little glow round the sun and bright clouds, not a veil over the shadows.
+        Bloom { intensity: 0.06, ..Bloom::NATURAL },
         Msaa::Off,
         TemporalAntiAliasing::default(),
     )
@@ -254,7 +264,7 @@ pub fn camera_plugin(app: &mut App) {
             chase_pos: Vec3::ZERO,
             fov: 50.0,
         })
-        .add_systems(Update, update_render_scale);
+        .add_systems(Update, (update_render_scale, fit_lens));
 }
 
 /// Frame rate the automatic render scale aims for.
@@ -473,6 +483,40 @@ pub fn update_camera(
     }
 }
 
+/// The lens of a view: the nose camera's, or none.
+pub fn lens(mode: CamMode) -> Option<(LensDistortion, Vignette, ChromaticAberration)> {
+    (mode == CamMode::Fpv).then(|| {
+        (
+            // A small wide-angle FPV lens: straight lines bow outwards, and the stretched edges
+            // are cropped off.
+            LensDistortion { intensity: 0.22, scale: 1.08, ..default() },
+            Vignette { intensity: 0.45, radius: 0.85, smoothness: 3.0, ..default() },
+            ChromaticAberration { intensity: 0.012, ..default() },
+        )
+    })
+}
+
+/// The main camera wears the lens of the pilot's view (none for a view pinned for a picture).
+fn fit_lens(
+    mut commands: Commands,
+    cs: Res<CamState>,
+    pinned: Res<PinnedView>,
+    cam: Query<(Entity, Has<LensDistortion>), With<MainCamera>>,
+) {
+    let want = if pinned.0.is_some() { None } else { lens(cs.mode) };
+    for (e, has) in &cam {
+        match (&want, has) {
+            (Some(l), false) => {
+                commands.entity(e).insert(l.clone());
+            }
+            (None, true) => {
+                commands.entity(e).remove::<(LensDistortion, Vignette, ChromaticAberration)>();
+            }
+            _ => {}
+        }
+    }
+}
+
 /// ReSTIR shares light samples between pixels and frames. It costs about 40% more per frame and
 /// removes the speckle on shaded surfaces, which is worth more than the pixels it costs when the
 /// resolution is made up by the upscaler. SIM001_RESTIR=0 turns it off.
@@ -522,19 +566,47 @@ mod tests {
     use bevy::render::view::ColorGrading;
 
     /// The view should look like a camera's picture, not a painting: a filmic curve that rolls
-    /// highlights off towards white, no extra saturation or contrast, and an exposure that
-    /// follows the light.
+    /// highlights off towards white, and an exposure that follows the light. A camera's standard
+    /// picture profile (an action camera's, a phone's) adds a little saturation and contrast to
+    /// what the sensor saw, so the view does too, but only a little: more reads as a cartoon.
     #[test]
     fn the_scene_looks_like_a_photo() {
         let mut world = World::new();
         let e = world.spawn(scene_look()).id();
         assert_eq!(world.get::<Tonemapping>(e), Some(&Tonemapping::AgX));
         let g = world.get::<ColorGrading>(e).expect("a colour grading");
-        assert_eq!(g.global.post_saturation, 1.0, "no saturation boost");
-        for s in [&g.shadows, &g.midtones, &g.highlights] {
-            assert_eq!((s.contrast, s.saturation), (1.0, 1.0), "no contrast or saturation boost");
+        let saturation = g.global.post_saturation;
+        assert!(saturation > 1.0 && saturation <= 1.12, "saturation {saturation}");
+        let contrast = g.midtones.contrast;
+        assert!(contrast > 1.0 && contrast <= 1.06, "contrast {contrast}");
+        for s in [&g.shadows, &g.highlights] {
+            assert_eq!((s.contrast, s.saturation), (1.0, 1.0), "only the midtones are graded");
         }
         assert!(world.get::<AutoExposure>(e).is_some(), "the exposure follows the light");
+    }
+
+    /// The nose camera is an FPV camera: a wide lens that bows straight lines outwards (barrel
+    /// distortion), darkens the corners and fringes edges with a little colour, as the pictures
+    /// in a pilot's goggles do. The other views are a person's eyes and a good camera: none of it.
+    #[test]
+    fn the_nose_camera_has_an_fpv_lens() {
+        let (bend, corners, fringe) = lens(CamMode::Fpv).expect("the nose camera has a lens");
+        assert!(bend.intensity > 0.1 && bend.intensity < 0.5, "barrel distortion {}", bend.intensity);
+        assert!(bend.scale > 1.0, "the bowed edges are cropped, not stretched");
+        assert!(corners.intensity > 0.0 && corners.intensity <= 0.6, "vignette {}", corners.intensity);
+        assert!(fringe.intensity > 0.0 && fringe.intensity <= 0.03, "colour fringes {}", fringe.intensity);
+        assert!(lens(CamMode::LineOfSight).is_none());
+        assert!(lens(CamMode::Chase).is_none());
+    }
+
+    /// A clean lens glows a little round the sun and bright clouds, but it doesn't lay a veil
+    /// over the whole picture: shadows stay dark.
+    #[test]
+    fn the_lens_glows_but_does_not_veil_the_picture() {
+        let mut world = World::new();
+        let e = world.spawn(scene_look()).id();
+        let bloom = world.get::<Bloom>(e).expect("a glow");
+        assert!(bloom.intensity > 0.0 && bloom.intensity <= 0.08, "bloom {}", bloom.intensity);
     }
 
     /// P1 zooms the line-of-sight camera: all the way down is the widest view, all the way up the

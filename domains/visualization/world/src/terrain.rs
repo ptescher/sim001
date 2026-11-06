@@ -318,62 +318,121 @@ pub fn trees() -> Vec<Tree> {
             .collect();
     }
     let mut out = Vec::new();
-    let spacing = 13.0;
-    let max_r = 1750.0;
-    let n = (max_r / spacing) as i32;
-    for ix in -n..=n {
-        for iz in -n..=n {
-            let jx = hash(ix * 7 + 1, iz * 13 + 5) - 0.5;
-            let jz = hash(ix * 3 + 9, iz * 5 + 2) - 0.5;
-            let x = (ix as f32 + jx * 0.9) * spacing;
-            let z = (iz as f32 + jz * 0.9) * spacing;
-            let r = (x * x + z * z).sqrt();
-            if r > max_r || r < 150.0 {
-                continue;
+    // Near the field, where single trees can be told apart, they grow as close as a real stand
+    // (7 m apart at the most); further off, a coarser grid keeps the count down, and the
+    // ground's colour carries the rest of the forest.
+    for (spacing, min_r, max_r) in [(7.0, 150.0, NEAR_WOODS), (13.0, NEAR_WOODS, 1750.0)] {
+        let n = (max_r / spacing) as i32;
+        for ix in -n..=n {
+            for iz in -n..=n {
+                if let Some(t) = tree_at(ix, iz, spacing, min_r, max_r) {
+                    out.push(t);
+                }
             }
-            // Keep the approach/climb-out corridors along the runway open.
-            if x.abs() < 40.0 && r < 400.0 {
-                continue;
-            }
-            if lake_factor(x, z) < 1.2 {
-                continue;
-            }
-            let h = ground_height(x, z);
-            let slope = 1.0 - ground_normal(x, z).y;
-            // Woods thicken on the hillsides; ragged treeline around 200-240 m.
-            let treeline = 215.0 + 35.0 * gradient_noise(x / 180.0, z / 180.0);
-            if h > treeline || slope > 0.5 {
-                continue;
-            }
-            let hill_bonus = smoothstep(450.0, 900.0, r) * 0.35;
-            let thin_near_line = smoothstep(treeline - 60.0, treeline, h) * 0.5;
-            // Woods grow in stands of 30 m or so with openings between them, not evenly.
-            let stand = (fbm(x / 34.0 + 11.0, z / 34.0 - 5.0, 2) - 0.5) * 0.9;
-            if hash(ix * 31 + 7, iz * 17 + 3) > forest_density(x, z) + hill_bonus - thin_near_line + stand {
-                continue;
-            }
-            let near_line = 1.0 - smoothstep(treeline - 80.0, treeline, h) * 0.45;
-            // The trees of a stand are of an age: tall in an old stand, short in a young one.
-            let age = fbm(x / 75.0 - 30.0, z / 75.0 + 12.0, 2);
-            let height =
-                (10.0 + 18.0 * smoothstep(0.25, 0.75, age)) * (0.82 + 0.36 * hash(ix + 77, iz - 33)) * near_line;
-            // Subalpine fir and spruce, with a few aspen groves in the lower, gentler ground.
-            let aspen_zone =
-                ((1.0 - smoothstep(300.0, 700.0, r)) * 0.45 + fbm(x / 120.0, z / 120.0, 2) * 0.25 - 0.45).max(0.0);
-            let conifer = hash(ix - 5, iz + 9) > aspen_zone;
-            // A few stand dead, more where the trees are hardest pressed.
-            let dead =
-                conifer && hash(ix * 5 + 1, iz * 11 + 7) < 0.025 + 0.07 * smoothstep(treeline - 90.0, treeline, h);
-            out.push(Tree {
-                pos: Vec3::new(x, h, z),
-                height,
-                conifer,
-                shade: (hash(ix + 2, iz + 2) * 4.0) as u8,
-                dead,
-            });
         }
     }
     out
+}
+
+/// How much of the sky a tree's crown hides at (x, z): 1 at a tree's foot, 0 past its crown.
+/// A real place's photo already shows what is under its trees, so there it is 0.
+pub fn canopy(x: f32, z: f32) -> f32 {
+    if real().is_some() {
+        return 0.0;
+    }
+    let grid = CROWNS.get_or_init(Crowns::new);
+    let (cx, cz) = Crowns::cell(x, z);
+    let mut c = 0.0f32;
+    for dx in -1..=1 {
+        for dz in -1..=1 {
+            for &(p, r) in grid.cells.get(&(cx + dx, cz + dz)).map(Vec::as_slice).unwrap_or(&[]) {
+                let d = p.distance(Vec2::new(x, z));
+                if d < r {
+                    c = c.max(1.0 - smoothstep(0.55 * r, r, d));
+                }
+            }
+        }
+    }
+    c
+}
+
+/// The trees' crowns (centre and radius on the ground), by cell, for `canopy`.
+struct Crowns {
+    cells: std::collections::HashMap<(i32, i32), Vec<(Vec2, f32)>>,
+}
+
+static CROWNS: OnceLock<Crowns> = OnceLock::new();
+
+impl Crowns {
+    /// Wider than the widest crown, so a point's crowns are in its cell or the next.
+    const CELL: f32 = 12.0;
+
+    fn cell(x: f32, z: f32) -> (i32, i32) {
+        ((x / Self::CELL).floor() as i32, (z / Self::CELL).floor() as i32)
+    }
+
+    fn new() -> Crowns {
+        let mut cells: std::collections::HashMap<(i32, i32), Vec<(Vec2, f32)>> = Default::default();
+        for t in trees() {
+            // Crowns are about two thirds as wide as the tree is tall (a dead one has only stubs).
+            let r = if t.dead {
+                0.1
+            } else if t.conifer {
+                0.3
+            } else {
+                0.35
+            } * t.height;
+            let r = r.min(Self::CELL);
+            cells.entry(Self::cell(t.pos.x, t.pos.z)).or_default().push((Vec2::new(t.pos.x, t.pos.z), r));
+        }
+        Crowns { cells }
+    }
+}
+
+/// Out to here the trees are on the fine grid.
+const NEAR_WOODS: f32 = 1000.0;
+
+/// The tree in cell (ix, iz) of a grid `spacing` apart, if one grows there.
+fn tree_at(ix: i32, iz: i32, spacing: f32, min_r: f32, max_r: f32) -> Option<Tree> {
+    let jx = hash(ix * 7 + 1, iz * 13 + 5) - 0.5;
+    let jz = hash(ix * 3 + 9, iz * 5 + 2) - 0.5;
+    let x = (ix as f32 + jx * 0.9) * spacing;
+    let z = (iz as f32 + jz * 0.9) * spacing;
+    let r = (x * x + z * z).sqrt();
+    if r >= max_r || r < min_r {
+        return None;
+    }
+    // Keep the approach/climb-out corridors along the runway open.
+    if x.abs() < 40.0 && r < 400.0 {
+        return None;
+    }
+    if lake_factor(x, z) < 1.2 {
+        return None;
+    }
+    let h = ground_height(x, z);
+    let slope = 1.0 - ground_normal(x, z).y;
+    // Woods thicken on the hillsides; ragged treeline around 200-240 m.
+    let treeline = 215.0 + 35.0 * gradient_noise(x / 180.0, z / 180.0);
+    if h > treeline || slope > 0.5 {
+        return None;
+    }
+    let hill_bonus = smoothstep(450.0, 900.0, r) * 0.35;
+    let thin_near_line = smoothstep(treeline - 60.0, treeline, h) * 0.5;
+    // Woods grow in stands of 30 m or so with openings between them, not evenly.
+    let stand = (fbm(x / 34.0 + 11.0, z / 34.0 - 5.0, 2) - 0.5) * 0.9;
+    if hash(ix * 31 + 7, iz * 17 + 3) > forest_density(x, z) + hill_bonus - thin_near_line + stand {
+        return None;
+    }
+    let near_line = 1.0 - smoothstep(treeline - 80.0, treeline, h) * 0.45;
+    // The trees of a stand are of an age: tall in an old stand, short in a young one.
+    let age = fbm(x / 75.0 - 30.0, z / 75.0 + 12.0, 2);
+    let height = (10.0 + 18.0 * smoothstep(0.25, 0.75, age)) * (0.82 + 0.36 * hash(ix + 77, iz - 33)) * near_line;
+    // Subalpine fir and spruce, with a few aspen groves in the lower, gentler ground.
+    let aspen_zone = ((1.0 - smoothstep(300.0, 700.0, r)) * 0.45 + fbm(x / 120.0, z / 120.0, 2) * 0.25 - 0.45).max(0.0);
+    let conifer = hash(ix - 5, iz + 9) > aspen_zone;
+    // A few stand dead, more where the trees are hardest pressed.
+    let dead = conifer && hash(ix * 5 + 1, iz * 11 + 7) < 0.025 + 0.07 * smoothstep(treeline - 90.0, treeline, h);
+    Some(Tree { pos: Vec3::new(x, h, z), height, conifer, shade: (hash(ix + 2, iz + 2) * 4.0) as u8, dead })
 }
 
 /// Young conifers and shrubs: among the trees and along the edges of the woods, thickets by the
@@ -560,6 +619,38 @@ mod tests {
             / trees.iter().step_by(7).count() as f64;
         let near = near / n.max(1) as f64;
         assert!(near < far * 0.8, "neighbours differ by {near:.2} m, strangers by {far:.2} m");
+    }
+
+    /// Seen from the air, real woods are a canopy, not a park: a stand of subalpine fir and
+    /// spruce has a few hundred trees a hectare. The thickest hectares within a kilometre of the
+    /// field are that dense.
+    #[test]
+    fn the_thickest_woods_are_a_canopy() {
+        let trees = trees();
+        let g = grid(trees.iter().filter(|t| t.pos.x.hypot(t.pos.z) < 1000.0).map(|t| (t.pos.x, t.pos.z, 0)), 100.0);
+        let mut per_hectare: Vec<usize> = g.values().map(|v| v.len()).collect();
+        per_hectare.sort_unstable();
+        // The tenth-thickest hectare, so one odd square doesn't decide it.
+        let thick = per_hectare[per_hectare.len().saturating_sub(10)];
+        assert!(thick >= 120, "the thickest woods have {thick} trees a hectare");
+    }
+
+    /// Under a crown the ground is in its shade and covered in what falls from it; out in a gap
+    /// between crowns it is open to the sky. `canopy` says which: 1 at a tree's foot, falling to
+    /// 0 past the edge of its crown.
+    #[test]
+    fn canopy_is_under_the_crowns_and_not_in_the_gaps() {
+        let trees = trees();
+        let t = trees.iter().find(|t| t.height > 18.0 && t.pos.x.hypot(t.pos.z) < 800.0).expect("a tall tree");
+        assert!(canopy(t.pos.x, t.pos.z) > 0.9, "at the foot of a tree: {}", canopy(t.pos.x, t.pos.z));
+        // A point well away from every tree.
+        let open = (0..2000)
+            .map(|k| (300.0 + (k % 40) as f32 * 9.7, -600.0 + (k / 40) as f32 * 9.3))
+            .find(|&(x, z)| trees.iter().all(|t| (t.pos.x - x).hypot(t.pos.z - z) > t.height * 0.5 + 2.0))
+            .expect("a gap");
+        assert_eq!(canopy(open.0, open.1), 0.0, "in a gap at {open:?}");
+        // The middle of the field has no trees at all.
+        assert_eq!(canopy(0.0, 0.0), 0.0);
     }
 
     /// Here and there a conifer is dead and still standing, more of them where the trees are
