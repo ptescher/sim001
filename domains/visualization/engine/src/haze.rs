@@ -28,7 +28,7 @@ use bevy::render::{
 
 /// How far you can see (m): where the air leaves 2% of a dark ridge's contrast. The raster
 /// view's fog uses it too.
-pub const VISIBILITY: f32 = 25_000.0;
+pub const VISIBILITY: f32 = 60_000.0;
 
 /// Put it on a camera to haze what it sees. `update_haze` keeps the camera's matrices current.
 #[derive(Component, ExtractComponent, Clone, Copy, ShaderType)]

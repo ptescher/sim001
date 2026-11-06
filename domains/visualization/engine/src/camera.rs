@@ -162,6 +162,14 @@ pub fn metering_curve() -> AutoExposureCompensationCurve {
     .expect("a flat line is a curve")
 }
 
+/// A camera's standard picture: a little more colour and midtone contrast than the sensor saw.
+fn picture_profile() -> bevy::render::view::ColorGrading {
+    let mut g = bevy::render::view::ColorGrading::default();
+    g.global.post_saturation = 1.08;
+    g.midtones.contrast = 1.03;
+    g
+}
+
 /// Sky, exposure, grading and anti-aliasing shared by every camera that renders the scene
 /// (the main view and the aircraft's sensor camera), so they look the same.
 pub fn scene_look() -> impl Bundle {
@@ -177,10 +185,10 @@ pub fn scene_look() -> impl Bundle {
             compensation_curve: METERING,
             ..default()
         },
-        // A filmic curve and no grading on top: highlights roll off to white as on film or a
-        // sensor, and colours are as lit, not pushed.
+        // A filmic curve, and a camera's standard picture profile on top: highlights roll off to
+        // white as on a sensor, and a touch of saturation and midtone contrast, as a camera adds.
         Tonemapping::AgX,
-        bevy::render::view::ColorGrading::default(),
+        picture_profile(),
         // Aerial perspective: far ridges fade into a pale blue haze. Solari does not apply it:
         // ray-traced cameras get `haze::Haze` instead (see `add_raytracing`).
         DistanceFog {
@@ -188,7 +196,7 @@ pub fn scene_look() -> impl Bundle {
             directional_light_color: Color::srgba(1.0, 0.95, 0.85, 0.3),
             directional_light_exponent: 20.0,
             falloff: FogFalloff::from_visibility_colors(
-                25_000.0,
+                crate::haze::VISIBILITY,
                 Color::srgb(0.40, 0.48, 0.60),
                 Color::srgb(0.75, 0.83, 0.95),
             ),

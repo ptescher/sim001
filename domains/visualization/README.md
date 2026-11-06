@@ -68,8 +68,17 @@ far ridges. What the view does for each:
 | A clear stony bed near the bank | The water is a mirror whose colour is the bed's: stones and silt (`pebble_texture`), fading with depth by vertex colour, red first. Fresnel shows the bed where you look down and the reflection where you look across |
 | Grass to the water's edge, a dark wet margin, cobbles | The shore is sedge and moss, with a wet band just above the water and about 900 cobbles along the waterline |
 | A field of cumulus, down to the horizon | About 500 flat-bottomed clouds out to 16 km, with sunlit tops and blue-grey bases |
-| Blue haze on the far mountains | A depth-based aerial perspective pass (`haze.rs`): air that thins with height, about 25 km of visibility, brighter towards the sun |
+| Blue haze on the far mountains | A depth-based aerial perspective pass (`haze.rs`): air that thins with height, about 60 km of visibility (a clear day; the raster fog uses the same), brighter towards the sun |
 | A warm, yellow-green meadow | The baked grass colours are warmed a little and pulled a little towards grey |
+| Long shadows across the picture | A mid-afternoon sun, 38° high in the west-south-west: the views up the valley are side-lit |
+| A camera's colours | A filmic curve (AgX) and a camera's standard picture profile on top: 8% more saturation, 3% more midtone contrast |
+| A mown field is not a carpet | Wet, dry and clover patches tens of metres across, under faint mowing stripes (about 5%) |
+| Woods, not parkland | Trees up to 7 m apart within 1 km of the field, so the thickest stands have 150 to 200 trees a hectare; 13 m apart further off |
+
+Before and after the afternoon sun, the camera profile, the clearer air, the patchy field and the
+denser woods (ray traced; the drone's view over the field, 250 m up, the creek and the woods):
+
+![Before and after](../../docs/realism_before_after.jpg)
 
 What it does not do yet:
 

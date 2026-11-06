@@ -216,11 +216,12 @@ pub fn update_windsock(scene: Res<Scene>, mut socks: Query<&mut Transform, With<
     }
 }
 
-/// Direction *towards* the sun: high midday sun (~52 deg) from the south-east, so the
-/// northern peaks seen from the pilot box are side-lit and slopes aren't grazed by light.
+/// Direction *towards* the sun: a mid-afternoon sun (38 deg) in the west-south-west. The views
+/// up the valley (north) are side-lit, so trees, buildings and ridges throw their shadows across
+/// the picture, and the long shadows model the ground.
 pub fn sun_dir() -> Vec3 {
-    let elevation = 52f32.to_radians();
-    let azimuth = 140f32.to_radians(); // clockwise from north (-Z)
+    let elevation = 38f32.to_radians();
+    let azimuth = 250f32.to_radians(); // clockwise from north (-Z)
     Vec3::new(azimuth.sin() * elevation.cos(), elevation.sin(), -azimuth.cos() * elevation.cos()).normalize()
 }
 

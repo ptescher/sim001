@@ -134,13 +134,18 @@ fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
     let blade = gradient_noise(x * 3.1, z * 3.1) * 0.5 + gradient_noise(x * 9.7, z * 9.7) * 0.5;
     c = scale(c, 0.86 + 0.22 * blade.abs().min(1.0) + 0.06 * blade);
 
-    // Mown flying field with stripes along the runway.
+    // Mown flying field: faint stripes along the runway (grass laid one way, then the other),
+    // over the patches a real field has: darker and greener where it's wet, yellowed where it's
+    // dry, bluish clover in drifts.
     let field = f[F_FIELD];
     if field > 0.0 {
         let tri = ((x / 6.0).rem_euclid(2.0) - 1.0).abs(); // 0..1 triangle wave across 12 m
         let stripe = smoothstep(0.35, 0.65, tri);
-        let mown = scale([0.040, 0.112, 0.016], 0.88 + 0.24 * stripe);
-        let mown = scale(mown, 0.92 + 0.12 * blade.abs());
+        let mut mown = [0.040, 0.112, 0.016];
+        mown = mix(mown, [0.026, 0.094, 0.013], smoothstep(0.30, 0.62, f[F_KIND]) * 0.9);
+        mown = mix(mown, [0.098, 0.118, 0.034], smoothstep(0.52, 0.80, f[F_N1]) * 0.85);
+        mown = mix(mown, [0.034, 0.090, 0.032], smoothstep(0.55, 0.78, f[F_N2]) * 0.6);
+        let mown = scale(mown, (0.975 + 0.05 * stripe) * (0.92 + 0.12 * blade.abs()));
         c = mix(c, mown, field);
     }
 
