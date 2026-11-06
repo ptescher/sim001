@@ -31,6 +31,7 @@ pub mod optics;
 pub mod pod;
 pub mod rocks;
 pub mod scenery;
+pub mod sensor;
 pub mod terrain_render;
 pub mod theme;
 pub mod treegen;
