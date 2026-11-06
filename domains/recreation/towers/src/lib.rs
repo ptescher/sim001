@@ -155,7 +155,7 @@ pub struct Rules {
     pub squad: [Class; 5],
     /// A tower's circle: a drone counts within this distance across (m)...
     pub circle_radius: f32,
-    /// ...and at most this high (m).
+    /// ...and below this height (m): the treetops. Only a low drone takes a tower.
     pub circle_ceiling: f32,
     /// One drone more in the circle takes the control from 0 to its end in this time (s).
     pub capture_time: f32,
@@ -222,7 +222,7 @@ impl Default for Rules {
             drones: 5,
             squad: [Class::Standard, Class::Standard, Class::Standard, Class::Heavy, Class::Light],
             circle_radius: 60.0,
-            circle_ceiling: 120.0,
+            circle_ceiling: map::TREE_MIN,
             capture_time: 20.0,
             decay_time: 100.0,
             win_score: 600.0,
@@ -672,7 +672,7 @@ impl Game {
 
     /// Is drone `d` in the circle of the tower at `at`?
     fn in_circle(&self, d: &Drone, at: Vec2) -> bool {
-        d.phase == Phase::Flying && d.at.distance(at) <= self.rules.circle_radius && d.alt <= self.rules.circle_ceiling
+        d.phase == Phase::Flying && d.at.distance(at) <= self.rules.circle_radius && d.alt < self.rules.circle_ceiling
     }
 
     fn capture(&mut self, dt: f32) {
@@ -886,9 +886,33 @@ mod tests {
         g.drones[i] = Drone { at, alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
     }
 
+    /// Puts a drone in a circle: flying low, below the treetops, where it counts for the tower.
+    fn circle(g: &mut Game, team: Team, k: usize, at: Vec2) {
+        let i = g.drone(team, k);
+        g.drones[i] = Drone { at, alt: 15.0, phase: Phase::Flying, ..g.drones[i] };
+    }
+
     fn fly_low(g: &mut Game, team: Team, k: usize, at: Vec2) {
         let i = g.drone(team, k);
         g.drones[i] = Drone { at, alt: 12.0, phase: Phase::Flying, ..g.drones[i] };
+    }
+
+    /// Only a drone below the treetops takes a tower: one that circles above the trees watches it.
+    #[test]
+    fn only_a_drone_below_the_treetops_takes_a_tower() {
+        let mut g = Game::new(Rules::default());
+        let west = g.tower("west");
+        let at = g.towers[west].at + Vec2::new(40.0, 0.0);
+        fly(&mut g, Team::Blue, 0, at);
+        for _ in 0..100 {
+            g.step(0.1);
+        }
+        assert_eq!(g.towers[west].control, 0.0, "a drone 50 m high moved the control");
+        fly_low(&mut g, Team::Blue, 0, at);
+        for _ in 0..100 {
+            g.step(0.1);
+        }
+        assert!((g.towers[west].control - 0.5).abs() < 0.01, "a low drone moves it 5 % a second");
     }
 
     #[test]
@@ -906,9 +930,9 @@ mod tests {
         let mut g = Game::new(Rules::default());
         let west = g.tower("west");
         let at = g.towers[west].at;
-        fly(&mut g, Team::Blue, 0, at + Vec2::new(40.0, 0.0));
-        fly(&mut g, Team::Blue, 1, at + Vec2::new(-40.0, 0.0));
-        fly(&mut g, Team::Red, 0, at + Vec2::new(0.0, 40.0));
+        circle(&mut g, Team::Blue, 0, at + Vec2::new(40.0, 0.0));
+        circle(&mut g, Team::Blue, 1, at + Vec2::new(-40.0, 0.0));
+        circle(&mut g, Team::Red, 0, at + Vec2::new(0.0, 40.0));
         run(&mut g, 4.0);
         assert!((g.towers[west].control - 0.2).abs() < 1e-3, "{}", g.towers[west].control);
         assert!(g.towers[west].contested);
@@ -974,7 +998,7 @@ mod tests {
     fn charged(at: Vec2, left: f32) -> (Game, usize) {
         let rules = Rules { light_battery: 150.0, standard_battery: 240.0, heavy_battery: 300.0, ..Rules::default() };
         let mut g = Game::new(rules);
-        fly(&mut g, Team::Blue, 0, at);
+        circle(&mut g, Team::Blue, 0, at);
         let i = g.drone(Team::Blue, 0);
         g.battery[i] = left;
         g.look();
@@ -1019,7 +1043,7 @@ mod tests {
         // Enemy classes: standard 1, heavy 2, light 0.5. Red drone 0 is standard, 3 heavy, 4 light.
         for (k, per_second) in [(0, 2.5), (3, 4.0), (4, 1.75)] {
             let (mut g, i) = charged(Vec2::ZERO + Vec2::new(40.0, 0.0), 100.0);
-            fly(&mut g, Team::Red, k, Vec2::new(-40.0, 0.0));
+            circle(&mut g, Team::Red, k, Vec2::new(-40.0, 0.0));
             run(&mut g, 10.0);
             assert!((g.battery[i] - (100.0 - 10.0 * per_second)).abs() < 0.01, "enemy {k}: {}", g.battery[i]);
         }
@@ -1034,7 +1058,7 @@ mod tests {
         run(&mut g, 10.0);
         assert!((g.battery[i] - 120.0).abs() < 0.01, "+3 -1: {}", g.battery[i]);
         // An enemy in the circle: contested, no recharge, and the drain is higher.
-        fly(&mut g, Team::Red, 0, Vec2::new(45.0, -390.0));
+        circle(&mut g, Team::Red, 0, Vec2::new(45.0, -390.0));
         g.battery[i] = 100.0;
         run(&mut g, 10.0);
         assert!((g.battery[i] - 75.0).abs() < 0.01, "{}", g.battery[i]);
@@ -1118,8 +1142,8 @@ mod tests {
         g.towers[west].control = 0.5;
         let at = g.towers[west].at;
         // One Blue and one Red: contested, nothing moves.
-        fly(&mut g, Team::Blue, 0, at + Vec2::new(40.0, 0.0));
-        fly(&mut g, Team::Red, 1, at + Vec2::new(-40.0, 0.0));
+        circle(&mut g, Team::Blue, 0, at + Vec2::new(40.0, 0.0));
+        circle(&mut g, Team::Red, 1, at + Vec2::new(-40.0, 0.0));
         run(&mut g, 10.0);
         assert_eq!(g.towers[west].control, 0.5);
     }
@@ -1210,7 +1234,7 @@ mod tests {
         let mut g = Game::new(Rules::default());
         let west = g.tower("west");
         let at = g.towers[west].at;
-        fly(&mut g, Team::Red, 1, at);
+        circle(&mut g, Team::Red, 1, at);
         run(&mut g, 19.9);
         assert_eq!(g.towers[west].holder, None);
         run(&mut g, 0.1);
@@ -1218,7 +1242,7 @@ mod tests {
         assert_eq!(g.towers[west].control, -1.0, "the control stops at the end");
         let i = g.drone(Team::Red, 1);
         g.drones[i].phase = Phase::Down;
-        fly(&mut g, Team::Blue, 0, at);
+        circle(&mut g, Team::Blue, 0, at);
         run(&mut g, 19.9);
         assert_eq!(g.towers[west].holder, Some(Team::Red));
         run(&mut g, 0.1);
@@ -1454,12 +1478,12 @@ mod tests {
         let mut g = Game::new(Rules::default());
         let east = g.tower("east");
         let at = g.towers[east].at;
-        fly(&mut g, Team::Red, 1, at);
+        circle(&mut g, Team::Red, 1, at);
         run(&mut g, 20.0);
         assert_eq!(g.towers[east].holder, Some(Team::Red));
         assert_eq!(g.maps[Team::Blue.index()].towers[east].holder, None);
         assert_eq!(g.maps[Team::Red.index()].towers[east].holder, Some(Team::Red));
-        fly(&mut g, Team::Blue, 0, at + Vec2::new(-145.0, 0.0));
+        circle(&mut g, Team::Blue, 0, at + Vec2::new(-145.0, 0.0));
         g.look();
         let s = g.maps[Team::Blue.index()].towers[east];
         assert_eq!((s.holder, s.seen), (Some(Team::Red), true));

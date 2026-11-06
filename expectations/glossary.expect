@@ -364,7 +364,7 @@ Term: Tower
 
 Term: Circle
   In [[Towers]], the area round a [[tower]] where a drone counts for it: within 60 m of the
-  tower, and not more than 120 m high. Only a drone that flies counts.
+  tower, and below the treetops (20 m). Only a drone that flies counts, and only [[low]].
 
 Term: Control
   In [[Towers]], how far a [[tower]] is towards each team, from −100 % (Red) to +100 % (Blue).

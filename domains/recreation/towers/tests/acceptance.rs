@@ -155,30 +155,43 @@ impl World {
     /// `n` of `team`'s drones in the circle of `tower` (on the circle's edge, 40 m out, spread
     /// round it), flying or on the ground; the team's drones that were there and are not wanted
     /// go back to the base.
-    fn in_circle(&mut self, team: Team, tower: &str, n: usize, flying: bool) {
+    /// Puts `n` of `team`'s drones in the circle of `tower`: flying low (`Some(true)`), flying
+    /// above the trees (`Some(false)`), or on the ground (`None`); and sends home the others that
+    /// were there so.
+    fn in_circle(&mut self, team: Team, tower: &str, n: usize, low: Option<bool>) {
         let centre = self.tower(tower).at;
         let order = World::order(team);
-        let ks: Vec<usize> = if flying { order.to_vec() } else { order.iter().rev().copied().collect() };
+        let ks: Vec<usize> = match low {
+            Some(true) => order.to_vec(),
+            Some(false) => order.iter().skip(1).chain(order.iter().take(1)).copied().collect(),
+            None => order.iter().rev().copied().collect(),
+        };
         for (j, k) in ks.into_iter().enumerate() {
             let i = self.game.drone(team, k);
             let d = self.game.drones[i];
-            let here = (d.phase == Phase::Flying) == flying && (d.at - centre).length() <= 60.0;
+            let here = (d.at - centre).length() <= 60.0 && self.kind_of(&d) == low;
             if j < n {
-                let a = j as f32 * 2.1;
-                self.put(i, centre + 40.0 * Vec2::new(a.cos(), a.sin()), flying.then_some(ALT));
+                let a = j as f32 * 2.1 + if low == Some(false) { 1.0 } else { 0.0 };
+                let alt = low.map(|l| if l { LOW } else { ALT });
+                self.put(i, centre + 40.0 * Vec2::new(a.cos(), a.sin()), alt);
             } else if here {
                 self.home(i);
             }
         }
     }
 
-    fn count(&self, team: Team, tower: &str, flying: bool) -> f64 {
+    /// How a drone is: flying low, flying above the trees, or on the ground.
+    fn kind_of(&self, d: &recreation_towers::Drone) -> Option<bool> {
+        (d.phase == Phase::Flying).then_some(d.alt < self.game.rules.treetop)
+    }
+
+    fn count(&self, team: Team, tower: &str, low: Option<bool>) -> f64 {
         let centre = self.tower(tower).at;
-        let phase = if flying { Phase::Flying } else { Phase::Ground };
         self.game
             .drones
             .iter()
-            .filter(|d| d.team == team && d.phase == phase && (d.at - centre).length() <= 60.0)
+            .filter(|d| d.team == team && (d.at - centre).length() <= 60.0 && self.kind_of(d) == low)
+            .filter(|d| low.is_some() || d.phase == Phase::Ground)
             .count() as f64
     }
 
@@ -252,7 +265,7 @@ impl World {
             }
             "near the Red home tower" => ("near the Red home tower", self.shadow(), Some(ALT)),
             "over its base" => ("over its base", m.bases[0], Some(ALT)),
-            "in the west circle" => ("in the west circle", m.towers[1] + Vec2::new(40.0, 0.0), Some(ALT)),
+            "in the west circle" => ("in the west circle", m.towers[1] + Vec2::new(40.0, 0.0), Some(LOW)),
             other => match away_from(m, other) {
                 Some((name, at)) => (name, at, Some(ALT)),
                 None => ("at its base", m.bases[0], None),
@@ -328,6 +341,12 @@ impl World {
     }
 
     /// The first Blue drone is sent to `target`, `low` or high.
+    /// Sends the first Blue drone to take the tower at `tower`.
+    fn take_blue(&mut self, tower: Vec2, low: bool) {
+        let d = self.game.drones[self.game.drone(Team::Blue, 0)];
+        self.plan = Some(flight::take(&self.game.map, d.at, tower, low));
+    }
+
     fn send_blue(&mut self, target: Vec2, low: bool) {
         let d = self.game.drones[self.game.drone(Team::Blue, 0)];
         self.plan = Some(flight::plan(&self.game.map, d.at, target, low));
@@ -445,13 +464,17 @@ fn bindings() -> Bindings<World> {
             w.tower_mut("west").control = v.as_f64().unwrap() as f32 / 100.0
         })
         .observe("the circle of the west tower", |w| if w.tower("west").contested { "contested" } else { "quiet" })
-        .observe("the Blue drones in the west circle", |w| w.count(Team::Blue, "west", true))
-        .set("the Blue drones in the west circle", move |w, v| w.in_circle(Team::Blue, "west", count(v), true))
-        .observe("the Red drones in the west circle", |w| w.count(Team::Red, "west", true))
-        .set("the Red drones in the west circle", move |w, v| w.in_circle(Team::Red, "west", count(v), true))
-        .observe("the Blue drones on the ground in the west circle", |w| w.count(Team::Blue, "west", false))
+        .observe("the Blue drones in the west circle", |w| w.count(Team::Blue, "west", Some(true)))
+        .set("the Blue drones in the west circle", move |w, v| w.in_circle(Team::Blue, "west", count(v), Some(true)))
+        .observe("the Red drones in the west circle", |w| w.count(Team::Red, "west", Some(true)))
+        .set("the Red drones in the west circle", move |w, v| w.in_circle(Team::Red, "west", count(v), Some(true)))
+        .observe("the Blue drones above the trees over the west circle", |w| w.count(Team::Blue, "west", Some(false)))
+        .set("the Blue drones above the trees over the west circle", move |w, v| {
+            w.in_circle(Team::Blue, "west", count(v), Some(false))
+        })
+        .observe("the Blue drones on the ground in the west circle", |w| w.count(Team::Blue, "west", None))
         .set("the Blue drones on the ground in the west circle", move |w, v| {
-            w.in_circle(Team::Blue, "west", count(v), false)
+            w.in_circle(Team::Blue, "west", count(v), None)
         })
         .observe("the east tower", |w| holder_name(w.tower("east").holder))
         .arrange("the east tower", |w, v| w.hold("east", v))
@@ -459,8 +482,8 @@ fn bindings() -> Bindings<World> {
         .arrange("the control of the east tower", |w, v| {
             w.tower_mut("east").control = v.as_f64().unwrap() as f32 / 100.0
         })
-        .observe("the Red drones in the east circle", |w| w.count(Team::Red, "east", true))
-        .set("the Red drones in the east circle", move |w, v| w.in_circle(Team::Red, "east", count(v), true))
+        .observe("the Red drones in the east circle", |w| w.count(Team::Red, "east", Some(true)))
+        .set("the Red drones in the east circle", move |w, v| w.in_circle(Team::Red, "east", count(v), Some(true)))
         // What Blue knows.
         .observe("the Red scout", |w| {
             let d = w.game.drones[w.scout()];
@@ -585,11 +608,11 @@ fn bindings() -> Bindings<World> {
         .arrange("the first Blue drone", |w, v| w.place_blue(v))
         .on("the first Blue drone is sent high to the west tower", |w| {
             let west = w.tower("west").at;
-            w.send_blue(west, false)
+            w.take_blue(west, false)
         })
         .on("the first Blue drone is sent low to the west tower", |w| {
             let west = w.tower("west").at;
-            w.send_blue(west, true)
+            w.take_blue(west, true)
         })
         .on("the first Blue drone is sent low to a point in the forest", |w| {
             w.send_blue(Vec2::new(-100.0, 100.0), true)
@@ -664,12 +687,14 @@ fn bindings() -> Bindings<World> {
         })
         .observe("the towers in the game", |w| w.game.towers.len() as f64)
         .observe("the Blue west outpost", |w| holder_name(w.tower("Blue west outpost").holder))
-        .observe("the Blue drones in the Blue west outpost circle", |w| w.count(Team::Blue, "Blue west outpost", true))
+        .observe("the Blue drones in the Blue west outpost circle", |w| {
+            w.count(Team::Blue, "Blue west outpost", Some(true))
+        })
         .set("the Blue drones in the Blue west outpost circle", move |w, v| {
-            w.in_circle(Team::Blue, "Blue west outpost", count(v), true)
+            w.in_circle(Team::Blue, "Blue west outpost", count(v), Some(true))
         })
         .arrange("the Blue drones in the Blue west outpost circle", move |w, v| {
-            w.in_circle(Team::Blue, "Blue west outpost", count(v), true)
+            w.in_circle(Team::Blue, "Blue west outpost", count(v), Some(true))
         })
         .observe("the spread of the Blue belief of the Red scout", |w| w.believed().spread(SCOUT).round() as f64)
         .observe("the chance on the Blue belief of the Red scout near the first Blue drone", |w| {

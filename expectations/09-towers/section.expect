@@ -17,7 +17,7 @@ Section: Towers
 
   You do not fly the drones with sticks. You command your team from the commander app: you
   give each drone an order, and the drone flies it by plan in [[AGENT mode]]. To take a tower,
-  send drones to circle it. Each tower that your team holds gives you one point each second. The centre tower gives two.
+  send drones to circle it, low, below the treetops. Each tower that your team holds gives you one point each second. The centre tower gives two.
   The first team to 600 points wins. If no team has 600 points after 10 minutes, the team with
   more points wins.
 
@@ -64,7 +64,9 @@ Vocabulary:
     Shows: contested: the circle of the west tower flashes, because drones of the two teams are in it
     Shows: quiet: the circle of the west tower does not flash
   State: the Blue drones in the west circle are 0..3
-    Set: send Blue drones to the west tower until {value} of them circle it
+    Set: send Blue drones to the west tower until {value} of them circle it below the treetops
+  State: the Blue drones above the trees over the west circle are 0..3
+    Set: send Blue drones high to the west tower and hold them over it until {value} of them circle 50 m high
   State: the Red drones in the west circle are 0..3
     Set: wait until {value} Red drones circle the west tower
   State: the Blue drones on the ground in the west circle are 0..3
@@ -113,7 +115,7 @@ Vocabulary:
     Shows: 110 m from the west tower: the first Blue drone flies 50 m high, 110 m east of the west tower
     Shows: 130 m from the west tower: the first Blue drone flies 50 m high, 130 m east of the west tower
     Shows: over its base: the first Blue drone circles 50 m high over the Blue base
-    Shows: in the west circle: the first Blue drone circles the west tower, 50 m high
+    Shows: in the west circle: the first Blue drone circles the west tower, 17 m high
     Shows: near the Red home tower: the first Blue drone flies 50 m high, 100 m from the Red home tower, on the side of the centre of the field
     Set[field]: near the Red home tower: fly the first Blue drone to the marker 50 m high and 100 m from the Red home tower, on the side of the centre of the field
     Shows: at the Blue home tower: the first Blue drone circles the Blue home tower

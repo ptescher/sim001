@@ -39,13 +39,14 @@ Feature: Flying low
   Each order is flown high or [[low]]. A drone that flies high goes straight to where it is
   sent, over the forest. A drone that flies low goes along the lanes, below the treetops. At
   the end it circles low if it is in a [[clearing]]. In a lane or over the forest there is no
-  space to circle, so there it climbs above the trees and circles high.
+  space to circle, so there it climbs above the trees and circles high. A drone sent to take a
+  tower circles it low, however it got there: only a low drone takes a tower.
 
   Expectation: A drone that flies high goes straight over the forest
     Given the first Blue drone is at the Blue home tower
     When the first Blue drone is sent high to the west tower
     Then the way of the first Blue drone is straight over the forest
-    And the orbit of the first Blue drone is high
+    And the orbit of the first Blue drone is low
 
   Expectation: A drone that flies low goes along the lanes
     Given the first Blue drone is at the Blue home tower
