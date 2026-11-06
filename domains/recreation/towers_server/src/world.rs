@@ -489,7 +489,7 @@ mod tests {
         w.game.drones[blue].phase = Referee::Flying;
         let west = w.game.tower("west");
         let low = plan_for(&w.game, blue, Order::Take(west), true, home, 1);
-        assert_eq!((low.primitive, low.alt), (Primitive::Goto, 17.5));
+        assert_eq!((low.primitive, low.alt), (Primitive::Goto, flight::low_height(Team::Blue, 1)));
         let (n, e) = cognition_plan::to_local(home.0, home.1, low.lat, low.lon);
         assert!(w.game.map.open(Vec2::new(n, e)), "it aims along the lane");
         let high = plan_for(&w.game, blue, Order::Take(west), false, home, 2);

@@ -20,7 +20,7 @@ pub fn orbit_height(team: Team, k: usize) -> f32 {
 /// where it takes a tower, and over the AGENT envelope's least height (its floor of 8 m and 8 m
 /// more), each its own: all five drones of a team fit in the 4 m between.
 pub fn low_height(team: Team, k: usize) -> f32 {
-    16.0 + 1.5 * k as f32 + if team == Team::Red { 0.75 } else { 0.0 }
+    16.0 + 0.7 * k as f32 + if team == Team::Red { 0.35 } else { 0.0 }
 }
 
 /// How far ahead along its way a drone aims, so that it follows a lane (m).
