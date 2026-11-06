@@ -1313,7 +1313,7 @@ mod tests {
         g.towers[0].holder = None;
         // Blue's drone is low in the mid lane; Red's is low in the east lane, 130 m off.
         fly_low(&mut g, Team::Blue, 0, Vec2::new(-200.0, 0.0));
-        let east = &g.map.lanes.iter().find(|l| l.name == map::LaneName::East).unwrap().points;
+        let east = &g.map.lanes.iter().find(|l| l.name == map::LaneName::East).unwrap().through;
         let p = east[0].lerp(east[1], 0.35);
         fly_low(&mut g, Team::Red, 0, p);
         assert!(p.distance(Vec2::new(-200.0, 0.0)) < 150.0 && !g.map.line_open(p, Vec2::new(-200.0, 0.0)));

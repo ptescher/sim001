@@ -220,7 +220,7 @@ impl World {
     /// lane (210 m, past the sight of the home tower): about 143 m from it, with the forest between.
     fn east_lane(&self) -> Vec2 {
         let lane = self.game.map.lanes.iter().find(|l| l.name == LaneName::East).unwrap();
-        lane.points[0] + (lane.points[1] - lane.points[0]).normalize() * 210.0
+        lane.through[0] + (lane.through[1] - lane.through[0]).normalize() * 210.0
     }
 
     /// Where the west lane is nearest the lake.

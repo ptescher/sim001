@@ -71,11 +71,49 @@ impl LaneName {
     }
 }
 
-/// A lane: a path through the forest, `LANE_HALF_WIDTH` to each side of its middle.
+/// A lane: a path through the forest, about `LANE_HALF_WIDTH` to each side of its middle.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lane {
     pub name: LaneName,
+    /// What it joins: towers (or a base and its home tower), in order.
+    pub through: Vec<Vec2>,
+    /// Its middle, as it winds from one to the next: it starts at the first, passes each and ends
+    /// at the last.
     pub points: Vec<Vec2>,
+}
+
+/// The lake: round about `at`, `radius` on average, its shore nearer or further in each direction.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lake {
+    pub at: Vec2,
+    pub radius: f32,
+}
+
+impl Lake {
+    /// How far the shore is from `at` in the direction `dir` (m).
+    pub fn shore(&self, dir: Vec2) -> f32 {
+        let _ = dir;
+        self.radius
+    }
+
+    /// How far `p` is from the shore: below 0 on the water (m, along the line from `at`).
+    pub fn distance(&self, p: Vec2) -> f32 {
+        self.at.distance(p) - self.shore(p - self.at)
+    }
+
+    pub fn contains(&self, p: Vec2) -> bool {
+        self.distance(p) <= 0.0
+    }
+
+    /// The shore, as `n` points round it.
+    pub fn outline(&self, n: usize) -> Vec<Vec2> {
+        (0..n)
+            .map(|k| {
+                let dir = Vec2::from_angle(k as f32 / n as f32 * std::f32::consts::TAU);
+                self.at + dir * self.shore(dir)
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -197,7 +235,7 @@ pub struct Map {
     pub towers: Vec<Vec2>,
     pub layout: Layout,
     pub bases: [Vec2; 2],
-    pub lake: Circle,
+    pub lake: Lake,
     pub lanes: Vec<Lane>,
     /// The open ground apart from the lanes and the lake: round each tower and each base.
     pub clearings: Vec<Circle>,
@@ -222,8 +260,8 @@ impl Map {
         let along = (b - a).normalize();
         let out = Vec2::new(along.y, -along.x).normalize();
         let out = if out.dot(Vec2::ZERO - (a + b) * 0.5) > 0.0 { -out } else { out };
-        let lake = Circle { at: (a + b) * 0.5 + out * (LAKE_RADIUS + 20.0), radius: LAKE_RADIUS };
-        let lane = |name: LaneName, points: Vec<Vec2>| Lane { name, points };
+        let lake = Lake { at: (a + b) * 0.5 + out * (LAKE_RADIUS + 20.0), radius: LAKE_RADIUS };
+        let lane = |name: LaneName, through: Vec<Vec2>| Lane { name, points: through.clone(), through };
         let mut lanes: Vec<Lane> = layout
             .lanes
             .iter()
@@ -262,8 +300,8 @@ impl Map {
             .iter()
             .flat_map(|l| l.points.windows(2))
             .map(|s| segment_distance(p, s[0], s[1]) - LANE_HALF_WIDTH);
-        let rounds = self.clearings.iter().chain([&self.lake]).map(|c| c.at.distance(p) - c.radius);
-        lanes.chain(rounds).fold(f32::MAX, f32::min)
+        let rounds = self.clearings.iter().map(|c| c.at.distance(p) - c.radius);
+        lanes.chain(rounds).chain([self.lake.distance(p)]).fold(f32::MAX, f32::min)
     }
 
     /// Is `p` in a clearing or on the lake: open ground wide enough to circle in?
@@ -283,7 +321,7 @@ impl Map {
         self.clearings
             .iter()
             .copied()
-            .chain([self.lake])
+            .chain([Circle { at: self.lake.at, radius: self.lake.shore(p - self.lake.at) }])
             .min_by(|a, b| (a.at.distance(p) - a.radius).total_cmp(&(b.at.distance(p) - b.radius)))
             .expect("a map has clearings")
     }
@@ -305,9 +343,10 @@ impl Map {
                 consider(closest_on_segment(p, s[0], s[1]));
             }
         }
-        for c in self.clearings.iter().chain([&self.lake]) {
+        for c in &self.clearings {
             consider(c.at + (p - c.at).normalize_or_zero() * c.radius * 0.9);
         }
+        consider(self.lake.at + (p - self.lake.at).normalize_or_zero() * self.lake.shore(p - self.lake.at) * 0.9);
         best.1
     }
 
@@ -387,7 +426,7 @@ impl Map {
             .iter()
             .map(|b| b.distance(p) - BASE_CLEARING)
             .chain(self.towers.iter().map(|t| t.distance(p) - TOWER_CLEARING))
-            .chain([self.lake.at.distance(p) - self.lake.radius])
+            .chain([self.lake.distance(p)])
             .fold(f32::MAX, f32::min);
         let foot = smooth(0.0, MOUNTAIN_FOOT, clear - MOUNTAIN_MARGIN);
         MOUNTAIN_HEIGHT * rise * foot * (0.75 + 0.25 * ridges(p))
@@ -470,7 +509,7 @@ impl Map {
 
     fn open_with_margin(&self, p: Vec2, margin: f32) -> bool {
         self.clearings.iter().any(|c| c.at.distance(p) <= c.radius + margin)
-            || self.lake.at.distance(p) <= self.lake.radius + margin
+            || self.lake.distance(p) <= margin
             || self
                 .lanes
                 .iter()
@@ -582,15 +621,22 @@ mod tests {
         assert!(m.lake.at.distance(a) > m.lake.radius * 2.0 && m.lake.at.distance(b) > m.lake.radius * 2.0);
         // The west lane's middle is a few metres off the shore, so that its edge meets the lake.
         let west = m.lanes.iter().find(|l| l.name == LaneName::West).unwrap();
-        let d = segment_distance(m.lake.at, west.points[0], west.points[1]);
-        assert!(d > m.lake.radius && d < m.lake.radius + LANE_HALF_WIDTH, "{d}");
-        assert!(m.lake.at.length() + m.lake.radius < m.field_radius, "the lake is in the field");
+        let (d, near) = west
+            .points
+            .windows(2)
+            .map(|s| (segment_distance(m.lake.at, s[0], s[1]), closest_on_segment(m.lake.at, s[0], s[1])))
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .unwrap();
+        let shore = m.lake.shore(near - m.lake.at);
+        assert!(d > shore && d < shore + LANE_HALF_WIDTH - 5.0, "{d} from the middle of the lake, the shore {shore}");
+        let far = m.lake.outline(72).iter().map(|p| p.length()).fold(0.0, f32::max);
+        assert!(far < m.field_radius, "the lake is in the field");
     }
 
     #[test]
     fn the_lanes_and_the_clearings_are_open_and_the_forest_is_not() {
         let m = map();
-        assert!(m.open(Vec2::new(-200.0, 20.0)), "on the mid lane");
+        assert!(m.open(Vec2::new(-200.0, 5.0)), "on the mid lane");
         assert!(!m.open(Vec2::new(-200.0, 60.0)), "in the forest beside it");
         assert!(m.open(m.lake.at), "the lake");
         assert!(!m.open(Vec2::new(300.0, 300.0)));
@@ -599,9 +645,20 @@ mod tests {
     #[test]
     fn the_distance_to_open_ground_is_negative_on_it_and_grows_into_the_forest() {
         let m = map();
-        assert!(m.open_distance(Vec2::new(-200.0, 0.0)) <= -29.0, "the middle of a lane");
-        assert!((m.open_distance(Vec2::new(-200.0, 30.0))).abs() < 0.01, "the edge of a lane");
-        assert!((m.open_distance(Vec2::new(-200.0, 50.0)) - 20.0).abs() < 0.01);
+        let mid = m.lanes.iter().find(|l| l.name == LaneName::Mid).unwrap();
+        // The middle of the lane halfway from the Blue home tower to the centre, in the forest.
+        let half = mid.through[0].lerp(mid.through[1], 0.5);
+        let on = mid
+            .points
+            .windows(2)
+            .map(|s| closest_on_segment(half, s[0], s[1]))
+            .min_by(|a, b| a.distance(half).total_cmp(&b.distance(half)))
+            .unwrap();
+        assert!(m.open_distance(on) <= -24.0, "the middle of a lane");
+        // Out from the lane, a metre further is about a metre further into the forest.
+        let out = Vec2::new(0.0, 1.0);
+        let (a, b) = (m.open_distance(on + out * 50.0), m.open_distance(on + out * 60.0));
+        assert!(a > 10.0 && (b - a - 10.0).abs() < 2.0, "{a} then {b}");
         for p in [Vec2::new(-200.0, 70.0), Vec2::new(10.0, 10.0), m.lake.at, Vec2::new(300.0, 300.0)] {
             assert_eq!(m.open_distance(p) <= 0.0, m.open(p), "{p}");
         }
@@ -626,8 +683,10 @@ mod tests {
         assert!(trees.iter().all(|t| (TREE_MIN..=TREE_MAX).contains(&t.height)));
         assert_eq!(trees, m.trees());
         // Trees stand right up to the edge of the lanes, so that a lane is a corridor.
-        let near =
-            trees.iter().filter(|t| t.at.x.abs() < 300.0 && (t.at.y.abs() - LANE_HALF_WIDTH - 6.0).abs() < 6.0).count();
+        let near = trees
+            .iter()
+            .filter(|t| t.at.x.abs() < 300.0 && t.at.y.abs() < 80.0 && (6.0..12.0).contains(&m.open_distance(t.at)))
+            .count();
         assert!(near > 20, "{near} trees along the mid lane");
     }
 
@@ -743,8 +802,155 @@ mod tests {
     fn each_lane_of_the_chain_runs_through_its_outposts() {
         let m = chain();
         let west = m.lanes.iter().find(|l| l.name == LaneName::West).unwrap();
-        assert_eq!(west.points.len(), 5);
-        assert_eq!(west.points[1], m.towers[5]);
-        assert_eq!(west.points[3], m.towers[8]);
+        assert_eq!(west.through.len(), 5);
+        assert_eq!(west.through[1], m.towers[5]);
+        assert_eq!(west.through[3], m.towers[8]);
+        assert!(west.points.contains(&m.towers[5]) && west.points.contains(&m.towers[8]));
+    }
+
+    fn lanes(m: &Map) -> impl Iterator<Item = &Lane> {
+        m.lanes.iter().filter(|l| l.name != LaneName::Road)
+    }
+
+    /// Points every `step` m along the middle of a lane, with the way it runs there.
+    fn along(lane: &Lane, step: f32) -> Vec<(Vec2, Vec2)> {
+        let mut out = vec![];
+        for s in lane.points.windows(2) {
+            let n = (s[0].distance(s[1]) / step).ceil().max(1.0) as usize;
+            let dir = (s[1] - s[0]).normalize_or_zero();
+            out.extend((0..n).map(|k| (s[0].lerp(s[1], k as f32 / n as f32), dir)));
+        }
+        out
+    }
+
+    /// The farthest the middle of `points` gets from the straight line from `a` to `b` (m).
+    fn bow(points: &[Vec2], a: Vec2, b: Vec2) -> f32 {
+        points.iter().map(|&p| segment_distance(p, a, b)).fold(0.0, f32::max)
+    }
+
+    /// A lane is a path cut through a forest, not a ruled line: it winds a little as it goes
+    /// from tower to tower. Never more than 18 m off the straight line, so that the line stays in
+    /// the lane (a lane is at least 24 m to each side of its middle).
+    #[test]
+    fn the_lanes_wind_through_the_forest() {
+        for m in [map(), chain()] {
+            for lane in lanes(&m) {
+                assert_eq!(lane.points.first(), lane.through.first());
+                assert_eq!(lane.points.last(), lane.through.last());
+                for w in lane.through.windows(2) {
+                    let (i, j) = (
+                        lane.points.iter().position(|p| *p == w[0]).expect("it passes each tower"),
+                        lane.points.iter().position(|p| *p == w[1]).expect("it passes each tower"),
+                    );
+                    let between = &lane.points[i..=j];
+                    let off = bow(between, w[0], w[1]);
+                    assert!((8.0..=18.0).contains(&off), "{:?} bows {off:.1} m from {} to {}", lane.name, w[0], w[1]);
+                }
+            }
+        }
+    }
+
+    /// Thus the straight line from one tower to the next is open ground all the way.
+    #[test]
+    fn the_straight_line_between_two_towers_stays_in_their_lane() {
+        for m in [map(), chain()] {
+            for lane in &m.lanes {
+                for w in lane.through.windows(2) {
+                    assert!(m.line_open(w[0], w[1]), "{:?} from {} to {}", lane.name, w[0], w[1]);
+                }
+            }
+        }
+    }
+
+    /// A low drone still sees another 120 m along a lane, wherever it is in it.
+    #[test]
+    fn a_low_drone_sees_120_m_along_a_lane() {
+        let m = map();
+        for lane in lanes(&m) {
+            let pts: Vec<Vec2> = along(lane, 10.0).into_iter().map(|(p, _)| p).collect();
+            for k in 0..pts.len().saturating_sub(12) {
+                assert!(m.line_open(pts[k], pts[k + 12]), "{:?}: from {} 120 m on", lane.name, pts[k]);
+            }
+        }
+    }
+
+    /// The edge of the forest along a lane is ragged, not ruled: the lane is a little wider or
+    /// narrower from place to place, and never narrower than 24 m to each side.
+    #[test]
+    fn the_forest_edge_is_ragged() {
+        let m = map();
+        let mid = m.lanes.iter().find(|l| l.name == LaneName::Mid).unwrap();
+        let mut widths = vec![];
+        for (c, dir) in along(mid, 10.0) {
+            let side = dir.perp();
+            if m.towers.iter().any(|t| t.distance(c) < TOWER_CLEARING + 40.0) {
+                continue;
+            }
+            for dir in [side, -side] {
+                let w = (0..600).map(|k| k as f32 * 0.1).find(|&d| !m.open(c + dir * d)).unwrap_or(60.0);
+                widths.push(w);
+            }
+        }
+        let (lo, hi) = widths.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &w| (lo.min(w), hi.max(w)));
+        assert!(widths.len() > 10);
+        assert!(lo >= 24.0, "the lane narrows to {lo:.1} m");
+        assert!(hi - lo >= 4.0, "the lane is {lo:.1} to {hi:.1} m to each side: ruled");
+    }
+
+    /// The lake is a lake, not a circle: its shore comes in and goes out, but it is wide enough
+    /// everywhere to circle over.
+    #[test]
+    fn the_lake_shore_comes_in_and_goes_out() {
+        let m = map();
+        let r: Vec<f32> = (0..72).map(|k| m.lake.shore(Vec2::from_angle(k as f32 * 5f32.to_radians()))).collect();
+        let (lo, hi) = r.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+        assert!(hi / lo >= 1.25, "the shore is {lo:.0} to {hi:.0} m from the middle: a circle");
+        assert!(lo >= 0.75 * LAKE_RADIUS, "the lake narrows to {lo:.0} m");
+        for w in r.windows(2) {
+            assert!((w[1] - w[0]).abs() < 8.0, "the shore jumps from {:.0} to {:.0} m", w[0], w[1]);
+        }
+        for p in m.lake.outline(36) {
+            assert!(m.open(p - (p - m.lake.at) * 0.02) && m.in_clearing(m.lake.at));
+        }
+    }
+
+    /// The foot of the mountains wanders in and out, not round a circle: where nothing on the
+    /// field (a base, a tower, a lane, the lake) holds it back, it is nearer the centre in some
+    /// places than in others, by 40 m or more.
+    #[test]
+    fn the_foot_of_the_mountains_wanders() {
+        let m = map();
+        let clear = |p: Vec2| {
+            m.bases
+                .iter()
+                .map(|b| b.distance(p) - BASE_CLEARING)
+                .chain(m.towers.iter().map(|t| t.distance(p) - TOWER_CLEARING))
+                .chain([m.lake.distance(p), m.open_distance(p) + LANE_HALF_WIDTH])
+                .fold(f32::MAX, f32::min)
+        };
+        let mut feet = vec![];
+        for k in 0..360 {
+            let dir = Vec2::from_angle((k as f32).to_radians());
+            let foot = (0..700).map(|i| i as f32).find(|&r| m.mountain_height(dir * r) > 1.0).unwrap_or(700.0);
+            // Only where the field is far behind the foot.
+            if clear(dir * (foot - 10.0)) > 100.0 {
+                feet.push(foot);
+            }
+        }
+        assert!(feet.len() >= 40, "only {} free feet", feet.len());
+        let (lo, hi) = feet.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+        assert!(hi - lo >= 40.0, "the foot is {lo:.0} to {hi:.0} m from the centre: a circle");
+    }
+
+    /// The mountains never stand on a lane: a drone can fly low all along each one.
+    #[test]
+    fn the_mountains_keep_off_the_lanes() {
+        for m in [map(), chain()] {
+            for lane in &m.lanes {
+                for p in &lane.points {
+                    assert_eq!(m.mountain_height(*p), 0.0, "{:?} at {p}", lane.name);
+                }
+            }
+        }
     }
 }
