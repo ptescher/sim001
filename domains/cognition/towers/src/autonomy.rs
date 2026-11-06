@@ -133,7 +133,9 @@ pub fn compare(a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comp
 
 /// The same, by `rules`.
 pub fn compare_with(rules: Rules, a: &dyn Autonomy, b: &dyn Autonomy, seeds: &[u64]) -> Result<Comparison, String> {
-    let seat = |autonomy| -> Box<dyn Captain + '_> { Box::new(Prepared { captain: Commander::new(rules), autonomy }) };
+    let seat = |autonomy| -> Box<dyn Captain + '_> {
+        Box::new(Prepared { captain: Commander::new(rules).with_lookahead(false), autonomy })
+    };
     compare_captains(rules, &|| seat(a), &|| seat(b), seeds)
 }
 

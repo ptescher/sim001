@@ -92,8 +92,8 @@ pub fn compare_edge(rules: Rules, edge: &dyn Edge, seeds: &[u64]) -> Result<Comp
     }
     compare_captains(
         rules,
-        &|| Box::new(Edged { captain: Commander::new(rules), edge: Dyn(edge) }),
-        &|| Box::new(Prepared { captain: Commander::new(rules), autonomy: Persist }),
+        &|| Box::new(Edged { captain: Commander::new(rules).with_lookahead(false), edge: Dyn(edge) }),
+        &|| Box::new(Prepared { captain: Commander::new(rules).with_lookahead(false), autonomy: Persist }),
         seeds,
     )
 }

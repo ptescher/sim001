@@ -75,6 +75,10 @@ const CRUISE: f32 = 16.0;
 /// this margin (s); it goes back to work when the battery is this much full.
 const REFUEL_MARGIN: f32 = 15.0;
 const BACK_TO_WORK: f32 = 0.9;
+/// A commander that thinks ahead does so this often (s).
+const LOOK_EVERY: f32 = 5.0;
+/// ...and not before this time in the game (s): at the start the belief is only a prior.
+const LOOK_AFTER: f32 = 10.0;
 
 /// A computer in a team's seat.
 #[derive(Clone, Debug)]
@@ -91,6 +95,10 @@ pub struct Commander {
     recharging: Vec<bool>,
     /// The game time of the last decision.
     last: Option<f32>,
+    /// Thinks ahead: a belief about the enemy, and when the model last changed an order.
+    look: Option<(crate::Belief, f32)>,
+    /// For measuring: the belief is never updated, so the model knows nothing of the enemy.
+    blind: bool,
 }
 
 impl Commander {
@@ -108,7 +116,18 @@ impl Commander {
             away: vec![None; n],
             recharging: vec![false; n],
             last: None,
+            look: None,
+            blind: std::env::var("SIM001_LOOKAHEAD").as_deref() == Ok("blind"),
         }
+        .with_lookahead(std::env::var("SIM001_LOOKAHEAD").as_deref() != Ok("0"))
+    }
+
+    /// Thinks ahead or not (crate::lookahead): once in a while a commander that does rolls a model of
+    /// the game forward from what it believes about the enemy, and changes an order if that is
+    /// better. A commander thinks ahead unless `SIM001_LOOKAHEAD` is `0`.
+    pub fn with_lookahead(mut self, on: bool) -> Commander {
+        self.look = on.then(|| (crate::Belief::new(self.rules, crate::Team::Blue), f32::NEG_INFINITY));
+        self
     }
 
     pub fn tuning(&self) -> CommanderTuning {
@@ -284,6 +303,23 @@ impl Commander {
                 .min_by(|&&a, &&b| view.towers[a].at.distance(at).total_cmp(&view.towers[b].at.distance(at)));
             *order = spare.map(|&t| Order::Take(t));
         }
+        if let Some((belief, last_look)) = &mut self.look {
+            if belief.team() != view.team {
+                *belief = crate::Belief::new(self.rules, view.team);
+            }
+            if !self.blind {
+                belief.update(view);
+            }
+            if view.time >= LOOK_AFTER && view.time - *last_look >= LOOK_EVERY {
+                *last_look = view.time;
+                let free: Vec<bool> = (0..self.orders.len()).map(|k| up[k] && charge[k].is_none()).collect();
+                if let Some((k, t)) =
+                    crate::lookahead::best_change(&self.rules, view, &self.orders, &free, &away, belief)
+                {
+                    self.orders[k] = Some(Order::Take(t));
+                }
+            }
+        }
         for (k, order) in charge.into_iter().enumerate() {
             if order.is_some() {
                 self.orders[k] = order;
@@ -323,7 +359,8 @@ mod tests {
     fn a_tuning_changes_how_it_plays() {
         let (mut g, mut c) = fight(-0.2);
         let mut patient =
-            Commander::with_tuning(g.rules, CommanderTuning { give_up: 60.0, ..CommanderTuning::DEFAULT });
+            Commander::with_tuning(g.rules, CommanderTuning { give_up: 60.0, ..CommanderTuning::DEFAULT })
+                .with_lookahead(false);
         patient.assign(0, c.order(0));
         let west = Some(Order::Take(g.tower("west")));
         let mut g2 = g.clone();
@@ -435,7 +472,7 @@ mod tests {
             g.drones[i] =
                 crate::Drone { at: at + Vec2::new(0.0, 40.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
         }
-        let mut c = Commander::new(g.rules);
+        let mut c = Commander::new(g.rules).with_lookahead(false);
         c.assign(0, Some(Order::Take(west)));
         (g, c)
     }

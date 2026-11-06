@@ -21,6 +21,7 @@ mod edge;
 mod filter;
 pub mod flight;
 mod instruction;
+mod lookahead;
 pub mod map;
 pub mod seat;
 pub mod svg;

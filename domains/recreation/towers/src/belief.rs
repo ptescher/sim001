@@ -260,9 +260,22 @@ impl Belief {
         g.iter().filter(|g| g.at.distance(at) <= radius).count() as f32 / g.len() as f32
     }
 
+    /// One guess for enemy drone `k`, the `i`-th of its cloud: where it is, the tower it flies to,
+    /// and how fast.
+    pub fn guess(&self, k: usize, i: usize) -> (Vec2, usize, f32) {
+        let g = &self.tracks[k].guesses;
+        let g = g[i % g.len()];
+        (g.at, g.goal, g.speed)
+    }
+
     /// How many enemy drones are within `radius` of `at`, on average.
     pub fn expected_near(&self, at: Vec2, radius: f32) -> f32 {
         (0..self.tracks.len()).map(|k| self.chance_within(k, at, radius)).sum()
+    }
+
+    /// The team that holds the belief.
+    pub fn team(&self) -> Team {
+        self.team
     }
 
     /// How many enemy drones there are.

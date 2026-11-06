@@ -219,3 +219,40 @@ guess that knows nothing puts 3 % there).
   the same); it is a fit to the default commander's play, and a captain that plays differently
   needs a different motion model.
 - The belief is not used by the commander yet. Next: a captain that looks ahead with it.
+
+## Step 6: a captain that thinks ahead (`lookahead.rs`)
+
+Every 5 s, from 10 s into the game, a commander (it is the default; `SIM001_LOOKAHEAD=0` or `Commander::with_lookahead(false)` turns it off) rolls a
+small model of the game forward 45 s and asks whether changing one drone's order would be worth
+more than 2 points. The model (`Sim`): our drones fly to their towers at 16 m/s; a tower's bar
+moves 5 % a second for each unit of weight more in its circle; a held tower scores its points;
+the value of a future is its points plus 10 points for each full bar (so progress counts). The
+enemy drones are guesses drawn from the `Belief` of step 5: each flies to its tower and, if the
+enemy holds it, to the nearest one it does not. The search tries every `Take(tower)` for every
+drone that is free (not charging, in contact), against 8 futures with the same guesses for the
+base orders and each change, and takes the change with the best average, if it is above the
+margin. The decision is made for the commander's own orders, which it then keeps as usual.
+
+Judged by the league's `judge` against master's commander on 256 seeds neither side had seen
+(6,000,000 and up; both sides of each seed, 512 games):
+
+| Challenger | Chain | Valley |
+| --- | --- | --- |
+| Thinks ahead, with the belief | **+0.319** (lower bound +0.251) | **+0.327** (+0.241) |
+| Thinks ahead, belief never updated (the enemy stays at its start) | +0.073 (+0.007) | +0.186 (+0.095) |
+| For comparison: the allocation by time to win (PR 69) | +0.180 (+0.128) | +0.129 (+0.043) |
+
+- **The belief carries most of the gain on the chain** (+0.25 of +0.32) and about half on the
+  valley (+0.14 of +0.33). Planning with the model alone still helps on the valley.
+- It takes about 4 s to play the 256 seeds (the model is cheap), so the search can be made bigger:
+  more futures, two changes at a time, a longer horizon.
+- **On by default** (`05-commander.expect` says so, with an expectation). Three changes were made
+  when it went on: it starts at 10 s (at the start the belief is only a prior, and two drones
+  went to the centre); it does not send a drone where its battery cannot last the flight, the
+  capture and the way home (without that, 2.75 drones went down a game); and it does not send a
+  drone back to a tower it gave up. With them, on 256 other seeds (7,000,000 and up) against
+  master's commander: **chain +0.385 (lower bound +0.320), valley +0.341 (+0.259)**.
+- The tests of the autonomy policies and the reactive rules (`give_up`, `stay_away`) play with
+  lookahead off: they measure those, not the commander's tactics.
+- Not tested: against a different opponent than master's commander; with a beaten opponent the
+  belief's motion model (fitted to that commander's play) may be worse.
