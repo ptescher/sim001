@@ -70,9 +70,11 @@ const F_ROCK: usize = 10;
 const F_ROCK_TONE: usize = 11;
 const F_STRATA: usize = 12;
 const F_SNOW: usize = 13;
-const NF: usize = 14;
+const F_CANOPY: usize = 14;
+const F_DOWN_X: usize = 15;
+const F_DOWN_Z: usize = 16;
+const NF: usize = 17;
 
-#[cfg_attr(not(test), allow(dead_code))]
 /// Which way is downhill at (x, z), on the ground, seen at the scale of a rock face (60 m), not
 /// of every bump in it.
 fn fall_line(x: f32, z: f32) -> Vec2 {
@@ -104,6 +106,7 @@ fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
             0.0
         };
     }
+    f[F_CANOPY] = terrain::canopy(x, z);
     f[F_MOSS] = if f[F_FOREST] > 0.0 { smoothstep(0.55, 0.75, fbm(x / 6.0 + 9.0, z / 6.0, 3)) } else { 0.0 };
     f[F_DRIFT] = smoothstep(0.50, 0.75, fbm(x / 18.0 + 3.0, z / 18.0 - 8.0, 3));
     f[F_KIND] = fbm(x / 40.0 - 2.0, z / 40.0 + 5.0, 2);
@@ -117,7 +120,11 @@ fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
             + smoothstep(180.0, 260.0, h + 30.0 * gradient_noise(x / 120.0, z / 120.0)))
         .clamp(0.0, 1.0);
         f[F_ROCK_TONE] = fbm(x / 60.0, z / 60.0, 3);
-        f[F_STRATA] = 0.93 + 0.07 * (h * 0.12 + gradient_noise(x / 30.0, z / 30.0) * 4.0).sin();
+        f[F_STRATA] = 0.97 + 0.03 * (h * 0.12 + gradient_noise(x / 30.0, z / 30.0) * 4.0).sin();
+        // Which way the face falls, for the gullies (see `gully`).
+        let down = fall_line(x, z);
+        f[F_DOWN_X] = down.x;
+        f[F_DOWN_Z] = down.y;
     }
     if h > 230.0 {
         f[F_SNOW] = smoothstep(
@@ -127,6 +134,24 @@ fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
         ) * (1.0 - smoothstep(0.45, 0.65, slope));
     }
     f
+}
+
+/// How much of the ground under a crown is litter, given how wooded the place is (0 to 1).
+fn litter_share(forest: f32) -> f32 {
+    0.2 + 0.75 * forest.clamp(0.0, 1.0)
+}
+
+/// Gullies on a rock face at (x, z), falling along `down`: noise smeared down the fall line
+/// (averaged along it), so dark runnels and pale ribs run down the face, as water and falling
+/// stones cut them. About -0.5 to 0.5.
+fn gully(x: f32, z: f32, down: Vec2) -> f32 {
+    let down = down.normalize_or_zero();
+    let mut g = 0.0;
+    for k in 0..8 {
+        let q = Vec2::new(x, z) + down * (k as f32 - 3.5) * 3.0;
+        g += gradient_noise(q.x / 6.0, q.y / 6.0) + 0.6 * gradient_noise(q.x / 15.0 + 4.0, q.y / 15.0);
+    }
+    g / 8.0
 }
 
 /// Per-texel detail on top of the interpolated coarse fields.
@@ -159,11 +184,17 @@ fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
         c = mix(c, mown, field);
     }
 
-    // Forest floor darkens the ground under woods, with patchy moss.
+    // The woods: the gaps between the crowns are grassy, a little shaded; under each crown is
+    // needle litter, brown, with patches of moss.
     let forest = f[F_FOREST];
     if forest > 0.0 {
-        let floor = mix([0.032, 0.036, 0.020], [0.060, 0.085, 0.022], f[F_MOSS]);
-        c = mix(c, floor, forest * 0.8);
+        c = scale(c, 1.0 - 0.15 * forest);
+    }
+    if f[F_CANOPY] > 0.0 {
+        // Thick in the woods; a lone tree in the meadow drops too little to bury the grass.
+        let litter = mix([0.036, 0.026, 0.015], [0.034, 0.050, 0.016], f[F_MOSS] * 0.7);
+        let litter = scale(litter, 0.85 + 0.3 * blade.abs());
+        c = mix(c, litter, f[F_CANOPY] * litter_share(forest));
     }
 
     // Alpine flowers in meadow drifts (single-texel speckles read as flowers from the air).
@@ -223,7 +254,9 @@ fn fine_color(x: f32, z: f32, f: &[f32; NF]) -> [f32; 3] {
 
     // Rock on steep slopes and high ground, with strata; snow above, not on cliffs.
     if f[F_ROCK] > 0.0 {
-        let rock_col = scale(mix([0.14, 0.13, 0.12], [0.20, 0.17, 0.14], f[F_ROCK_TONE]), f[F_STRATA]);
+        let g = gully(x, z, Vec2::new(f[F_DOWN_X], f[F_DOWN_Z]));
+        let gully = (1.0 + 1.6 * g).clamp(0.45, 1.6);
+        let rock_col = scale(mix([0.14, 0.13, 0.12], [0.20, 0.17, 0.14], f[F_ROCK_TONE]), f[F_STRATA] * gully);
         c = mix(c, rock_col, f[F_ROCK]);
     }
     if f[F_SNOW] > 0.0 {
@@ -569,7 +602,8 @@ pub fn ground_cover(x: f32, z: f32) -> Cover {
     let dryness = smoothstep(0.35, 0.75, fbm(x / 90.0 + 7.0, z / 90.0 - 3.0, 4));
     let meadow_h = 0.22 + 0.25 * fbm(x / 9.0, z / 9.0, 2);
     let height = meadow_h + (0.075 - meadow_h) * field;
-    let density = (1.0 - bare) * (9.0 + 9.0 * field) * (1.0 - 0.75 * forest);
+    // Grass grows in the light: in the gaps between the crowns, hardly under them.
+    let density = (1.0 - bare) * (9.0 + 9.0 * field) * (1.0 - 0.25 * forest) * (1.0 - 0.9 * terrain::canopy(x, z));
     let drift = smoothstep(0.50, 0.75, fbm(x / 18.0 + 3.0, z / 18.0 - 8.0, 3)) * (1.0 - field) * (1.0 - forest);
     let kind = fbm(x / 40.0 - 2.0, z / 40.0 + 5.0, 2);
     Cover {

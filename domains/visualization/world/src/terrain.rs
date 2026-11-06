@@ -335,8 +335,58 @@ pub fn trees() -> Vec<Tree> {
 }
 
 /// How much of the sky a tree's crown hides at (x, z): 1 at a tree's foot, 0 past its crown.
-pub fn canopy(_x: f32, _z: f32) -> f32 {
-    0.0
+/// A real place's photo already shows what is under its trees, so there it is 0.
+pub fn canopy(x: f32, z: f32) -> f32 {
+    if real().is_some() {
+        return 0.0;
+    }
+    let grid = CROWNS.get_or_init(Crowns::new);
+    let (cx, cz) = Crowns::cell(x, z);
+    let mut c = 0.0f32;
+    for dx in -1..=1 {
+        for dz in -1..=1 {
+            for &(p, r) in grid.cells.get(&(cx + dx, cz + dz)).map(Vec::as_slice).unwrap_or(&[]) {
+                let d = p.distance(Vec2::new(x, z));
+                if d < r {
+                    c = c.max(1.0 - smoothstep(0.55 * r, r, d));
+                }
+            }
+        }
+    }
+    c
+}
+
+/// The trees' crowns (centre and radius on the ground), by cell, for `canopy`.
+struct Crowns {
+    cells: std::collections::HashMap<(i32, i32), Vec<(Vec2, f32)>>,
+}
+
+static CROWNS: OnceLock<Crowns> = OnceLock::new();
+
+impl Crowns {
+    /// Wider than the widest crown, so a point's crowns are in its cell or the next.
+    const CELL: f32 = 12.0;
+
+    fn cell(x: f32, z: f32) -> (i32, i32) {
+        ((x / Self::CELL).floor() as i32, (z / Self::CELL).floor() as i32)
+    }
+
+    fn new() -> Crowns {
+        let mut cells: std::collections::HashMap<(i32, i32), Vec<(Vec2, f32)>> = Default::default();
+        for t in trees() {
+            // Crowns are about two thirds as wide as the tree is tall (a dead one has only stubs).
+            let r = if t.dead {
+                0.1
+            } else if t.conifer {
+                0.3
+            } else {
+                0.35
+            } * t.height;
+            let r = r.min(Self::CELL);
+            cells.entry(Self::cell(t.pos.x, t.pos.z)).or_default().push((Vec2::new(t.pos.x, t.pos.z), r));
+        }
+        Crowns { cells }
+    }
 }
 
 /// Out to here the trees are on the fine grid.

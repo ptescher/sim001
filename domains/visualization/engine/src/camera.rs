@@ -203,7 +203,8 @@ pub fn scene_look() -> impl Bundle {
             ),
         },
         crate::clouds::Clouds::default(),
-        Bloom::NATURAL,
+        // A clean lens: a little glow round the sun and bright clouds, not a veil over the shadows.
+        Bloom { intensity: 0.06, ..Bloom::NATURAL },
         Msaa::Off,
         TemporalAntiAliasing::default(),
     )
@@ -263,7 +264,7 @@ pub fn camera_plugin(app: &mut App) {
             chase_pos: Vec3::ZERO,
             fov: 50.0,
         })
-        .add_systems(Update, update_render_scale);
+        .add_systems(Update, (update_render_scale, fit_lens));
 }
 
 /// Frame rate the automatic render scale aims for.
@@ -483,8 +484,37 @@ pub fn update_camera(
 }
 
 /// The lens of a view: the nose camera's, or none.
-pub fn lens(_mode: CamMode) -> Option<(LensDistortion, Vignette, ChromaticAberration)> {
-    None
+pub fn lens(mode: CamMode) -> Option<(LensDistortion, Vignette, ChromaticAberration)> {
+    (mode == CamMode::Fpv).then(|| {
+        (
+            // A small wide-angle FPV lens: straight lines bow outwards, and the stretched edges
+            // are cropped off.
+            LensDistortion { intensity: 0.22, scale: 1.08, ..default() },
+            Vignette { intensity: 0.45, radius: 0.85, smoothness: 3.0, ..default() },
+            ChromaticAberration { intensity: 0.012, ..default() },
+        )
+    })
+}
+
+/// The main camera wears the lens of the pilot's view (none for a view pinned for a picture).
+fn fit_lens(
+    mut commands: Commands,
+    cs: Res<CamState>,
+    pinned: Res<PinnedView>,
+    cam: Query<(Entity, Has<LensDistortion>), With<MainCamera>>,
+) {
+    let want = if pinned.0.is_some() { None } else { lens(cs.mode) };
+    for (e, has) in &cam {
+        match (&want, has) {
+            (Some(l), false) => {
+                commands.entity(e).insert(l.clone());
+            }
+            (None, true) => {
+                commands.entity(e).remove::<(LensDistortion, Vignette, ChromaticAberration)>();
+            }
+            _ => {}
+        }
+    }
 }
 
 /// ReSTIR shares light samples between pixels and frames. It costs about 40% more per frame and
