@@ -1551,8 +1551,11 @@ impl Driver for ConsoleDriver {
             },
             "autopilot mode" => {
                 let mode = name()?;
-                // The plan's start arranges the mode before the mission: AUTO waits for it.
-                if mode == "AUTO" && self.read("vehicle mission")?.as_str() == Some("empty") {
+                // The plan's start arranges the mode before the mission: AUTO waits for it, even
+                // when the vehicle has a mission already (ArduPilot keeps the last one across
+                // reboots, and AUTO would fly that one). A start with no mission to arrange gets
+                // AUTO when it settles.
+                if mode == "AUTO" && self.read("vehicle mission")?.as_str() != Some("up to date") {
                     self.pending_auto = true;
                     return Ok(());
                 }
