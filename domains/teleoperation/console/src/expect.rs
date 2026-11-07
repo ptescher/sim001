@@ -290,6 +290,21 @@ fn restart(log: &std::collections::VecDeque<crate::vehicle::LogLine>, reset: Ins
     }
 }
 
+/// Says how long a step of a test's start took, when it ends (however it ends).
+struct Took(Instant, String);
+
+impl Took {
+    fn new(what: String) -> Took {
+        Took(Instant::now(), what)
+    }
+}
+
+impl Drop for Took {
+    fn drop(&mut self) {
+        println!("expect:   arranged {} in {:.1} s", self.1, self.0.elapsed().as_secs_f32());
+    }
+}
+
 /// What [`Liftoff`] looks at, read from the vehicle.
 #[derive(Clone, Copy, Debug)]
 struct Lift {
@@ -720,8 +735,13 @@ fn kind_of(name: &str) -> Option<WpKind> {
 }
 
 /// A waypoint of our own on the valley floor near home, for arranging a plan.
+/// The `i`th waypoint a test plans: around a triangle a few hundred metres across, south of the
+/// pilot box, so that a plane flying the mission takes a while on each leg and the steps that
+/// watch it keep up. The treetops near it stand 28 m above home, under the 40 m plan altitude.
 fn waypoint(g: &Gcs, i: usize) -> Waypoint {
-    let (lat, lon) = g.origin.to_ll(80.0 + 40.0 * i as f32, 50.0 * ((i % 3) as f32 - 1.0));
+    const CORNERS: [(f32, f32); 3] = [(-200.0, -200.0), (-350.0, 0.0), (-200.0, 200.0)];
+    let (north, east) = CORNERS[i % 3];
+    let (lat, lon) = g.origin.to_ll(north, east);
     Waypoint { kind: WpKind::Waypoint, lat, lon, alt: g.map.plan_alt }
 }
 
@@ -906,7 +926,15 @@ fn arrange_model(g: &mut Gcs, key: &str, value: &Value) -> Result<(), String> {
             }
         }
         "takeoff" => match name()?.as_str() {
-            "planned" => g.add_takeoff(),
+            // The start arranges the plan's length too, and in no set order: a takeoff takes the
+            // place of the first waypoint, so the plan keeps its length and its last item.
+            "planned" => {
+                let before = g.map.plan.len();
+                g.add_takeoff();
+                if before >= 2 && g.map.plan.len() > before {
+                    g.map.plan.remove(1);
+                }
+            }
             _ => g.map.plan.retain(|w| w.kind != WpKind::Takeoff),
         },
         "last plan item" => match name()?.as_str() {
@@ -1480,6 +1508,9 @@ impl Driver for ConsoleDriver {
     }
 
     fn arrange(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
+        // Each step of a test's start, and how long it took: a start that runs out of time says
+        // where it was.
+        let _took = Took::new(format!("{} = {value:?}", var.key));
         let key = var.key.as_str();
         let name = || enum_value(value);
         match key {
@@ -1877,10 +1908,16 @@ impl Driver for ConsoleDriver {
     }
 
     fn observe(&mut self, var: &Variable) -> Result<Value, String> {
-        self.read(&var.key)
+        let start = Instant::now();
+        let got = self.read(&var.key);
+        if start.elapsed() > Duration::from_secs(1) {
+            println!("expect:   read {} in {:.1} s: {got:?}", var.key, start.elapsed().as_secs_f32());
+        }
+        got
     }
 
     fn settle(&mut self) {
+        let _took = Took::new("the start (settling)".into());
         // AUTO with no mission arranged after it: as it is (the start's check says what it got).
         if std::mem::take(&mut self.pending_auto) {
             let _ = self.arrange_mode("AUTO");
