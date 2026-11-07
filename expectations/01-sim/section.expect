@@ -68,6 +68,8 @@ Vocabulary:
     Say: press Space to throw the plane
   Event: the pilot resets the plane
     Say: press R
+  Event: the pilot rewinds
+    Say: press Backspace
   Event: the pilot changes flight mode
     Say: press M on the keyboard
   Event: the pilot changes rates

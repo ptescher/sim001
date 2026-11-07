@@ -30,6 +30,7 @@ use std::time::Duration;
 const KEYS: &[(&str, KeyCode)] = &[
     ("pilot throws the plane", KeyCode::Space),
     ("pilot resets the plane", KeyCode::KeyR),
+    ("pilot rewinds", KeyCode::Backspace),
     ("pilot changes flight mode", KeyCode::KeyM),
     ("pilot changes rates", KeyCode::KeyL),
     ("pilot toggles differential thrust", KeyCode::KeyX),
@@ -720,6 +721,14 @@ impl Driver for SimDriver {
             // Anything else would mean flying it there: the Background already has it in hand,
             // and level.
             "plane" if name()? == "in hand" => Ok(()),
+            // As a pilot crashes it: stick forward, throw, and wait for the ground.
+            "plane" if name()? == "crashed" => {
+                self.standin.lock().unwrap().held.pitch = -1.0;
+                self.press(KeyCode::Space)?;
+                let crashed = self.until(10.0, "the plane to crash", |c| c.state.phase == Phase::Crashed);
+                self.standin.lock().unwrap().held.pitch = 0.0;
+                crashed
+            }
             "wings" if name()? == "level" => Ok(()),
             "battery" if value.as_f64().is_some_and(|b| b >= 99.0) => self.sim(|c| c.state.recharge()),
             "flight mode" => {
