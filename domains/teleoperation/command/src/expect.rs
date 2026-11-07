@@ -458,49 +458,102 @@ impl AppDriver {
     }
 
     /// The ground point of the battlefield for the next point of a route or the centre of a circle:
-    /// ahead of the camera's point, apart from the last, and away from the towers.
-    fn open_point(&self) -> Result<glam::Vec2, String> {
-        self.call(|v, _, _| {
+    /// ahead of the camera's point, apart from the last, away from the towers, and with room for a
+    /// circle of `room` round it inside the field (the mountains at its edge crash a drone that
+    /// circles into them; a point of a route needs only to be clear of them).
+    /// With `far`, the open point furthest from the first drone: the game runs at ten times
+    /// real time, and a drone sent to a near point is there before the next step looks.
+    fn open_point(&self, room: f32, far: bool) -> Result<glam::Vec2, String> {
+        self.call(move |v, _, _| {
             let s = v.seat.state();
             let view = s.view.clone();
+            // Inside the field, by more than a circle's room (the app moves a point outside it in).
+            let inside = s.rules.as_ref().map_or(f32::MAX, |r| r.field_radius - room - ROOM_MARGIN);
             drop(s);
             let look = v.rig.eye.look;
             let h = v.rig.eye.heading.to_radians();
             let (ahead, side) = (glam::Vec2::new(h.cos(), h.sin()), glam::Vec2::new(-h.sin(), h.cos()));
+            let valley = v.valley().cloned();
             let towers: Vec<glam::Vec2> =
                 view.as_ref().map(|m| m.towers.iter().map(|t| t.at).collect()).unwrap_or_default();
             // Away from the first drone and the points it already has, so that each is a new goal.
             let mut taken: Vec<glam::Vec2> = v.route(0).to_vec();
-            taken.extend(view.as_ref().and_then(|m| m.drones.first()).map(|d| d.at));
-            (0..12)
-                .flat_map(|i| [0.0f32, -1.0, 1.0].map(move |j| (i, j)))
-                .map(|(i, j)| look + ahead * (120.0 + 40.0 * i as f32) + side * (200.0 * j))
-                .find(|p| towers.iter().all(|t| t.distance(*p) > 120.0) && taken.iter().all(|t| t.distance(*p) > 250.0))
-                .ok_or_else(|| "no open ground ahead of the camera".to_string())
+            let drone = view.as_ref().and_then(|m| m.drones.first()).map(|d| d.at);
+            taken.extend(drone);
+            // Anywhere on the field (the commander looks there first if it is off the picture).
+            let grid =
+                (-20..=20).flat_map(|i| (-20..=20).map(move |j| glam::Vec2::new(40.0 * i as f32, 40.0 * j as f32)));
+            let mut open: Vec<glam::Vec2> = grid
+                .filter(|p| {
+                    p.length() < inside
+                        && towers.iter().all(|t| t.distance(*p) > 120.0)
+                        && taken.iter().all(|t| t.distance(*p) > 250.0)
+                        && valley.as_ref().is_none_or(|m| room_to_circle(m, *p, room))
+                })
+                .collect();
+            // Nearest to where the camera looks, ahead of it first; or furthest from the drone.
+            let ahead_first = |p: &glam::Vec2| (*p - look).length() - 0.5 * (*p - look).dot(ahead);
+            open.sort_by(|a, b| ahead_first(a).total_cmp(&ahead_first(b)));
+            let found = match (far, drone) {
+                (true, Some(d)) => open.iter().copied().max_by(|a, b| a.distance(d).total_cmp(&b.distance(d))),
+                _ => open.first().copied(),
+            };
+            found.ok_or_else(|| "no open ground on the field".to_string())
         })?
     }
 
     /// CIRCLE (C), then a drag on the battlefield from an open point out to `radius` metres.
     fn draw_circle(&self, radius: f32) -> Result<(), String> {
-        let centre = self.open_point()?;
+        let centre = self.open_point(radius, false)?;
+        let edge = move |v: &CommanderView| {
+            let h = v.rig.eye.heading.to_radians();
+            centre + glam::Vec2::new(-h.sin(), h.cos()) * radius
+        };
+        self.look_at(centre, move |v| vec![centre, edge(v)])?;
         self.press_key("c")?;
         let (from, to) = self
-            .call(move |v, _, _| {
-                let h = v.rig.eye.heading.to_radians();
-                let side = glam::Vec2::new(-h.sin(), h.cos());
-                Some((v.screen_of(centre)?, v.screen_of(centre + side * radius)?))
-            })?
+            .call(move |v, _, _| Some((v.screen_of(centre)?, v.screen_of(edge(v))?)))?
             .ok_or("the circle is not on the battlefield")?;
         self.with_window(move |w, cx| drag(w, cx, point(px(from.0), px(from.1)), point(px(to.0), px(to.1))))
     }
 
     /// Shift and a right-click on an open point of the battlefield.
     fn add_route_point(&self) -> Result<(), String> {
-        let at = self.open_point()?;
-        self.with_window(|w, cx| w.draw(cx).clear())?;
+        let at = self.open_point(0.0, true)?;
+        self.look_at(at, move |_| vec![at])?;
         let (x, y) = self.call(move |v, _, _| v.screen_of(at))?.ok_or("the point is not on the battlefield")?;
         self.with_window(move |w, cx| shift_right_click(w, cx, point(px(x), px(y))))?;
         std::thread::sleep(Duration::from_millis(200));
+        Ok(())
+    }
+
+    /// Unless the points that `points` gives are well inside the battlefield already, the
+    /// commander first looks at `at` with the minimap, as for a tower off the battlefield. (Far
+    /// up the picture a point is under the edge, and a drag there is too short to be one.)
+    fn look_at(
+        &self,
+        at: glam::Vec2,
+        points: impl Fn(&CommanderView) -> Vec<glam::Vec2> + Send + Clone + 'static,
+    ) -> Result<(), String> {
+        self.with_window(|w, cx| w.draw(cx).clear())?;
+        let inside = move |v: &CommanderView| {
+            let b = v.map_bounds.get();
+            let (w, h) = (f32::from(b.size.width), f32::from(b.size.height));
+            let (x0, y0) = (f32::from(b.origin.x), f32::from(b.origin.y));
+            points(v).iter().all(|p| {
+                v.screen_of(*p).is_some_and(|(x, y)| {
+                    x > x0 + 0.15 * w && x < x0 + 0.85 * w && y > y0 + 0.25 * h && y < y0 + 0.85 * h
+                })
+            })
+        };
+        let check = inside.clone();
+        if self.call(move |v, _, _| check(v))? {
+            return Ok(());
+        }
+        let (x, y) =
+            self.call(move |v, _, _| v.minimap_screen(at))?.ok_or_else(|| "there is no minimap".to_string())?;
+        self.with_window(move |w, cx| click(w, cx, point(px(x), px(y))))?;
+        self.with_window(|w, cx| w.draw(cx).clear())?;
         Ok(())
     }
 
@@ -1013,4 +1066,41 @@ fn driver_support(a: &Acceptance, plan: &expectation_story::Plan, d: &AppDriver)
             .all(|c| d.supports(Need::Observe(v.var(c.var))))
         && plan.steps.iter().filter_map(|s| s.action.event).all(|e| d.supports(Need::Perform(v.event(e))))
         && plan.steps.iter().flat_map(|s| s.action.changes.vars()).all(|x| d.supports(Need::Set(v.var(x))))
+}
+
+/// Past a circle's radius, the room to the mountains (m): a circle is flown a little wide.
+const ROOM_MARGIN: f32 = 60.0;
+
+/// Is there room for a circle of `radius` round `p` inside the field: are `p`, and a ring round
+/// it a margin wider than the circle, clear of the mountains?
+fn room_to_circle(map: &recreation_towers::map::Map, p: glam::Vec2, radius: f32) -> bool {
+    let ring = radius + ROOM_MARGIN;
+    std::iter::once(p)
+        .chain((0..24).map(|k| {
+            let a = k as f32 * std::f32::consts::TAU / 24.0;
+            p + glam::Vec2::new(a.cos(), a.sin()) * ring
+        }))
+        .all(|q| map.mountain_height(q) < 1.0)
+}
+
+#[cfg(test)]
+mod room_tests {
+    use super::*;
+    use recreation_towers::Rules;
+    use recreation_towers::map::Map;
+
+    /// The middle of the field has room for a circle; a centre near its edge doesn't, because
+    /// part of the circle would be in the mountains, where a drone crashes.
+    #[test]
+    fn a_circle_needs_room_inside_the_field() {
+        let map = Map::new(&Rules::default());
+        assert!(room_to_circle(&map, glam::Vec2::ZERO, 120.0));
+        let edge = (0..200)
+            .map(|k| glam::Vec2::new(0.0, 10.0 * k as f32))
+            .find(|p| map.mountain_height(*p) > 1.0)
+            .expect("mountains east of the field");
+        let near = edge - glam::Vec2::new(0.0, 100.0);
+        assert!(map.mountain_height(near) < 1.0, "the centre itself is on the field");
+        assert!(!room_to_circle(&map, near, 120.0), "but a circle round it reaches the mountains");
+    }
 }

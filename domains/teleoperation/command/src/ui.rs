@@ -95,6 +95,11 @@ pub struct CommanderView {
 }
 
 impl CommanderView {
+    /// The valley (lanes, lake, clearings, the mountains round the field), once the rules arrived.
+    pub(crate) fn valley(&self) -> Option<&Map> {
+        self.valley.as_ref()
+    }
+
     pub fn new(
         seat: Arc<Seat>,
         cameras: Arc<Cameras>,

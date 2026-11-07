@@ -1,276 +1,318 @@
 expectation-results 1
-run	1a1b4d41846-5198-0	1794035161158
-plan	towers--your-first-tower--take-the-west-tower	failed	bb7bf23dd61fe6f3
+run	1a1b772a795-87ab-0	1794079106965
+plan	towers--your-first-tower--take-the-west-tower	passed	bb7bf23dd61fe6f3
 step	0	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/00.jpg	-
-window	0	1794035161160	1794035161966
+window	0	1794079106967	1794079107774
 step	1	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/01.jpg	-
-window	1	1794035161966	1794035162772
+window	1	1794079107774	1794079108597
 check	1	e:Blue	-
 check	1	n:5	-
 check	1	e:the Blue base	-
 check	1	n:0	-
 check	1	n:1	-
 step	2	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/02.jpg	-
-window	2	1794035162772	1794035163579
+window	2	1794079108597	1794079109414
 check	1	e:the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	3	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/03.jpg	-
-window	3	1794035163579	1794035164435
+window	3	1794079109414	1794079110305
 check	1	e:take the west tower	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-step	4	failed	1	screenshots/towers--your-first-tower--take-the-west-tower/04.jpg	-
-window	4	1794035164435	1794035201580
-check	0	e:neutral	-
-check	1	n:1	-
-check	1	n:999	-
+step	4	passed	1	screenshots/towers--your-first-tower--take-the-west-tower/04.jpg	-
+window	4	1794079110305	1794079135636
+check	1	e:held by Blue	-
+check	1	n:5	-
+check	1	n:989	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-run	1a1b4d4b691-5198-1	1794035201681
+run	1a1b7731794-87ab-1	1794079135636
 plan	towers--changing-your-mind--hold-then-home	passed	e78d735bdb45c8eb
 step	0	passed	1	screenshots/towers--changing-your-mind--hold-then-home/00.jpg	-
-window	0	1794035201683	1794035203366
+window	0	1794079135637	1794079138279
 step	1	passed	1	screenshots/towers--changing-your-mind--hold-then-home/01.jpg	-
-window	1	1794035203366	1794035205118
+window	1	1794079138279	1794079141023
 check	1	e:the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	2	passed	1	screenshots/towers--changing-your-mind--hold-then-home/02.jpg	-
-window	2	1794035205118	1794035206860
+window	2	1794079141023	1794079143756
 check	1	e:hold	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	3	passed	1	screenshots/towers--changing-your-mind--hold-then-home/03.jpg	-
-window	3	1794035206860	1794035208617
+window	3	1794079143756	1794079146129
 check	1	e:go home	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-run	1a1b4d4d1a9-5198-2	1794035208617
-plan	towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower	failed	7ef2853468fd3b86
+run	1a1b7734091-87ab-2	1794079146129
+plan	towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower	passed	7ef2853468fd3b86
 step	0	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/00.jpg	-
-window	0	1794035208618	1794035210552
+window	0	1794079146130	1794079148164
 step	1	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/01.jpg	-
-window	1	1794035210552	1794035212370
+window	1	1794079148164	1794079150549
 check	1	e:Blue	-
 check	1	n:5	-
 check	1	e:the Blue base	-
 check	1	n:0	-
 check	1	n:1	-
 step	2	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/02.jpg	-
-window	2	1794035212370	1794035214127
+window	2	1794079150549	1794079153048
 check	1	e:the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	3	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/03.jpg	-
-window	3	1794035214127	1794035216169
+window	3	1794079153048	1794079156351
 check	1	e:the west tower	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	4	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/04.jpg	-
-window	4	1794035216169	1794035218215
+window	4	1794079156351	1794079159653
 check	1	e:take the west tower	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-step	5	failed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/05.jpg	-
-window	5	1794035218215	1794035256797
-check	0	e:neutral	-
-check	1	n:1	-
-check	1	n:989	-
+step	5	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/05.jpg	-
+window	5	1794079159653	1794079187149
+check	1	e:held by Blue	-
+check	1	n:5	-
+check	1	n:1014	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-check	0	e:somewhere else	-
-step	6	skipped	0	-	-
-step	7	skipped	0	-	-
-run	1a1b4d58ea6-5198-3	1794035256998
-plan	towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower	failed	a93ff6d3fae1d7b7
+check	1	e:in the west circle	-
+step	6	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/06.jpg	-
+window	6	1794079187149	1794079189999
+check	1	n:45	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+step	7	passed	1	screenshots/towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower/07.jpg	-
+window	7	1794079189999	1794079192971
+check	1	e:the west tower	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+run	1a1b773f78b-87ab-3	1794079192971
+plan	towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower	passed	a93ff6d3fae1d7b7
 step	0	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/00.jpg	-
-window	0	1794035257000	1794035258625
+window	0	1794079192973	1794079195229
 step	1	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/01.jpg	-
-window	1	1794035258625	1794035261337
+window	1	1794079195229	1794079197968
 check	1	e:Blue	-
 check	1	n:5	-
 check	1	e:the Blue base	-
 check	1	n:0	-
 check	1	n:1	-
 step	2	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/02.jpg	-
-window	2	1794035261337	1794035264184
+window	2	1794079197968	1794079200672
 check	1	e:the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	3	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/03.jpg	-
-window	3	1794035264184	1794035267887
+window	3	1794079200672	1794079205459
 check	1	e:circle a point	-
 check	1	n:120	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-step	4	failed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/04.jpg	-
-window	4	1794035267887	1794035302379
-check	0	n:254	-
+step	4	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/04.jpg	-
+window	4	1794079205459	1794079234626
+check	1	n:120	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-check	1	n:293	-
-check	0	n:310	-
-step	5	skipped	0	-	-
-step	6	skipped	0	-	-
-step	7	skipped	0	-	-
-step	8	skipped	0	-	-
-run	1a1b4d640b3-5198-4	1794035302579
+check	1	n:120	-
+check	1	n:120	-
+step	5	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/05.jpg	-
+window	5	1794079234626	1794079240463
+check	1	e:go to a point	-
+check	1	n:1	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+step	6	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/06.jpg	-
+window	6	1794079240463	1794079244974
+check	1	n:2	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+step	7	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/07.jpg	-
+window	7	1794079244974	1794079268668
+check	1	n:1	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+step	8	passed	1	screenshots/towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower/08.jpg	-
+window	8	1794079268668	1794079272793
+check	1	e:take the west tower	-
+check	1	n:0	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+run	1a1b7752f5a-87ab-4	1794079272794
 plan	towers--coverage--low-makes-the-selected-drone-fly-low	passed	ed00dca19ee7dc2a
 step	0	passed	1	screenshots/towers--coverage--low-makes-the-selected-drone-fly-low/00.jpg	-
-window	0	1794035302580	1794035306401
+window	0	1794079272794	1794079276743
 check	1	e:the first Blue drone	-
 check	1	e:high	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	1	passed	1	screenshots/towers--coverage--low-makes-the-selected-drone-fly-low/01.jpg	-
-window	1	1794035306401	1794035309083
+window	1	1794079276743	1794079279756
 check	1	e:low	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-run	1a1b4d65a1b-5198-5	1794035309083
-plan	towers--coverage--a-drone-that-flies-low-along-the-lanes-takes-a-tower	failed	54f6a7dbd301a63b
+run	1a1b7754a8c-87ab-5	1794079279756
+plan	towers--coverage--a-drone-that-flies-low-along-the-lanes-takes-a-tower	passed	54f6a7dbd301a63b
 step	0	passed	1	screenshots/towers--coverage--a-drone-that-flies-low-along-the-lanes-takes-a-tower/00.jpg	-
-window	0	1794035309084	1794035312798
+window	0	1794079279757	1794079283366
 check	1	e:take the west tower	-
 check	1	e:low	-
-step	1	failed	1	screenshots/towers--coverage--a-drone-that-flies-low-along-the-lanes-takes-a-tower/01.jpg	-
-window	1	1794035312798	1794035366194
-check	0	e:neutral	-
-run	1a1b4d739e4-5198-6	1794035366372
+step	1	passed	1	screenshots/towers--coverage--a-drone-that-flies-low-along-the-lanes-takes-a-tower/01.jpg	-
+window	1	1794079283366	1794079321542
+check	1	e:held by Blue	-
+run	1a1b775edc6-87ab-6	1794079321542
 plan	towers--coverage--the-battlefield-shows-the-valley-in-3d	passed	79a8208e5e9d8709
 step	0	passed	1	screenshots/towers--coverage--the-battlefield-shows-the-valley-in-3d/00.jpg	-
-window	0	1794035366373	1794035368565
+window	0	1794079321543	1794079323844
 step	1	passed	1	screenshots/towers--coverage--the-battlefield-shows-the-valley-in-3d/01.jpg	-
-window	1	1794035368565	1794035541689
+window	1	1794079323844	1794079453833
 check	1	e:live	-
-run	1a1b4d9e6b9-5198-7	1794035541689
+run	1a1b777f289-87ab-7	1794079453833
 plan	towers--coverage--the-keys-move-the-camera-across-the-field	passed	64e32abe1d530544
-step	0	passed	1	screenshots/towers--coverage--the-keys-move-the-camera-across-the-field/00.jpg	-
-window	0	1794035541690	1794035548926
+step	0	passed	1	-	-
+window	0	1794079453834	1794079470912
 check	1	e:the Blue base	-
 step	1	passed	1	screenshots/towers--coverage--the-keys-move-the-camera-across-the-field/01.jpg	-
-window	1	1794035548926	1794035551809
+window	1	1794079470912	1794079474147
 check	1	n:269	-
-run	1a1b4da0e41-5198-8	1794035551809
+run	1a1b77841e3-87ab-8	1794079474147
 plan	towers--coverage--the-mouse-at-the-edge-of-the-battlefield-moves-the-camera	passed	8422991b9bf9574b
 step	0	passed	1	screenshots/towers--coverage--the-mouse-at-the-edge-of-the-battlefield-moves-the-camera/00.jpg	-
-window	0	1794035551809	1794035555678
+window	0	1794079474148	1794079477908
 check	1	e:the Blue base	-
 step	1	passed	1	screenshots/towers--coverage--the-mouse-at-the-edge-of-the-battlefield-moves-the-camera/01.jpg	-
-window	1	1794035555678	1794035558936
-check	1	n:314	-
-run	1a1b4da2a19-5198-9	1794035558937
+window	1	1794079477908	1794079482723
+check	1	n:188	-
+run	1a1b7786363-87ab-9	1794079482723
 plan	towers--coverage--the-mouse-wheel-moves-the-camera-nearer-to-the-ground	passed	3e446d0b0ae42327
 step	0	passed	1	screenshots/towers--coverage--the-mouse-wheel-moves-the-camera-nearer-to-the-ground/00.jpg	-
-window	0	1794035558938	1794035563101
+window	0	1794079482724	1794079486400
 check	1	n:600	-
 step	1	passed	1	screenshots/towers--coverage--the-mouse-wheel-moves-the-camera-nearer-to-the-ground/01.jpg	-
-window	1	1794035563101	1794035565506
+window	1	1794079486400	1794079488926
 check	1	n:276	-
-run	1a1b4da43c2-5198-a	1794035565506
+run	1a1b7787b9e-87ab-a	1794079488926
 plan	towers--coverage--with-no-drone-selected-there-is-no-unit-panel	passed	7e63da33461c414d
 step	0	passed	1	screenshots/towers--coverage--with-no-drone-selected-there-is-no-unit-panel/00.jpg	-
-window	0	1794035565506	1794035570583
+window	0	1794079488929	1794079495107
 check	1	e:none	-
 check	1	e:hidden	-
 check	1	e:nothing	-
-run	1a1b4da5797-5198-b	1794035570583
-plan	towers--coverage--the-portrait-shows-the-camera-of-the-selected-drone	failed	8a113a96392b8e78
+run	1a1b77893c3-87ab-b	1794079495107
+plan	towers--coverage--the-portrait-shows-the-camera-of-the-selected-drone	passed	8a113a96392b8e78
 step	0	passed	1	screenshots/towers--coverage--the-portrait-shows-the-camera-of-the-selected-drone/00.jpg	-
-window	0	1794035570584	1794035575863
+window	0	1794079495110	1794079498148
 check	1	e:the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-step	1	failed	1	screenshots/towers--coverage--the-portrait-shows-the-camera-of-the-selected-drone/01.jpg	-
-window	1	1794035575863	1794035762194
-check	0	n:0	-
+step	1	passed	1	screenshots/towers--coverage--the-portrait-shows-the-camera-of-the-selected-drone/01.jpg	-
+window	1	1794079498148	1794079626204
+check	1	n:5	-
 check	1	e:the camera of the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-run	1a1b4dd44df-5198-c	1794035762399
+run	1a1b77a93dc-87ab-c	1794079626204
 plan	towers--coverage--a-click-on-a-camera-selects-its-drone	passed	0c5d43fa82e53554
 step	0	passed	1	screenshots/towers--coverage--a-click-on-a-camera-selects-its-drone/00.jpg	-
-window	0	1794035762399	1794035768040
+window	0	1794079626205	1794079629084
 step	1	passed	1	screenshots/towers--coverage--a-click-on-a-camera-selects-its-drone/01.jpg	-
-window	1	1794035768040	1794035769604
+window	1	1794079629084	1794079630571
 check	1	e:the second Blue drone	-
-run	1a1b4dd6104-5198-d	1794035769604
+run	1a1b77aa4eb-87ab-d	1794079630571
 plan	towers--state--a-right-click-on-a-tower-sends-the-selected-drone-to-take-it	passed	b8dd4a0a057cd8f7
 step	0	passed	1	screenshots/towers--state--a-right-click-on-a-tower-sends-the-selected-drone-to-take-it/00.jpg	-
-window	0	1794035769604	1794035773481
+window	0	1794079630573	1794079633939
 check	1	e:the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	1	passed	1	screenshots/towers--state--a-right-click-on-a-tower-sends-the-selected-drone-to-take-it/01.jpg	-
-window	1	1794035773481	1794035778107
+window	1	1794079633939	1794079638326
 check	1	e:take the west tower	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-run	1a1b4dd823b-5198-e	1794035778107
+run	1a1b77ac336-87ab-e	1794079638326
 plan	towers--state--a-click-on-the-minimap-moves-the-camera-there	passed	8616d178898f4897
 step	0	passed	1	screenshots/towers--state--a-click-on-the-minimap-moves-the-camera-there/00.jpg	-
-window	0	1794035778107	1794035780291
+window	0	1794079638327	1794079640827
 step	1	passed	1	screenshots/towers--state--a-click-on-the-minimap-moves-the-camera-there/01.jpg	-
-window	1	1794035780291	1794035782540
+window	1	1794079640827	1794079643044
 check	1	e:the west tower	-
-run	1a1b4dd938c-5198-f	1794035782540
-plan	towers--state--space-moves-the-camera-to-the-selected-drone	failed	937e042a2028201f
-step	0	failed	0	-	couldn't arrange the first Blue drone is in the west circle: timed out waiting for the first Blue drone in the west circle
-window	0	1794035782540	1794036084961
-step	1	skipped	0	-	-
-run	1a1b4e231ab-5198-10	1794036085163
+run	1a1b77ad5a4-87ab-f	1794079643044
+plan	towers--state--space-moves-the-camera-to-the-selected-drone	passed	937e042a2028201f
+step	0	passed	1	screenshots/towers--state--space-moves-the-camera-to-the-selected-drone/00.jpg	-
+window	0	1794079643044	1794079666694
+check	1	e:in the west circle	-
+check	1	e:the first Blue drone	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+step	1	passed	1	screenshots/towers--state--space-moves-the-camera-to-the-selected-drone/01.jpg	-
+window	1	1794079666694	1794079669931
+check	1	e:the west tower	-
+check	1	e:shown	-
+check	1	e:standard	-
+check	1	n:1.1	-
+run	1a1b77b3eab-87ab-10	1794079669931
 plan	towers--state--circle-sends-the-selected-drone-to-circle-a-point-at-the-distance-that-you-drag	passed	e4a845354bda4b95
 step	0	passed	1	screenshots/towers--state--circle-sends-the-selected-drone-to-circle-a-point-at-the-distance-that-you-drag/00.jpg	-
-window	0	1794036085163	1794036088821
+window	0	1794079669932	1794079673883
 check	1	e:the first Blue drone	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	1	passed	1	screenshots/towers--state--circle-sends-the-selected-drone-to-circle-a-point-at-the-distance-that-you-drag/01.jpg	-
-window	1	1794036088821	1794036092380
+window	1	1794079673883	1794079678360
 check	1	e:circle a point	-
 check	1	n:120	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
-run	1a1b4e24ddc-5198-11	1794036092380
+run	1a1b77b5f98-87ab-11	1794079678360
 plan	towers--state--shift-and-a-right-click-start-the-route-of-the-selected-drone	passed	d325d34c530fb9e1
 step	0	passed	1	screenshots/towers--state--shift-and-a-right-click-start-the-route-of-the-selected-drone/00.jpg	-
-window	0	1794036092381	1794036096463
+window	0	1794079678360	1794079682507
 check	1	e:the first Blue drone	-
 check	1	n:0	-
 check	1	e:shown	-
 check	1	e:standard	-
 check	1	n:1.1	-
 step	1	passed	1	screenshots/towers--state--shift-and-a-right-click-start-the-route-of-the-selected-drone/01.jpg	-
-window	1	1794036096463	1794036100222
+window	1	1794079682507	1794079686962
 check	1	e:go to a point	-
 check	1	n:1	-
 check	1	e:shown	-

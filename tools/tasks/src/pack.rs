@@ -109,7 +109,11 @@ pub fn pack(root: &Path) -> Result<usize, String> {
     }
     // Only what the generated pages show: the old runs' leftovers stay behind.
     let mut refs = BTreeSet::new();
-    for page in pages(&docs.join("site")) {
+    // The default platform's manual, and each other platform's (docs/platforms/<name>/site).
+    let platforms = std::fs::read_dir(docs.join("platforms"))
+        .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path().join("site")).collect::<Vec<_>>())
+        .unwrap_or_default();
+    for page in std::iter::once(docs.join("site")).chain(platforms).flat_map(|d| pages(&d)) {
         refs.extend(screenshot_refs(&std::fs::read_to_string(&page).map_err(|e| format!("{}: {e}", page.display()))?));
     }
     for gone in ["results", "screenshots"] {
@@ -235,6 +239,26 @@ mod tests {
         assert_eq!(std::fs::read_to_string(site.join("screenshots/t1/01.svg")).unwrap(), "<svg/>");
         assert!(!site.join("screenshots/old").exists(), "a screenshot no page shows");
         assert!(!site.join("screenshots/gone").exists(), "the stale leftovers are cleared");
+    }
+
+    /// A platform's manual (docs/platforms/<name>/site) shows screenshots too: those of the tests
+    /// that run only there (Towers on its sim platform).
+    #[test]
+    fn packing_takes_the_screenshots_a_platform_page_shows() {
+        let root = temp("pack-platform");
+        let docs = root.join("docs");
+        std::fs::create_dir_all(docs.join("results")).unwrap();
+        std::fs::create_dir_all(docs.join("site")).unwrap();
+        std::fs::create_dir_all(docs.join("platforms/sim/site")).unwrap();
+        std::fs::write(docs.join("results/towers@sim.tsv"), "results").unwrap();
+        std::fs::write(docs.join("site/index.html"), "no pictures").unwrap();
+        std::fs::write(docs.join("platforms/sim/site/tower.html"), r#"<img src="../../../screenshots/t2/00.svg">"#)
+            .unwrap();
+        std::fs::create_dir_all(docs.join("screenshots/t2")).unwrap();
+        std::fs::write(docs.join("screenshots/t2/00.svg"), "<svg/>").unwrap();
+
+        assert_eq!(pack(&root), Ok(1));
+        assert!(root.join("site/screenshots/t2/00.svg").exists());
     }
 
     #[test]

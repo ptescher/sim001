@@ -42,6 +42,12 @@ jobs:
           mkdir -p _site/docs
           cp -r site/*.html site/*.jpg _site/
           cp -r out/site out/screenshots _site/docs/
+          # The other platforms' manuals (iOS, sim, field), which the version menu links to.
+          for d in out/platforms/*/; do
+            n=$(basename "$d")
+            mkdir -p "_site/docs/platforms/$n"
+            cp -r "$d/site" "_site/docs/platforms/$n/"
+          done
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:

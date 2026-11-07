@@ -468,7 +468,7 @@ fn terminal(transcript: &[String]) -> String {
 
 /// Tests that fail because ArduPlane does not do what the spec says yet (see the windowless
 /// acceptance test for why). Remove one from here when it passes.
-const KNOWN_FAILURES: &[&str] = &["A repeated plan id changes nothing"];
+const KNOWN_FAILURES: &[&str] = &[];
 
 #[test]
 fn the_section_runs_in_sitl() {

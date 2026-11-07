@@ -25,7 +25,7 @@ pub enum Fleet {
 
 impl Fleet {
     pub fn start(root: &Path, dir: &Path, speedup: f32) -> Result<Fleet, String> {
-        let program = launch::native_binary(root);
+        let program = launch::agent_binary(root);
         if !program.exists() {
             return Err(format!("no native ArduPlane at {}: run ardupilot/build_native.sh", program.display()));
         }

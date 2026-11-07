@@ -103,7 +103,7 @@ impl Drop for Fleet {
 /// drone moves the fence's centre (`AGENT_FENCE_N`, `_E`, metres from home) to the middle of the
 /// field.
 fn start_fleet(root: &Path, dir: &Path, rules: &Rules, first: u16, n: u16, speedup: f32) -> Result<Fleet, String> {
-    let program = launch::native_binary(root);
+    let program = launch::agent_binary(root);
     if !program.exists() {
         return Err(format!(
             "no ArduPlane at {} (build the AGENT mode with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh` and set SIM001_BIN)",
