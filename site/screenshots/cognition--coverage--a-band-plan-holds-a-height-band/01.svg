@@ -1,1 +1,3 @@
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 240' width='720' height='240' font-family='Menlo, monospace' font-size='12'><rect width='720' height='240' rx='6' fill='#1e1f22'/><text x='12' y='22' fill='#8fd18f' xml:space='preserve'>&gt; reset</text><text x='12' y='40' fill='#d8d8d8' xml:space='preserve'>status mode=AGENT plan=0 prim=0 env=20 fall=0 recoveries=0 time=255.5</text><text x='12' y='58' fill='#8fd18f' xml:space='preserve'>&gt; plan band 70 0 35 10 600</text><text x='12' y='76' fill='#f0c674' xml:space='preserve'>ack id=1 result=0 reason=0</text><text x='12' y='94' fill='#d8d8d8' xml:space='preserve'>status mode=AGENT plan=1 prim=5 env=76 fall=0 recoveries=0 time=257.1</text></svg>
+version https://git-lfs.github.com/spec/v1
+oid sha256:47d8171c963a382ae51a3a61b8ab2727ec7fa3f1fd02e606d4f4108eb8e9d252
+size 822

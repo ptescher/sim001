@@ -1,6 +1,8 @@
 expectation-results 1
-plan	launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop	passed	5812900d95d32426
+run	1a1b350b636-162b7-0	1794009773622
+plan	launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop	passed	dd3db446184239f1
 step	0	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/00.jpg	-
+window	0	1794009773622	1794009775661
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -8,18 +10,25 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
+check	1	e:missing	-
 step	1	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/01.jpg	-
+window	1	1794009775661	1794009776770
 check	1	e:SIMULATOR ONLY	-
+check	1	e:WITHOUT ARDUPILOT	-
 step	2	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/02.jpg	-
+window	2	1794009776770	1794009777718
 check	1	e:the simulator	-
 check	1	e:the T1-S Ranger	-
 check	1	e:STOP	-
 check	1	e:running	-
 step	3	passed	1	screenshots/launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop/03.jpg	-
+window	3	1794009777718	1794009778654
 check	1	e:LAUNCH	-
 check	1	e:stopped	-
-plan	launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot	passed	c1fb4092c338989a
+run	1a1b350c9de-162b7-1	1794009778654
+plan	launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot	passed	2f62c44afcd5a0a5
 step	0	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/00.jpg	-
+window	0	1794009778654	1794009780988
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -27,10 +36,15 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
+check	1	e:missing	-
 step	1	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/01.jpg	-
+window	1	1794009780988	1794009782095
+check	1	e:SIMULATOR ONLY	-
 step	2	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/02.jpg	-
+window	2	1794009782095	1794009783183
 check	1	e:CYPRESS	-
 step	3	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/03.jpg	-
+window	3	1794009783183	1794009784149
 check	1	e:the simulator	-
 check	1	e:the T1-S VTOL	-
 check	1	e:Cypress	-
@@ -38,17 +52,58 @@ check	1	e:on	-
 check	1	e:STOP	-
 check	1	e:running	-
 step	4	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/04.jpg	-
+window	4	1794009784149	1794009785086
 check	1	e:LAUNCH	-
 check	1	e:stopped	-
 step	5	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/05.jpg	-
+window	5	1794009785086	1794009786207
+check	1	e:GROUND STATION	-
 check	1	e:WITHOUT ARDUPILOT	-
 step	6	passed	1	screenshots/launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot/06.jpg	-
+window	6	1794009786207	1794009787172
 check	1	e:the ground station	-
 check	1	e:direct	-
 check	1	e:Cypress	-
 check	1	e:on	-
-plan	launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping	passed	86d59164f41546a8
+run	1a1b350eb24-162b7-2	1794009787172
+plan	launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer	passed	5208f1164d638150
+step	0	passed	1	screenshots/launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer/00.jpg	-
+window	0	1794009787172	1794009789532
+check	1	e:GROUND STATION	-
+check	1	e:WITH ARDUPILOT	-
+check	1	e:ALPINE VALLEY	-
+check	1	e:off	-
+check	1	e:LAUNCH	-
+check	1	e:nothing	-
+check	1	e:idle	-
+check	1	e:missing	-
+step	1	passed	1	screenshots/launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer/01.jpg	-
+window	1	1794009789532	1794009790809
+check	1	e:TOWERS	-
+check	1	e:NOBODY	-
+step	2	passed	1	screenshots/launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer/02.jpg	-
+window	2	1794009790809	1794009791758
+check	1	e:the Towers game	-
+check	1	e:nobody	-
+check	1	e:off	-
+check	1	e:STOP	-
+check	1	e:running	-
+step	3	passed	1	screenshots/launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer/03.jpg	-
+window	3	1794009791758	1794009792700
+check	1	e:LAUNCH	-
+check	1	e:stopped	-
+step	4	passed	1	screenshots/launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer/04.jpg	-
+window	4	1794009792700	1794009793803
+check	1	e:COMPUTER	-
+step	5	passed	1	screenshots/launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer/05.jpg	-
+window	5	1794009793803	1794009795596
+check	1	e:the Towers game	-
+check	1	e:the computer	-
+check	1	e:on	-
+run	1a1b3510c0c-162b7-3	1794009795596
+plan	launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping	passed	7c4d63d47dbd48b8
 step	0	passed	1	screenshots/launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping/00.jpg	-
+window	0	1794009795597	1794009802501
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -58,12 +113,34 @@ check	1	e:nothing	-
 check	1	e:idle	-
 check	1	e:missing	-
 step	1	passed	1	screenshots/launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping/01.jpg	-
+window	1	1794009802501	1794009804348
 check	1	e:the radio wizard	-
 check	1	e:the T1-S Ranger	-
 step	2	passed	1	screenshots/launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping/02.jpg	-
+window	2	1794009804348	1794009806604
 check	1	e:mapped	-
-plan	launcher--coverage--launch-starts-the-station-with-ardupilot	passed	aea5f3c468c6da8e
+run	1a1b351370c-162b7-4	1794009806604
+plan	launcher--coverage--with-ardupilot-picks-the-flight-controller	passed	288060eb76d4d91f
+step	0	passed	1	screenshots/launcher--coverage--with-ardupilot-picks-the-flight-controller/00.jpg	-
+window	0	1794009806604	1794009813630
+check	1	e:GROUND STATION	-
+check	1	e:WITH ARDUPILOT	-
+check	1	e:ALPINE VALLEY	-
+check	1	e:off	-
+check	1	e:LAUNCH	-
+check	1	e:nothing	-
+check	1	e:idle	-
+check	1	e:missing	-
+step	1	passed	1	screenshots/launcher--coverage--with-ardupilot-picks-the-flight-controller/01.jpg	-
+window	1	1794009813630	1794009815451
+check	1	e:WITHOUT ARDUPILOT	-
+step	2	passed	1	screenshots/launcher--coverage--with-ardupilot-picks-the-flight-controller/02.jpg	-
+window	2	1794009815451	1794009817240
+check	1	e:WITH ARDUPILOT	-
+run	1a1b3516098-162b7-5	1794009817240
+plan	launcher--coverage--launch-starts-the-station-with-ardupilot	passed	46597d8fd5201103
 step	0	passed	1	screenshots/launcher--coverage--launch-starts-the-station-with-ardupilot/00.jpg	-
+window	0	1794009817240	1794009823784
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -71,13 +148,17 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
+check	1	e:missing	-
 step	1	passed	1	screenshots/launcher--coverage--launch-starts-the-station-with-ardupilot/01.jpg	-
+window	1	1794009823784	1794009826306
 check	1	e:the ground station	-
 check	1	e:through ArduPilot	-
 check	1	e:STOP	-
 check	1	e:running	-
-plan	launcher--coverage--render-docs-writes-the-manual	passed	c4bb06fa1cd825bb
+run	1a1b3518402-162b7-6	1794009826306
+plan	launcher--coverage--render-docs-writes-the-manual	passed	01a0fe98630bf66b
 step	0	passed	1	screenshots/launcher--coverage--render-docs-writes-the-manual/00.jpg	-
+window	0	1794009826306	1794009833317
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -85,22 +166,14 @@ check	1	e:off	-
 check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
+check	1	e:missing	-
 step	1	passed	1	screenshots/launcher--coverage--render-docs-writes-the-manual/01.jpg	-
+window	1	1794009833317	1794009835166
 check	1	e:the manual build	-
-plan	launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger	passed	0c17e2aa4d3408a6
-step	0	passed	1	screenshots/launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger/00.jpg	-
-check	1	e:GROUND STATION	-
-check	1	e:WITH ARDUPILOT	-
-check	1	e:ALPINE VALLEY	-
-check	1	e:off	-
-check	1	e:LAUNCH	-
-check	1	e:nothing	-
-check	1	e:idle	-
-step	1	passed	1	screenshots/launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger/01.jpg	-
-check	1	e:the radio wizard	-
-check	1	e:the T1-S Ranger	-
-plan	launcher--state--launch-starts-the-station-with-ardupilot	passed	295c7cd3e43a3bca
-step	0	passed	1	screenshots/launcher--state--launch-starts-the-station-with-ardupilot/00.jpg	-
+run	1a1b351a69e-162b7-7	1794009835166
+plan	launcher--state--towers-picks-the-commander-app	passed	df6b5574f7858a62
+step	0	passed	1	screenshots/launcher--state--towers-picks-the-commander-app/00.jpg	-
+window	0	1794009835166	1794009842117
 check	1	e:GROUND STATION	-
 check	1	e:WITH ARDUPILOT	-
 check	1	e:ALPINE VALLEY	-
@@ -109,20 +182,6 @@ check	1	e:LAUNCH	-
 check	1	e:nothing	-
 check	1	e:idle	-
 check	1	e:missing	-
-step	1	passed	1	screenshots/launcher--state--launch-starts-the-station-with-ardupilot/01.jpg	-
-check	1	e:the ground station	-
-check	1	e:through ArduPilot	-
-check	1	e:STOP	-
-check	1	e:running	-
-plan	launcher--state--render-docs-writes-the-manual	passed	c0926c856d36b3c7
-step	0	passed	1	screenshots/launcher--state--render-docs-writes-the-manual/00.jpg	-
-check	1	e:GROUND STATION	-
-check	1	e:WITH ARDUPILOT	-
-check	1	e:ALPINE VALLEY	-
-check	1	e:off	-
-check	1	e:LAUNCH	-
-check	1	e:nothing	-
-check	1	e:idle	-
-check	1	e:missing	-
-step	1	passed	1	screenshots/launcher--state--render-docs-writes-the-manual/01.jpg	-
-check	1	e:the manual build	-
+step	1	passed	1	screenshots/launcher--state--towers-picks-the-commander-app/01.jpg	-
+window	1	1794009842117	1794009843950
+check	1	e:TOWERS	-

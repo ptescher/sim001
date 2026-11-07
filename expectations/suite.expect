@@ -18,6 +18,9 @@ Suite: SIM001
   it, so it takes off and lands vertically, flies missions, and has self-levelling modes. You
   fly it from the ground control station, with a radio.
 
+  New here? [[Start here]] has a path for each thing that you can do: learn to fly, learn
+  ground control, or play Towers.
+
   Start with [[The simulator]] to fly either plane by hand: it opens with the Ranger. Use
   [[Flying with a flight controller]] for the modes that the VTOL adds, and the
   [[Ground control station]] to plan missions and fly the VTOL with ArduPilot. The ground
@@ -38,7 +41,7 @@ Vocabulary:
     Shows: in hand: the plane is in your hand at the pilot box
     Shows: being carried back: the HUD says "Bringing it back to your hand..."
     Shows: launching: the throw starts, and the plane leaves your hand when time runs again
-    Shows: flying: the plane leaves your hand and climbs away
+    Shows: flying: the plane is in the air and flying
     Shows: on the ground: the plane lands and stops on the ground
     Shows: crashed: the plane hits the ground, and the HUD says CRASHED with the reason and "Press R to reset"
     Shows: flying the mission: the plane climbs and flies to the first waypoint

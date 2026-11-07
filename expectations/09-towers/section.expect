@@ -5,8 +5,8 @@
 # ArduPlane SITL drones. The vocabulary here is shared by all three.
 
 Section: Towers
-  Launch: start the commander app on a practice game. Run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`. The app starts a game server with ten ArduPilot drones, and takes the Blue seat. With `--red nobody`, nobody commands Red, and its drones circle over their base
-  Towers is a game for two teams of drones, Blue and Red. Each team has three T1-S VTOL
+  Launch: start a practice game. In [[The launcher]], click TOWERS, then RED: NOBODY, then LAUNCH, as [[Starting a game of Towers]] shows. (From source, you can instead run `cargo run --release -- --serve --red nobody` in `domains/teleoperation/command`.) The commander app opens. It starts a game server with ten ArduPilot drones, five on each team, and takes the Blue seat for you. Nobody commands Red, so its drones circle over their base
+  Towers is a game for two teams of drones, Blue and Red. Each team has five T1-S VTOL
   drones and a [[base]] at one end of the field. Five radio [[tower]]s stand on the field. At
   the start, each team holds its home tower. The centre tower and the two flank towers are
   neutral.
@@ -34,6 +34,8 @@ Vocabulary:
   # first platform is the default, so plain lines are about the sim: the game server with
   # simulated air and ArduPlane SITL. The field is real drones and a real radio, on a bench rig.
   Platform: sim | field
+    About: sim: the game with simulated drones, on this computer
+    About: field: real drones and a real radio
 
   State: the game of Towers is in play | won by Blue | won by Red | a draw
     Shows: in play: the clock runs, and the scores go up

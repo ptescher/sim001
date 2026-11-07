@@ -1,6 +1,7 @@
 # Publishes the landing page (site/) and the manual (generated from expectations/) to GitHub Pages.
 # The tests can't run in CI (Docker, ArduPilot, a GPU), so the manual shows the results of the last local
-# run: `tasks docs`, then `tasks pack-docs` (cargo run --release -p sim001_tasks --), then commit site/results and site/screenshots.
+# run: `tasks docs`, then `tasks pack-docs` (cargo run --release -p sim001_tasks --), then commit site/results and site/screenshots
+# (the screenshots go to Git LFS: install git-lfs first).
 name: Pages
 
 on:
@@ -23,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The screenshots are in Git LFS (see .gitattributes).
+          lfs: true
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.99.0"
