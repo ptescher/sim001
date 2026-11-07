@@ -335,10 +335,10 @@ impl SimCore {
         self.game.as_ref().is_none_or(|g| g.may_launch())
     }
 
-    /// Space: throw the plane, if a throw is allowed.
+    /// Space: throw the plane, if a throw is allowed: from the hand, or picked up off the ground.
     pub fn launch(&mut self) {
         if self.may_launch() {
-            self.state.launch();
+            self.state.throw(&self.params);
         }
     }
 
