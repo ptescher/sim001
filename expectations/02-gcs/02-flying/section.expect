@@ -5,8 +5,9 @@ Section: Flying a mission
 
 Vocabulary:
   Phrase: the plane is flying a three-waypoint mission
-    Say: do the steps of [[From plan to flight]], but plan only three waypoints, with no takeoff and no return
+    Say: do the steps of [[From plan to flight]], but plan a takeoff and three waypoints, with no return. The takeoff holds the motors until you throw the plane
     Given the plan has 3 items
+    And the takeoff is planned
     And the last plan item is WAYPOINT
     And the vehicle mission is up to date
     And the vehicle is armed
