@@ -472,7 +472,7 @@ impl AppDriver {
             drop(s);
             let look = v.rig.eye.look;
             let h = v.rig.eye.heading.to_radians();
-            let (ahead, side) = (glam::Vec2::new(h.cos(), h.sin()), glam::Vec2::new(-h.sin(), h.cos()));
+            let ahead = glam::Vec2::new(h.cos(), h.sin());
             let valley = v.valley().cloned();
             let towers: Vec<glam::Vec2> =
                 view.as_ref().map(|m| m.towers.iter().map(|t| t.at).collect()).unwrap_or_default();
