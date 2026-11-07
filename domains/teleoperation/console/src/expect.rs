@@ -266,9 +266,28 @@ const LOOK: Duration = Duration::from_millis(250);
 const STUCK: Duration = Duration::from_secs(20);
 const PUSHING: u16 = 50;
 
-/// Has ArduPilot started again since `since`? It says "ArduPilot Ready" when it has.
-fn restarted_since(log: &std::collections::VecDeque<crate::vehicle::LogLine>, since: Instant) -> bool {
-    log.iter().any(|l| l.time >= since && l.text.contains("ArduPilot Ready"))
+/// How long after a reset the console may take to reboot the autopilot for it.
+const REBOOT_ASKED: Duration = Duration::from_secs(8);
+
+/// Where a fresh plane's autopilot is, `now`, after the sim was reset at `reset`.
+#[derive(Debug, PartialEq)]
+enum Restart {
+    /// The console rebooted it and it isn't back yet, or a reboot may still come.
+    Waiting,
+    /// It said "ArduPilot Ready" after the reboot.
+    Done,
+    /// No reboot came: the plane was fresh already.
+    NotNeeded,
+}
+
+fn restart(log: &std::collections::VecDeque<crate::vehicle::LogLine>, reset: Instant, now: Instant) -> Restart {
+    let reboot = log.iter().find(|l| l.time >= reset && l.text.contains("REBOOT autopilot")).map(|l| l.time);
+    match reboot {
+        Some(at) if log.iter().any(|l| l.time >= at && l.text.contains("ArduPilot Ready")) => Restart::Done,
+        Some(_) => Restart::Waiting,
+        None if now.duration_since(reset) >= REBOOT_ASKED => Restart::NotNeeded,
+        None => Restart::Waiting,
+    }
 }
 
 /// What [`Liftoff`] looks at, read from the vehicle.
@@ -1314,7 +1333,7 @@ impl ConsoleDriver {
         *self.liftoff.lock().unwrap() = Liftoff::default();
         self.wait_for(180, "the autopilot restarting", move |g| {
             let v = g.vehicle.lock().unwrap();
-            v.link.alive() && restarted_since(&v.log, pressed)
+            v.link.alive() && restart(&v.log, pressed, Instant::now()) != Restart::Waiting
         })?;
         // ArduPilot goes to the mode of its mode switch a few seconds after it is ready, and a test
         // that sets a mode before then has it taken away; by the time it is ready to arm, that is
@@ -1918,16 +1937,21 @@ mod tests {
         crate::vehicle::LogLine { time, severity: 6, source: "fc", text: text.into() }
     }
 
-    /// A fresh plane is ready once ArduPilot has said so after the reset: a native ArduPlane
-    /// reboots faster than its link times out, so the link never looks down.
+    /// A fresh plane is ready once ArduPilot has said so after the console rebooted it: a native
+    /// ArduPlane reboots faster than its link times out, so the link never looks down. A reset
+    /// that needed no reboot (the plane was fresh already) has nothing to wait for.
     #[test]
-    fn the_autopilot_has_restarted_once_it_says_so_after_the_reset() {
+    fn the_autopilot_has_restarted_once_it_says_so_after_the_reboot() {
         let t0 = Instant::now();
         let reset = t0 + Duration::from_secs(10);
+        let s = |n: u64| reset + Duration::from_secs(n);
         let mut log = std::collections::VecDeque::from([line(t0, "ArduPilot Ready")]);
-        assert!(!restarted_since(&log, reset), "the last start, not this one");
-        log.push_back(line(reset + Duration::from_secs(3), "ArduPilot Ready"));
-        assert!(restarted_since(&log, reset));
+        assert_eq!(restart(&log, reset, s(1)), Restart::Waiting, "a reboot may still come");
+        assert_eq!(restart(&log, reset, s(10)), Restart::NotNeeded, "none came: the plane was fresh");
+        log.push_back(line(s(1), "Command: REBOOT autopilot"));
+        assert_eq!(restart(&log, reset, s(10)), Restart::Waiting, "the last start, not this one");
+        log.push_back(line(s(4), "ArduPilot Ready"));
+        assert_eq!(restart(&log, reset, s(10)), Restart::Done);
     }
 
     /// Each test watches its own plane: a previous test's push on the ground doesn't count.
