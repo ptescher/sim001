@@ -177,6 +177,8 @@ pub struct SimCore {
     pub wind: WindSettings,
     pub paused: bool,
     pub last_cmd: ActuatorCommands,
+    /// Diagnostics: the phase last logged, and the clock of the physics trace.
+    diag: (Option<Phase>, f32),
     pub last_wind: Vec3,
     pub ap: ArduPilotLink,
     pid: PidState,
@@ -250,6 +252,7 @@ impl SimCore {
             wind: WindSettings { speed: 3.0, from_dir: 20.0f32.to_radians(), turbulence: 0.3 },
             paused: false,
             last_cmd: ActuatorCommands::default(),
+            diag: (None, 0.0),
             test_radio: None,
             pilot_radio: false,
             radio_arm: None,
@@ -461,6 +464,50 @@ impl SimCore {
         let cmd = ActuatorCommands::from_pwm(&self.params, pwm);
         self.auto_launch(cmd.forward_throttle(&self.params), dt);
         self.step_physics(&cmd, dt);
+        self.trace_physics(Some(pwm), dt);
+    }
+
+    /// Diagnostics: logs each change of the flight phase, and with SIM001_TRACE_PHYSICS=1 the
+    /// physics once a second (what holds the plane, and what the motors do).
+    fn trace_physics(&mut self, pwm: Option<&[u16; 16]>, dt: f32) {
+        let s = &self.state;
+        if self.diag.0 != Some(s.phase) {
+            eprintln!(
+                "physics: phase {:?} -> {:?} at t={:.1} (carry {}, height {:.2} m)",
+                self.diag.0,
+                s.phase,
+                s.time,
+                s.carry.is_some(),
+                s.pos.y
+            );
+            self.diag.0 = Some(s.phase);
+        }
+        static TRACE: std::sync::LazyLock<bool> =
+            std::sync::LazyLock::new(|| std::env::var("SIM001_TRACE_PHYSICS").is_ok_and(|v| v == "1"));
+        self.diag.1 += dt;
+        if *TRACE && self.diag.1 >= 1.0 {
+            self.diag.1 = 0.0;
+            let thrust: Vec<String> = s.thrust.iter().map(|t| format!("{t:.1}")).collect();
+            let tilt: Vec<String> = s.tilt.iter().map(|t| format!("{:.0}", t.to_degrees())).collect();
+            eprintln!(
+                "physics: t={:.1} phase {:?} carry {} ground {} pos ({:.1},{:.2},{:.1}) vy {:.2} battery {:.2} V {:.1} A {:.0} mAh used thrust [{}] N tilt [{}] deg cmd {:?} pwm {:?}",
+                s.time,
+                s.phase,
+                s.carry.is_some(),
+                s.on_ground,
+                s.pos.x,
+                s.pos.y,
+                s.pos.z,
+                s.vel.y,
+                s.voltage,
+                s.current,
+                s.used_mah,
+                thrust.join(" "),
+                tilt.join(" "),
+                self.last_cmd.out,
+                pwm.map(|p| &p[..8])
+            );
+        }
     }
 
     fn step_physics(&mut self, cmd: &ActuatorCommands, dt: f32) {
