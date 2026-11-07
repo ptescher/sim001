@@ -36,6 +36,20 @@ pub fn native_binary(root: &Path) -> PathBuf {
     root.join(".ardupilot/build/sitl/bin/arduplane")
 }
 
+/// The native ArduPlane with our AGENT mode, for the Towers game server and the runner:
+/// `SIM001_BIN` if it has one, else the AGENT build (`AP_DIR=.ardupilot-agent AGENT_EXEC=1
+/// ardupilot/build_native.sh`), else the plain build, which flies but has no AGENT mode.
+pub fn agent_binary(root: &Path) -> PathBuf {
+    agent_binary_from(root, std::env::var_os("SIM001_BIN").as_deref())
+}
+
+fn agent_binary_from(root: &Path, sim001_bin: Option<&std::ffi::OsStr>) -> PathBuf {
+    let name = if cfg!(windows) { "arduplane.exe" } else { "arduplane" };
+    let bundled = sim001_bin.map(|b| PathBuf::from(b).join(name));
+    let agent = root.join(".ardupilot-agent/build/sitl/bin").join(name);
+    [bundled, Some(agent)].into_iter().flatten().find(|p| p.exists()).unwrap_or_else(|| native_binary(root))
+}
+
 /// The command line of a native ArduPlane for the plane `aircraft`: instance 0, at the default
 /// home, in real time.
 pub fn native_args(root: &Path, aircraft: &str) -> Vec<String> {
@@ -250,6 +264,35 @@ mod tests {
 
     fn root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+    }
+
+    /// The game server and the runner need ArduPlane's AGENT mode: SIM001_BIN if it has an
+    /// ArduPlane, else the AGENT build (.ardupilot-agent), else the plain one (.ardupilot), which
+    /// flies but has no AGENT mode.
+    #[test]
+    fn the_agent_build_is_found_before_the_plain_one() {
+        let dir = std::env::temp_dir().join(format!("sim001-agent-binary-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let make = |sub: &str| {
+            let bin = dir.join(sub).join("build/sitl/bin");
+            std::fs::create_dir_all(&bin).unwrap();
+            std::fs::write(bin.join("arduplane"), "").unwrap();
+            bin
+        };
+        assert_eq!(agent_binary_from(&dir, None), dir.join(".ardupilot/build/sitl/bin/arduplane"), "none built");
+        make(".ardupilot");
+        assert_eq!(agent_binary_from(&dir, None), dir.join(".ardupilot/build/sitl/bin/arduplane"));
+        let agent = make(".ardupilot-agent");
+        assert_eq!(agent_binary_from(&dir, None), agent.join("arduplane"));
+        let other = make("elsewhere");
+        assert_eq!(agent_binary_from(&dir, Some(other.as_os_str())), other.join("arduplane"));
+        let empty = dir.join("empty");
+        assert_eq!(
+            agent_binary_from(&dir, Some(empty.as_os_str())),
+            agent.join("arduplane"),
+            "SIM001_BIN with no ArduPlane"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
