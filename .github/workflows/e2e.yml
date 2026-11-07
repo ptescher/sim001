@@ -4,7 +4,8 @@
 #
 # This repository is PUBLIC, and a self-hosted runner runs whatever a workflow says, on the
 # owner's machine. So nothing starts this by itself: no pull request, push or merge queue. It is a
-# one-off job, started by hand by someone with write access to the repository:
+# one-off job, started by hand by someone with write access, and the job then waits for the
+# owner's approval (the `self-hosted-mac` environment's required reviewer):
 #
 #   gh workflow run e2e.yml --ref <branch>
 #   gh run watch
@@ -26,6 +27,8 @@ env:
 jobs:
   e2e:
     name: end-to-end (self-hosted Mac)
+    # Pauses until a required reviewer of this environment approves (Settings > Environments).
+    environment: self-hosted-mac
     runs-on: [self-hosted, macOS, ARM64, sim001]
     timeout-minutes: 120
     steps:
