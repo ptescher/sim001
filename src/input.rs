@@ -40,6 +40,8 @@ pub enum Action {
     Race,
     /// Start a game of tag, or stop the one being played.
     Tag,
+    /// Take the flight back 10 s (see `crate::replay`).
+    Rewind,
 }
 
 const RADIO_ACTIONS: [(Action, &str); 6] = [
@@ -474,6 +476,7 @@ pub fn read_input(
         (KeyCode::Escape, Action::Dismiss),
         (KeyCode::KeyG, Action::Race),
         (KeyCode::KeyT, Action::Tag),
+        (KeyCode::Backspace, Action::Rewind),
     ];
     let in_wizard = input.wizard.is_some();
     for (k, a) in key_actions {
