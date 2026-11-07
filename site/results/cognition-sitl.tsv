@@ -1,4 +1,5 @@
 expectation-results 1
+run	1a1b34825cc-15fa6-0	1794009212364
 plan	sim--recreation--your-first-pylon-race--start-throw-at-go-fly-five-laps	unsupported	53a438cf71fe184b
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 52 more things yet.
 step	1	unsupported	0	-	-
@@ -9,6 +10,7 @@ step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
 step	7	unsupported	0	-	-
 step	8	unsupported	0	-	-
+run	1a1b34825cc-15fa6-1	1794009212364
 plan	sim--recreation--a-game-of-tag--tag-then-get-tagged	unsupported	8ab0b6f27c7e06ce
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 52 more things yet.
 step	1	unsupported	0	-	-
@@ -16,22 +18,26 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825cc-15fa6-2	1794009212364
 plan	sim--your-first-throw--throttle-up-then-pick-it-back-up	unsupported	f0525c94034fbad5
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825cc-15fa6-3	1794009212364
 plan	sim--watching-from-every-view--throw-it-then-step-through-the-views	unsupported	4bd62feef9f39539
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825cc-15fa6-4	1794009212364
 plan	sim--crashing-and-starting-again--nose-it-in-then-reset	unsupported	0dd8cdfceb6d900f
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825cc-15fa6-5	1794009212364
 plan	sim--taking-a-break--pause-read-the-help-carry-on	unsupported	a49fc6e97e5563bb
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 49 more things yet.
 step	1	unsupported	0	-	-
@@ -39,6 +45,7 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825cc-15fa6-6	1794009212364
 plan	gcs--planning--planning-a-hand-launched-circuit--takeoff-three-waypoints-home	unsupported	ac2c32c6adec52b3
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 50 more things yet.
 step	1	unsupported	0	-	-
@@ -47,17 +54,20 @@ step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
+run	1a1b34825cd-15fa6-7	1794009212365
 plan	gcs--planning--fixing-a-misplaced-waypoint--two-clicks-and-a-right-click	unsupported	be47d6649dda8417
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825cd-15fa6-8	1794009212365
 plan	gcs--planning--clearing-the-ridge--raise-the-plan-add-a-waypoint-check-it	unsupported	cb94b9d873ac13de
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825cd-15fa6-9	1794009212365
 plan	gcs--planning--keeping-a-mission-for-the-field--save-change-load	unsupported	9963d3105ac39729
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
@@ -65,23 +75,28 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825cd-15fa6-a	1794009212365
 plan	gcs--planning--surveying-a-field--draw-a-grid-and-upload-it	unsupported	3c291596f5766dad
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825cd-15fa6-b	1794009212365
 plan	gcs--planning--planning-at-the-altitude-limit--alt-from-290-m	unsupported	a02953e155a05985
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825cd-15fa6-c	1794009212365
 plan	gcs--flying--flying-the-circuit-and-coming-home--three-waypoints-then-home	unsupported	c68c76cbdfd61f41
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825cd-15fa6-d	1794009212365
 plan	gcs--flying--flying-the-circuit-again--back-to-the-first-waypoint	unsupported	3aa4c6bd339dbe74
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825cd-15fa6-e	1794009212365
 plan	gcs--vtol--flying-a-vtol--take-off-fly-forward-hover-land	unsupported	4d12509fbee05d18
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 57 more things yet.
 step	1	unsupported	0	-	-
@@ -89,6 +104,7 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825cd-15fa6-f	1794009212365
 plan	gcs--radio--taking-off-with-the-tx15--arm-pick-qloiter-lift-off-and-land	unsupported	f1ca781a9512fa84
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 69 more things yet.
 step	1	unsupported	0	-	-
@@ -96,6 +112,7 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825cd-15fa6-10	1794009212365
 plan	gcs--radio--flying-a-vtol-with-self-levelling--lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	7a3c64eb680c5d85
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 75 more things yet.
 step	1	unsupported	0	-	-
@@ -106,6 +123,7 @@ step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
 step	7	unsupported	0	-	-
 step	8	unsupported	0	-	-
+run	1a1b34825ce-15fa6-11	1794009212366
 plan	gcs--radio--trying-the-buttons-of-the-radio--lift-off-try-qhover-and-cruise-then-fly-home	unsupported	1e3b68c6b30d8932
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 73 more things yet.
 step	1	unsupported	0	-	-
@@ -114,11 +132,13 @@ step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
+run	1a1b34825ce-15fa6-12	1794009212366
 plan	gcs--games--racing-the-computer-pilots-from-the-station--wait-for-go-then-go	unsupported	70bf35f92ffe91e8
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 68 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825ce-15fa6-13	1794009212366
 plan	gcs--serial-line--flying-a-vtol-with-the-tx15--arm-lift-off-fly-forward-in-fbwa-hover-again-and-land-softly	unsupported	2d607a5aeb75385d
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 75 more things yet.
 step	1	unsupported	0	-	-
@@ -129,6 +149,7 @@ step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
 step	7	unsupported	0	-	-
 step	8	unsupported	0	-	-
+run	1a1b34825ce-15fa6-14	1794009212366
 plan	gcs--from-plan-to-flight--plan-upload-arm-auto-throw	unsupported	88dbb24af33f49da
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 54 more things yet.
 step	1	unsupported	0	-	-
@@ -140,52 +161,61 @@ step	6	unsupported	0	-	-
 step	7	unsupported	0	-	-
 step	8	unsupported	0	-	-
 step	9	unsupported	0	-	-
+run	1a1b34825ce-15fa6-15	1794009212366
 plan	flight-controller--your-first-hover--arm-lift-off-hold-the-hover-and-bring-the-plane-home	unsupported	dbe4a4df4380581d
 step	0	unsupported	0	-	The driver can't arrange the autopilot, arrange the autopilot as disarmed, arrange the flight controller and 23 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825ce-15fa6-16	1794009212366
 plan	flight-controller--learning-with-self-levelling--pick-angle-mode-and-throw	unsupported	5d1a2c53d4fbf00d
 step	0	unsupported	0	-	The driver can't arrange the flight controller, arrange the flight controller as fitted, arrange the flight mode and 20 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825ce-15fa6-17	1794009212366
 plan	communication--seeing-a-friend-who-flies-near-you--a-friend-joins-and-leaves	unsupported	0fadc15212835368
 step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the TX15 link as up, arrange the crowd and 21 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825ce-15fa6-18	1794009212366
 plan	communication--flying-near-a-crowd-of-planes--out-of-range-into-range-into-a-crowd	unsupported	a319dea9da560a20
 step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the TX15 link as up, arrange the crowd and 23 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825ce-15fa6-19	1794009212366
 plan	communication--losing-the-radio-link--the-link-drops	unsupported	7d257795ff5b5751
 step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the TX15 link as up, arrange the crowd and 22 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825ce-15fa6-1a	1794009212366
 plan	visualization--watching-a-flight-from-the-pilot-box--the-plane-takes-off-turns-and-goes-quiet	unsupported	9c1eb4dafd98f785
 step	0	unsupported	0	-	The driver can't arrange the plane in the view, arrange the plane in the view as missing, arrange the reported bank and 26 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825cf-15fa6-1b	1794009212367
 plan	aviation--checking-the-sticks-on-the-serial-line--centre-full-travel-half-travel-arm	unsupported	7b9cd58d55830480
 step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 arm switch as off and 54 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825cf-15fa6-1c	1794009212367
 plan	aviation--losing-the-tx15-and-getting-it-back--unplug-then-plug-in-again	unsupported	381d59da41e726c1
 step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 arm switch as off and 50 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825cf-15fa6-1d	1794009212367
 plan	aviation--commanding-the-plane-from-the-ground-station--hear-the-plane-follow-it-command-it-lose-it	unsupported	82c50fff0a10886e
 step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 arm switch as off and 55 more things yet.
 step	1	unsupported	0	-	-
@@ -193,6 +223,7 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825cf-15fa6-1e	1794009212367
 plan	aviation--reading-the-flight-display--from-prearm-to-rtl	unsupported	ededea8400d6e1c1
 step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 arm switch as off and 56 more things yet.
 step	1	unsupported	0	-	-
@@ -202,160 +233,171 @@ step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
 step	7	unsupported	0	-	-
-plan	cognition--watching-a-game-of-tag-by-plan--play-and-watch	passed	7c556781604610a0
-step	0	passed	1	screenshots/cognition--watching-a-game-of-tag-by-plan--play-and-watch/00.svg	-
-check	1	e:AGENT	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--watching-a-game-of-tag-by-plan--play-and-watch/01.svg	-
-check	1	n:0	-
-check	1	n:3	-
-check	1	n:0	-
-check	1	e:complete	-
-step	2	passed	1	screenshots/cognition--watching-a-game-of-tag-by-plan--play-and-watch/02.svg	-
-check	1	e:accepted	-
-check	1	n:600	-
-check	1	n:1	-
-check	1	e:go to	-
-step	3	passed	1	screenshots/cognition--watching-a-game-of-tag-by-plan--play-and-watch/03.svg	-
-check	1	n:10	-
-plan	cognition--sending-your-first-plan--send-a-plan	passed	bf6ed5ca5719d214
-step	0	passed	1	screenshots/cognition--sending-your-first-plan--send-a-plan/00.svg	-
-check	1	e:FBWA	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--sending-your-first-plan--send-a-plan/01.svg	-
-check	1	e:refused for the mode	-
-check	1	n:0	-
-step	2	passed	1	screenshots/cognition--sending-your-first-plan--send-a-plan/02.svg	-
-check	1	n:0	-
-check	1	e:none	-
-step	3	passed	1	screenshots/cognition--sending-your-first-plan--send-a-plan/03.svg	-
-check	1	e:accepted	-
-check	1	n:600	-
-check	1	n:1	-
-check	1	e:go to	-
-step	4	passed	1	screenshots/cognition--sending-your-first-plan--send-a-plan/04.svg	-
-check	1	e:refused as malformed	-
-check	1	n:1	-
-step	5	passed	1	screenshots/cognition--sending-your-first-plan--send-a-plan/05.svg	-
-check	1	n:2	-
-check	1	e:orbit	-
-check	1	e:accepted	-
-check	1	n:600	-
-plan	cognition--letting-a-plan-run-out--let-a-plan-run-out	failed	708698449e0970b8
-step	0	passed	1	screenshots/cognition--letting-a-plan-run-out--let-a-plan-run-out/00.svg	-
-check	1	e:AGENT	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--letting-a-plan-run-out--let-a-plan-run-out/01.svg	-
-check	1	e:accepted	-
-check	1	n:5	-
-check	1	n:1	-
-check	1	e:go to	-
-step	2	failed	1	screenshots/cognition--letting-a-plan-run-out--let-a-plan-run-out/02.svg	-
-check	0	e:recovery	-
-step	3	skipped	0	-	-
+run	1a1b34825cf-15fa6-1f	1794009212367
+plan	cognition--watching-a-game-of-tag-by-plan--play-and-watch	unsupported	7c556781604610a0
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+run	1a1b34825cf-15fa6-20	1794009212367
+plan	cognition--sending-your-first-plan--send-a-plan	unsupported	bf6ed5ca5719d214
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+run	1a1b34825cf-15fa6-21	1794009212367
+plan	cognition--letting-a-plan-run-out--let-a-plan-run-out	unsupported	708698449e0970b8
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+run	1a1b34825cf-15fa6-22	1794009212367
 plan	league--your-first-league-run--one-game-64-games-one-generation	unsupported	a9babce7b5a1bbd9
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that the arena plays 64 games with the default executor and 11 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
-plan	league--judging-a-towers-captain--one-game-a-fair-test-a-judgement	unsupported	556df9025b4558ff
+run	1a1b34825cf-15fa6-23	1794009212367
+plan	league--judging-a-towers-captain--one-game-a-fair-test-a-judgement	unsupported	7c360429fc4c4f5e
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 10 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
-plan	towers--arduplane--watching-two-computer-teams-play--play-and-watch	unsupported	3dbe8f261d9104a5
-step	0	unsupported	0	-	The driver can't make it happen that two computer teams play a game of Towers, observe the Red drones that the Blue seat saw, observe the commands that the drones refused and 5 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--your-first-tower--take-the-west-tower	unsupported	e8feb0d4343dfa29
-step	0	unsupported	0	-	The driver can't make it happen that the commander joins the game, make it happen that the commander selects the first Blue drone, make it happen that the commander sends the selected drone to the west tower and 7 more things yet.
+run	1a1b34825cf-15fa6-24	1794009212367
+plan	towers--your-first-tower--take-the-west-tower	unsupported	bb7bf23dd61fe6f3
+step	0	unsupported	0	-	The driver can't make it happen that the commander joins the game, make it happen that the commander selects the first Blue drone, make it happen that the commander sends the selected drone to the west tower and 16 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
-plan	towers--changing-your-mind--hold-then-home	unsupported	b16f1502a4735b98
-step	0	unsupported	0	-	The driver can't make it happen that the commander holds the selected drone, make it happen that the commander selects the first Blue drone, make it happen that the commander sends the selected drone home and 2 more things yet.
+run	1a1b34825cf-15fa6-25	1794009212367
+plan	towers--changing-your-mind--hold-then-home	unsupported	e78d735bdb45c8eb
+step	0	unsupported	0	-	The driver can't make it happen that the commander holds the selected drone, make it happen that the commander selects the first Blue drone, make it happen that the commander sends the selected drone home and 5 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
-plan	launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop	unsupported	a8349e8213283f24
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the flight controller choice as WITH ARDUPILOT, arrange the launch button and 23 more things yet.
-step	1	unsupported	0	-	-
-step	2	unsupported	0	-	-
-step	3	unsupported	0	-	-
-plan	launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot	unsupported	d983b7eb70bdd1a7
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the flight controller choice as WITH ARDUPILOT, arrange the launch button and 28 more things yet.
+run	1a1b34825cf-15fa6-26	1794009212367
+plan	towers--watch-your-drone-on-the-battlefield--follow-a-drone-to-the-west-tower	unsupported	7ef2853468fd3b86
+step	0	unsupported	0	-	The driver can't make it happen that the commander centres the battlefield on the selected drone, make it happen that the commander clicks the west tower on the minimap, make it happen that the commander joins the game and 20 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
-plan	launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer	unsupported	8a3cff3f73eeed31
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the flight controller choice as WITH ARDUPILOT, arrange the launch button and 26 more things yet.
+step	7	unsupported	0	-	-
+run	1a1b34825cf-15fa6-27	1794009212367
+plan	towers--circle-a-point-then-fly-a-route--a-circle-a-route-and-a-tower	unsupported	a93ff6d3fae1d7b7
+step	0	unsupported	0	-	The driver can't make it happen that the commander adds a point to the route of the selected drone, make it happen that the commander draws a circle of 120 m on the battlefield, make it happen that the commander joins the game and 16 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+step	7	unsupported	0	-	-
+step	8	unsupported	0	-	-
+run	1a1b34825cf-15fa6-28	1794009212367
+plan	launcher--your-first-flight-from-the-launcher--simulator-only-without-ardupilot-then-stop	unsupported	dd3db446184239f1
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 26 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+run	1a1b34825d0-15fa6-29	1794009212368
+plan	launcher--picking-what-to-launch--the-vtol-at-cypress-then-the-station-without-ardupilot	unsupported	2f62c44afcd5a0a5
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 31 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+run	1a1b34825d0-15fa6-2a	1794009212368
+plan	launcher--starting-a-game-of-towers--a-practice-game-then-a-game-against-the-computer	unsupported	5208f1164d638150
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 29 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+run	1a1b34825d0-15fa6-2b	1794009212368
 plan	launcher--setting-up-your-radio--set-up-the-controller-then-see-the-mapping	unsupported	7c4d63d47dbd48b8
 step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 24 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d0-15fa6-2c	1794009212368
+plan	gcs--flying--reaching	unsupported	c21b8e78f5b773f0
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 52 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+step	3	unsupported	0	-	-
+step	4	unsupported	0	-	-
+step	5	unsupported	0	-	-
+step	6	unsupported	0	-	-
+step	7	unsupported	0	-	-
+step	8	unsupported	0	-	-
+run	1a1b34825d0-15fa6-2d	1794009212368
 plan	sim--coverage--space-throws-the-plane	unsupported	cf372fe928f475d1
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d0-15fa6-2e	1794009212368
 plan	sim--coverage--a-pause-holds-the-plane-in-your-hand	unsupported	01955c625b453579
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d0-15fa6-2f	1794009212368
 plan	sim--coverage--a-throw-during-a-pause-waits-for-the-pause-to-end	unsupported	822f9bf6571ef68d
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d0-15fa6-30	1794009212368
 plan	sim--coverage--without-a-flight-controller-there-is-only-one-mode	unsupported	472dde23da798407
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d0-15fa6-31	1794009212368
 plan	sim--coverage--low-rates-for-gentle-flying	unsupported	bd6e0e2983c1108d
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d0-15fa6-32	1794009212368
 plan	sim--coverage--high-rates-for-tight-turns	unsupported	122729a18a7f4479
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d0-15fa6-33	1794009212368
 plan	sim--coverage--differential-thrust-off	unsupported	e67006c316565381
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d0-15fa6-34	1794009212368
 plan	sim--coverage--differential-thrust-on	unsupported	eda70a4850710d2b
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d1-15fa6-35	1794009212369
 plan	sim--coverage--auto-zoom-off	unsupported	6dfdcb713a6f70a1
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d1-15fa6-36	1794009212369
 plan	sim--coverage--auto-zoom-on	unsupported	b4c4b65915f9a823
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d1-15fa6-37	1794009212369
 plan	sim--coverage--h-again-hides-it	unsupported	899f4111d524be41
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d1-15fa6-38	1794009212369
 plan	sim--coverage--v-fits-a-fresh-battery	unsupported	4c9f4ffe44ae672d
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d1-15fa6-39	1794009212369
 plan	sim--recreation--coverage--the-key-of-the-game-stops-it	unsupported	2b9fbed4fe26cb80
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 49 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d1-15fa6-3a	1794009212369
 plan	sim--recreation--coverage--a-turn-inside-a-pylon-is-a-cut	unsupported	c70d26fbcf2ca702
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 54 more things yet.
 step	1	unsupported	0	-	-
@@ -363,6 +405,7 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825d1-15fa6-3b	1794009212369
 plan	sim--recreation--coverage--a-second-cut-disqualifies-you	unsupported	f5236c99d6ce067c
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 54 more things yet.
 step	1	unsupported	0	-	-
@@ -371,6 +414,7 @@ step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
 step	6	unsupported	0	-	-
+run	1a1b34825d1-15fa6-3c	1794009212369
 plan	sim--recreation--coverage--out-of-the-arena-you-are-it	unsupported	5335ba0ade31d730
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 52 more things yet.
 step	1	unsupported	0	-	-
@@ -378,780 +422,1292 @@ step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
 step	5	unsupported	0	-	-
+run	1a1b34825d1-15fa6-3d	1794009212369
 plan	sim--recreation--coverage--two-minutes-of-tag	unsupported	b81a6afd43e1f6b6
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 51 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825d1-15fa6-3e	1794009212369
 plan	gcs--coverage--plan-again-goes-back-to-panning	unsupported	4e34988ce70bc0be
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d2-15fa6-3f	1794009212370
 plan	gcs--coverage--goto-picks-the-fly-to-tool	unsupported	8764415f3dc6a255
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d2-15fa6-40	1794009212370
 plan	gcs--coverage--a-goto-click-flies-the-plane-there	unsupported	3b4761967f0f4322
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825d2-15fa6-41	1794009212370
 plan	gcs--planning--coverage--right-click-on-an-empty-plan-does-nothing	unsupported	edf597b3d83bf5a9
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d2-15fa6-42	1794009212370
 plan	gcs--planning--coverage--clear-empties-the-plan	unsupported	d8b2a53f8c34f326
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d2-15fa6-43	1794009212370
 plan	gcs--planning--coverage--alt-lowers-the-plan-altitude	unsupported	bca16b2a4db4382b
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d2-15fa6-44	1794009212370
 plan	gcs--planning--coverage--alt-stops-at-10-m	unsupported	78eaf7c8986d750e
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825d2-15fa6-45	1794009212370
 plan	gcs--planning--coverage--waypoints-already-planned-keep-their-altitude	unsupported	43186c52b3bfcae7
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d2-15fa6-46	1794009212370
 plan	gcs--planning--coverage--a-new-waypoint-needs-a-new-height-check	unsupported	7c55d92ce5bab083
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825d2-15fa6-47	1794009212370
 plan	gcs--planning--coverage--the-plan-has-only-one-takeoff	unsupported	b67fd6c4674ce97c
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d2-15fa6-48	1794009212370
 plan	gcs--planning--coverage--changing-a-command-keeps-the-item-in-its-place	unsupported	7481f15bf36e488f
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d2-15fa6-49	1794009212370
 plan	gcs--planning--coverage--changing-a-command-makes-the-vehicle-s-copy-out-of-date	unsupported	842aecb397a5e727
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825d2-15fa6-4a	1794009212370
 plan	gcs--planning--coverage--upload-does-not-send-an-empty-plan	unsupported	43709b134a712895
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d3-15fa6-4b	1794009212371
 plan	gcs--planning--coverage--changing-the-plan-makes-the-vehicle-s-copy-out-of-date	unsupported	6f2175d14a017e52
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825d3-15fa6-4c	1794009212371
 plan	gcs--planning--coverage--download-only-reads	unsupported	142bde7f5de32c29
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d3-15fa6-4d	1794009212371
 plan	gcs--planning--coverage--edit-brings-the-vehicle-s-mission-back-into-the-plan	unsupported	79003d0d52f4ca7e
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 50 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
 step	4	unsupported	0	-	-
+run	1a1b34825d3-15fa6-4e	1794009212371
 plan	gcs--planning--coverage--before-a-save-there-is-nothing-to-load	unsupported	f33980656166dd66
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d3-15fa6-4f	1794009212371
 plan	gcs--planning--coverage--measuring-between-two-points-shows-the-distance	unsupported	3a81e52c681b31f5
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d3-15fa6-50	1794009212371
 plan	gcs--flying--coverage--a-mission-that-ends-with-a-loiter-keeps-circling	unsupported	40b6d3f07558a41a
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d3-15fa6-51	1794009212371
 plan	gcs--flying--coverage--a-mission-that-ends-with-a-landing-lands	unsupported	d962328195aff166
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825d3-15fa6-52	1794009212371
 plan	gcs--flying--coverage--a-mission-that-ends-with-rtl-flies-home-in-auto	unsupported	0473f6b32a4ccbb2
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d3-15fa6-53	1794009212371
 plan	gcs--flying--coverage--disarming-outside-auto-restarts-the-mission	unsupported	40f9d05804c811eb
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 47 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d3-15fa6-54	1794009212371
 plan	gcs--flying--coverage--disarming-in-auto-keeps-the-plane-s-place	unsupported	3665630c96b64ab6
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d3-15fa6-55	1794009212371
 plan	gcs--coverage--auto-with-no-mission-asks-first	unsupported	1b4a13cc887ab911
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d3-15fa6-56	1794009212371
 plan	gcs--coverage--auto-twice-goes-anyway	unsupported	e578dc6e1be07e60
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d4-15fa6-57	1794009212372
 plan	gcs--radio--coverage--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	e0a3d31644234123
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d4-15fa6-58	1794009212372
 plan	gcs--radio-setup--coverage--f2-calibrates-the-radio	unsupported	32b7ea9294a581a3
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d4-15fa6-59	1794009212372
+plan	gcs--coverage--view-changes-to-the-battlefield	unsupported	f685291c18fb50cf
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d4-15fa6-5a	1794009212372
+plan	gcs--coverage--view-again-changes-back-to-the-screens	unsupported	c114bb7cec997c01
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 49 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d4-15fa6-5b	1794009212372
+plan	gcs--coverage--the-sim-renders-the-battlefield-in-3d	unsupported	4419ea4c11f30f2b
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d4-15fa6-5c	1794009212372
+plan	gcs--coverage--a-right-click-on-the-battlefield-flies-the-plane-there	unsupported	f4b75d1f6d0e1f52
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+run	1a1b34825d4-15fa6-5d	1794009212372
+plan	gcs--coverage--shift-and-a-right-click-add-a-waypoint-to-the-plan	unsupported	c9749906412baf84
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d4-15fa6-5e	1794009212372
+plan	gcs--coverage--circle-flies-the-plane-round-a-point-at-the-distance-that-you-drag	unsupported	9140d6b2891facbd
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 51 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+run	1a1b34825d4-15fa6-5f	1794009212372
 plan	flight-controller--coverage--acro-holds-the-attitude	unsupported	30dec6a35c86f4d2
 step	0	unsupported	0	-	The driver can't arrange the flight controller, arrange the flight controller as fitted, arrange the flight mode and 16 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d4-15fa6-60	1794009212372
 plan	flight-controller--coverage--manual-gives-you-the-control-surfaces	unsupported	a44dddb7c8acd695
 step	0	unsupported	0	-	The driver can't arrange the flight controller, arrange the flight controller as fitted, arrange the flight mode and 16 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
 step	3	unsupported	0	-	-
+run	1a1b34825d4-15fa6-61	1794009212372
 plan	communication--coverage--your-own-transmitter-is-not-another-plane	unsupported	667860b1fadd8934
 step	0	unsupported	0	-	The driver can't arrange the TX15 link, arrange the TX15 link as up, arrange the crowd and 16 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d4-15fa6-62	1794009212372
 plan	aviation--coverage--a-frame-with-a-wrong-checksum-does-nothing	unsupported	8ac7e43ceb1fcf73
 step	0	unsupported	0	-	The driver can't arrange the TX15, arrange the TX15 arm switch, arrange the TX15 arm switch as off and 47 more things yet.
 step	1	unsupported	0	-	-
-plan	cognition--coverage--a-repeated-plan-id-changes-nothing	failed	26f54fd08c587e9b
-step	0	passed	1	screenshots/cognition--coverage--a-repeated-plan-id-changes-nothing/00.svg	-
-check	1	e:AGENT	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--coverage--a-repeated-plan-id-changes-nothing/01.svg	-
-check	1	e:accepted	-
-check	1	n:600	-
-check	1	n:1	-
-check	1	e:go to	-
-step	2	failed	1	screenshots/cognition--coverage--a-repeated-plan-id-changes-nothing/02.svg	-
-check	1	e:accepted	-
-check	1	n:1	-
-check	0	e:orbit	-
+run	1a1b34825d4-15fa6-63	1794009212372
+plan	cognition--coverage--a-repeated-plan-id-changes-nothing	unsupported	26f54fd08c587e9b
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+run	1a1b34825d4-15fa6-64	1794009212372
+plan	cognition--coverage--a-standing-plan-takes-over-when-the-plans-stop	unsupported	cd0cf0082c3962ee
+step	0	unsupported	0	-	The driver can't make it happen that the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 30 seconds and observe the primitive that the plane flies yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-65	1794009212373
+plan	cognition--coverage--a-standing-plan-waits-for-its-time	unsupported	0d6eda51dbc6fa99
+step	0	unsupported	0	-	The driver can't make it happen that the ground sends a go-to plan and a standing orbit plan for 20 s, and the plane flies on for 10 seconds and observe the primitive that the plane flies yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-66	1794009212373
+plan	cognition--coverage--a-new-plan-starts-the-time-again	unsupported	5b04633cc46f6103
+step	0	unsupported	0	-	The driver can't make it happen that the ground sends a go-to plan and a standing orbit plan for 20 s, and again a go-to plan after 15 seconds, and the plane flies on for 15 seconds and observe the primitive that the plane flies yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-67	1794009212373
+plan	cognition--coverage--a-new-plan-replaces-a-standing-plan-that-took-over	unsupported	b137f8a6c61aee76
+step	0	unsupported	0	-	The driver can't make it happen that the ground sends a go-to plan and a standing orbit plan for 20 s, and a go-to plan after 30 seconds and observe the primitive that the plane flies yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-68	1794009212373
 plan	cognition--coverage--go-to-flies-over-the-point-then-circles-it	unsupported	3af74f6cb021b0e5
 step	0	unsupported	0	-	The driver can't make it happen that the plane flies on for 2 minutes, observe the closest approach to the point, observe the greatest distance from the point in the last minute and 2 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d5-15fa6-69	1794009212373
 plan	cognition--coverage--orbit-holds-its-radius-and-its-height	unsupported	b5e91dd9ce9ba699
 step	0	unsupported	0	-	The driver can't make it happen that the plane flies on for 2 minutes, observe the greatest distance from the point in the last minute, observe the highest height in the last minute and 2 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
-plan	cognition--coverage--a-band-plan-holds-a-height-band	passed	8975ecbcc46e96a1
-step	0	passed	1	screenshots/cognition--coverage--a-band-plan-holds-a-height-band/00.svg	-
-check	1	e:AGENT	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--coverage--a-band-plan-holds-a-height-band/01.svg	-
-check	1	e:accepted	-
-check	1	n:600	-
-check	1	n:1	-
-check	1	e:band	-
+run	1a1b34825d5-15fa6-6a	1794009212373
+plan	cognition--coverage--a-band-plan-holds-a-height-band	unsupported	8975ecbcc46e96a1
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-6b	1794009212373
 plan	cognition--coverage--band-keeps-the-plane-between-its-two-heights	unsupported	ce8063e23f905273
 step	0	unsupported	0	-	The driver can't make it happen that the plane flies on for 2 minutes, observe the farthest distance from the arena centre, observe the highest height in the last minute and 1 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
-plan	cognition--coverage--a-loiter-plan-circles-where-the-plane-is	passed	ed18f731c0ff1083
-step	0	passed	1	screenshots/cognition--coverage--a-loiter-plan-circles-where-the-plane-is/00.svg	-
-check	1	e:AGENT	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--coverage--a-loiter-plan-circles-where-the-plane-is/01.svg	-
-check	1	e:accepted	-
-check	1	n:600	-
-check	1	n:1	-
-check	1	e:loiter	-
+run	1a1b34825d5-15fa6-6c	1794009212373
+plan	cognition--coverage--a-loiter-plan-circles-where-the-plane-is	unsupported	ed18f731c0ff1083
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-6d	1794009212373
 plan	cognition--coverage--loiter-stays-round-the-place-where-it-began	unsupported	74e2c5e0b72237d6
 step	0	unsupported	0	-	The driver can't make it happen that the plane flies on for 2 minutes, observe the greatest distance from the point in the last minute and observe the least distance from the point in the last minute yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d5-15fa6-6e	1794009212373
 plan	cognition--coverage--a-pursue-plan-chases-another-aircraft	unsupported	9e2a79cc667ab9c1
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as round the arena, make it happen that the ground sends a pursue plan and 1 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-6f	1794009212373
 plan	cognition--coverage--pursue-closes-on-the-target-and-stays-on-its-tail	unsupported	81209d9657aec692
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as round the arena, make it happen that the ground sends a pursue plan and 4 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d5-15fa6-70	1794009212373
 plan	cognition--coverage--an-evade-plan-breaks-away-from-another-aircraft	unsupported	14896281915c9d77
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as after your plane, make it happen that the ground sends an evade plan and 1 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-71	1794009212373
 plan	cognition--coverage--evade-opens-the-distance-from-a-chaser	unsupported	09c17e64a1972183
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as after your plane, make it happen that the ground sends an evade plan and 2 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d5-15fa6-72	1794009212373
 plan	cognition--coverage--a-target-that-goes-silent-ends-the-chase	unsupported	af64f79db880be08
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as round the arena, make it happen that the ground sends a pursue plan and 2 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d5-15fa6-73	1794009212373
 plan	cognition--coverage--the-envelope-leaves-a-safe-plan-alone	unsupported	c2f59df9e3ebdaae
 step	0	unsupported	0	-	The driver can't make it happen that the plane flies on for 10 minutes and observe the interventions in the last minute yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d5-15fa6-74	1794009212373
 plan	cognition--coverage--the-plane-stays-inside-the-fence	unsupported	640c0eb9f7e375ba
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 4 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-75	1794009212373
 plan	cognition--coverage--the-plane-stays-above-the-floor	unsupported	b6b51cef447487a4
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 4 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-76	1794009212373
 plan	cognition--coverage--the-plane-stays-below-the-ceiling	unsupported	49c7ee3b7d3d07de
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 4 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-77	1794009212373
 plan	cognition--coverage--under-the-stall-margin-the-plane-gets-its-airspeed-back-first	unsupported	954dfaa477028a8f
 step	0	unsupported	0	-	The driver can't arrange the start, arrange the start as a slow climb, observe the start and 1 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-78	1794009212373
 plan	cognition--coverage--after-a-recovery-the-plane-flies-on	unsupported	92602a873f598425
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 5 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-79	1794009212373
 plan	cognition--coverage--the-plane-keeps-clear-of-an-aircraft-that-crosses-its-path	unsupported	d45e14fc30704808
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as across your path, observe the closest distance to the other aircraft and 1 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-7a	1794009212373
 plan	cognition--coverage--bad-input-gives-wings-level-and-the-throttle-to-the-pilot	unsupported	d615e6c35210fd1a
 step	0	unsupported	0	-	The driver can't make it happen that the plane loses its position estimate and observe the throttle of the plane yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-7b	1794009212373
 plan	cognition--coverage--the-plane-flies-again-when-the-position-estimate-comes-back	unsupported	fc6739b5117ffc76
 step	0	unsupported	0	-	The driver can't arrange the reported fallback as bad input, make it happen that the plane gets its position estimate back and observe the throttle of the plane yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-7c	1794009212373
 plan	cognition--coverage--with-space-to-turn-planes-on-plans-keep-their-separation	unsupported	e91a03a3c8165a1f
 step	0	unsupported	0	-	The driver can't arrange the fence radius as 300, arrange the separation limit as 8, make it happen that three planes fly random plans for 20 minutes and 1 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-7d	1794009212373
 plan	cognition--coverage--in-a-small-fence-the-fence-wins-over-the-separation	unsupported	bb05df3a35e5fad5
 step	0	unsupported	0	-	The driver can't arrange the separation limit as 8, make it happen that three planes fly random plans for 20 minutes, observe the farthest distance from the arena centre and 1 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d5-15fa6-7e	1794009212373
 plan	cognition--coverage--the-plane-that-is-it-pursues-the-plane-it-can-catch-soonest	unsupported	d8b046b2796bb413
 step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the chaser Kestrel as behind Merlin and ahead of Swift, make it happen that the ground control agent decides and 2 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-7f	1794009212374
 plan	cognition--coverage--a-plane-that-is-not-it-holds-its-own-height-band	unsupported	e8bff43eb25259b8
 step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the chaser Kestrel as far from the others, make it happen that the ground control agent decides and 5 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-80	1794009212374
 plan	cognition--coverage--a-plane-that-is-not-it-breaks-away-from-a-chaser-that-comes-near	unsupported	f1a93eb471f9d6ca
 step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the chaser Kestrel as near Merlin, make it happen that the ground control agent decides and 4 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-81	1794009212374
 plan	league--coverage--the-same-seed-plays-the-same-game	unsupported	728825229b8aefb6
 step	0	unsupported	0	-	The driver can't make it happen that the arena plays the same seed twice and observe the two games yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-82	1794009212374
 plan	league--coverage--a-challenger-that-scores-better-on-the-same-seeds-becomes-the-champion	unsupported	c39c0a03904ce892
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger as the default executor, arrange the champion and 10 more things yet.
 step	1	unsupported	0	-	-
 step	2	unsupported	0	-	-
+run	1a1b34825d6-15fa6-83	1794009212374
 plan	league--coverage--a-challenger-that-scores-worse-stays-out	unsupported	964e21de8c29018f
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger as the slow executor, arrange the champion and 5 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-84	1794009212374
 plan	league--coverage--a-challenger-that-crashes-stays-out-whatever-it-scores	unsupported	79c305f365c37b82
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger as the default executor, arrange the champion and 9 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-85	1794009212374
 plan	league--coverage--the-evolution-strategy-improves-on-a-slow-start	unsupported	37542a9e0d5c7e59
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as started from the slow executor, make it happen that the league runs 5 generations with the evolution strategy and 2 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-86	1794009212374
 plan	league--coverage--a-challenger-whose-tests-fail-stays-out	unsupported	db61969fcf2ec70a
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that a Claude strategy gives a challenger whose tests fail and 3 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-87	1794009212374
 plan	league--coverage--a-challenger-that-changes-the-envelope-stays-out	unsupported	406ba3bacedeeafa
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that a Claude strategy gives a challenger that changes the envelope and 3 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-88	1794009212374
+plan	league--coverage--a-claude-run-that-does-not-stop-in-time-is-stopped	unsupported	22123ef70fb66175
+step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that a Claude strategy is still working when its time is up and 3 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-89	1794009212374
+plan	league--coverage--each-claude-run-is-written-down	unsupported	c069a66b155a9ec8
+step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that a Claude strategy gives new numbers and 2 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-8a	1794009212374
 plan	league--coverage--a-captain-that-is-worse-stays-out	unsupported	0ffbef3b5235ac15
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the timid captain, arrange the champion captain and 5 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-8b	1794009212374
 plan	league--coverage--a-captain-changed-in-code-plays-with-its-own-code	unsupported	a9566ea549f0c1d0
 step	0	unsupported	0	-	The driver can't make it happen that a Claude strategy gives a captain whose code sends every drone home, observe the mean difference of the captain challenger and observe the verdict yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-8c	1794009212374
 plan	league--coverage--a-captain-that-changes-the-referee-stays-out	unsupported	7f704fa9c5b1894e
 step	0	unsupported	0	-	The driver can't make it happen that a Claude strategy gives a captain that changes the referee, observe the reason and observe the verdict yet.
 step	1	unsupported	0	-	-
-plan	towers--coverage--low-makes-the-selected-drone-fly-low	unsupported	ed11daa19ef64bf7
-step	0	unsupported	0	-	The driver can't arrange the flight of the first Blue drone, arrange the flight of the first Blue drone as high, arrange the selected drone and 4 more things yet.
+run	1a1b34825d6-15fa6-8d	1794009212374
+plan	towers--coverage--low-makes-the-selected-drone-fly-low	unsupported	ed00dca19ee7dc2a
+step	0	unsupported	0	-	The driver can't arrange the flight of the first Blue drone, arrange the flight of the first Blue drone as high, arrange the selected drone and 7 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-8e	1794009212374
 plan	towers--coverage--a-drone-that-flies-low-along-the-lanes-takes-a-tower	unsupported	54f6a7dbd301a63b
 step	0	unsupported	0	-	The driver can't arrange the flight of the first Blue drone, arrange the flight of the first Blue drone as low, arrange the order of the first Blue drone and 5 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-8f	1794009212374
+plan	towers--coverage--the-battlefield-shows-the-valley-in-3d	unsupported	79a8208e5e9d8709
+step	0	unsupported	0	-	The driver can't make it happen that the commander waits for the battlefield and observe the battlefield picture in the app yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-90	1794009212374
+plan	towers--coverage--the-keys-move-the-camera-across-the-field	unsupported	64e32abe1d530544
+step	0	unsupported	0	-	The driver can't arrange the point of the battlefield camera, arrange the point of the battlefield camera as the Blue base, make it happen that the commander pans the battlefield to the front and 2 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-91	1794009212374
+plan	towers--coverage--the-mouse-at-the-edge-of-the-battlefield-moves-the-camera	unsupported	8422991b9bf9574b
+step	0	unsupported	0	-	The driver can't arrange the point of the battlefield camera, arrange the point of the battlefield camera as the Blue base, make it happen that the commander moves the mouse to the top edge of the battlefield and 2 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-92	1794009212374
+plan	towers--coverage--the-mouse-wheel-moves-the-camera-nearer-to-the-ground	unsupported	3e446d0b0ae42327
+step	0	unsupported	0	-	The driver can't arrange the height of the battlefield camera, arrange the height of the battlefield camera as 600, make it happen that the commander zooms the battlefield in and 1 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-93	1794009212374
+plan	towers--coverage--with-no-drone-selected-there-is-no-unit-panel	unsupported	7e63da33461c414d
+step	0	unsupported	0	-	The driver can't arrange the selected drone, arrange the selected drone as none, observe the picture in the portrait and 2 more things yet.
+run	1a1b34825d6-15fa6-94	1794009212374
+plan	towers--coverage--the-portrait-shows-the-camera-of-the-selected-drone	unsupported	8a113a96392b8e78
+step	0	unsupported	0	-	The driver can't arrange the selected drone, arrange the selected drone as the first Blue drone, make it happen that the commander waits for the cameras and 6 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-95	1794009212374
 plan	towers--coverage--a-click-on-a-camera-selects-its-drone	unsupported	0c5d43fa82e53554
 step	0	unsupported	0	-	The driver can't make it happen that the commander clicks the camera of the second Blue drone and observe the selected drone yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--one-drone-moves-the-control-5-each-second	unsupported	0844e61989c1ea5c
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-96	1794009212374
 plan	towers--rules--coverage--one-drone-takes-a-neutral-tower-in-20-seconds	unsupported	84105e8f2e7ac71d
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--two-drones-take-a-tower-in-half-the-time	unsupported	ff3c2a57067dc455
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 2, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-drone-on-the-ground-does-not-count	unsupported	c78e8d228b510084
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--the-same-number-of-drones-from-each-team-stops-the-control	unsupported	edee7d39ea66b84f
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 44 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--the-team-with-more-drones-moves-the-control-by-the-difference	unsupported	19eefc566ab55990
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 2, arrange the Blue drones on the ground in the west circle and 44 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--an-empty-circle-keeps-its-control	unsupported	fe8568ab730da1dd
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 44 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-team-keeps-a-tower-while-the-control-is-on-its-side	unsupported	7bf9ae7c5526a615
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-held-tower-becomes-neutral-when-its-control-gets-back-to-0	unsupported	d50766b11bfee7a2
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--each-tower-that-a-team-holds-gives-one-point-each-second	unsupported	ce81d2aedfce86af
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--the-first-team-to-500-points-wins	unsupported	ece37760e0b884f8
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--when-the-clock-gets-to-0-the-team-with-more-points-wins	unsupported	f01909a308d1a6c4
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--equal-points-when-the-clock-gets-to-0-is-a-draw	unsupported	3a95852946fe07b7
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-game-that-has-stopped-does-not-change	unsupported	0158008691069281
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-team-sees-an-enemy-drone-near-one-of-its-drones	unsupported	cb3c457496921d92
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 44 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-team-sees-an-enemy-drone-near-a-tower-that-it-holds	unsupported	1e668a2da7ebcacc
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 44 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-team-does-not-see-an-enemy-drone-in-the-fog	unsupported	5f29df320c8e271d
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 44 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it	unsupported	c4cdcb6141686937
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 45 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-tower-in-the-fog-shows-the-side-it-had-when-the-team-last-saw-it	unsupported	a4a9891a0a6d52fd
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-team-sees-the-side-of-a-tower-again-when-its-drone-comes-near	unsupported	6e7ef21687e5c725
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 43 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--at-the-start-the-commander-sends-a-drone-to-each-neutral-tower	unsupported	374e490157287edd
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 46 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--the-commander-defends-a-tower-that-an-enemy-drone-comes-near	unsupported	57f2a0d56ccc2be0
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 44 more things yet.
-step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-drone-that-is-behind-at-a-contested-tower-goes-somewhere-else	unsupported	4fedbd00e939a546
 step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 46 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--the-trees-hide-a-drone-that-flies-low	unsupported	911db3475cf14a6c
+run	1a1b34825d6-15fa6-97	1794009212374
+plan	towers--rules--coverage--a-game-that-has-stopped-does-not-change	unsupported	0158008691069281
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 46 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-98	1794009212374
+plan	towers--rules--coverage--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it	unsupported	c4ca65614165860e
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-99	1794009212374
+plan	towers--rules--coverage--a-tower-in-the-fog-shows-the-side-it-had-when-the-team-last-saw-it	unsupported	a4a9891a0a6d52fd
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 46 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-9a	1794009212374
+plan	towers--rules--coverage--a-team-sees-the-side-of-a-tower-again-when-its-drone-comes-near	unsupported	6e7ef21687e5c725
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 46 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-9b	1794009212374
+plan	towers--rules--coverage--a-drone-that-is-behind-at-a-contested-tower-goes-somewhere-else	unsupported	4fedbd00e939a546
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 49 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-9c	1794009212374
+plan	towers--rules--coverage--the-commander-does-not-keep-a-drone-at-a-tower-that-the-enemy-holds-with-two-drones	unsupported	853440fce9dc9e64
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 52 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d6-15fa6-9d	1794009212374
+plan	towers--rules--coverage--the-commander-sends-a-drone-with-a-low-battery-home	unsupported	79823bcc475af270
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 61 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d7-15fa6-9e	1794009212375
+plan	towers--rules--coverage--a-drone-that-flies-high-goes-straight-over-the-forest	unsupported	3238bec8fe1f23db
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 56 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d7-15fa6-9f	1794009212375
+plan	towers--rules--coverage--a-drone-that-flies-low-goes-along-the-lanes	unsupported	4625e2918bc43ab0
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 56 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d7-15fa6-a0	1794009212375
+plan	towers--rules--coverage--a-drone-that-flies-low-to-the-forest-climbs-to-circle	unsupported	88926de899f1c046
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 56 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d7-15fa6-a1	1794009212375
+plan	towers--rules--coverage--a-tower-that-nobody-holds-blocks-no-radio	unsupported	c1fd82a6918a7045
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 56 more things yet.
+run	1a1b34825d7-15fa6-a2	1794009212375
+plan	towers--rules--coverage--a-drone-that-leaves-the-radio-shadow-is-in-contact-again	unsupported	fb4076846d34fca6
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 58 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d7-15fa6-a3	1794009212375
+plan	towers--rules--coverage--the-computer-commander-gives-no-order-to-a-drone-out-of-contact	unsupported	356fc1e90ed7807b
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 60 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d7-15fa6-a4	1794009212375
+plan	towers--rules--coverage--the-filter-of-the-link-passes-the-frames-of-a-drone-in-contact	unsupported	0a916036e0ec3bdf
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 67 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+run	1a1b34825d7-15fa6-a5	1794009212375
+plan	towers--rules--coverage--the-filter-of-the-link-passes-the-frames-of-a-drone-that-a-friend-relays	unsupported	1e0c64c28fbd61ce
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 60 more things yet.
+run	1a1b34825d7-15fa6-a6	1794009212375
+plan	towers--rules--coverage--a-drone-that-is-sent-into-the-mountains-flies-to-the-foot-of-them	unsupported	5615e35d736ab28a
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 55 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d8-15fa6-a7	1794009212376
+plan	towers--rules--coverage--a-drone-out-of-contact-keeps-its-order-until-the-standing-order-is-due	unsupported	e2a6736c9ba145d3
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 64 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d8-15fa6-a8	1794009212376
+plan	towers--rules--coverage--a-drone-with-no-standing-order-flies-home-when-its-link-is-lost	unsupported	e0ff9872fd7d622d
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 64 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d8-15fa6-a9	1794009212376
+plan	towers--rules--coverage--a-drone-with-a-standing-order-does-not-fly-home-when-its-link-is-lost	unsupported	1ddd0c7859efe5c8
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 64 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d8-15fa6-aa	1794009212376
+plan	towers--rules--coverage--a-new-order-replaces-the-standing-order	unsupported	3f84dd2f6a4b0ee8
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 56 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d8-15fa6-ab	1794009212376
+plan	towers--rules--coverage--a-drone-with-no-standing-order-flies-home-when-its-battery-is-low	unsupported	ed298021602a457a
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 70 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d8-15fa6-ac	1794009212376
+plan	towers--rules--coverage--a-standing-order-replaces-the-flight-home-at-a-low-battery	unsupported	4dd3d0637436cd2d
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 70 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d8-15fa6-ad	1794009212376
+plan	towers--rules--coverage--a-fort-blocks-the-radio-160-m-round-it	unsupported	8f953477d645dd40
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+run	1a1b34825d8-15fa6-ae	1794009212376
+plan	towers--rules--coverage--a-fort-does-not-block-the-radio-more-than-160-m-away	unsupported	a6818c29203d2b50
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+run	1a1b34825d8-15fa6-af	1794009212376
+plan	towers--rules--coverage--the-spire-blocks-the-radio-200-m-round-it	unsupported	39939c74e4774229
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+run	1a1b34825d9-15fa6-b0	1794009212377
+plan	towers--rules--coverage--the-spire-does-not-block-the-radio-more-than-200-m-away	unsupported	a5dbb90c9d632dca
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+run	1a1b34825d9-15fa6-b1	1794009212377
+plan	towers--rules--coverage--a-depot-blocks-the-radio-120-m-round-it	unsupported	3d87b6dc25418aed
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 52 more things yet.
+run	1a1b34825d9-15fa6-b2	1794009212377
+plan	towers--rules--coverage--a-depot-does-not-block-the-radio-more-than-120-m-away	unsupported	70560ed314e5586d
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 52 more things yet.
+run	1a1b34825d9-15fa6-b3	1794009212377
+plan	towers--rules--coverage--a-drone-that-is-down-is-back-at-its-base-with-a-full-battery-100-s-later	unsupported	7d6dd540b692285c
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 60 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d9-15fa6-b4	1794009212377
+plan	towers--rules--coverage--the-map-keeps-the-battery-that-a-drone-out-of-contact-last-reported	unsupported	dd22b23b393747b5
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 65 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d9-15fa6-b5	1794009212377
+plan	towers--rules--coverage--a-friend-that-is-in-a-shadow-itself-does-not-relay	unsupported	c44d8bacb428247c
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+run	1a1b34825d9-15fa6-b6	1794009212377
+plan	towers--rules--coverage--a-friend-more-than-70-m-away-does-not-relay	unsupported	7e507d2da2c55c7b
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+run	1a1b34825d9-15fa6-b7	1794009212377
+plan	towers--rules--coverage--the-advisor-is-quiet-when-nothing-matters	unsupported	0b1c4792dcec4168
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 51 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825d9-15fa6-b8	1794009212377
+plan	towers--rules--coverage--the-advisor-warns-of-an-enemy-drone-near-a-tower-that-the-team-holds	unsupported	5caed01a56e7fea6
 step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-drone-above-the-trees-is-seen-over-the-forest	unsupported	b92cd9bb171bbe6d
+run	1a1b34825d9-15fa6-b9	1794009212377
+plan	towers--rules--coverage--the-advisor-says-a-danger-one-time	unsupported	689cee2c4cb5e15f
 step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-team-sees-a-low-drone-along-the-lane	unsupported	c1da0c231eafdce7
+run	1a1b34825d9-15fa6-ba	1794009212377
+plan	towers--rules--coverage--the-advisor-says-a-danger-again-after-30-seconds	unsupported	a88b870b76418a70
 step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-team-sees-a-low-drone-across-the-lake	unsupported	34fe044f41dc74c2
+run	1a1b34825da-15fa6-bb	1794009212378
+plan	towers--rules--coverage--the-advisor-tells-the-team-that-it-lost-a-tower	unsupported	b5c678b946157a38
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825da-15fa6-bc	1794009212378
+plan	towers--rules--coverage--the-advisor-tells-the-team-that-a-drone-is-down	unsupported	f3607ca434ad4854
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 60 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825da-15fa6-bd	1794009212378
+plan	towers--rules--coverage--the-advisor-tells-a-team-that-is-behind-when-the-clock-runs-out	unsupported	1eb1cb311b6d5c78
 step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-drone-that-flies-high-goes-straight-over-the-forest	unsupported	3242f0c8fe27cd56
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 48 more things yet.
+run	1a1b34825da-15fa6-be	1794009212378
+plan	towers--rules--coverage--the-advisor-does-not-tell-a-team-that-is-ahead-when-the-clock-runs-out	unsupported	531f4d11dfbb71d0
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-drone-that-flies-low-goes-along-the-lanes	unsupported	4636e0918bd2aa7d
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 48 more things yet.
+run	1a1b34825da-15fa6-bf	1794009212378
+plan	towers--rules--coverage--a-drone-out-of-contact-sees-the-enemy-drones-near-it	unsupported	97c401953d94b507
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 55 more things yet.
+run	1a1b34825da-15fa6-c0	1794009212378
+plan	towers--rules--coverage--a-drone-does-not-see-an-enemy-drone-that-is-far	unsupported	f7a5a75c27223b5f
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 54 more things yet.
+run	1a1b34825da-15fa6-c1	1794009212378
+plan	towers--rules--coverage--a-drone-sees-who-holds-the-tower-in-its-camera	unsupported	59aecf59953e376c
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Blue drones on the ground in the west circle and 49 more things yet.
+run	1a1b34825da-15fa6-c2	1794009212378
+plan	towers--rules--coverage--the-valley-has-five-towers	unsupported	ea80a0fee7db6736
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 53 more things yet.
+run	1a1b34825da-15fa6-c3	1794009212378
+plan	towers--rules--coverage--the-chain-has-eleven-towers	unsupported	5fbad4c9534a8471
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 54 more things yet.
+run	1a1b34825da-15fa6-c4	1794009212378
+plan	towers--rules--coverage--one-drone-takes-an-outpost-in-25-seconds	unsupported	94ae716d2bb78fdf
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the Blue west outpost circle, arrange the Blue drones in the Blue west outpost circle as 1, arrange the Blue drones in the west circle and 58 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--coverage--a-drone-that-flies-low-to-the-forest-climbs-to-circle	unsupported	88883be899e916cb
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 48 more things yet.
+run	1a1b34825da-15fa6-c5	1794009212378
+plan	towers--rules--coverage--the-team-is-less-sure-of-a-drone-that-it-cannot-see	unsupported	0ae657700d739b9a
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 50 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825da-15fa6-c6	1794009212378
+plan	launcher--coverage--with-ardupilot-picks-the-flight-controller	unsupported	288060eb76d4d91f
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 22 more things yet.
+step	1	unsupported	0	-	-
+step	2	unsupported	0	-	-
+run	1a1b34825db-15fa6-c7	1794009212379
 plan	launcher--coverage--launch-starts-the-station-with-ardupilot	unsupported	46597d8fd5201103
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the flight controller choice as WITH ARDUPILOT, arrange the launch button and 20 more things yet.
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 23 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-c8	1794009212379
 plan	launcher--coverage--render-docs-writes-the-manual	unsupported	01a0fe98630bf66b
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the flight controller choice as WITH ARDUPILOT, arrange the launch button and 19 more things yet.
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 22 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-c9	1794009212379
 plan	sim--state--chase-follows-the-plane	unsupported	96fa0dbb0321b11f
 step	0	unsupported	0	-	The driver can't arrange auto-zoom, arrange auto-zoom as on, arrange differential thrust and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-ca	1794009212379
 plan	gcs--state--tkof-puts-a-takeoff-first	unsupported	e5fd87daec189aa5
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-cb	1794009212379
 plan	gcs--state--rtl-ends-the-plan-with-a-return	unsupported	d717b9af2813d391
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-cc	1794009212379
 plan	gcs--state--measuring-between-two-points-shows-the-distance	unsupported	eb0586dbbe69f5d3
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-cd	1794009212379
 plan	gcs--state--arming-sets-home	unsupported	23be1b8129217fb6
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-ce	1794009212379
 plan	gcs--state--qland-brings-the-plane-straight-down	unsupported	08c4013d7e410aca
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-cf	1794009212379
 plan	gcs--state--cruise-changes-a-hover-into-forward-flight	unsupported	a2f39194a967d107
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 51 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-d0	1794009212379
 plan	gcs--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	83fb458acedfe69b
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 50 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-d1	1794009212379
 plan	gcs--state--the-mode-switch-picks-the-mode	unsupported	601b78cb5d4995b5
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-d2	1794009212379
 plan	gcs--state--a-race-starts-with-every-plane-on-the-ground	unsupported	9045c4bf7cc56d3c
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825db-15fa6-d3	1794009212379
 plan	gcs--state--the-screen-shows-that-the-plane-is-armed	unsupported	3ca610b8b773b937
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the arm switch and 55 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-d4	1794009212380
 plan	gcs--planning--state--rtl-ends-the-plan-with-a-return	unsupported	87acc97e05898b6f
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-d5	1794009212380
 plan	gcs--planning--state--arming-sets-home	unsupported	d6a9176897904e38
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-d6	1794009212380
 plan	gcs--planning--state--auto-twice-goes-anyway	unsupported	62bac3377b6760d2
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-d7	1794009212380
 plan	gcs--planning--state--qland-brings-the-plane-straight-down	unsupported	20962f883f809780
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-d8	1794009212380
 plan	gcs--planning--state--cruise-changes-a-hover-into-forward-flight	unsupported	3d22db2a514830cd
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 51 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-d9	1794009212380
 plan	gcs--planning--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	ddf267da6a69eb4d
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 50 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-da	1794009212380
 plan	gcs--planning--state--the-mode-switch-picks-the-mode	unsupported	1be17b3ef6b76c3f
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-db	1794009212380
 plan	gcs--planning--state--f2-calibrates-the-radio	unsupported	1eadd55a9be930c9
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-dc	1794009212380
 plan	gcs--planning--state--a-race-starts-with-every-plane-on-the-ground	unsupported	371241b9e9b17b7c
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-dd	1794009212380
 plan	gcs--planning--state--the-screen-shows-that-the-plane-is-armed	unsupported	e709175a42736585
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the arm switch and 55 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-de	1794009212380
+plan	gcs--planning--state--view-changes-to-the-battlefield	unsupported	dcb9c02c6f5746c1
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825dc-15fa6-df	1794009212380
+plan	gcs--planning--state--view-again-changes-back-to-the-screens	unsupported	3dd955f0f21fa487
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 49 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e0	1794009212381
+plan	gcs--planning--state--the-sim-renders-the-battlefield-in-3d	unsupported	bde9f7b472da4f71
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e1	1794009212381
+plan	gcs--planning--state--shift-and-a-right-click-add-a-waypoint-to-the-plan	unsupported	6ea11bffaa268340
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e2	1794009212381
 plan	gcs--flying--state--plan-picks-the-planning-tool	unsupported	c65944aed0f05e15
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e3	1794009212381
 plan	gcs--flying--state--goto-picks-the-fly-to-tool	unsupported	db1be3cc762701e9
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e4	1794009212381
 plan	gcs--flying--state--waypoints-already-planned-keep-their-altitude	unsupported	e30072914a197b91
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e5	1794009212381
 plan	gcs--flying--state--a-height-check-raises-waypoints-above-the-terrain	unsupported	ec19e75ede2d6112
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e6	1794009212381
 plan	gcs--flying--state--tkof-puts-a-takeoff-first	unsupported	f3521a3da28b0393
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e7	1794009212381
 plan	gcs--flying--state--saving-keeps-the-plan-in-a-file	unsupported	c694f1e0fecc71e7
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e8	1794009212381
 plan	gcs--flying--state--measuring-between-two-points-shows-the-distance	unsupported	711282e08922ed81
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 46 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-e9	1794009212381
 plan	gcs--flying--state--qland-brings-the-plane-straight-down	unsupported	709b7cf8cb0ef1ba
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the flight and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-ea	1794009212381
 plan	gcs--flying--state--cruise-changes-a-hover-into-forward-flight	unsupported	d92729c2e4bc65b7
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the flight and 51 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825dd-15fa6-eb	1794009212381
 plan	gcs--flying--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	6b53137d2a8b4477
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the flight and 50 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-ec	1794009212382
 plan	gcs--flying--state--taking-the-arm-switch-down-disarms-the-vehicle	unsupported	37ff52bf1321253f
 step	0	unsupported	0	-	The driver can't arrange the arm switch, arrange the arm switch as on, arrange the autopilot mode and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-ed	1794009212382
 plan	gcs--flying--state--qhover-is-a-hover-mode	unsupported	86cff897d71ecd24
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the flight and 55 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-ee	1794009212382
 plan	gcs--flying--state--cruise-changes-a-hover-into-forward-flight-with-the-radio	unsupported	e6bf2e680226b185
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the flight and 55 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-ef	1794009212382
 plan	gcs--flying--state--f2-calibrates-the-radio	unsupported	84bbecaa7464729d
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f0	1794009212382
 plan	gcs--flying--state--a-race-starts-with-every-plane-on-the-ground	unsupported	452ebd9226a3d744
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the game clock and 48 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f1	1794009212382
+plan	gcs--flying--state--view-changes-to-the-battlefield	unsupported	1353a12460a1419b
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f2	1794009212382
+plan	gcs--flying--state--view-again-changes-back-to-the-screens	unsupported	5e6fdf9c2b3bb46b
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the console view and 49 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f3	1794009212382
+plan	gcs--flying--state--the-sim-renders-the-battlefield-in-3d	unsupported	8b567697db1d654d
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the console view and 50 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f4	1794009212382
+plan	gcs--flying--state--a-right-click-on-the-battlefield-flies-the-plane-there	unsupported	481918bc5b659c9c
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as AUTO, arrange the console view and 49 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f5	1794009212382
 plan	gcs--vtol--state--plan-picks-the-planning-tool	unsupported	5c1ddeff280bf9b4
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f6	1794009212382
 plan	gcs--vtol--state--goto-picks-the-fly-to-tool	unsupported	df7b30533e16d700
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825de-15fa6-f7	1794009212382
 plan	gcs--vtol--state--tkof-puts-a-takeoff-first	unsupported	ce73a65db34bd8b4
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-f8	1794009212383
 plan	gcs--vtol--state--rtl-ends-the-plan-with-a-return	unsupported	fd71e36b068e5db8
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-f9	1794009212383
 plan	gcs--vtol--state--measuring-between-two-points-shows-the-distance	unsupported	2086e3183cdc162c
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-fa	1794009212383
 plan	gcs--vtol--state--auto-twice-goes-anyway	unsupported	cceced2f327e99db
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-fb	1794009212383
 plan	gcs--vtol--state--qland-brings-the-plane-straight-down	unsupported	89160195b85ff279
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 52 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-fc	1794009212383
 plan	gcs--vtol--state--cruise-changes-a-hover-into-forward-flight	unsupported	e8c49784f21b244c
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 54 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-fd	1794009212383
 plan	gcs--vtol--state--the-mode-switch-picks-the-mode	unsupported	2060fd2592e12b32
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 52 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-fe	1794009212383
 plan	gcs--vtol--state--f2-calibrates-the-radio	unsupported	08f490a45e3ee21c
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 52 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-ff	1794009212383
 plan	gcs--vtol--state--a-race-starts-with-every-plane-on-the-ground	unsupported	e548bb87af1ae81b
 step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 51 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-100	1794009212383
 plan	gcs--vtol--state--the-screen-shows-that-the-plane-is-armed	unsupported	b9152ce000785074
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 58 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-101	1794009212383
+plan	gcs--vtol--state--view-changes-to-the-battlefield	unsupported	95791f8409d2454c
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 53 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-102	1794009212383
+plan	gcs--vtol--state--view-again-changes-back-to-the-screens	unsupported	b90a45223609c126
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 52 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825df-15fa6-103	1794009212383
+plan	gcs--vtol--state--the-sim-renders-the-battlefield-in-3d	unsupported	786f228b596f942c
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 53 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-104	1794009212384
+plan	gcs--vtol--state--shift-and-a-right-click-add-a-waypoint-to-the-plan	unsupported	8604713d98805e1f
+step	0	unsupported	0	-	The driver can't arrange the airframe, arrange the airframe as VTOL, arrange the autopilot mode and 53 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-105	1794009212384
 plan	gcs--radio--state--plan-picks-the-planning-tool	unsupported	e9aa5b29a58626ba
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-106	1794009212384
 plan	gcs--radio--state--goto-picks-the-fly-to-tool	unsupported	95f8d560e2126136
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-107	1794009212384
 plan	gcs--radio--state--tkof-puts-a-takeoff-first	unsupported	d4527a4e83fabfe6
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-108	1794009212384
 plan	gcs--radio--state--rtl-ends-the-plan-with-a-return	unsupported	2f41e06223fde69a
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-109	1794009212384
 plan	gcs--radio--state--measuring-between-two-points-shows-the-distance	unsupported	872ebbc63bb26ff2
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-10a	1794009212384
 plan	gcs--radio--state--arming-sets-home	unsupported	5937bbdc3682ba31
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-10b	1794009212384
 plan	gcs--radio--state--auto-twice-goes-anyway	unsupported	c596765222b5d0c5
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e0-15fa6-10c	1794009212384
 plan	gcs--radio--state--qland-brings-the-plane-straight-down	unsupported	8ad96a1ab1aa266f
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 67 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-10d	1794009212385
 plan	gcs--radio--state--cruise-changes-a-hover-into-forward-flight	unsupported	f1e42df668555f5a
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 69 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-10e	1794009212385
 plan	gcs--radio--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	c8fbd016bcefe3dc
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 68 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-10f	1794009212385
 plan	gcs--radio--state--the-mode-switch-picks-the-mode	unsupported	ebf286d2ef269d1d
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 64 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-110	1794009212385
 plan	gcs--radio--state--f2-calibrates-the-radio	unsupported	170d8dc1fe22442a
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 67 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-111	1794009212385
+plan	gcs--radio--state--view-changes-to-the-battlefield	unsupported	0f3785564ffbbcf2
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 68 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-112	1794009212385
+plan	gcs--radio--state--view-again-changes-back-to-the-screens	unsupported	f2e4a5e0422edc70
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 67 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-113	1794009212385
+plan	gcs--radio--state--the-sim-renders-the-battlefield-in-3d	unsupported	6b3a26058709915a
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 68 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-114	1794009212385
+plan	gcs--radio--state--shift-and-a-right-click-add-a-waypoint-to-the-plan	unsupported	25fb838d2cdd3329
+step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the airframe and 68 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-115	1794009212385
 plan	gcs--radio-setup--state--plan-picks-the-planning-tool	unsupported	5cf7dbac30f67a69
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e1-15fa6-116	1794009212385
 plan	gcs--radio-setup--state--goto-picks-the-fly-to-tool	unsupported	808f6d3019ea7fb9
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-117	1794009212386
 plan	gcs--radio-setup--state--tkof-puts-a-takeoff-first	unsupported	f669cf36055209b1
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-118	1794009212386
 plan	gcs--radio-setup--state--rtl-ends-the-plan-with-a-return	unsupported	27eebd7d341f8905
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-119	1794009212386
 plan	gcs--radio-setup--state--measuring-between-two-points-shows-the-distance	unsupported	1191f52b76ebba37
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-11a	1794009212386
 plan	gcs--radio-setup--state--arming-sets-home	unsupported	903ee4672397eca2
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-11b	1794009212386
 plan	gcs--radio-setup--state--auto-twice-goes-anyway	unsupported	7159eb4d155709ec
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 49 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-11c	1794009212386
 plan	gcs--radio-setup--state--qland-brings-the-plane-straight-down	unsupported	181b580e0b1ebed6
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 52 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-11d	1794009212386
 plan	gcs--radio-setup--state--cruise-changes-a-hover-into-forward-flight	unsupported	d130493d6d531373
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 54 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-11e	1794009212386
 plan	gcs--radio-setup--state--qloiter-changes-forward-flight-back-into-a-hover	unsupported	3882745d7ce1889f
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the flight and 53 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-11f	1794009212386
 plan	gcs--radio-setup--state--the-mode-switch-picks-the-mode	unsupported	453d2ffc471c6321
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 52 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-120	1794009212386
 plan	gcs--radio-setup--state--a-race-starts-with-every-plane-on-the-ground	unsupported	26c3cec75c17dc30
 step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the game clock and 51 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e2-15fa6-121	1794009212386
 plan	gcs--radio-setup--state--the-screen-shows-that-the-plane-is-armed	unsupported	02c0330872f3aeb3
 step	0	unsupported	0	-	The driver can't arrange the TX15 screen arming, arrange the TX15 screen arming as disarmed, arrange the arm switch and 58 more things yet.
 step	1	unsupported	0	-	-
-plan	cognition--state--a-malformed-plan-is-refused-with-a-reason	passed	6d07fef58d391033
-step	0	passed	1	screenshots/cognition--state--a-malformed-plan-is-refused-with-a-reason/00.svg	-
-check	1	e:AGENT	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--state--a-malformed-plan-is-refused-with-a-reason/01.svg	-
-check	1	e:refused as malformed	-
-check	1	n:0	-
+run	1a1b34825e2-15fa6-122	1794009212386
+plan	gcs--radio-setup--state--view-changes-to-the-battlefield	unsupported	3439c4b3e2a4cf8b
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 53 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-123	1794009212387
+plan	gcs--radio-setup--state--view-again-changes-back-to-the-screens	unsupported	fcebf0fdcacbc7c5
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 52 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-124	1794009212387
+plan	gcs--radio-setup--state--the-sim-renders-the-battlefield-in-3d	unsupported	2f2ff790fe9c74b7
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 53 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-125	1794009212387
+plan	gcs--radio-setup--state--shift-and-a-right-click-add-a-waypoint-to-the-plan	unsupported	bf761ae44155b6e0
+step	0	unsupported	0	-	The driver can't arrange the autopilot mode, arrange the autopilot mode as MANUAL, arrange the console view and 53 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-126	1794009212387
+plan	cognition--state--a-malformed-plan-is-refused-with-a-reason	unsupported	6d07fef58d391033
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-127	1794009212387
 plan	league--state--a-captain-game-in-the-fast-arena-is-a-game-of-towers	unsupported	2494e2a830dce0a5
 step	0	unsupported	0	-	The driver can't make it happen that the arena plays a game of Towers between two default captains, observe the captain game and observe the drones that flew in the captain game yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-128	1794009212387
 plan	league--state--a-captain-that-is-better-from-both-sides-becomes-the-champion	unsupported	34c7282bbd4942ac
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 5 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it	unsupported	1bf8f3ff6d05e110
-step	0	unsupported	0	-	The driver can't arrange the selected drone, arrange the selected drone as the first Blue drone, make it happen that the commander sends the selected drone to the west tower and 2 more things yet.
+run	1a1b34825e3-15fa6-129	1794009212387
+plan	towers--state--a-right-click-on-a-tower-sends-the-selected-drone-to-take-it	unsupported	b8dd4a0a057cd8f7
+step	0	unsupported	0	-	The driver can't arrange the selected drone, arrange the selected drone as the first Blue drone, make it happen that the commander sends the selected drone to the west tower and 6 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it	unsupported	0ef5f58208a756e4
-step	0	unsupported	0	-	The driver can't arrange the order of the first Blue drone, arrange the order of the first Blue drone as take the west tower, make it happen that the game runs for 2 minutes and 2 more things yet.
+run	1a1b34825e3-15fa6-12a	1794009212387
+plan	towers--state--a-click-on-the-minimap-moves-the-camera-there	unsupported	8616d178898f4897
+step	0	unsupported	0	-	The driver can't make it happen that the commander clicks the west tower on the minimap and observe the point of the battlefield camera yet.
 step	1	unsupported	0	-	-
-plan	towers--state--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it	unsupported	5e70963323f0340e
-step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as near a Blue drone, make it happen that the Red scout flies into the fog for 10 seconds and 3 more things yet.
+run	1a1b34825e3-15fa6-12b	1794009212387
+plan	towers--state--space-moves-the-camera-to-the-selected-drone	unsupported	937e042a2028201f
+step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as in the west circle, arrange the selected drone and 8 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-12c	1794009212387
+plan	towers--state--circle-sends-the-selected-drone-to-circle-a-point-at-the-distance-that-you-drag	unsupported	e4a845354bda4b95
+step	0	unsupported	0	-	The driver can't arrange the selected drone, arrange the selected drone as the first Blue drone, make it happen that the commander draws a circle of 120 m on the battlefield and 7 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-12d	1794009212387
+plan	towers--state--shift-and-a-right-click-start-the-route-of-the-selected-drone	unsupported	d325d34c530fb9e1
+step	0	unsupported	0	-	The driver can't arrange the points in the route of the first Blue drone, arrange the points in the route of the first Blue drone as 0, arrange the selected drone and 8 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-12e	1794009212387
+plan	towers--state--a-game-that-has-stopped-does-not-change	unsupported	88cc3b8c55df3ba5
+step	0	unsupported	0	-	The driver can't arrange the game of Towers, arrange the game of Towers as won by Blue, make it happen that the game runs for 1 minute and 1 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-12f	1794009212387
+plan	towers--state--an-enemy-drone-that-goes-into-the-fog-stays-where-the-team-last-saw-it	unsupported	5e73fc3323f31737
+step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as near a Blue drone, make it happen that the Red scout flies into the fog for 10 seconds and 5 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-130	1794009212387
 plan	towers--state--a-team-sees-the-side-of-a-tower-again-when-its-drone-comes-near	unsupported	7352c42fcb7719a8
 step	0	unsupported	0	-	The driver can't arrange the east tower, arrange the east tower as held by Red, arrange the east tower on the Blue map and 4 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--state--the-commander-defends-a-tower-that-an-enemy-drone-comes-near	unsupported	ebb6a3c2ed6b0d69
-step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as near the Blue home tower, make it happen that the computer commander of Blue decides and 2 more things yet.
-step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-131	1794009212387
 plan	towers--state--a-drone-that-is-behind-at-a-contested-tower-goes-somewhere-else	unsupported	b4d7e72d289c4deb
 step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 1, arrange the Red drones in the west circle and 10 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--state--a-drone-that-flies-high-goes-straight-over-the-forest	unsupported	9878fb99aed81b13
-step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as at the Blue home tower, make it happen that the first Blue drone is sent high to the west tower and 3 more things yet.
+run	1a1b34825e3-15fa6-132	1794009212387
+plan	towers--state--the-commander-does-not-keep-a-drone-at-a-tower-that-the-enemy-holds-with-two-drones	unsupported	81afac0e2b237109
+step	0	unsupported	0	-	The driver can't arrange the Red drones in the west circle, arrange the Red drones in the west circle as 2, arrange the control of the west tower and 13 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--state--a-drone-that-flies-low-goes-along-the-lanes	unsupported	ea41294bd440c446
-step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as at the Blue home tower, make it happen that the first Blue drone is sent low to the west tower and 3 more things yet.
+run	1a1b34825e3-15fa6-133	1794009212387
+plan	towers--state--a-drone-that-flies-high-goes-straight-over-the-forest	unsupported	98759599aed537ea
+step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as at the Blue home tower, make it happen that the first Blue drone is sent high to the west tower and 4 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--state--a-drone-that-flies-low-to-the-forest-climbs-to-circle	unsupported	e99fb3a7d76eb0a2
-step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as at the Blue home tower, make it happen that the first Blue drone is sent low to a point in the forest and 3 more things yet.
+run	1a1b34825e3-15fa6-134	1794009212387
+plan	towers--state--a-drone-that-flies-low-goes-along-the-lanes	unsupported	ea448f4bd443a76f
+step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as at the Blue home tower, make it happen that the first Blue drone is sent low to the west tower and 4 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--the-app-takes-the-blue-seat	unsupported	7b977c3e1cb727cb
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 46 more things yet.
+run	1a1b34825e3-15fa6-135	1794009212387
+plan	towers--state--a-drone-that-flies-low-to-the-forest-climbs-to-circle	unsupported	e9a319a7d77193cb
+step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as at the Blue home tower, make it happen that the first Blue drone is sent low to a point in the forest and 4 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--a-click-on-a-drone-selects-it	unsupported	f0617f8368227d1c
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 44 more things yet.
+run	1a1b34825e3-15fa6-136	1794009212387
+plan	towers--state--a-drone-that-leaves-the-radio-shadow-is-in-contact-again	unsupported	4f52a9793ea6cce3
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the first Blue drone and 6 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--a-click-on-a-tower-sends-the-selected-drone-to-take-it	unsupported	2809312f138ea037
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
+run	1a1b34825e3-15fa6-137	1794009212387
+plan	towers--state--a-drone-that-is-sent-into-the-mountains-flies-to-the-foot-of-them	unsupported	8e7014f701c07351
+step	0	unsupported	0	-	The driver can't arrange the first Blue drone, arrange the first Blue drone as at the Blue home tower, make it happen that the first Blue drone is sent to a point in the mountains and 3 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--hold-makes-the-selected-drone-circle-where-it-is	unsupported	f1e44d416fe10e90
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
+run	1a1b34825e3-15fa6-138	1794009212387
+plan	towers--state--a-drone-out-of-contact-keeps-its-order-until-the-standing-order-is-due	unsupported	523c57a99451a190
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the first Blue drone and 12 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--home-sends-the-selected-drone-back-over-its-base	unsupported	61437e68dcc7b900
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
+run	1a1b34825e3-15fa6-139	1794009212387
+plan	towers--state--a-drone-with-no-standing-order-flies-home-when-its-link-is-lost	unsupported	8ab0a1f38561ebd0
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the first Blue drone and 12 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it	unsupported	20ed0d01dcdfae51
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 47 more things yet.
+run	1a1b34825e3-15fa6-13a	1794009212387
+plan	towers--state--a-drone-with-a-standing-order-does-not-fly-home-when-its-link-is-lost	unsupported	f4ee76ea0027fc21
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the first Blue drone and 12 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--low-makes-the-selected-drone-fly-low	unsupported	6940b99d2a0a44ce
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 49 more things yet.
+run	1a1b34825e3-15fa6-13b	1794009212387
+plan	towers--state--a-drone-stays-on-its-standing-order-when-it-is-in-contact-again	unsupported	1d4a43ec78330e1e
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the order that the first Blue drone flies and 7 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--a-drone-that-flies-low-along-the-lanes-takes-a-tower	unsupported	6ee7254886e8992e
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 50 more things yet.
+run	1a1b34825e3-15fa6-13c	1794009212387
+plan	towers--state--a-new-order-replaces-the-standing-order	unsupported	fce6298cb5e35137
+step	0	unsupported	0	-	The driver can't arrange the order that the first Blue drone flies, arrange the order that the first Blue drone flies as take the west tower, arrange the standing order of the first Blue drone and 4 more things yet.
 step	1	unsupported	0	-	-
-plan	towers--rules--state--a-click-on-a-camera-selects-its-drone	unsupported	7e1d94735de4f5b5
-step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 44 more things yet.
+run	1a1b34825e3-15fa6-13d	1794009212387
+plan	towers--state--a-drone-with-no-standing-order-flies-home-when-its-battery-is-low	unsupported	0ddb68864db9da2d
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the batteries and 18 more things yet.
 step	1	unsupported	0	-	-
-plan	launcher--state--set-up-controller-starts-the-radio-wizard-on-the-t1-s-ranger	unsupported	8f96bb4f794427dd
-step	0	unsupported	0	-	The driver can't arrange the flight controller choice, arrange the flight controller choice as WITH ARDUPILOT, arrange the launch button and 20 more things yet.
+run	1a1b34825e3-15fa6-13e	1794009212387
+plan	towers--state--a-standing-order-replaces-the-flight-home-at-a-low-battery	unsupported	44a41297289d1fb4
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the batteries and 18 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-13f	1794009212387
+plan	towers--state--a-drone-that-is-down-is-back-at-its-base-with-a-full-battery-100-s-later	unsupported	9d1b41b75995b437
+step	0	unsupported	0	-	The driver can't arrange the batteries, arrange the batteries as on, arrange the battery of the first Blue drone and 8 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-140	1794009212387
+plan	towers--state--the-map-keeps-the-battery-that-a-drone-out-of-contact-last-reported	unsupported	99b2f3161ba2cf26
+step	0	unsupported	0	-	The driver can't arrange the Red home tower, arrange the Red home tower as held by Red, arrange the batteries and 13 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-141	1794009212387
+plan	towers--state--the-advisor-is-quiet-when-nothing-matters	unsupported	4f0f959638ec9869
+step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as at its base, arrange the time left and 5 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-142	1794009212387
+plan	towers--state--the-advisor-warns-of-an-enemy-drone-near-a-tower-that-the-team-holds	unsupported	557c648f27a12327
+step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as near the Blue home tower, arrange the time left and 5 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-143	1794009212387
+plan	towers--state--the-advisor-says-a-danger-one-time	unsupported	71ef6f21ab0e9bb8
+step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as near the Blue home tower, arrange the time left and 5 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-144	1794009212387
+plan	towers--state--the-advisor-tells-the-team-that-it-lost-a-tower	unsupported	7629345f9643eec1
+step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as at its base, arrange the first Blue drone and 14 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-145	1794009212387
+plan	towers--state--the-advisor-tells-the-team-that-a-drone-is-down	unsupported	8fa1015cb79213cb
+step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as at its base, arrange the batteries and 14 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e3-15fa6-146	1794009212387
+plan	towers--state--the-advisor-tells-a-team-that-is-behind-when-the-clock-runs-out	unsupported	905089a9f1be816f
+step	0	unsupported	0	-	The driver can't arrange the Red scout, arrange the Red scout as at its base, arrange the score of Blue and 11 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-147	1794009212388
+plan	towers--state--one-drone-takes-an-outpost-in-25-seconds	unsupported	bc9ebde6e534012a
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the Blue west outpost circle, arrange the Blue drones in the Blue west outpost circle as 1, arrange the layout and 6 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-148	1794009212388
+plan	towers--rules--state--the-app-takes-the-blue-seat	unsupported	8b05f777902a9e7a
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 63 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-149	1794009212388
+plan	towers--rules--state--a-click-on-a-drone-selects-it	unsupported	71feb95ab307d066
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 62 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-14a	1794009212388
+plan	towers--rules--state--a-right-click-on-a-tower-sends-the-selected-drone-to-take-it	unsupported	4b34219e16219829
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 65 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-14b	1794009212388
+plan	towers--rules--state--hold-makes-the-selected-drone-circle-where-it-is	unsupported	bf03da2e8bcaa33c
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 65 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-14c	1794009212388
+plan	towers--rules--state--home-sends-the-selected-drone-back-over-its-base	unsupported	0df17c3b9d39efaa
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 65 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-14d	1794009212388
+plan	towers--rules--state--a-drone-sent-to-a-tower-that-nobody-fights-for-takes-it	unsupported	3bbb3fe41fce50ef
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 65 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-14e	1794009212388
+plan	towers--rules--state--low-makes-the-selected-drone-fly-low	unsupported	dd63d786e29c5f9c
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 67 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-14f	1794009212388
+plan	towers--rules--state--a-drone-that-flies-low-along-the-lanes-takes-a-tower	unsupported	0560cd1f6c7f118d
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 65 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e4-15fa6-150	1794009212388
+plan	towers--rules--state--the-battlefield-shows-the-valley-in-3d	unsupported	e5fcb2a6498c9e6b
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-151	1794009212389
+plan	towers--rules--state--a-click-on-the-minimap-moves-the-camera-there	unsupported	ffc54c74162628a5
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-152	1794009212389
+plan	towers--rules--state--the-keys-move-the-camera-across-the-field	unsupported	48acf783eac7bbbe
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 62 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-153	1794009212389
+plan	towers--rules--state--e-turns-the-camera-to-the-right	unsupported	345d9949ab206b99
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 61 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-154	1794009212389
+plan	towers--rules--state--space-moves-the-camera-to-the-selected-drone	unsupported	f3ee8d5ec752a62f
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 68 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-155	1794009212389
+plan	towers--rules--state--the-portrait-shows-the-camera-of-the-selected-drone	unsupported	2e04fc37837db7be
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 66 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-156	1794009212389
+plan	towers--rules--state--a-click-on-a-camera-selects-its-drone	unsupported	0b90ec5823e41cce
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 59 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-157	1794009212389
+plan	towers--rules--state--circle-sends-the-selected-drone-to-circle-a-point-at-the-distance-that-you-drag	unsupported	faac815d0f929f00
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 66 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-158	1794009212389
+plan	towers--rules--state--shift-and-a-right-click-start-the-route-of-the-selected-drone	unsupported	40f7dd249e85c426
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 65 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e5-15fa6-159	1794009212389
+plan	towers--rules--state--a-drone-that-leaves-the-radio-shadow-is-in-contact-again	unsupported	851145acff254ba5
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 66 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-15a	1794009212390
+plan	towers--rules--state--a-drone-stays-on-its-standing-order-when-it-is-in-contact-again	unsupported	5e1cb3bccb20a1ce
+step	0	unsupported	0	-	The driver can't arrange the Blue drones in the west circle, arrange the Blue drones in the west circle as 0, arrange the Blue drones on the ground in the west circle and 67 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-15b	1794009212390
+plan	launcher--state--towers-picks-the-commander-app	unsupported	df6b5574f7858a62
+step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 22 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-15c	1794009212390
 plan	flight-controller--state--angle-levels-the-plane-for-you	unsupported	8a62f3a940a8109a
 step	0	unsupported	0	-	The driver can't arrange the autopilot, arrange the autopilot as disarmed, arrange the flight controller and 19 more things yet.
 step	1	unsupported	0	-	-
-plan	cognition--state--the-plane-stays-inside-the-fence	unsupported	65a5ab2df45c9bbc
-step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 4 more things yet.
-step	1	unsupported	0	-	-
-plan	cognition--state--the-plane-stays-above-the-floor	unsupported	02e6177305d33ad6
-step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 4 more things yet.
-step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-15d	1794009212390
 plan	cognition--state--the-plane-stays-below-the-ceiling	unsupported	768a8e5f370179ea
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 4 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-15e	1794009212390
 plan	cognition--state--under-the-stall-margin-the-plane-gets-its-airspeed-back-first	unsupported	9ce5bb23c3cf340d
 step	0	unsupported	0	-	The driver can't arrange the start, arrange the start as a slow climb, observe the start and 1 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-15f	1794009212390
 plan	cognition--state--after-a-recovery-the-plane-flies-on	unsupported	b6cd6ac0442e318b
 step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as far away, arrange the start and 5 more things yet.
 step	1	unsupported	0	-	-
-plan	cognition--state--the-plane-keeps-clear-of-an-aircraft-that-crosses-its-path	unsupported	93a2377d26bcc2f0
-step	0	unsupported	0	-	The driver can't arrange the other aircraft, arrange the other aircraft as across your path, observe the closest distance to the other aircraft and 1 more things yet.
-step	1	unsupported	0	-	-
-plan	cognition--state--bad-input-gives-wings-level-and-the-throttle-to-the-pilot	unsupported	8cb79029358f42c8
-step	0	unsupported	0	-	The driver can't make it happen that the plane loses its position estimate and observe the throttle of the plane yet.
-step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-160	1794009212390
 plan	cognition--state--the-plane-flies-again-when-the-position-estimate-comes-back	unsupported	76f62e80db1c43de
 step	0	unsupported	0	-	The driver can't arrange the reported fallback as bad input, make it happen that the plane gets its position estimate back and observe the throttle of the plane yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-161	1794009212390
 plan	cognition--state--the-plane-that-is-it-pursues-the-plane-it-can-catch-soonest	unsupported	e3fad57cd937192b
 step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the chaser Kestrel as behind Merlin and ahead of Swift, make it happen that the ground control agent decides and 2 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-162	1794009212390
 plan	cognition--state--a-plane-that-is-not-it-holds-its-own-height-band	unsupported	0389ebbe7699c9b4
 step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the chaser Kestrel as far from the others, make it happen that the ground control agent decides and 5 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-163	1794009212390
 plan	cognition--state--a-plane-that-is-not-it-breaks-away-from-a-chaser-that-comes-near	unsupported	0c08ba056de63784
 step	0	unsupported	0	-	The driver can't arrange the chaser Kestrel, arrange the chaser Kestrel as near Merlin, make it happen that the ground control agent decides and 4 more things yet.
 step	1	unsupported	0	-	-
-plan	cognition--state--a-plane-that-is-not-it-never-pursues	passed	7ffd857aefb9eb52
-step	0	passed	1	screenshots/cognition--state--a-plane-that-is-not-it-never-pursues/00.svg	-
-check	1	e:FBWA	-
-check	1	e:none	-
-check	1	n:0	-
-check	1	n:0	-
-check	1	e:none	-
-step	1	passed	1	screenshots/cognition--state--a-plane-that-is-not-it-never-pursues/01.svg	-
-check	1	n:0	-
-check	1	n:3	-
-check	1	n:0	-
-check	1	e:complete	-
+run	1a1b34825e6-15fa6-164	1794009212390
+plan	cognition--state--a-plane-that-is-not-it-never-pursues	unsupported	7ffd857aefb9eb52
+step	0	unsupported	0	-	It needs ardupilot-agent: /Users/ptescher/code/t1s_sim-manual/.ardupilot-agent/build/sitl/bin/arduplane is not there: build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`, or set SIM001_BIN.
+step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-165	1794009212390
 plan	league--state--the-same-seed-plays-the-same-game	unsupported	f68a1bffc88758f8
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that the arena plays the same seed twice and 2 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-166	1794009212390
 plan	league--state--a-challenger-that-scores-worse-stays-out	unsupported	afd340ecb95aa001
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger as the slow executor, arrange the champion and 8 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-167	1794009212390
 plan	league--state--a-challenger-that-crashes-stays-out-whatever-it-scores	unsupported	141fd75bd3eae9f0
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger as the default executor, arrange the champion and 12 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-168	1794009212390
 plan	league--state--a-captain-game-in-the-fast-arena-is-a-game-of-towers-2	unsupported	c2719bafe98329ab
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that the arena plays a game of Towers between two default captains and 3 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-169	1794009212390
 plan	league--state--a-captain-that-is-better-from-both-sides-becomes-the-champion-2	unsupported	456f27d5efe008e6
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 8 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-16a	1794009212390
 plan	league--state--a-captain-that-is-worse-stays-out	unsupported	4fffdff0eeacd867
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the timid captain, arrange the champion captain and 8 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-16b	1794009212390
 plan	league--state--a-captain-changed-in-code-plays-with-its-own-code	unsupported	6a0b97c43129c9ae
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that a Claude strategy gives a captain whose code sends every drone home and 3 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-16c	1794009212390
 plan	league--state--a-captain-that-changes-the-referee-stays-out	unsupported	b9dafc44091e4bdc
 step	0	unsupported	0	-	The driver can't arrange the league, arrange the league as new, make it happen that a Claude strategy gives a captain that changes the referee and 3 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-16d	1794009212390
 plan	league--state--the-same-seed-plays-the-same-game-2	unsupported	a5e52f763925c962
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 5 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-16e	1794009212390
 plan	league--state--a-challenger-that-scores-worse-stays-out-2	unsupported	58ed3d584b2dbae3
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger as the slow executor, arrange the challenger captain and 11 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-16f	1794009212390
 plan	league--state--a-challenger-that-crashes-stays-out-whatever-it-scores-2	unsupported	c2540c79f69f6ece
 step	0	unsupported	0	-	The driver can't arrange the challenger, arrange the challenger as the default executor, arrange the challenger captain and 15 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-170	1794009212390
 plan	league--state--each-generation-is-written-down	unsupported	eeb8638280165622
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 10 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-171	1794009212390
 plan	league--state--the-evolution-strategy-improves-on-a-slow-start	unsupported	7d2cf312aac9fe39
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 8 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-172	1794009212390
 plan	league--state--a-challenger-whose-tests-fail-stays-out	unsupported	1b2ab76534f805aa
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 9 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-173	1794009212390
 plan	league--state--a-challenger-that-changes-the-envelope-stays-out	unsupported	78ad493007532caa
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 9 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-174	1794009212390
+plan	league--state--a-claude-run-that-does-not-stop-in-time-is-stopped	unsupported	4031b4b812a99fc9
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 9 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-175	1794009212390
+plan	league--state--each-claude-run-is-written-down	unsupported	9a8164ffb40220b8
+step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 8 more things yet.
+step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-176	1794009212390
 plan	league--state--a-captain-changed-in-code-plays-with-its-own-code-2	unsupported	265223d752b11840
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 6 more things yet.
 step	1	unsupported	0	-	-
+run	1a1b34825e6-15fa6-177	1794009212390
 plan	league--state--a-captain-that-changes-the-referee-stays-out-2	unsupported	c4103927d3c137ba
 step	0	unsupported	0	-	The driver can't arrange the challenger captain, arrange the challenger captain as the default captain, arrange the champion captain and 6 more things yet.
-step	1	unsupported	0	-	-
-plan	launcher--state--launch-starts-the-station-with-ardupilot	unsupported	513473a744c40034
-step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 23 more things yet.
-step	1	unsupported	0	-	-
-plan	launcher--state--render-docs-writes-the-manual	unsupported	e0a245e7dc904d5a
-step	0	unsupported	0	-	The driver can't arrange the controls file, arrange the controls file as missing, arrange the flight controller choice and 22 more things yet.
 step	1	unsupported	0	-	-
