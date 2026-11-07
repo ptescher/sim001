@@ -8,8 +8,13 @@ Story: Flying a VTOL
   and flies on its wing. Then you switch back to a hover, and you land straight down. The
   plane keeps its height through both transitions.
 
+  Forward flight goes a long way in a straight line, and the trees of the valley stand up to
+  50 m above the pilot box. So before you take off, raise the plan altitude to 70 m: VTOL TKOF
+  climbs to it, and CRUISE holds it.
+
   Scenario: Take off, fly forward, hover, land
-    When the operator arms the vehicle
+    When the plan altitude is 70 m
+    And the operator arms the vehicle
     Then the vehicle is armed
     When the operator takes off vertically
     Then the flight is hovering

@@ -143,6 +143,7 @@ Vocabulary:
     Say: press MEASURE and click the two points on the map
   Event: the pilot throws the plane in the sim
     Say: click the sim window. Then press Space to throw the plane
+  Event: the plane finishes its takeoff
   Event: the plane reaches a waypoint
   Event: the plane reaches the last item
 
