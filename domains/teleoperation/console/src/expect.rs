@@ -266,6 +266,11 @@ const LOOK: Duration = Duration::from_millis(250);
 const STUCK: Duration = Duration::from_secs(20);
 const PUSHING: u16 = 50;
 
+/// Has ArduPilot started again since `since`? It says "ArduPilot Ready" when it has.
+fn restarted_since(log: &std::collections::VecDeque<crate::vehicle::LogLine>, since: Instant) -> bool {
+    log.iter().any(|l| l.time >= since && l.text.contains("ArduPilot Ready"))
+}
+
 /// What [`Liftoff`] looks at, read from the vehicle.
 #[derive(Clone, Copy, Debug)]
 struct Lift {
@@ -1296,15 +1301,21 @@ impl ConsoleDriver {
         self.deliver_radio(self.radio)?;
         // The sim starts again, as with the R key, with a fresh pack (V): a reset keeps the
         // battery, and over a whole suite the tests before would leave it flat.
+        let pressed = Instant::now();
         self.call(|g, _, _| {
             if let Some(s) = &g.sensor {
                 s.press_key(Key::Reset);
                 s.press_key(Key::Recharge);
             }
         })?;
-        // The station restarts the autopilot: its link drops, and then comes back.
-        let _ = self.wait_for(45, "the autopilot restarting", |g| !g.vehicle.lock().unwrap().link.alive());
-        self.wait_for(180, "the autopilot coming back", |g| g.vehicle.lock().unwrap().link.alive())?;
+        // The station restarts the autopilot, and it says so when it is up again. (Its link may
+        // not even look down: a native ArduPlane reboots faster than the link times out, and the
+        // health it reported before the reboot would pass for ready.)
+        *self.liftoff.lock().unwrap() = Liftoff::default();
+        self.wait_for(180, "the autopilot restarting", move |g| {
+            let v = g.vehicle.lock().unwrap();
+            v.link.alive() && restarted_since(&v.log, pressed)
+        })?;
         // ArduPilot goes to the mode of its mode switch a few seconds after it is ready, and a test
         // that sets a mode before then has it taken away; by the time it is ready to arm, that is
         // long done.
@@ -1401,6 +1412,8 @@ impl Driver for ConsoleDriver {
             self.dead = Some(e.clone());
             return Err(e);
         }
+        // Each test watches its own plane for a takeoff that never comes.
+        *self.liftoff.lock().unwrap() = Liftoff::default();
         // The throttle stick starts down, as a pilot leaves it before arming.
         if self.vtol {
             // A test that doesn't use the radio flies without one, like a keyboard pilot, and the
@@ -1899,6 +1912,31 @@ mod tests {
         assert_eq!(w.check(&lift(true, 95, 0.1, false), at(19)), None);
         let why = w.check(&lift(true, 95, 0.1, false), at(20)).expect("it fails");
         assert!(why.contains("still on the ground") && why.contains("95 %"), "{why}");
+    }
+
+    fn line(time: Instant, text: &str) -> crate::vehicle::LogLine {
+        crate::vehicle::LogLine { time, severity: 6, source: "fc", text: text.into() }
+    }
+
+    /// A fresh plane is ready once ArduPilot has said so after the reset: a native ArduPlane
+    /// reboots faster than its link times out, so the link never looks down.
+    #[test]
+    fn the_autopilot_has_restarted_once_it_says_so_after_the_reset() {
+        let t0 = Instant::now();
+        let reset = t0 + Duration::from_secs(10);
+        let mut log = std::collections::VecDeque::from([line(t0, "ArduPilot Ready")]);
+        assert!(!restarted_since(&log, reset), "the last start, not this one");
+        log.push_back(line(reset + Duration::from_secs(3), "ArduPilot Ready"));
+        assert!(restarted_since(&log, reset));
+    }
+
+    /// Each test watches its own plane: a previous test's push on the ground doesn't count.
+    #[test]
+    fn a_new_watch_starts_from_nothing() {
+        let (mut w, t0) = (Liftoff::default(), Instant::now());
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), t0), None);
+        w = Liftoff::default();
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), t0 + Duration::from_secs(25)), None);
     }
 
     /// ArduPilot's own word for it ends the test at once.
