@@ -729,6 +729,10 @@ impl Driver for SimDriver {
                 self.standin.lock().unwrap().held.pitch = 0.0;
                 crashed
             }
+            // A plane that starts on the ground (a VTOL) is set down there: wait until it rests.
+            "plane" if name()? == "on the ground" => self.until(10.0, "the plane resting on the ground", |c| {
+                c.state.phase == Phase::Flying && c.state.on_ground && c.state.vel.length() < 0.5
+            }),
             "wings" if name()? == "level" => Ok(()),
             "battery" if value.as_f64().is_some_and(|b| b >= 99.0) => self.sim(|c| c.state.recharge()),
             "flight mode" => {

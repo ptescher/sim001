@@ -99,6 +99,26 @@ pub fn native_arduplane() -> Option<PathBuf> {
 /// The command line of a native ArduPlane for SITL instance `instance` (0 is yours; 1 to 3 are the
 /// computer pilots', whose physics go to port 9002 + 10·N). As ardupilot/start.sh runs it in Docker.
 fn native_sitl_args(ports: Ports, instance: usize, aircraft: &str, home_loc: Option<&str>) -> Vec<String> {
+    native_sitl_args_at(ports, instance, aircraft, home_loc, speedup())
+}
+
+/// How many times faster than real time the autopilots run: `SIM001_SPEEDUP`, 1 if unset. Their
+/// clock is the sim's physics frames, in lockstep, so the sim sets the pace it can keep.
+pub fn speedup() -> f32 {
+    speedup_from(std::env::var("SIM001_SPEEDUP").ok().as_deref())
+}
+
+fn speedup_from(v: Option<&str>) -> f32 {
+    v.and_then(|s| s.parse::<f32>().ok()).filter(|s| *s > 0.0).unwrap_or(1.0)
+}
+
+fn native_sitl_args_at(
+    ports: Ports,
+    instance: usize,
+    aircraft: &str,
+    home_loc: Option<&str>,
+    speedup: f32,
+) -> Vec<String> {
     let root = repo_root();
     let parm = |name: &str| root.join("ardupilot").join(name);
     let mut defaults = vec![root.join(".ardupilot/Tools/autotest/models/plane.parm"), parm("t1s.parm")];
@@ -110,7 +130,7 @@ fn native_sitl_args(ports: Ports, instance: usize, aircraft: &str, home_loc: Opt
         "--model",
         "JSON:127.0.0.1",
         "--speedup",
-        "1",
+        &speedup.to_string(),
         "--home",
         home_loc.unwrap_or("-35.363261,149.165230,584,353"),
         "--defaults",
@@ -689,6 +709,20 @@ mod tests {
         let kestrel = native_sitl_args(Ports::new(0), 1, "t1s-vtol", Some("1,2,3,4"));
         assert!(kestrel.windows(2).any(|w| w == ["--serial0", "tcp:0"]) && kestrel.contains(&"-I1".to_string()));
         assert!(kestrel.windows(2).any(|w| w == ["--home", "1,2,3,4"]));
+    }
+
+    /// The autopilots run as fast as SIM001_SPEEDUP says (their clock is the sim's physics
+    /// frames, in lockstep), so a test run can fly at 10×; a person flies at 1×.
+    #[test]
+    fn the_autopilots_run_at_the_speed_asked_for() {
+        assert_eq!(speedup_from(None), 1.0);
+        assert_eq!(speedup_from(Some("10")), 10.0);
+        assert_eq!(speedup_from(Some("nonsense")), 1.0);
+        assert_eq!(speedup_from(Some("0")), 1.0, "never stopped");
+        let args = native_sitl_args_at(Ports::new(0), 0, "t1s-vtol", None, 10.0);
+        assert!(args.windows(2).any(|w| w == ["--speedup", "10"]), "{args:?}");
+        let args = native_sitl_args_at(Ports::new(0), 1, "t1s-vtol", None, 10.0);
+        assert!(args.windows(2).any(|w| w == ["--speedup", "10"]), "the computer pilots too: {args:?}");
     }
 
     /// A second station's autopilot is an instance of its own too, further up: it waits for its
