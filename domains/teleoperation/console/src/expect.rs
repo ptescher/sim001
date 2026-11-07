@@ -299,8 +299,8 @@ struct Lift {
     alt_rel: f32,
     groundspeed: f32,
     batt_v: f32,
-    /// ArduPilot said "Potential VTOL Thrust Loss" since it armed.
-    thrust_loss: bool,
+    /// When ArduPilot last said "Potential VTOL Thrust Loss" since it armed.
+    thrust_loss: Option<Instant>,
 }
 
 impl Lift {
@@ -312,7 +312,12 @@ impl Lift {
             alt_rel: v.alt_rel,
             groundspeed: v.groundspeed,
             batt_v: v.batt_v,
-            thrust_loss: v.log.iter().any(|l| l.text.contains("Thrust Loss") && since.is_some_and(|a| l.time >= a)),
+            thrust_loss: v
+                .log
+                .iter()
+                .rev()
+                .find(|l| l.text.contains("Thrust Loss") && since.is_some_and(|a| l.time >= a))
+                .map(|l| l.time),
         }
     }
 }
@@ -323,16 +328,28 @@ impl Lift {
 #[derive(Default)]
 struct Liftoff {
     pushing_since: Option<Instant>,
+    /// When the watch began: what ArduPilot said before is another test's.
+    from: Option<Instant>,
+    /// Not watching: the plane is being made fresh.
+    off: bool,
 }
 
 impl Liftoff {
+    fn off() -> Liftoff {
+        Liftoff { off: true, ..Liftoff::default() }
+    }
+
     fn check(&mut self, s: &Lift, now: Instant) -> Option<String> {
+        if self.off {
+            return None;
+        }
+        let from = *self.from.get_or_insert(now);
         let on_ground = s.alt_rel < 1.0 && s.groundspeed < 1.0;
         if !s.armed {
             self.pushing_since = None;
             return None;
         }
-        if s.thrust_loss && s.alt_rel < 3.0 {
+        if s.thrust_loss.is_some_and(|t| t >= from) && s.alt_rel < 3.0 {
             return Some(format!(
                 "the plane didn't take off: ArduPilot says Potential VTOL Thrust Loss (its motors run, and it doesn't \
                  climb; battery {:.1} V)",
@@ -1330,7 +1347,7 @@ impl ConsoleDriver {
         // The station restarts the autopilot, and it says so when it is up again. (Its link may
         // not even look down: a native ArduPlane reboots faster than the link times out, and the
         // health it reported before the reboot would pass for ready.)
-        *self.liftoff.lock().unwrap() = Liftoff::default();
+        *self.liftoff.lock().unwrap() = Liftoff::off();
         self.wait_for(180, "the autopilot restarting", move |g| {
             let v = g.vehicle.lock().unwrap();
             v.link.alive() && restart(&v.log, pressed, Instant::now()) != Restart::Waiting
@@ -1918,7 +1935,22 @@ mod tests {
     use super::*;
 
     fn lift(armed: bool, throttle: u16, alt_rel: f32, thrust_loss: bool) -> Lift {
+        let thrust_loss = thrust_loss.then(Instant::now);
         Lift { armed, throttle, alt_rel, groundspeed: 0.0, batt_v: 16.8, thrust_loss }
+    }
+
+    /// A thrust loss from before the test (the last test's, while its plane is reset) doesn't
+    /// count, and while the plane is made fresh nothing is watched.
+    #[test]
+    fn only_the_tests_own_flight_is_watched() {
+        let before = Instant::now();
+        let mut w = Liftoff::default();
+        let now = before + Duration::from_secs(5);
+        let old = Lift { thrust_loss: Some(before), ..lift(true, 100, 0.0, false) };
+        assert_eq!(w.check(&old, now), None, "the last test's thrust loss");
+        let mut off = Liftoff::off();
+        assert_eq!(off.check(&lift(true, 100, 0.0, true), now), None);
+        assert_eq!(off.check(&lift(true, 95, 0.1, false), now + Duration::from_secs(60)), None);
     }
 
     /// A plane armed and pushing hard that stays on the ground fails its test in 20 s, not
@@ -1966,8 +1998,9 @@ mod tests {
     /// ArduPilot's own word for it ends the test at once.
     #[test]
     fn thrust_loss_fails_at_once() {
-        let mut w = Liftoff::default();
-        let why = w.check(&lift(true, 100, 0.0, true), Instant::now()).expect("it fails");
+        let (mut w, t) = (Liftoff::default(), Instant::now());
+        let now = Lift { thrust_loss: Some(t), ..lift(true, 100, 0.0, false) };
+        let why = w.check(&now, t).expect("it fails");
         assert!(why.contains("Thrust Loss"), "{why}");
     }
 
