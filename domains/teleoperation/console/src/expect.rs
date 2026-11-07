@@ -186,7 +186,7 @@ const EVENTS: &[(&str, Act)] = &[
 ];
 
 /// What the plane does by itself, and the driver waits for.
-const WAITS: &[&str] = &["plane reaches a waypoint", "plane reaches the last item"];
+const WAITS: &[&str] = &["plane finishes its takeoff", "plane reaches a waypoint", "plane reaches the last item"];
 /// How long the plane has to get to the next waypoint, or to the last item, flying the mission.
 const FLY_SECS: u64 = 240;
 
@@ -1753,12 +1753,12 @@ impl Driver for ConsoleDriver {
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
         match event.key.as_str() {
-            // The mission goes on to its next item.
-            "plane reaches a waypoint" => {
+            // The mission goes on to its next item: past the takeoff, or a waypoint.
+            "plane finishes its takeoff" | "plane reaches a waypoint" => {
                 let from = self.call(|g, _, _| g.vehicle.lock().unwrap().mission_seq)?;
-                return self.wait_for(FLY_SECS, "the plane reaching a waypoint", move |g| {
-                    g.vehicle.lock().unwrap().mission_seq > from
-                });
+                let what =
+                    if event.key.contains("takeoff") { "the takeoff ending" } else { "the plane reaching a waypoint" };
+                return self.wait_for(FLY_SECS, what, move |g| g.vehicle.lock().unwrap().mission_seq > from);
             }
             // The mission is on its last item (the first is home).
             "plane reaches the last item" => {
