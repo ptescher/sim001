@@ -282,15 +282,16 @@ impl FlightState {
         self.used_mah = 0.0;
     }
 
-    /// Space: throw the plane. One in the hand goes at once; one that waits at rest on the
-    /// ground (a VTOL on its wheels) is picked up first, carried to the hand in the throwing
-    /// pose like [`reset_to_hand`](Self::reset_to_hand) does, and goes when it is there.
+    /// Space: throw the plane. One in the hand goes at once; one on its wheels and slow (below
+    /// 5 m/s: at rest, or creeping forward as a takeoff starts) is picked up first. Picked up, it
+    /// is carried to the hand in the throwing pose like [`reset_to_hand`](Self::reset_to_hand)
+    /// does, and goes when it is there.
     pub fn throw(&mut self, params: &AircraftParams) {
         if self.phase == Phase::Held {
             self.launch();
             return;
         }
-        if self.phase != Phase::Flying || !self.on_ground || self.vel.length() > 0.5 {
+        if self.phase != Phase::Flying || !self.on_ground || self.vel.length() > 5.0 {
             return;
         }
         let rest = match params.start {
@@ -1136,9 +1137,25 @@ mod throw_tests {
         assert!(jump < 0.05, "carried, not teleported: {jump:.3} m in a step");
     }
 
-    /// A throw in the air, or of a plane still rolling, does nothing.
+    /// A plane that has started to roll (ArduPilot runs the motors for a takeoff as soon as AUTO
+    /// starts) is still grabbed and thrown, as a pilot grabs one that creeps forward.
     #[test]
-    fn only_a_plane_at_rest_on_the_ground_is_picked_up() {
+    fn a_plane_creeping_forward_on_its_wheels_is_picked_up() {
+        let p = t1s_vtol::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        s.carry = None;
+        s.phase = Phase::Flying;
+        s.on_ground = true;
+        s.pos = Vec3::new(0.0, 0.07, 0.0);
+        s.vel = Vec3::new(0.0, 0.0, -3.0);
+        s.throw(&p);
+        assert_eq!(s.phase, Phase::Held);
+        assert!(s.throw_pending);
+    }
+
+    /// A throw in the air, or of a plane rolling fast, does nothing.
+    #[test]
+    fn only_a_plane_on_the_ground_and_slow_is_picked_up() {
         let p = t1s_vtol::params();
         let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
         s.carry = None;
@@ -1147,5 +1164,10 @@ mod throw_tests {
         s.vel = Vec3::new(0.0, 0.0, -15.0);
         s.throw(&p);
         assert_eq!(s.phase, Phase::Flying);
+        s.pos.y = 0.07;
+        s.on_ground = true;
+        s.vel = Vec3::new(0.0, 0.0, -8.0);
+        s.throw(&p);
+        assert_eq!(s.phase, Phase::Flying, "a takeoff roll at 8 m/s is left alone");
     }
 }
