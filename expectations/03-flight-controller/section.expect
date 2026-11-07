@@ -32,7 +32,7 @@ Vocabulary:
   Event: the pilot opens the throttle to climb
     Say: press 4. In the hover modes the middle of the throttle holds the height, and the throttle that you set above it is the climb
   Event: the pilot sends the plane home
-    Say: press N until the mode is QRTL
+    Say: switch ArduPilot to QRTL. On the radio, press button 6 on the front. On the keyboard, press N until the mode is QRTL. The plane flies to home, and lands there
   State: the autopilot is armed | disarmed
     Shows: armed: the line at the top of the HUD says ARMED
     Shows: disarmed: the line at the top of the HUD says disarmed

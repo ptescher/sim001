@@ -186,7 +186,7 @@ const EVENTS: &[(&str, Act)] = &[
 ];
 
 /// What the plane does by itself, and the driver waits for.
-const WAITS: &[&str] = &["plane reaches a waypoint", "plane reaches the last item"];
+const WAITS: &[&str] = &["plane finishes its takeoff", "plane reaches a waypoint", "plane reaches the last item"];
 /// How long the plane has to get to the next waypoint, or to the last item, flying the mission.
 const FLY_SECS: u64 = 240;
 
@@ -260,6 +260,135 @@ const MODE_IDS: [&str; 10] = [
 /// Time to let the console settle after an action, and between looks while waiting for a check.
 const SETTLE: Duration = Duration::from_millis(1200);
 const LOOK: Duration = Duration::from_millis(250);
+
+/// How long a plane may sit on the ground armed, with its throttle at [`PUSHING`] % or more,
+/// before a test that waits on it gives up.
+const STUCK: Duration = Duration::from_secs(20);
+const PUSHING: u16 = 50;
+
+/// How long after a reset the console may take to reboot the autopilot for it.
+const REBOOT_ASKED: Duration = Duration::from_secs(8);
+
+/// Where a fresh plane's autopilot is, `now`, after the sim was reset at `reset`.
+#[derive(Debug, PartialEq)]
+enum Restart {
+    /// The console rebooted it and it isn't back yet, or a reboot may still come.
+    Waiting,
+    /// It said "ArduPilot Ready" after the reboot.
+    Done,
+    /// No reboot came: the plane was fresh already.
+    NotNeeded,
+}
+
+fn restart(log: &std::collections::VecDeque<crate::vehicle::LogLine>, reset: Instant, now: Instant) -> Restart {
+    let reboot = log.iter().find(|l| l.time >= reset && l.text.contains("REBOOT autopilot")).map(|l| l.time);
+    match reboot {
+        Some(at) if log.iter().any(|l| l.time >= at && l.text.contains("ArduPilot Ready")) => Restart::Done,
+        Some(_) => Restart::Waiting,
+        None if now.duration_since(reset) >= REBOOT_ASKED => Restart::NotNeeded,
+        None => Restart::Waiting,
+    }
+}
+
+/// Says how long a step of a test's start took, when it ends (however it ends).
+struct Took(Instant, String);
+
+impl Took {
+    fn new(what: String) -> Took {
+        Took(Instant::now(), what)
+    }
+}
+
+impl Drop for Took {
+    fn drop(&mut self) {
+        println!("expect:   arranged {} in {:.1} s", self.1, self.0.elapsed().as_secs_f32());
+    }
+}
+
+/// What [`Liftoff`] looks at, read from the vehicle.
+#[derive(Clone, Copy, Debug)]
+struct Lift {
+    armed: bool,
+    /// The autopilot's throttle (%).
+    throttle: u16,
+    alt_rel: f32,
+    groundspeed: f32,
+    batt_v: f32,
+    /// When ArduPilot last said "Potential VTOL Thrust Loss" since it armed.
+    thrust_loss: Option<Instant>,
+}
+
+impl Lift {
+    fn of(v: &crate::vehicle::Vehicle) -> Lift {
+        let since = v.armed_since;
+        Lift {
+            armed: v.armed,
+            throttle: v.throttle,
+            alt_rel: v.alt_rel,
+            groundspeed: v.groundspeed,
+            batt_v: v.batt_v,
+            thrust_loss: v
+                .log
+                .iter()
+                .rev()
+                .find(|l| l.text.contains("Thrust Loss") && since.is_some_and(|a| l.time >= a))
+                .map(|l| l.time),
+        }
+    }
+}
+
+/// Fails a test fast when its plane never takes off: armed and pushing, it stays on the ground
+/// (a flat battery, motors that give no thrust, a throw that did nothing), which the steps
+/// would otherwise wait out for minutes, twice.
+#[derive(Default)]
+struct Liftoff {
+    pushing_since: Option<Instant>,
+    /// When the watch began: what ArduPilot said before is another test's.
+    from: Option<Instant>,
+    /// Not watching: the plane is being made fresh.
+    off: bool,
+}
+
+impl Liftoff {
+    fn off() -> Liftoff {
+        Liftoff { off: true, ..Liftoff::default() }
+    }
+
+    fn check(&mut self, s: &Lift, now: Instant) -> Option<String> {
+        if self.off {
+            return None;
+        }
+        let from = *self.from.get_or_insert(now);
+        let on_ground = s.alt_rel < 1.0 && s.groundspeed < 1.0;
+        if !s.armed {
+            self.pushing_since = None;
+            return None;
+        }
+        if s.thrust_loss.is_some_and(|t| t >= from) && s.alt_rel < 3.0 {
+            return Some(format!(
+                "the plane didn't take off: ArduPilot says Potential VTOL Thrust Loss (its motors run, and it doesn't \
+                 climb; battery {:.1} V)",
+                s.batt_v
+            ));
+        }
+        if !(on_ground && s.throttle >= PUSHING) {
+            self.pushing_since = None;
+            return None;
+        }
+        let since = *self.pushing_since.get_or_insert(now);
+        (now.duration_since(since) >= STUCK).then(|| {
+            format!(
+                "the plane didn't take off: armed, with the throttle at {} % for {} s, it is still on the ground \
+                 (height {:.1} m, ground speed {:.1} m/s, battery {:.1} V)",
+                s.throttle,
+                STUCK.as_secs(),
+                s.alt_rel,
+                s.groundspeed,
+                s.batt_v
+            )
+        })
+    }
+}
 /// How long a mode has to hold before it counts as arranged.
 const HOLD: Duration = Duration::from_secs(3);
 /// Between a click and whatever repaints before the next one.
@@ -606,8 +735,13 @@ fn kind_of(name: &str) -> Option<WpKind> {
 }
 
 /// A waypoint of our own on the valley floor near home, for arranging a plan.
+/// The `i`th waypoint a test plans: around a triangle a few hundred metres across, south of the
+/// pilot box, so that a plane flying the mission takes a while on each leg and the steps that
+/// watch it keep up. The treetops near it stand 28 m above home, under the 40 m plan altitude.
 fn waypoint(g: &Gcs, i: usize) -> Waypoint {
-    let (lat, lon) = g.origin.to_ll(80.0 + 40.0 * i as f32, 50.0 * ((i % 3) as f32 - 1.0));
+    const CORNERS: [(f32, f32); 3] = [(-200.0, -200.0), (-350.0, 0.0), (-200.0, 200.0)];
+    let (north, east) = CORNERS[i % 3];
+    let (lat, lon) = g.origin.to_ll(north, east);
     Waypoint { kind: WpKind::Waypoint, lat, lon, alt: g.map.plan_alt }
 }
 
@@ -792,7 +926,15 @@ fn arrange_model(g: &mut Gcs, key: &str, value: &Value) -> Result<(), String> {
             }
         }
         "takeoff" => match name()?.as_str() {
-            "planned" => g.add_takeoff(),
+            // The start arranges the plan's length too, and in no set order: a takeoff takes the
+            // place of the first waypoint, so the plan keeps its length and its last item.
+            "planned" => {
+                let before = g.map.plan.len();
+                g.add_takeoff();
+                if before >= 2 && g.map.plan.len() > before {
+                    g.map.plan.remove(1);
+                }
+            }
             _ => g.map.plan.retain(|w| w.kind != WpKind::Takeoff),
         },
         "last plan item" => match name()?.as_str() {
@@ -846,6 +988,8 @@ struct ConsoleDriver {
     /// Why the plane can't be got ready (the autopilot didn't come back, or never got ready to
     /// arm): no other test can run either, so the run stops instead of waiting out each one.
     dead: Option<String>,
+    /// Watches for a plane that never takes off (see [`Liftoff`]).
+    liftoff: std::sync::Mutex<Liftoff>,
 }
 
 impl ConsoleDriver {
@@ -872,6 +1016,7 @@ impl ConsoleDriver {
             in_use: Default::default(),
             pending_auto: false,
             dead: None,
+            liftoff: Default::default(),
         }
     }
 
@@ -1063,6 +1208,10 @@ impl ConsoleDriver {
             if let Some(why) = crate::station::autopilot_gave_up() {
                 return Err(format!("{what} can't happen: {why}"));
             }
+            let lift = self.call(|g, _, _| Lift::of(&g.vehicle.lock().unwrap()))?;
+            if let Some(why) = self.liftoff.lock().unwrap().check(&lift, Instant::now()) {
+                return Err(format!("{what} can't happen: {why}"));
+            }
             if Instant::now() > end {
                 return Err(format!("{what} didn't happen within {secs} s"));
             }
@@ -1214,15 +1363,23 @@ impl ConsoleDriver {
         println!("expect: starting the next test from a fresh plane (the autopilot restarts, about a minute)");
         self.radio = radio_for_a_fresh_plane(self.radio);
         self.deliver_radio(self.radio)?;
-        // The sim starts again, as with the R key.
+        // The sim starts again, as with the R key, with a fresh pack (V): a reset keeps the
+        // battery, and over a whole suite the tests before would leave it flat.
+        let pressed = Instant::now();
         self.call(|g, _, _| {
             if let Some(s) = &g.sensor {
                 s.press_key(Key::Reset);
+                s.press_key(Key::Recharge);
             }
         })?;
-        // The station restarts the autopilot: its link drops, and then comes back.
-        let _ = self.wait_for(45, "the autopilot restarting", |g| !g.vehicle.lock().unwrap().link.alive());
-        self.wait_for(180, "the autopilot coming back", |g| g.vehicle.lock().unwrap().link.alive())?;
+        // The station restarts the autopilot, and it says so when it is up again. (Its link may
+        // not even look down: a native ArduPlane reboots faster than the link times out, and the
+        // health it reported before the reboot would pass for ready.)
+        *self.liftoff.lock().unwrap() = Liftoff::off();
+        self.wait_for(180, "the autopilot restarting", move |g| {
+            let v = g.vehicle.lock().unwrap();
+            v.link.alive() && restart(&v.log, pressed, Instant::now()) != Restart::Waiting
+        })?;
         // ArduPilot goes to the mode of its mode switch a few seconds after it is ready, and a test
         // that sets a mode before then has it taken away; by the time it is ready to arm, that is
         // long done.
@@ -1319,6 +1476,8 @@ impl Driver for ConsoleDriver {
             self.dead = Some(e.clone());
             return Err(e);
         }
+        // Each test watches its own plane for a takeoff that never comes.
+        *self.liftoff.lock().unwrap() = Liftoff::default();
         // The throttle stick starts down, as a pilot leaves it before arming.
         if self.vtol {
             // A test that doesn't use the radio flies without one, like a keyboard pilot, and the
@@ -1349,6 +1508,9 @@ impl Driver for ConsoleDriver {
     }
 
     fn arrange(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
+        // Each step of a test's start, and how long it took: a start that runs out of time says
+        // where it was.
+        let _took = Took::new(format!("{} = {value:?}", var.key));
         let key = var.key.as_str();
         let name = || enum_value(value);
         match key {
@@ -1389,8 +1551,11 @@ impl Driver for ConsoleDriver {
             },
             "autopilot mode" => {
                 let mode = name()?;
-                // The plan's start arranges the mode before the mission: AUTO waits for it.
-                if mode == "AUTO" && self.read("vehicle mission")?.as_str() == Some("empty") {
+                // The plan's start arranges the mode before the mission: AUTO waits for it, even
+                // when the vehicle has a mission already (ArduPilot keeps the last one across
+                // reboots, and AUTO would fly that one). A start with no mission to arrange gets
+                // AUTO when it settles.
+                if mode == "AUTO" && self.read("vehicle mission")?.as_str() != Some("up to date") {
                     self.pending_auto = true;
                     return Ok(());
                 }
@@ -1622,12 +1787,12 @@ impl Driver for ConsoleDriver {
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
         match event.key.as_str() {
-            // The mission goes on to its next item.
-            "plane reaches a waypoint" => {
+            // The mission goes on to its next item: past the takeoff, or a waypoint.
+            "plane finishes its takeoff" | "plane reaches a waypoint" => {
                 let from = self.call(|g, _, _| g.vehicle.lock().unwrap().mission_seq)?;
-                return self.wait_for(FLY_SECS, "the plane reaching a waypoint", move |g| {
-                    g.vehicle.lock().unwrap().mission_seq > from
-                });
+                let what =
+                    if event.key.contains("takeoff") { "the takeoff ending" } else { "the plane reaching a waypoint" };
+                return self.wait_for(FLY_SECS, what, move |g| g.vehicle.lock().unwrap().mission_seq > from);
             }
             // The mission is on its last item (the first is home).
             "plane reaches the last item" => {
@@ -1746,10 +1911,16 @@ impl Driver for ConsoleDriver {
     }
 
     fn observe(&mut self, var: &Variable) -> Result<Value, String> {
-        self.read(&var.key)
+        let start = Instant::now();
+        let got = self.read(&var.key);
+        if start.elapsed() > Duration::from_secs(1) {
+            println!("expect:   read {} in {:.1} s: {got:?}", var.key, start.elapsed().as_secs_f32());
+        }
+        got
     }
 
     fn settle(&mut self) {
+        let _took = Took::new("the start (settling)".into());
         // AUTO with no mission arranged after it: as it is (the start's check says what it got).
         if std::mem::take(&mut self.pending_auto) {
             let _ = self.arrange_mode("AUTO");
@@ -1802,6 +1973,93 @@ fn supported(need: Need<'_>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lift(armed: bool, throttle: u16, alt_rel: f32, thrust_loss: bool) -> Lift {
+        let thrust_loss = thrust_loss.then(Instant::now);
+        Lift { armed, throttle, alt_rel, groundspeed: 0.0, batt_v: 16.8, thrust_loss }
+    }
+
+    /// A thrust loss from before the test (the last test's, while its plane is reset) doesn't
+    /// count, and while the plane is made fresh nothing is watched.
+    #[test]
+    fn only_the_tests_own_flight_is_watched() {
+        let before = Instant::now();
+        let mut w = Liftoff::default();
+        let now = before + Duration::from_secs(5);
+        let old = Lift { thrust_loss: Some(before), ..lift(true, 100, 0.0, false) };
+        assert_eq!(w.check(&old, now), None, "the last test's thrust loss");
+        let mut off = Liftoff::off();
+        assert_eq!(off.check(&lift(true, 100, 0.0, true), now), None);
+        assert_eq!(off.check(&lift(true, 95, 0.1, false), now + Duration::from_secs(60)), None);
+    }
+
+    /// A plane armed and pushing hard that stays on the ground fails its test in 20 s, not
+    /// after the minutes its steps would wait.
+    #[test]
+    fn a_plane_that_never_takes_off_fails_fast() {
+        let (mut w, t0) = (Liftoff::default(), Instant::now());
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(0)), None);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(19)), None);
+        let why = w.check(&lift(true, 95, 0.1, false), at(20)).expect("it fails");
+        assert!(why.contains("still on the ground") && why.contains("95 %"), "{why}");
+    }
+
+    fn line(time: Instant, text: &str) -> crate::vehicle::LogLine {
+        crate::vehicle::LogLine { time, severity: 6, source: "fc", text: text.into() }
+    }
+
+    /// A fresh plane is ready once ArduPilot has said so after the console rebooted it: a native
+    /// ArduPlane reboots faster than its link times out, so the link never looks down. A reset
+    /// that needed no reboot (the plane was fresh already) has nothing to wait for.
+    #[test]
+    fn the_autopilot_has_restarted_once_it_says_so_after_the_reboot() {
+        let t0 = Instant::now();
+        let reset = t0 + Duration::from_secs(10);
+        let s = |n: u64| reset + Duration::from_secs(n);
+        let mut log = std::collections::VecDeque::from([line(t0, "ArduPilot Ready")]);
+        assert_eq!(restart(&log, reset, s(1)), Restart::Waiting, "a reboot may still come");
+        assert_eq!(restart(&log, reset, s(10)), Restart::NotNeeded, "none came: the plane was fresh");
+        log.push_back(line(s(1), "Command: REBOOT autopilot"));
+        assert_eq!(restart(&log, reset, s(10)), Restart::Waiting, "the last start, not this one");
+        log.push_back(line(s(4), "ArduPilot Ready"));
+        assert_eq!(restart(&log, reset, s(10)), Restart::Done);
+    }
+
+    /// Each test watches its own plane: a previous test's push on the ground doesn't count.
+    #[test]
+    fn a_new_watch_starts_from_nothing() {
+        let (mut w, t0) = (Liftoff::default(), Instant::now());
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), t0), None);
+        w = Liftoff::default();
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), t0 + Duration::from_secs(25)), None);
+    }
+
+    /// ArduPilot's own word for it ends the test at once.
+    #[test]
+    fn thrust_loss_fails_at_once() {
+        let (mut w, t) = (Liftoff::default(), Instant::now());
+        let now = Lift { thrust_loss: Some(t), ..lift(true, 100, 0.0, false) };
+        let why = w.check(&now, t).expect("it fails");
+        assert!(why.contains("Thrust Loss"), "{why}");
+    }
+
+    /// Waiting is fine: disarmed, armed with the throttle low (a hand-launched plane waiting for
+    /// its throw), or off the ground. A climb resets the clock.
+    #[test]
+    fn a_plane_that_waits_or_flies_does_not_fail() {
+        let (mut w, t0) = (Liftoff::default(), Instant::now());
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        for s in 0..60 {
+            assert_eq!(w.check(&lift(false, 0, 0.0, false), at(s)), None);
+            assert_eq!(w.check(&lift(true, 0, 0.0, false), at(s)), None);
+        }
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(100)), None);
+        assert_eq!(w.check(&lift(true, 95, 5.0, false), at(110)), None);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(115)), None);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(130)), None, "the clock started again at 115 s");
+        assert_eq!(w.check(&lift(true, 100, 30.0, true), at(140)), None, "high up, thrust loss is a flight's");
+    }
 
     /// A test that ends with the mode switch on QRTL (the VTOL's last slot) and the arm switch on
     /// must not hand that to the restarted autopilot: ArduPlane enters the switch's mode before it
