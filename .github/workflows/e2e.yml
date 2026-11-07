@@ -3,26 +3,19 @@
 # Set the runner up with tools/runner/setup.sh.
 #
 # This repository is PUBLIC, and a self-hosted runner runs whatever a workflow says, on the
-# owner's machine. So this workflow never runs code from a fork:
-#   - `merge_group` and `push` to master run code that was already reviewed and merged;
-#   - a pull request runs only when it comes from a branch of this repository (the `if:` below),
-#     and only when it carries the `e2e` label, which only someone with write access can add.
-# Also keep Settings > Actions > General > "Fork pull request workflows" on "Require approval for
-# all external contributors".
+# owner's machine. So nothing starts this by itself: no pull request, push or merge queue. It is a
+# one-off job, started by hand by someone with write access to the repository:
+#
+#   gh workflow run e2e.yml --ref <branch>
+#   gh run watch
 name: E2E
 
 on:
-  merge_group:
-  push:
-    branches: [master]
-    paths-ignore: ["**.md", "docs/**", "plans/**", "site/**"]
-  pull_request:
-    types: [labeled, synchronize, reopened]
-    paths-ignore: ["**.md", "docs/**", "plans/**", "site/**"]
+  workflow_dispatch:
 
 concurrency:
-  group: e2e-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: e2e
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -33,10 +26,6 @@ env:
 jobs:
   e2e:
     name: end-to-end (self-hosted Mac)
-    if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-       contains(github.event.pull_request.labels.*.name, 'e2e'))
     runs-on: [self-hosted, macOS, ARM64, sim001]
     timeout-minutes: 120
     steps:
