@@ -3,6 +3,15 @@ Feature: The end of a mission
   or a landing, the plane does that. A copter circles at the last waypoint, and a rover
   stays where it is.
 
+  Expectation: After the takeoff the plane heads for the first waypoint
+    A hand-launched mission starts with a takeoff: the plane climbs to its height, and then
+    the mission moves on to the first waypoint.
+    Given the plane is flying the mission
+    And the takeoff is planned
+    And the vehicle's current item is 1
+    When the plane finishes its takeoff
+    Then the vehicle's current item goes up by 1
+
   Expectation: Each waypoint reached moves the mission on
     Given the plane is flying the mission
     When the plane reaches a waypoint

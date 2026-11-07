@@ -3,12 +3,12 @@ Story: Flying the circuit and coming home
   I want the plane to fly the waypoints in order and come home after the last one
   So that all I have to do is throw it and catch it
 
-  After the throw, the plane flies its mission without your help. At each waypoint, the
-  [[current item]] on the map moves to the next one. After the last waypoint, the mode
-  changes to RTL.
+  After the throw, the plane flies its mission without your help. It climbs to the height
+  of the takeoff, and then it flies to each waypoint in turn. Each time, the [[current item]]
+  on the map moves to the next one. After the last waypoint, the mode changes to RTL.
 
-  Scenario: Three waypoints, then home
-    When the plane reaches a waypoint
+  Scenario: Takeoff, two waypoints, then home
+    When the plane finishes its takeoff
     Then the vehicle's current item is 2
     When the plane reaches a waypoint
     Then the vehicle's current item is 3
@@ -21,11 +21,12 @@ Story: Flying the circuit again
   I want to start the mission over without landing
   So that I can fly another lap
 
-  WP1 sends the plane back to the first item of its mission. Thus the plane flies the
-  circuit again, and it does not land.
+  WP1 sends the plane back to the first item of its mission, the takeoff. The plane is
+  already above the height of the takeoff, so it goes on to the first waypoint, and it
+  flies the circuit again. It does not land.
 
   Scenario: Back to the first waypoint
-    When the plane reaches a waypoint
+    When the plane finishes its takeoff
     Then the vehicle's current item is 2
     When the operator restarts the mission
     Then the vehicle's current item is 1
