@@ -10,6 +10,9 @@ Story: Flying a VTOL with the TX15
   with the aileron stick, and let go. Press button 2 to hover again, and press button 6. The plane
   flies home and lands softly. At each step, look at the screen of the TX15.
 
+  Keep the throttle stick up until the plane is 60 m above home: forward flight goes a
+  long way, and the trees of the valley stand up to 50 m above the pilot box.
+
   Scenario: Arm, lift off, fly forward in FBWA, hover again and land softly
     When the arm switch is on
     Then the vehicle is armed
@@ -20,7 +23,7 @@ Story: Flying a VTOL with the TX15
     When the throttle stick is high
     Then the flight is hovering
     And the plane is flying
-    And the height above home is at least 15 m
+    And the height above home is at least 60 m
     When the pilot switches to forward flight
     Then the flight is cruising
     And the autopilot mode is FBWA

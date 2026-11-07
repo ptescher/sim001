@@ -348,6 +348,9 @@ pub enum Key {
     Tag,
     /// R: a fresh plane (with a ground station attached, the station restarts ArduPilot for it).
     Reset,
+    /// V: a fresh battery. A reset keeps the pack it had, as on the field: a test that wants a
+    /// fresh plane presses both.
+    Recharge,
     /// Space: throw the plane.
     Throw,
 }
@@ -364,6 +367,7 @@ impl KeyPress {
             Key::Race => b'G',
             Key::Tag => b'T',
             Key::Reset => b'R',
+            Key::Recharge => b'V',
             Key::Throw => b' ',
         };
         b
@@ -396,6 +400,7 @@ impl ClientMsg {
                 b'G' => Ok(ClientMsg::Key(Key::Race)),
                 b'T' => Ok(ClientMsg::Key(Key::Tag)),
                 b'R' => Ok(ClientMsg::Key(Key::Reset)),
+                b'V' => Ok(ClientMsg::Key(Key::Recharge)),
                 b' ' => Ok(ClientMsg::Key(Key::Throw)),
                 _ => Err(io::Error::new(io::ErrorKind::InvalidData, "unknown key")),
             };
@@ -467,10 +472,11 @@ mod tests {
         }
     }
 
-    /// The station presses the sim's G and T keys for its tests.
+    /// The station presses the sim's keys for its tests: G and T for the games, R and V for a
+    /// fresh plane with a fresh pack, Space to throw.
     #[test]
     fn a_key_press_roundtrips() {
-        for k in [Key::Race, Key::Tag, Key::Reset, Key::Throw] {
+        for k in [Key::Race, Key::Tag, Key::Reset, Key::Recharge, Key::Throw] {
             assert_eq!(ClientMsg::decode(&KeyPress(k).encode()).unwrap(), ClientMsg::Key(k));
         }
     }

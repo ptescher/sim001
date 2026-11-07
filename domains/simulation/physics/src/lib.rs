@@ -115,6 +115,8 @@ pub struct FlightState {
     /// After a reset, the plane is carried back to the hand along a smooth path rather than
     /// teleported, so an autopilot's IMU dead-reckons the same trip its GPS reports.
     pub carry: Option<Carry>,
+    /// Picked up off the ground to be thrown: it goes once it is in the hand.
+    pub throw_pending: bool,
 }
 
 /// A minimum-jerk trip from where a reset found the plane back to the pilot's hand, with a hop
@@ -225,6 +227,7 @@ impl FlightState {
             prop_angle: (0..params.motors.len()).map(|m| if m == 1 { 1.3 } else { 0.0 }).collect(),
             hand_rot: Quat::IDENTITY,
             carry: None,
+            throw_pending: false,
         };
         s.reset_to_hand(params, start);
         // Start already in the hand; later resets carry it there (see `step`).
@@ -256,6 +259,7 @@ impl FlightState {
         self.vel = Vec3::ZERO;
         self.omega = Vec3::ZERO;
         self.phase = Phase::Held;
+        self.throw_pending = false;
         self.crash_reason.clear();
         self.launch_timer = 0.0;
         self.on_ground = false;
@@ -276,6 +280,33 @@ impl FlightState {
 
     pub fn recharge(&mut self) {
         self.used_mah = 0.0;
+    }
+
+    /// Space: throw the plane. One in the hand goes at once; one on its wheels and slow (below
+    /// 5 m/s: at rest, or creeping forward as a takeoff starts) is picked up first. Picked up, it
+    /// is carried to the hand in the throwing pose like [`reset_to_hand`](Self::reset_to_hand)
+    /// does, and goes when it is there.
+    pub fn throw(&mut self, params: &AircraftParams) {
+        if self.phase == Phase::Held {
+            self.launch();
+            return;
+        }
+        if self.phase != Phase::Flying || !self.on_ground || self.vel.length() > 5.0 {
+            return;
+        }
+        let rest = match params.start {
+            StartStyle::Ground { rest_height } => rest_height,
+            StartStyle::Hand => 0.0,
+        };
+        let ahead = self.rot * Vec3::NEG_Z;
+        let heading = (-ahead.x).atan2(-ahead.z);
+        self.carry = Carry::new(self.pos, self.pos + Vec3::Y * (HAND_HEIGHT - rest));
+        self.hand_rot = Quat::from_rotation_y(heading) * Quat::from_rotation_x(8.0 * DEG);
+        self.vel = Vec3::ZERO;
+        self.omega = Vec3::ZERO;
+        self.phase = Phase::Held;
+        self.on_ground = false;
+        self.throw_pending = true;
     }
 
     pub fn launch(&mut self) {
@@ -578,8 +609,12 @@ pub fn step(
         } else {
             s.omega = Vec3::ZERO;
             s.rot = s.hand_rot;
-            // A plane that starts on the ground is let go once it is set down level.
-            if s.carry.is_none() && matches!(p.start, StartStyle::Ground { .. }) {
+            // Picked up to be thrown, it goes once it is in the hand. A plane that starts on
+            // the ground is let go once it is set down level.
+            if s.carry.is_none() && s.throw_pending {
+                s.throw_pending = false;
+                s.launch();
+            } else if s.carry.is_none() && matches!(p.start, StartStyle::Ground { .. }) {
                 s.phase = Phase::Flying;
             }
         }
@@ -1066,5 +1101,73 @@ mod rest_tests {
             assert!((mean.length() - GRAVITY).abs() < 0.3, "{name}: mean {:.2} m/s²", mean.length());
             assert!(swing < 0.05, "{name}: the accelerometer swings {swing:.3} m/s² at rest");
         }
+    }
+}
+
+#[cfg(test)]
+mod throw_tests {
+    use super::*;
+    use simulation_aircraft::t1s_vtol;
+
+    /// A VTOL that waits on its wheels is picked up and thrown: it is carried to the hand (never
+    /// teleported, so ArduPilot's estimators agree), and then it goes, nose first, off the ground.
+    #[test]
+    fn a_plane_at_rest_on_the_ground_is_picked_up_and_thrown() {
+        let p = t1s_vtol::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        let (cmd, env, dt) = (ActuatorCommands::default(), Environment { wind: Vec3::ZERO }, 1.0 / 1200.0);
+        for _ in 0..(3.0 / dt) as usize {
+            step(&p, &mut s, &cmd, &env, &Flat, &[], dt);
+        }
+        assert!(s.phase == Phase::Flying && s.on_ground, "it waits on the ground: {:?}", s.phase);
+        let ground = s.pos.y;
+
+        s.throw(&p);
+        let (mut highest, mut launched, mut jump) = (ground, false, 0.0f32);
+        let mut last = s.pos;
+        for _ in 0..(4.0 / dt) as usize {
+            step(&p, &mut s, &cmd, &env, &Flat, &[], dt);
+            jump = jump.max((s.pos - last).length());
+            last = s.pos;
+            highest = highest.max(s.pos.y);
+            launched |= s.phase == Phase::Launching;
+        }
+        assert!(launched, "it was thrown");
+        assert!(highest > ground + 1.0, "from the hand, not the ground: {highest:.2} m");
+        assert!(jump < 0.05, "carried, not teleported: {jump:.3} m in a step");
+    }
+
+    /// A plane that has started to roll (ArduPilot runs the motors for a takeoff as soon as AUTO
+    /// starts) is still grabbed and thrown, as a pilot grabs one that creeps forward.
+    #[test]
+    fn a_plane_creeping_forward_on_its_wheels_is_picked_up() {
+        let p = t1s_vtol::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        s.carry = None;
+        s.phase = Phase::Flying;
+        s.on_ground = true;
+        s.pos = Vec3::new(0.0, 0.07, 0.0);
+        s.vel = Vec3::new(0.0, 0.0, -3.0);
+        s.throw(&p);
+        assert_eq!(s.phase, Phase::Held);
+        assert!(s.throw_pending);
+    }
+
+    /// A throw in the air, or of a plane rolling fast, does nothing.
+    #[test]
+    fn only_a_plane_on_the_ground_and_slow_is_picked_up() {
+        let p = t1s_vtol::params();
+        let mut s = FlightState::new(&p, &Start { pos: Vec3::ZERO, heading: 0.0 });
+        s.carry = None;
+        s.phase = Phase::Flying;
+        s.pos = Vec3::new(0.0, 20.0, 0.0);
+        s.vel = Vec3::new(0.0, 0.0, -15.0);
+        s.throw(&p);
+        assert_eq!(s.phase, Phase::Flying);
+        s.pos.y = 0.07;
+        s.on_ground = true;
+        s.vel = Vec3::new(0.0, 0.0, -8.0);
+        s.throw(&p);
+        assert_eq!(s.phase, Phase::Flying, "a takeoff roll at 8 m/s is left alone");
     }
 }

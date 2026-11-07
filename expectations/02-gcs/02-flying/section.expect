@@ -4,9 +4,10 @@ Section: Flying a mission
   decides where to go. It also decides when the mission starts again from the first item.
 
 Vocabulary:
-  Phrase: the plane is flying a three-waypoint mission
-    Say: do the steps of [[From plan to flight]], but plan only three waypoints, with no takeoff and no return
-    Given the plan has 3 items
+  Phrase: the plane is flying a short mission
+    Say: do the steps of [[From plan to flight]], but plan a takeoff and two waypoints a few hundred metres apart, south of the pilot box, with no return
+    Given the takeoff is planned
+    And the plan has 3 items
     And the last plan item is WAYPOINT
     And the vehicle mission is up to date
     And the vehicle is armed
@@ -16,4 +17,4 @@ Vocabulary:
 
 Background:
   Follows: the console is connected to a plane on the ground
-  Given the plane is flying a three-waypoint mission
+  Given the plane is flying a short mission

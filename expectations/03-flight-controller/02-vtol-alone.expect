@@ -17,6 +17,14 @@ Feature: A hovering plane on its own
     When the pilot opens the throttle to climb
     Then the plane is flying
 
+  Expectation: Space throws a plane that waits on the ground
+    The T1-S VTOL can also go up like a plain plane: in a forward-flight mode, or for a
+    mission that starts with a takeoff from the hand, you throw it. Space picks the plane up
+    off the ground and throws it, as it throws a plane from your hand.
+    Given the plane is on the ground
+    When the pilot throws the plane
+    Then the plane is flying
+
   Expectation: Closing the throttle holds the hover
     In the hover modes the middle of the throttle stick holds the height, and the keyboard
     sends the middle when the throttle is closed. The plane does not fall.
