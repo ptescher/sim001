@@ -467,10 +467,11 @@ mod tests {
         }
     }
 
-    /// The station presses the sim's G and T keys for its tests.
+    /// The station presses the sim's keys for its tests: G and T for the games, R and V for a
+    /// fresh plane with a fresh pack, Space to throw.
     #[test]
     fn a_key_press_roundtrips() {
-        for k in [Key::Race, Key::Tag, Key::Reset, Key::Throw] {
+        for k in [Key::Race, Key::Tag, Key::Reset, Key::Recharge, Key::Throw] {
             assert_eq!(ClientMsg::decode(&KeyPress(k).encode()).unwrap(), ClientMsg::Key(k));
         }
     }
