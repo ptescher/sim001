@@ -41,6 +41,7 @@ mod placement;
 mod power;
 mod radio;
 mod radio_overlay;
+mod replay;
 mod script;
 mod selftest;
 mod sim;
@@ -453,12 +454,22 @@ fn sim_update(
     mut input: ResMut<PilotInput>,
     sim: Res<SharedSim>,
     mut acc: Local<f32>,
+    mut recorder: Local<Option<replay::Recorder>>,
     scale: Option<Res<acceptance::TimeScale>>,
 ) {
     let mut c = sim.0.lock().unwrap();
+    // On its own, the sim records its run as it goes, to rewind (see `replay`). With ArduPilot
+    // the physics run in its lockstep and the pilot's inputs go straight to the sim.
+    let rec =
+        if c.ap.enabled { None } else { Some(recorder.get_or_insert_with(|| replay::Recorder::new(&c, PHYSICS_DT))) };
+    let mut rec = rec;
+    let mut put = |c: &mut sim::SimCore, i: replay::Input| match rec.as_deref_mut() {
+        Some(r) => r.input(c, i),
+        None => c.apply(&i),
+    };
     // (A hook, the tests' stand-in pilot, holds the sticks itself.)
-    if c.hook.is_none() {
-        c.sticks = input.sticks;
+    if c.hook.is_none() && input.sticks != c.sticks {
+        put(&mut c, replay::Input::Sticks(input.sticks));
     }
     c.pilot_radio = input.profile == Some(input::Profile::Radio);
     c.radio_arm = input.radio_arm;
@@ -466,12 +477,22 @@ fn sim_update(
 
     for a in input.actions.clone() {
         match a {
-            Action::Launch => c.launch(),
-            Action::Race => c.toggle_game(recreation_games::Kind::Race),
-            Action::Tag => c.toggle_game(recreation_games::Kind::Tag),
-            Action::Reset => c.reset(),
+            Action::Launch => put(&mut c, replay::Input::Throw),
+            Action::Race => put(&mut c, replay::Input::Game(recreation_games::Kind::Race)),
+            Action::Tag => put(&mut c, replay::Input::Game(recreation_games::Kind::Tag)),
+            Action::Reset => put(&mut c, replay::Input::Reset),
             // Self-levelling and rate hold are a flight controller's: a plane without one stays in MANUAL.
-            Action::Mode if c.params.flight_controller && (!c.ap.enabled || c.direct) => c.mode = c.mode.next(),
+            Action::Mode if c.params.flight_controller && (!c.ap.enabled || c.direct) => {
+                let next = c.mode.next();
+                put(&mut c, replay::Input::Mode(next));
+            }
+            Action::Rewind => {
+                input.notice = if c.ap.enabled {
+                    "Rewind works without ArduPilot (not yet with it)".into()
+                } else {
+                    "Back 10 s".into()
+                };
+            }
             Action::ControlSource if c.ap.enabled => {
                 c.direct = !c.direct;
                 input.notice = if c.direct {
@@ -480,11 +501,17 @@ fn sim_update(
                     "ARDUPILOT flies the plane".into()
                 };
             }
-            Action::Rates => c.high_rates = !c.high_rates,
+            Action::Rates => {
+                let high = !c.high_rates;
+                put(&mut c, replay::Input::Rates(high));
+            }
             Action::Pause => c.paused = !c.paused,
-            Action::DiffThrust => c.diff_thrust = !c.diff_thrust,
+            Action::DiffThrust => {
+                let on = !c.diff_thrust;
+                put(&mut c, replay::Input::DiffThrust(on));
+            }
             Action::Recharge => {
-                c.state.recharge();
+                put(&mut c, replay::Input::Recharge);
                 input.notice = "Fresh 4S 1800 mAh pack".into();
             }
             Action::ApArm => c.ap.arm_switch = !c.ap.arm_switch,
@@ -496,20 +523,31 @@ fn sim_update(
     }
 
     // Wind controls.
+    let mut wind = c.wind;
     if keys.just_pressed(KeyCode::BracketRight) {
-        c.wind.speed = (c.wind.speed + 1.0).min(15.0);
+        wind.speed = (wind.speed + 1.0).min(15.0);
     }
     if keys.just_pressed(KeyCode::BracketLeft) {
-        c.wind.speed = (c.wind.speed - 1.0).max(0.0);
+        wind.speed = (wind.speed - 1.0).max(0.0);
     }
     if keys.just_pressed(KeyCode::Period) {
-        c.wind.from_dir += 15f32.to_radians();
+        wind.from_dir += 15f32.to_radians();
     }
     if keys.just_pressed(KeyCode::Comma) {
-        c.wind.from_dir -= 15f32.to_radians();
+        wind.from_dir -= 15f32.to_radians();
     }
     if keys.just_pressed(KeyCode::Slash) {
-        c.wind.turbulence = if c.wind.turbulence >= 0.99 { 0.0 } else { (c.wind.turbulence + 0.25).min(1.0) };
+        wind.turbulence = if wind.turbulence >= 0.99 { 0.0 } else { (wind.turbulence + 0.25).min(1.0) };
+    }
+    if wind != c.wind {
+        put(&mut c, replay::Input::Wind(wind));
+    }
+    drop(put);
+    if input.actions.contains(&Action::Rewind)
+        && let Some(r) = rec.as_deref_mut()
+    {
+        r.rewind(&mut c, 10.0);
+        *acc = 0.0;
     }
 
     if c.ap.enabled {
@@ -522,7 +560,10 @@ fn sim_update(
     }
     *acc += time.delta_secs().min(0.1) * scale.map_or(1.0, |s| s.0);
     while *acc >= PHYSICS_DT {
-        c.step_standalone(PHYSICS_DT);
+        match rec.as_deref_mut() {
+            Some(r) => r.step(&mut c),
+            None => c.step_standalone(PHYSICS_DT),
+        }
         *acc -= PHYSICS_DT;
     }
 }

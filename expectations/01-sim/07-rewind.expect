@@ -1,0 +1,12 @@
+Feature: Rewind
+  Backspace takes the flight back 10 seconds, and you fly on from there: a crash is undone,
+  and so is a bad turn. The sim keeps the last ten minutes, and it never goes back past the
+  start of the flight. With ArduPilot the sim can't rewind yet, and the HUD says so.
+
+  Expectation: Backspace undoes a crash
+    A crash a few seconds after the throw goes back to the moment before the throw: the plane
+    is in your hand again.
+    Given the plane is crashed
+    And the throttle is 0 %
+    When the pilot rewinds
+    Then the plane is in hand
