@@ -37,7 +37,7 @@ impl FlightMode {
 }
 
 /// Pilot stick positions, normalized.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Sticks {
     /// Right positive.
     pub roll: f32,
@@ -49,7 +49,7 @@ pub struct Sticks {
     pub throttle: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindSettings {
     pub speed: f32,
     /// Direction the wind blows FROM, radians clockwise from north.
@@ -57,7 +57,7 @@ pub struct WindSettings {
     pub turbulence: f32,
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 struct PidState {
     roll_i: f32,
     pitch_i: f32,
@@ -203,6 +203,28 @@ pub struct SimCore {
     pub fbwa: Fbwa,
 }
 
+/// The sim's domain state at a moment: what changes as it runs and is not a link to another
+/// program (ArduPilot) or code (the test hook). See `crate::replay`.
+#[derive(Clone, Debug)]
+pub struct Snapshot {
+    state: FlightState,
+    sticks: Sticks,
+    mode: FlightMode,
+    high_rates: bool,
+    diff_thrust: bool,
+    wind: WindSettings,
+    paused: bool,
+    last_cmd: ActuatorCommands,
+    last_wind: Vec3,
+    pid: PidState,
+    launch_hold: f32,
+    resets: u16,
+    direct: bool,
+    game: Option<Session>,
+    parked: Vec<FlightState>,
+    hook_clock: f32,
+}
+
 /// A function called with the sim and the time since its last call.
 pub type Hook = Box<dyn FnMut(&mut SimCore, f32) + Send>;
 
@@ -232,6 +254,66 @@ fn expo(x: f32, e: f32) -> f32 {
 }
 
 impl SimCore {
+    /// The sim's domain state now, to come back to with [`restore`](Self::restore).
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            state: self.state.clone(),
+            sticks: self.sticks,
+            mode: self.mode,
+            high_rates: self.high_rates,
+            diff_thrust: self.diff_thrust,
+            wind: self.wind,
+            paused: self.paused,
+            last_cmd: self.last_cmd,
+            last_wind: self.last_wind,
+            pid: self.pid,
+            launch_hold: self.launch_hold,
+            resets: self.resets,
+            direct: self.direct,
+            game: self.game.clone(),
+            parked: self.parked.clone(),
+            hook_clock: self.hook_clock,
+        }
+    }
+
+    /// Put the sim back as it was at `s`. Its links (ArduPilot, the ground station) and its hook
+    /// stay as they are.
+    pub fn restore(&mut self, s: &Snapshot) {
+        let s = s.clone();
+        self.state = s.state;
+        self.sticks = s.sticks;
+        self.mode = s.mode;
+        self.high_rates = s.high_rates;
+        self.diff_thrust = s.diff_thrust;
+        self.wind = s.wind;
+        self.paused = s.paused;
+        self.last_cmd = s.last_cmd;
+        self.last_wind = s.last_wind;
+        self.pid = s.pid;
+        self.launch_hold = s.launch_hold;
+        self.resets = s.resets;
+        self.direct = s.direct;
+        self.game = s.game;
+        self.parked = s.parked;
+        self.hook_clock = s.hook_clock;
+    }
+
+    /// Do what the pilot did (see [`crate::replay::Input`]).
+    pub fn apply(&mut self, input: &crate::replay::Input) {
+        use crate::replay::Input;
+        match input {
+            Input::Sticks(s) => self.sticks = *s,
+            Input::Throw => self.launch(),
+            Input::Reset => self.reset(),
+            Input::Recharge => self.state.recharge(),
+            Input::Game(k) => self.toggle_game(*k),
+            Input::Mode(m) => self.mode = *m,
+            Input::Rates(high) => self.high_rates = *high,
+            Input::DiffThrust(on) => self.diff_thrust = *on,
+            Input::Wind(w) => self.wind = *w,
+        }
+    }
+
     pub fn new(params: AircraftParams, obstacles: Vec<Obstacle>, ap_enabled: bool, ap_port: u16) -> Self {
         let state = FlightState::new(&params, &terrain::start());
         let parked = if ap_enabled {
