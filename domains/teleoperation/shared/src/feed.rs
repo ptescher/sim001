@@ -348,6 +348,9 @@ pub enum Key {
     Tag,
     /// R: a fresh plane (with a ground station attached, the station restarts ArduPilot for it).
     Reset,
+    /// V: a fresh battery. A reset keeps the pack it had, as on the field: a test that wants a
+    /// fresh plane presses both.
+    Recharge,
     /// Space: throw the plane.
     Throw,
 }
@@ -364,6 +367,7 @@ impl KeyPress {
             Key::Race => b'G',
             Key::Tag => b'T',
             Key::Reset => b'R',
+            Key::Recharge => b'V',
             Key::Throw => b' ',
         };
         b
@@ -396,6 +400,7 @@ impl ClientMsg {
                 b'G' => Ok(ClientMsg::Key(Key::Race)),
                 b'T' => Ok(ClientMsg::Key(Key::Tag)),
                 b'R' => Ok(ClientMsg::Key(Key::Reset)),
+                b'V' => Ok(ClientMsg::Key(Key::Recharge)),
                 b' ' => Ok(ClientMsg::Key(Key::Throw)),
                 _ => Err(io::Error::new(io::ErrorKind::InvalidData, "unknown key")),
             };

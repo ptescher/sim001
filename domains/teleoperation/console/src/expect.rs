@@ -1214,10 +1214,12 @@ impl ConsoleDriver {
         println!("expect: starting the next test from a fresh plane (the autopilot restarts, about a minute)");
         self.radio = radio_for_a_fresh_plane(self.radio);
         self.deliver_radio(self.radio)?;
-        // The sim starts again, as with the R key.
+        // The sim starts again, as with the R key, with a fresh pack (V): a reset keeps the
+        // battery, and over a whole suite the tests before would leave it flat.
         self.call(|g, _, _| {
             if let Some(s) = &g.sensor {
                 s.press_key(Key::Reset);
+                s.press_key(Key::Recharge);
             }
         })?;
         // The station restarts the autopilot: its link drops, and then comes back.
