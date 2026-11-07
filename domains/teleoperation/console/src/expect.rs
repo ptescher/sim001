@@ -260,6 +260,79 @@ const MODE_IDS: [&str; 10] = [
 /// Time to let the console settle after an action, and between looks while waiting for a check.
 const SETTLE: Duration = Duration::from_millis(1200);
 const LOOK: Duration = Duration::from_millis(250);
+
+/// How long a plane may sit on the ground armed, with its throttle at [`PUSHING`] % or more,
+/// before a test that waits on it gives up.
+const STUCK: Duration = Duration::from_secs(20);
+const PUSHING: u16 = 50;
+
+/// What [`Liftoff`] looks at, read from the vehicle.
+#[derive(Clone, Copy, Debug)]
+struct Lift {
+    armed: bool,
+    /// The autopilot's throttle (%).
+    throttle: u16,
+    alt_rel: f32,
+    groundspeed: f32,
+    batt_v: f32,
+    /// ArduPilot said "Potential VTOL Thrust Loss" since it armed.
+    thrust_loss: bool,
+}
+
+impl Lift {
+    fn of(v: &crate::vehicle::Vehicle) -> Lift {
+        let since = v.armed_since;
+        Lift {
+            armed: v.armed,
+            throttle: v.throttle,
+            alt_rel: v.alt_rel,
+            groundspeed: v.groundspeed,
+            batt_v: v.batt_v,
+            thrust_loss: v.log.iter().any(|l| l.text.contains("Thrust Loss") && since.is_some_and(|a| l.time >= a)),
+        }
+    }
+}
+
+/// Fails a test fast when its plane never takes off: armed and pushing, it stays on the ground
+/// (a flat battery, motors that give no thrust, a throw that did nothing), which the steps
+/// would otherwise wait out for minutes, twice.
+#[derive(Default)]
+struct Liftoff {
+    pushing_since: Option<Instant>,
+}
+
+impl Liftoff {
+    fn check(&mut self, s: &Lift, now: Instant) -> Option<String> {
+        let on_ground = s.alt_rel < 1.0 && s.groundspeed < 1.0;
+        if !s.armed {
+            self.pushing_since = None;
+            return None;
+        }
+        if s.thrust_loss && s.alt_rel < 3.0 {
+            return Some(format!(
+                "the plane didn't take off: ArduPilot says Potential VTOL Thrust Loss (its motors run, and it doesn't \
+                 climb; battery {:.1} V)",
+                s.batt_v
+            ));
+        }
+        if !(on_ground && s.throttle >= PUSHING) {
+            self.pushing_since = None;
+            return None;
+        }
+        let since = *self.pushing_since.get_or_insert(now);
+        (now.duration_since(since) >= STUCK).then(|| {
+            format!(
+                "the plane didn't take off: armed, with the throttle at {} % for {} s, it is still on the ground \
+                 (height {:.1} m, ground speed {:.1} m/s, battery {:.1} V)",
+                s.throttle,
+                STUCK.as_secs(),
+                s.alt_rel,
+                s.groundspeed,
+                s.batt_v
+            )
+        })
+    }
+}
 /// How long a mode has to hold before it counts as arranged.
 const HOLD: Duration = Duration::from_secs(3);
 /// Between a click and whatever repaints before the next one.
@@ -846,6 +919,8 @@ struct ConsoleDriver {
     /// Why the plane can't be got ready (the autopilot didn't come back, or never got ready to
     /// arm): no other test can run either, so the run stops instead of waiting out each one.
     dead: Option<String>,
+    /// Watches for a plane that never takes off (see [`Liftoff`]).
+    liftoff: std::sync::Mutex<Liftoff>,
 }
 
 impl ConsoleDriver {
@@ -872,6 +947,7 @@ impl ConsoleDriver {
             in_use: Default::default(),
             pending_auto: false,
             dead: None,
+            liftoff: Default::default(),
         }
     }
 
@@ -1061,6 +1137,10 @@ impl ConsoleDriver {
                 return Ok(());
             }
             if let Some(why) = crate::station::autopilot_gave_up() {
+                return Err(format!("{what} can't happen: {why}"));
+            }
+            let lift = self.call(|g, _, _| Lift::of(&g.vehicle.lock().unwrap()))?;
+            if let Some(why) = self.liftoff.lock().unwrap().check(&lift, Instant::now()) {
                 return Err(format!("{what} can't happen: {why}"));
             }
             if Instant::now() > end {
@@ -1804,6 +1884,47 @@ fn supported(need: Need<'_>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lift(armed: bool, throttle: u16, alt_rel: f32, thrust_loss: bool) -> Lift {
+        Lift { armed, throttle, alt_rel, groundspeed: 0.0, batt_v: 16.8, thrust_loss }
+    }
+
+    /// A plane armed and pushing hard that stays on the ground fails its test in 20 s, not
+    /// after the minutes its steps would wait.
+    #[test]
+    fn a_plane_that_never_takes_off_fails_fast() {
+        let (mut w, t0) = (Liftoff::default(), Instant::now());
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(0)), None);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(19)), None);
+        let why = w.check(&lift(true, 95, 0.1, false), at(20)).expect("it fails");
+        assert!(why.contains("still on the ground") && why.contains("95 %"), "{why}");
+    }
+
+    /// ArduPilot's own word for it ends the test at once.
+    #[test]
+    fn thrust_loss_fails_at_once() {
+        let mut w = Liftoff::default();
+        let why = w.check(&lift(true, 100, 0.0, true), Instant::now()).expect("it fails");
+        assert!(why.contains("Thrust Loss"), "{why}");
+    }
+
+    /// Waiting is fine: disarmed, armed with the throttle low (a hand-launched plane waiting for
+    /// its throw), or off the ground. A climb resets the clock.
+    #[test]
+    fn a_plane_that_waits_or_flies_does_not_fail() {
+        let (mut w, t0) = (Liftoff::default(), Instant::now());
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        for s in 0..60 {
+            assert_eq!(w.check(&lift(false, 0, 0.0, false), at(s)), None);
+            assert_eq!(w.check(&lift(true, 0, 0.0, false), at(s)), None);
+        }
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(100)), None);
+        assert_eq!(w.check(&lift(true, 95, 5.0, false), at(110)), None);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(115)), None);
+        assert_eq!(w.check(&lift(true, 95, 0.1, false), at(130)), None, "the clock started again at 115 s");
+        assert_eq!(w.check(&lift(true, 100, 30.0, true), at(140)), None, "high up, thrust loss is a flight's");
+    }
 
     /// A test that ends with the mode switch on QRTL (the VTOL's last slot) and the arm switch on
     /// must not hand that to the restarted autopilot: ArduPlane enters the switch's mode before it
