@@ -26,7 +26,7 @@ expectation_story = { git = "https://github.com/ptescher/expectation" }
 
 [package]
 name = "sim001"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 # `cargo run` starts the launcher (src/bin/launcher.rs); the sim is `cargo run --bin sim001`.
 default-run = "sim001_launch"
