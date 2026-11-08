@@ -1093,5 +1093,13 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+/// The static library is built with `panic = "abort"`, so nothing unwinds. But on Linux the
+/// prebuilt `compiler_builtins` still refers to the unwinder's personality, which a `no_std`
+/// library has none of, and ArduPlane would not link ("undefined reference to
+/// rust_eh_personality"). It is never called.
+#[cfg(feature = "ffi-static")]
+#[unsafe(no_mangle)]
+pub extern "C" fn rust_eh_personality() {}
+
 #[cfg(test)]
 mod tests;
