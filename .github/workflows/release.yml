@@ -37,6 +37,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
+          # The manual's screenshots are in Git LFS.
+          lfs: true
       - name: The tag matches the version
         shell: bash
         run: |
@@ -65,8 +67,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ardupilot
-          key: ardupilot-${{ runner.os }}-${{ hashFiles('ardupilot/build_native.sh', 'ardupilot/patches/**') }}
-      - run: ardupilot/build_native.sh
+          key: ardupilot-agent-${{ runner.os }}-${{ hashFiles('ardupilot/build_native.sh', 'ardupilot/patches/**', 'domains/cognition/executor/**') }}
+      # With the plan executor: Towers flies its drones in AGENT mode.
+      - run: AGENT_EXEC=1 ardupilot/build_native.sh
       - name: Test results for the manual
         run: |
           mkdir -p docs

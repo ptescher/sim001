@@ -3,6 +3,7 @@
 //! its input (`--stop-with-stdin`): when the app quits, or starts a new game. With the cameras on,
 //! it starts the 3D view of the game (`towers_view`) too, which sends the camera of each drone.
 
+use crate::place::Place;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 
@@ -14,20 +15,27 @@ pub struct Server {
     view: Option<(Child, ChildStdin)>,
 }
 
-pub fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("the repo root")
+fn place() -> Place {
+    Place::from_env()
 }
 
 /// Builds the game server, and the 3D view with the cameras of the drones if `cameras` (a no-op
-/// when they are up to date).
+/// when they are up to date). In the app bundle they are built already.
 pub fn build(cameras: bool) -> Result<(), String> {
-    let mut args = vec!["build", "--release", "-p", "recreation_towers_server"];
-    if cameras {
+    let place = place();
+    let mut args = vec!["build", "--release"];
+    if place.program("towers_server").1 {
+        args.extend(["-p", "recreation_towers_server"]);
+    }
+    if cameras && place.program("towers_view").1 {
         args.extend(["-p", "recreation_towers_view"]);
+    }
+    if args.len() == 2 {
+        return Ok(());
     }
     let ok = Command::new("cargo")
         .args(args)
-        .current_dir(root())
+        .current_dir(&place.home)
         .status()
         .map_err(|e| format!("can't run cargo: {e}"))?
         .success();
@@ -40,7 +48,7 @@ pub fn ensure_map(dir: &Path) -> Result<(), String> {
     if dir.join("terrain_map.png").exists() && dir.join("terrain_map.txt").exists() {
         return Ok(());
     }
-    let ok = Command::new(root().join("target/release/towers_view"))
+    let ok = Command::new(place().program("towers_view").0)
         .arg("--export-map")
         .arg(dir)
         .status()
@@ -56,17 +64,26 @@ pub fn free_port(preferred: u16) -> u16 {
         .unwrap_or(preferred)
 }
 
-/// The ArduPlane with the AGENT mode: `SIM001_BIN`, else the checkout's AGENT build.
+/// The ArduPlane with the AGENT mode: `SIM001_BIN` (the bundle's programs), else the checkout's
+/// AGENT build.
 fn agent_bin() -> PathBuf {
-    std::env::var_os("SIM001_BIN").map(PathBuf::from).unwrap_or_else(|| root().join(".ardupilot-agent/build/sitl/bin"))
+    std::env::var_os("SIM001_BIN")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| place().home.join(".ardupilot-agent/build/sitl/bin"))
+}
+
+/// The game server's log.
+pub fn log_path() -> PathBuf {
+    place().logs().join("server.log")
 }
 
 impl Server {
     /// Starts a game with `args` (`--blue person --red computer --speedup 1` ...), and the 3D view
     /// of it if `cameras`. What they print goes to `logs/towers/server.log` and `view.log`.
     pub fn start(args: &[String], cameras: bool) -> Result<Server, String> {
-        let program = root().join("target/release/towers_server");
-        let logs = root().join("logs/towers");
+        let place = place();
+        let program = place.program("towers_server").0;
+        let logs = place.logs();
         let _ = std::fs::create_dir_all(&logs);
         let log = std::fs::File::create(logs.join("server.log")).map_err(|e| e.to_string())?;
         let err = log.try_clone().map_err(|e| e.to_string())?;
@@ -74,6 +91,8 @@ impl Server {
             .args(args)
             .arg("--stop-with-stdin")
             .env("SIM001_BIN", agent_bin())
+            // The game server finds its files (the ArduPilot parameters) where the app does.
+            .env("SIM001_HOME", &place.home)
             .stdin(Stdio::piped())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(err))
@@ -88,7 +107,7 @@ impl Server {
     /// If the server has exited: why, from the end of its log.
     pub fn exited(&mut self) -> Option<String> {
         let status = self.child.try_wait().ok().flatten()?;
-        let log = std::fs::read_to_string(root().join("logs/towers/server.log")).unwrap_or_default();
+        let log = std::fs::read_to_string(log_path()).unwrap_or_default();
         let tail: Vec<&str> = log.lines().rev().take(3).collect();
         Some(format!("the game server exited ({status}): {}", tail.into_iter().rev().collect::<Vec<_>>().join(" / ")))
     }
@@ -121,7 +140,7 @@ impl Server {
 /// Starts the 3D view of the game, which takes a spectator's seat on the server and serves the
 /// drones' cameras (it stops when its input closes).
 fn start_view(logs: &Path, seat_port: Option<&String>) -> Result<(Child, ChildStdin), String> {
-    let program = root().join("target/release/towers_view");
+    let program = place().program("towers_view").0;
     let log = std::fs::File::create(logs.join("view.log")).map_err(|e| e.to_string())?;
     let err = log.try_clone().map_err(|e| e.to_string())?;
     let mut command = Command::new(&program);

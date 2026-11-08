@@ -83,8 +83,9 @@ Feature: Launching
     Then the ray tracing of the started program is on
 
   Expectation: TOWERS starts a game of Towers against the computer
-    The commander app starts the game server with six ArduPlane drones and takes the Blue seat.
-    It needs the AGENT build of ArduPlane.
+    The commander app starts the game server with ten ArduPlane drones, five on each team, and
+    takes the Blue seat. It needs the AGENT build of ArduPlane, which the app has; from source,
+    build it with `AP_DIR=.ardupilot-agent AGENT_EXEC=1 ardupilot/build_native.sh`.
 
     Hands over to: a game of Towers is in play
     Given the launch target is TOWERS
