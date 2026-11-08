@@ -582,7 +582,7 @@ impl Launcher {
         let target = self.choices.target;
         let explain = match (target, fc) {
             (Target::Towers, _) => {
-                "Two teams of three drones fight for five radio towers in a valley with a forest. You command Blue from the map: click a drone, then a tower, and LOW sends it along the lanes under the trees. Starts a game server with six ArduPlane drones, and needs the AGENT build of ArduPlane."
+                "Two teams of five drones fight for five radio towers in a valley with a forest. You command Blue from the map: click a drone, then a tower, and LOW sends it along the lanes under the trees. Starts a game server with ten ArduPlane drones. From source, it needs the AGENT build of ArduPlane; the app has it."
             }
             (Target::Sim, true) => {
                 "The T1-S VTOL. The sim starts its own ArduPilot (native build or Docker); fly it with your radio."
@@ -642,11 +642,8 @@ impl Launcher {
                         .child(self.choice("t-station", "GROUND STATION", target == Target::Station, cx, |t| {
                             t.choices.target = Target::Station
                         }))
-                        // The bundle has no commander app (nor the game server) yet.
-                        .children((!layout().bundled()).then(|| {
-                            self.choice("t-towers", "TOWERS", target == Target::Towers, cx, |t| {
-                                t.choices.target = Target::Towers
-                            })
+                        .child(self.choice("t-towers", "TOWERS", target == Target::Towers, cx, |t| {
+                            t.choices.target = Target::Towers
                         })), cx)
                 )
                 .when(target != Target::Towers, |d| {

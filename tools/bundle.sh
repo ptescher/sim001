@@ -1,6 +1,7 @@
 #!/bin/bash
-# Bundles the launcher, the sim, the viewer, the tag runner, the expectation tool, the map builder, the ground station, ArduPlane SITL, the maps and the docs into one
-# app. Build it on the OS you want it for.
+# Bundles the launcher, the sim, the viewer, the tag runner, the expectation tool, the map builder, the ground station,
+# the Towers commander app with its game server and 3D view, ArduPlane SITL, the maps and the docs into one app. Build it
+# on the OS you want it for.
 #   tools/bundle.sh [--no-build] [--no-docs]
 #     macOS    target/bundle/SIM001.app, and SIM001-macos.zip beside it
 #     Linux    target/bundle/sim001-linux/ (run sim001_launcher), and sim001-linux.tar.gz
@@ -11,7 +12,10 @@
 # and flight logs go to the user's data folder, since the app itself is read-only).
 # ArduPlane SITL is bundled if ardupilot/build_native.sh has built it, and both the sim and the
 # station then run without Docker (the station starts one ArduPlane per plane, yours and the
-# computer pilots'). Without it they fall back to Docker.
+# computer pilots'). Without it they fall back to Docker. Towers needs its AGENT mode with the plan
+# executor (AGENT_EXEC=1): the AGENT build is bundled if there is one (AP_BUNDLE, else
+# .ardupilot-agent, else .ardupilot, which the release builds with AGENT_EXEC=1); it flies the sim
+# and the station too.
 set -e
 cd "$(dirname "$0")/.."
 ROOT=$PWD
@@ -26,20 +30,28 @@ case "$(uname -s)" in
 esac
 
 if [ $build = 1 ]; then
-  echo "== building the sim, the viewer, the tag runner, the expectation tool, the map builder, the console and the launcher"
-  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation -p visualization_mapbuild -p teleoperation_console -p teleoperation_launcher
+  echo "== building the sim, the viewer, the tag runner, the expectation tool, the map builder, the console, Towers and the launcher"
+  cargo build --release -p sim001 -p visualization_viewer -p cognition_runner -p expectation -p visualization_mapbuild -p teleoperation_console \
+    -p teleoperation_command -p recreation_towers_server -p recreation_towers_view -p teleoperation_launcher
 fi
 SIM=target/release/sim001$exe
 GCS=target/release/sim001_gcs$exe
 LAUNCHER=target/release/sim001_launcher$exe
 # The other programs: the viewer of a real plane, the tag runner, the expectation tool, the map builder.
 EXTRA="target/release/sim001_view$exe target/release/cognition_runner$exe target/release/expectation$exe target/release/mapbuild$exe"
+# Towers: the commander app, its game server and the 3D view with the drones' cameras.
+EXTRA="$EXTRA target/release/sim001_command$exe target/release/towers_server$exe target/release/towers_view$exe"
 for f in "$SIM" "$GCS" "$LAUNCHER" $EXTRA; do [ -x "$f" ] || { echo "missing $f (build first)" >&2; exit 1; }; done
 
 # The console's terrain map of the Alpine Valley comes from the sim.
 if [ ! -f domains/teleoperation/console/assets/terrain_map.png ]; then
   echo "== exporting the terrain map"
   "$SIM" --export-map domains/teleoperation/console/assets
+fi
+# The commander app's picture of the valley comes from the 3D view (the bundle is read-only).
+if [ ! -f domains/teleoperation/command/assets/terrain_map.png ]; then
+  echo "== exporting the valley for the commander app"
+  target/release/towers_view$exe --export-map domains/teleoperation/command/assets
 fi
 if [ $docs = 1 ]; then
   echo "== rendering the docs from the saved test results"
@@ -56,10 +68,16 @@ mkdir -p "$BIN" "$RES"
 
 cp "$LAUNCHER" "$BIN/"; cp "$SIM" "$BIN/"; cp "$GCS" "$BIN/"
 for f in $EXTRA; do cp "$f" "$BIN/"; done
-if [ -x .ardupilot/build/sitl/bin/arduplane$exe ]; then
-  cp .ardupilot/build/sitl/bin/arduplane$exe "$BIN/"
+AP=""
+for d in ${AP_BUNDLE:-} .ardupilot-agent .ardupilot; do
+  if [ -x "$d/build/sitl/bin/arduplane$exe" ]; then AP=$d; break; fi
+done
+if [ -n "$AP" ]; then
+  echo "== ArduPlane SITL from $AP"
+  strings "$AP/build/sitl/bin/arduplane$exe" | grep -q "Agent: executor" || echo "note: $AP has no AGENT mode: Towers won't fly"
+  cp "$AP/build/sitl/bin/arduplane$exe" "$BIN/"
   mkdir -p "$RES/.ardupilot/Tools/autotest/models"
-  cp .ardupilot/Tools/autotest/models/plane.parm "$RES/.ardupilot/Tools/autotest/models/"
+  cp "$AP/Tools/autotest/models/plane.parm" "$RES/.ardupilot/Tools/autotest/models/"
 else
   echo "note: no native ArduPlane (ardupilot/build_native.sh): the bundle will need Docker for ArduPilot"
 fi
@@ -77,6 +95,8 @@ cp maps/README.md "$RES/maps/" 2>/dev/null || true
 mkdir -p "$RES/ardupilot"; find ardupilot -maxdepth 1 -type f -exec cp {} "$RES/ardupilot/" \;
 rsync -a --exclude results docs/ "$RES/docs/"
 rsync -a domains/teleoperation/console/assets/ "$RES/assets/"
+mkdir -p "$RES/domains/teleoperation/command"
+rsync -a domains/teleoperation/command/assets/ "$RES/domains/teleoperation/command/assets/"
 cp controls.cfg.example "$RES/"
 cp README.md "$RES/"
 echo "SIM001 ${SIM001_VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)}" > "$RES/sim001-bundle"
