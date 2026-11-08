@@ -156,7 +156,10 @@ fn radio_channels(r: &Radio) -> [u16; 8] {
 
 fn main() {
     let mut a = args();
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root");
+    // The ArduPilot parameters are in the checkout, or in the app bundle's resources (SIM001_HOME).
+    let root = std::env::var_os("SIM001_HOME").map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repo root")
+    });
     // The server cannot put a drone down when its battery is empty yet (plans/towers-rules-v2.md,
     // step 11): the drones fly with no battery.
     let rules = Rules::default().without_batteries();

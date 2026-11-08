@@ -11,6 +11,7 @@ mod cameras;
 mod expect;
 mod field;
 mod ground;
+mod place;
 mod seat;
 mod server;
 mod snapshot;
@@ -64,7 +65,7 @@ fn main() {
             .and_then(|i| args.get(i + 1))
             .filter(|a| !a.starts_with("--"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| server::root().join("expectations"));
+            .unwrap_or_else(|| place::Place::from_env().expectations());
         std::process::exit(bench::run(&suite, arg("--only").as_deref()));
     }
     let serve = flag("--serve") || expect;
@@ -142,7 +143,7 @@ fn main() {
             .and_then(|i| args.get(i + 1))
             .filter(|a| !a.starts_with("--"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| server::root().join("expectations"));
+            .unwrap_or_else(|| place::Place::from_env().expectations());
         expect::Config {
             suite,
             only: arg("--only"),

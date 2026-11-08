@@ -19,7 +19,7 @@ pub struct Ground {
 
 /// Where the picture is exported to, and read from.
 pub fn assets_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("assets")
+    crate::place::Place::from_env().assets()
 }
 
 impl Ground {

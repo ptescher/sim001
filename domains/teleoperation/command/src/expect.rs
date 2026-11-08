@@ -340,7 +340,7 @@ impl AppDriver {
             format!("seat {:?}, selected {:?}, {game}", s.status, v.selected)
         });
         println!("expect:   app: {}", state.unwrap_or_else(|e| e));
-        let log = crate::server::root().join("logs/towers/server.log");
+        let log = crate::server::log_path();
         let Ok(text) = std::fs::read_to_string(&log) else {
             println!("expect:   no server log at {}", log.display());
             return;
