@@ -159,7 +159,13 @@ fn vfov(hfov_deg: f32, size: UVec2) -> f32 {
     (2.0 * ((hfov_deg.to_radians() * 0.5).tan() * aspect).atan()).to_degrees()
 }
 
-/// Each camera follows its drone, and renders full size only while someone watches its feed.
+/// The size a drone's camera renders at: the feed's while someone watches it, and none (it does not
+/// render) while nobody does. Each camera costs its own shadows, sky and exposure whatever its size.
+fn render_size(watched: bool, size: UVec2) -> Option<UVec2> {
+    watched.then_some(size)
+}
+
+/// Each camera follows its drone, and renders only while someone watches its feed.
 fn update(
     mut commands: Commands,
     links: Res<Links>,
@@ -167,19 +173,23 @@ fn update(
     render_scale: Res<RenderScale>,
     mut cams: ResMut<Cams>,
     mut images: ResMut<Assets<Image>>,
-    mut cameras: Query<(&DroneCamera, &mut Transform)>,
+    mut cameras: Query<(&DroneCamera, &mut Transform, &mut Camera)>,
 ) {
     let size = cams.size;
-    for (DroneCamera(i), mut t) in &mut cameras {
+    for (DroneCamera(i), mut t, mut camera) in &mut cameras {
         if let Some(pose) = &scene.vehicles[*i] {
             t.translation = pose.pos + pose.rot * SENSOR_MOUNT;
             t.rotation = pose.rot * Quat::from_rotation_x(TILT_DEG.to_radians());
         }
         let live = links.0[*i].clients.load(Ordering::Relaxed) > 0 && !render_scale.suspended;
         let cam = &mut cams.cams[*i];
-        let want = if live { size } else { IDLE_SIZE };
+        let want = render_size(live, size);
+        if camera.is_active != want.is_some() {
+            camera.is_active = want.is_some();
+        }
         let handle = cam.image.clone();
-        if images.get(&handle).is_some_and(|img| img.size() != want)
+        if let Some(want) = want
+            && images.get(&handle).is_some_and(|img| img.size() != want)
             && let Some(mut img) = images.get_mut(&handle)
         {
             img.resize(Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 });
@@ -237,4 +247,21 @@ fn on_readback(i: usize, ev: &ReadbackComplete, links: &Links, game: &Game, cams
     let shared = &links.0[i];
     *shared.latest.lock().unwrap() = Some(Frame { header, pixels: Arc::new(ev.data.clone()) });
     shared.new_frame.notify_all();
+}
+
+#[cfg(test)]
+mod watched_tests {
+    use super::*;
+
+    #[test]
+    fn a_camera_that_nobody_watches_does_not_render() {
+        // Each camera costs its own shadows, sky and exposure whatever its size: an idle one at
+        // 64 by 36 cost the view as much as a full one (plans/battlefield-latency-results.md).
+        assert_eq!(render_size(false, UVec2::new(320, 240)), None);
+    }
+
+    #[test]
+    fn a_watched_camera_renders_at_the_feed_size() {
+        assert_eq!(render_size(true, UVec2::new(320, 240)), Some(UVec2::new(320, 240)));
+    }
 }

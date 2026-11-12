@@ -97,3 +97,77 @@ GPU free most of each frame, neither the app nor the picture can be fast. In ord
 2. Find what costs most in its frame (the realism passes, the trees, shadows) for the
    battlefield's camera, which looks down from far and needs little of it.
 3. Measure again: the app's draws, then the picture.
+
+## Step 5, first part: a lighter 3D view
+
+Measured first with `towers_view` alone (no game) and a small client that pans the battlefield at
+1400 by 630 like the app (60 requests a second). Then in a game, in the app.
+
+### What each camera costs
+
+| Off (an experiment each) | 3D view | Pictures a second | Request to arrival |
+| --- | --- | --- | --- |
+| Nothing | 185 ms a frame | 4.8 | 936 ms |
+| Its main camera | 172 ms | 5.1 | 1039 ms |
+| The six drones' cameras, idle at 64 by 36 | 72 ms | 12.9 | 725 ms |
+
+Each camera costs its own shadows, sky and exposure whatever its size, so an idle camera cost as
+much as a full one. **Kept: a camera that nobody watches does not render** (`Camera::is_active`):
+a drone's camera without a viewer, and a battlefield that no app asks for.
+
+### The GPU was 13 frames behind
+
+With the idle cameras off: 54 ms a frame, but a picture still arrived 730 ms after its request.
+Timing inside the view: a request was already 723 ms old when its frame's readback completed, also
+with only one readback in flight. Bevy presents a window only when a camera draws into it, and the
+present is what holds the CPU back to the GPU; `towers_view` draws into images, so nothing held it:
+it queued frames while the valley loaded, and the GPU stayed 13 frames behind. **Kept: frame
+pacing** (`visualization_battlefield::pacing`): after each frame the render thread waits for the
+GPU to finish the frame two before (at most 500 ms).
+
+| | 3D view | Pictures a second | Request to arrival | Valley loaded in |
+| --- | --- | --- | --- | --- |
+| Idle cameras off | 54 ms | 18 | 730 ms | 35 s |
+| And frame pacing | 53 ms | 18.6 | 224 ms | 25 s |
+
+### What the rest of the frame is
+
+Each an experiment, from 54 ms a frame with pacing: without the clouds, the exposure, bloom or fog,
+no change; without the atmosphere 46 ms; without TAA 50 ms; a quarter of the pixels 50 ms; the
+sun's shadows off 40 ms; two shadow cascades instead of four, no change. The view uses about half
+a CPU core. So the frame is geometry (the forest and the terrain, for each camera, and once more for
+each shadow cascade), not pixels or the CPU. Turning off the view's main camera crashes Bevy's
+atmosphere (`bevy_pbr` `atmosphere/environment.rs:124`).
+
+### In a game, in the app
+
+| | The app's draws in a 3.6 s pan | Picture behind (median) | Pictures a second |
+| --- | --- | --- | --- |
+| Before step 5 | 12 (about 190 ms each) | 420 to 630 ms | 14 to 23 |
+| Step 5 so far | 11 (about 190 ms each) | 417 ms | 28 |
+
+In a game the app watches all five drones' cameras, so they render, and the 3D view is at about
+80 ms a frame. The app still draws only about 5 times a second. Experiments to find why:
+
+| The 3D view runs, and | The app's draws (median round trip) |
+| --- | --- |
+| is capped at 20 or 12 frames a second | about 200 ms (it already ran at 11 to 12) |
+| the app takes no battlefield pictures | about 200 ms |
+| the app takes nothing from it | about 190 ms |
+| does not run at all (step 1) | 6 ms |
+| **its window is hidden** | **32 ms**, but about half the draws still took 215 ms |
+
+So the app is not slowed by the pictures it takes, nor by how hard the view works. It is slowed by
+the 3D view's window, which opens on top of the app's (macOS throttles the drawing of a covered
+window), and by something else, not found yet, that stops its UI thread about every other frame.
+
+## Where this leaves the go/no-go
+
+- The picture is 417 ms behind in a game, against 80 ms. About 4 frames of that is the view at
+  80 ms a frame; the rest is the app drawing in bursts.
+- The decision now rests on two things not done yet:
+  1. hide the 3D view's window when an app serves as its screen, and find the other stall of the
+     app's UI thread;
+  2. a lighter look for the battlefield (no shadows on it: 14 ms), the drones' cameras smaller or
+     slower, and the view's main camera off. These change how the game looks, so they are the
+     user's call.

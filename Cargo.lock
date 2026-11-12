@@ -10310,6 +10310,7 @@ dependencies = [
  "glam",
  "teleoperation_shared",
  "visualization_engine",
+ "wgpu",
 ]
 
 [[package]]

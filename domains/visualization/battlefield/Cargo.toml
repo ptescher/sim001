@@ -10,3 +10,5 @@ visualization_engine = { path = "../engine" }
 teleoperation_shared = { path = "../../teleoperation/shared" }
 bevy.workspace = true
 glam.workspace = true
+# Only for the frame pacing (`SubmissionIndex`): the version Bevy uses, so there is one wgpu.
+wgpu = { version = "30", default-features = false }
