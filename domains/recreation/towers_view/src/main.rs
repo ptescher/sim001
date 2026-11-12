@@ -1,7 +1,7 @@
 //! towers_view: the 3D view of a game of Towers, and the camera of each drone.
 //!
 //!   cargo run --release -p recreation_towers_view -- [--server ADDR] [--feed-port N] [--feed-size WxH]
-//!                                                    [--stop-with-stdin]
+//!                                                    [--stop-with-stdin] [--hidden]
 //!   cargo run --release -p recreation_towers_view -- --export-map DIR
 //!   cargo run --release -p recreation_towers_view -- --capture DIR --at NAME=x,agl,z,tx,tagl,tz[,fov] ...
 //!
@@ -12,7 +12,8 @@
 //! while someone watches its feed. The battlefield of each team, the valley from the camera of
 //! its commander with no drones in it, is on `--feed-port + 20` (Blue) and `+ 21` (Red); see
 //! `visualization_battlefield`. With `--stop-with-stdin` the view quits when its input closes
-//! (the commander app starts it so, and it stops with the app).
+//! (the commander app starts it so, and it stops with the app). With `--hidden` its window is not
+//! on screen (the commander app starts it so too: a window on top of the app's slows the app).
 //!
 //! `--export-map DIR` writes the top-down map of the valley (`terrain_map.png`, `terrain_height.bin`
 //! and `terrain_map.txt`, as `sim001 --export-map` writes the sim's) and exits. It is the ground of
@@ -80,27 +81,20 @@ fn main() {
     let links = feeds::serve(first_port);
 
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: format!("SIM001 Towers - {}", visualization_world::terrain::site_title()),
-            resolution: WindowResolution::new(1280, 720),
-            present_mode: PresentMode::AutoVsync,
-            ..default()
-        }),
-        ..default()
-    }))
-    // The pictures of the cameras do not need the window on screen: the UI is drawn offscreen.
-    .insert_resource(camera::UiOffscreen(UVec2::new(1280, 720)))
-    .add_plugins(EnginePlugin {
-        raytracing: false,
-        liveries: (0..6)
-            .map(|i| if i < 3 { Color::srgb(0.10, 0.42, 1.0) } else { Color::srgb(1.0, 0.18, 0.12) })
-            .collect(),
-        tips: vec!["Waiting for the valley. The drones appear when the game server sends them."],
-    })
-    .insert_resource(game)
-    .insert_resource(links)
-    .add_systems(Update, publish.before(EngineSet::Draw));
+    let hidden = args.iter().any(|a| a == "--hidden");
+    app.add_plugins(DefaultPlugins.set(WindowPlugin { primary_window: Some(window(hidden)), ..default() }))
+        // The pictures of the cameras do not need the window on screen: the UI is drawn offscreen.
+        .insert_resource(camera::UiOffscreen(UVec2::new(1280, 720)))
+        .add_plugins(EnginePlugin {
+            raytracing: false,
+            liveries: (0..6)
+                .map(|i| if i < 3 { Color::srgb(0.10, 0.42, 1.0) } else { Color::srgb(1.0, 0.18, 0.12) })
+                .collect(),
+            tips: vec!["Waiting for the valley. The drones appear when the game server sends them."],
+        })
+        .insert_resource(game)
+        .insert_resource(links)
+        .add_systems(Update, publish.before(EngineSet::Draw));
     feeds::plugin(&mut app, size);
     if let Some(dir) = arg("--capture") {
         visualization_engine::capture::plugin(
@@ -120,6 +114,19 @@ fn main() {
         origin: Vec3::ZERO,
     });
     app.run();
+}
+
+/// The view's window. With `--hidden` it is not on screen: the commander app starts the view so,
+/// because the app is its screen, and a window on top of the app's makes macOS throttle the app's
+/// drawing. The cameras draw into images either way.
+fn window(hidden: bool) -> Window {
+    Window {
+        title: format!("SIM001 Towers - {}", visualization_world::terrain::site_title()),
+        resolution: WindowResolution::new(1280, 720),
+        present_mode: PresentMode::AutoVsync,
+        visible: !hidden,
+        ..default()
+    }
 }
 
 /// A spectator seat on the game server: reads the whole game, and reconnects when it is lost.
@@ -172,5 +179,16 @@ fn publish(game: Res<Game>, mut scene: ResMut<Scene>) {
     let truth = game.0.lock().unwrap();
     for i in 0..scene.vehicles.len() {
         scene.vehicles[i] = truth.as_ref().and_then(|t| pose_of(t, i));
+    }
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    #[test]
+    fn with_hidden_the_view_has_no_window_on_screen() {
+        assert!(!window(true).visible);
+        assert!(window(false).visible);
     }
 }

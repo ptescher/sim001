@@ -31,7 +31,12 @@ struct Link {
     /// The newest request, and whether it has been sent.
     request: Mutex<Option<(Request, bool)>>,
     lag: Mutex<Lag>,
+    /// The draws since the last log line, and when that was.
+    draws: Mutex<Option<(Instant, u32)>>,
 }
+
+/// How often the app logs how many times a second it draws.
+const LOG_DRAWS_EVERY: Duration = Duration::from_secs(5);
 
 /// The battlefield on a 3D view, or none (there is no 3D view).
 pub struct Battlefield {
@@ -78,6 +83,16 @@ impl Battlefield {
     /// motion of the camera is logged with its numbers.
     pub fn painted(&self, seq: Option<u32>) {
         let Some(link) = &self.link else { return };
+        {
+            let mut draws = link.draws.lock().unwrap();
+            let (since, n) = draws.get_or_insert((Instant::now(), 0));
+            *n += 1;
+            let secs = since.elapsed();
+            if secs >= LOG_DRAWS_EVERY {
+                println!("battlefield: the app draws {:.0} times a second", *n as f32 / secs.as_secs_f32());
+                *draws = Some((Instant::now(), 0));
+            }
+        }
         // With no picture, the plain map is drawn with the camera now: not behind.
         let seq = seq.unwrap_or_else(|| link.request.lock().unwrap().map_or(0, |(r, _)| r.seq));
         if let Some(m) = link.lag.lock().unwrap().painted(seq, Instant::now()) {

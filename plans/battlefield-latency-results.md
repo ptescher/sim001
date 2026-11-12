@@ -171,3 +171,22 @@ window), and by something else, not found yet, that stops its UI thread about ev
   2. a lighter look for the battlefield (no shadows on it: 14 ms), the drones' cameras smaller or
      slower, and the view's main camera off. These change how the game looks, so they are the
      user's call.
+
+## Step 5, second part: the 3D view's window hidden, and a correction
+
+- `towers_view --hidden` keeps its window off screen, and the commander app starts it so.
+- The app logs how many times a second it draws (`battlefield: the app draws N times a second`).
+
+**A correction to the app's numbers above.** The app's draws "about 5 times a second" were
+measured by the test driver forcing draws of the app's window during a pan. Started from a test
+or from a shell session, that window is not on screen, and macOS does not draw it: in a 4-minute
+practice game started the same way, the app never once logged a draw rate. So those numbers
+describe a window that is off screen, not what a person at the app sees, and the conclusions drawn
+from them (the 3D view's window throttling the app; an unknown stall) are not supported. Runs of the
+same case gave a median draw of 32 ms once and 207 ms another time.
+
+The numbers of the 3D view itself (frame times, readback delay, request to arrival with the test
+client) do not depend on the app's window, and stand.
+
+**Next:** measure the app on a screen, with a person at it: start a practice game, pan the camera,
+and read `battlefield: the app draws …` and `battlefield: the camera moved …` from the app's output.
