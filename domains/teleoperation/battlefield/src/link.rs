@@ -1,8 +1,11 @@
 //! The picture of the battlefield: the valley from the commander's camera, rendered by the game's
 //! 3D view (`towers_view`) with no drones in it (`teleoperation_shared::battlefield`). The app sends
 //! the camera and the size of the battlefield; the pictures come back on a thread of their own,
-//! each with the eye that it was rendered from, and the window takes the newest.
+//! each with the eye that it was rendered from, and the window takes the newest. Each change of
+//! the camera is a request with the next number; the picture comes back with it, and [`Lag`]
+//! measures how far the picture trails the camera.
 
+use crate::lag::{Lag, Motion};
 use gpui::RenderImage;
 use std::io::Write;
 use std::net::TcpStream;
@@ -18,6 +21,7 @@ const RESEND: Duration = Duration::from_millis(500);
 struct Latest {
     image: Arc<RenderImage>,
     eye: Eye,
+    seq: u32,
     at: Instant,
 }
 
@@ -26,6 +30,7 @@ struct Link {
     latest: Mutex<Option<Latest>>,
     /// The newest request, and whether it has been sent.
     request: Mutex<Option<(Request, bool)>>,
+    lag: Mutex<Lag>,
 }
 
 /// The battlefield on a 3D view, or none (there is no 3D view).
@@ -51,20 +56,41 @@ impl Battlefield {
         Arc::new(Battlefield { link: None })
     }
 
-    /// Asks for a picture `w` by `h` from `eye` (sent only when it changed).
+    /// Asks for a picture `w` by `h` from `eye` (sent only when it changed, with the next number).
     pub fn ask(&self, eye: Eye, w: u16, h: u16) {
         let Some(link) = &self.link else { return };
-        let r = Request { eye, width: w, height: h };
         let mut req = link.request.lock().unwrap();
-        if req.is_none_or(|(old, _)| old != r) {
-            *req = Some((r, false));
+        let same = req.is_some_and(|(old, _)| old.eye == eye && old.width == w && old.height == h);
+        if !same {
+            let seq = req.map_or(1, |(old, _)| old.seq.wrapping_add(1));
+            *req = Some((Request { eye, width: w, height: h, seq }, false));
+            link.lag.lock().unwrap().asked(seq, Instant::now());
         }
     }
 
-    /// The newest picture, and the eye it is from, if there is a fresh one.
-    pub fn picture(&self) -> Option<(Arc<RenderImage>, Eye)> {
+    /// The newest picture, the eye it is from and the number of its request, if there is a fresh one.
+    pub fn picture(&self) -> Option<(Arc<RenderImage>, Eye, u32)> {
         let latest = self.link.as_ref()?.latest.lock().unwrap();
-        latest.as_ref().filter(|l| l.at.elapsed().as_secs_f32() < STALE).map(|l| (l.image.clone(), l.eye))
+        latest.as_ref().filter(|l| l.at.elapsed().as_secs_f32() < STALE).map(|l| (l.image.clone(), l.eye, l.seq))
+    }
+
+    /// The picture of request `seq` is on the battlefield now (`None`: no picture). The end of a
+    /// motion of the camera is logged with its numbers.
+    pub fn painted(&self, seq: Option<u32>) {
+        let Some(link) = &self.link else { return };
+        // With no picture, the plain map is drawn with the camera now: not behind.
+        let seq = seq.unwrap_or_else(|| link.request.lock().unwrap().map_or(0, |(r, _)| r.seq));
+        if let Some(m) = link.lag.lock().unwrap().painted(seq, Instant::now()) {
+            println!(
+                "battlefield: the camera moved {:.1} s; {} pictures ({:.0} a second); behind by {:.0} ms (median), {:.0} ms (90 %)",
+                m.secs, m.pictures, m.pictures_per_s, m.lag_ms, m.lag_p90_ms
+            );
+        }
+    }
+
+    /// The numbers of the camera's motion now, or of its last one.
+    pub fn motion(&self) -> Option<Motion> {
+        self.link.as_ref()?.lag.lock().unwrap().motion(Instant::now())
     }
 }
 
@@ -113,7 +139,8 @@ fn receive(addr: &str, link: &Arc<Link>) {
             };
             let Some(img) = image::RgbaImage::from_raw(w, h, pixels) else { continue };
             let image = Arc::new(RenderImage::new(vec![image::Frame::new(img)]));
-            *link.latest.lock().unwrap() = Some(Latest { image, eye: f.eye, at: Instant::now() });
+            link.lag.lock().unwrap().arrived(f.seq, Instant::now());
+            *link.latest.lock().unwrap() = Some(Latest { image, eye: f.eye, seq: f.seq, at: Instant::now() });
         }
         *link.latest.lock().unwrap() = None;
         // The next connection sends the request again.

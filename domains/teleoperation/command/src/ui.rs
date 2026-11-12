@@ -78,7 +78,7 @@ pub struct CommanderView {
     shown: Vec<Option<Arc<RenderImage>>>,
     /// The picture of the battlefield from the 3D view, and the one the window has on its atlas.
     battlefield: Arc<Battlefield>,
-    picture: Option<(Arc<RenderImage>, Eye)>,
+    picture: Option<(Arc<RenderImage>, Eye, u32)>,
     focus: FocusHandle,
     /// The commander's camera over the battlefield.
     pub rig: Rig,
@@ -156,6 +156,11 @@ impl CommanderView {
     /// The battlefield shows the picture of the 3D view (not the plain map).
     pub fn battlefield_live(&self) -> bool {
         self.battlefield.picture().is_some()
+    }
+
+    /// How far the battlefield's picture trailed the camera in its motion now, or its last.
+    pub fn battlefield_motion(&self) -> Option<teleoperation_battlefield::lag::Motion> {
+        self.battlefield.motion()
     }
 
     /// The battlefield through the camera now.
@@ -520,14 +525,14 @@ impl CommanderView {
     }
 
     /// The newest picture of the battlefield; the one the window had is freed from its atlas.
-    fn battlefield_picture(&mut self, window: &mut Window) -> Option<(Arc<RenderImage>, Eye)> {
+    fn battlefield_picture(&mut self, window: &mut Window) -> Option<(Arc<RenderImage>, Eye, u32)> {
         let new = self.battlefield.picture();
         let same = match (&self.picture, &new) {
-            (Some((a, _)), Some((b, _))) => Arc::ptr_eq(a, b),
+            (Some((a, ..)), Some((b, ..))) => Arc::ptr_eq(a, b),
             (None, None) => true,
             _ => false,
         };
-        if !same && let Some((old, _)) = std::mem::replace(&mut self.picture, new.clone()) {
+        if !same && let Some((old, ..)) = std::mem::replace(&mut self.picture, new.clone()) {
             let _ = window.drop_image(old);
         }
         new
@@ -757,9 +762,10 @@ impl Render for CommanderView {
                 battlefield.ask(eye, w.round() as u16, h.round() as u16);
                 // The picture's own eye, so that the map lies on it where it was rendered.
                 let (image, lens) = match &picture {
-                    Some((img, at)) => (Some(img.clone()), Lens::new(*at, b)),
+                    Some((img, at, _)) => (Some(img.clone()), Lens::new(*at, b)),
                     None => (None, Lens::new(eye, b)),
                 };
+                battlefield.painted(picture.as_ref().map(|(.., seq)| *seq));
                 if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
                     let scene = Scene {
                         picture: image,
