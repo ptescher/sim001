@@ -92,16 +92,18 @@ pub fn port(first_feed_port: u16, slot: usize) -> u16 {
 pub const MAX_SIZE: (u16, u16) = (2560, 1600);
 
 /// What the app asks of the 3D view: a picture `width` by `height` from `eye`. It sends one
-/// whenever the camera or the size of the battlefield changes; the newest one counts.
+/// whenever the camera or the size of the battlefield changes; the newest one counts. `seq` goes
+/// up by one with each change, and comes back with the picture, so the app knows how late it is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Request {
     pub eye: Eye,
     pub width: u16,
     pub height: u16,
+    pub seq: u32,
 }
 
-const REQUEST_MAGIC: [u8; 4] = *b"BFLD";
-const FRAME_MAGIC: [u8; 4] = *b"BFRM";
+const REQUEST_MAGIC: [u8; 4] = *b"BFL2";
+const FRAME_MAGIC: [u8; 4] = *b"BFR2";
 
 fn put_eye(b: &mut Vec<u8>, e: &Eye) {
     for x in [e.look.x, e.look.y, e.heading, e.pitch, e.distance, e.vfov] {
@@ -119,7 +121,7 @@ fn get_eye(b: &[u8]) -> Eye {
 }
 
 impl Request {
-    pub const SIZE: usize = 32;
+    pub const SIZE: usize = 36;
 
     pub fn encode(&self) -> [u8; Self::SIZE] {
         let mut b = Vec::with_capacity(Self::SIZE);
@@ -127,7 +129,8 @@ impl Request {
         put_eye(&mut b, &self.eye);
         b.extend_from_slice(&self.width.to_le_bytes());
         b.extend_from_slice(&self.height.to_le_bytes());
-        b.try_into().expect("a request is 32 bytes")
+        b.extend_from_slice(&self.seq.to_le_bytes());
+        b.try_into().expect("a request is 36 bytes")
     }
 
     pub fn decode(b: &[u8; Self::SIZE]) -> Option<Request> {
@@ -138,21 +141,24 @@ impl Request {
             eye: get_eye(&b[4..28]),
             width: u16::from_le_bytes([b[28], b[29]]),
             height: u16::from_le_bytes([b[30], b[31]]),
+            seq: u32::from_le_bytes([b[32], b[33], b[34], b[35]]),
         })
     }
 }
 
-/// A picture of the battlefield: BGRA, `stride` bytes a row, rendered from `eye`.
+/// A picture of the battlefield: BGRA, `stride` bytes a row, rendered from `eye` for the request
+/// `seq`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
     pub width: u16,
     pub height: u16,
     pub stride: u32,
     pub frame: u32,
+    pub seq: u32,
     pub eye: Eye,
 }
 
-const FRAME_HEADER: usize = 40;
+const FRAME_HEADER: usize = 44;
 
 pub fn write_frame(w: &mut impl Write, f: &Frame, pixels: &[u8]) -> io::Result<()> {
     let mut b = Vec::with_capacity(FRAME_HEADER);
@@ -161,6 +167,7 @@ pub fn write_frame(w: &mut impl Write, f: &Frame, pixels: &[u8]) -> io::Result<(
     b.extend_from_slice(&f.height.to_le_bytes());
     b.extend_from_slice(&f.stride.to_le_bytes());
     b.extend_from_slice(&f.frame.to_le_bytes());
+    b.extend_from_slice(&f.seq.to_le_bytes());
     put_eye(&mut b, &f.eye);
     w.write_all(&b)?;
     w.write_all(&pixels[..(f.stride * f.height as u32) as usize])?;
@@ -179,7 +186,8 @@ pub fn read_frame(r: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<Frame> {
         height: u16::from_le_bytes([h[6], h[7]]),
         stride: u32::from_le_bytes([h[8], h[9], h[10], h[11]]),
         frame: u32::from_le_bytes([h[12], h[13], h[14], h[15]]),
-        eye: get_eye(&h[16..40]),
+        seq: u32::from_le_bytes([h[16], h[17], h[18], h[19]]),
+        eye: get_eye(&h[20..44]),
     };
     let len = f.stride as usize * f.height as usize;
     if len > MAX_SIZE.0 as usize * 4 * MAX_SIZE.1 as usize * 2 {
@@ -261,6 +269,7 @@ mod tests {
             eye: Eye { look: Vec2::new(-1.5, 2.25), heading: 45.0, ..Eye::default() },
             width: 1280,
             height: 640,
+            seq: 70_001,
         };
         assert_eq!(Request::decode(&r.encode()), Some(r));
         assert_eq!(Request::decode(&[0; Request::SIZE]), None);
@@ -269,7 +278,7 @@ mod tests {
     #[test]
     fn a_frame_reads_back_with_the_eye_it_was_rendered_from() {
         let eye = Eye { look: Vec2::new(10.0, -20.0), heading: 270.0, pitch: 40.0, distance: 333.0, vfov: 35.0 };
-        let header = Frame { width: 3, height: 2, stride: 256, frame: 7, eye };
+        let header = Frame { width: 3, height: 2, stride: 256, frame: 7, seq: 41, eye };
         let pixels: Vec<u8> = (0..512).map(|i| i as u8).collect();
         let mut wire = Vec::new();
         write_frame(&mut wire, &header, &pixels).unwrap();

@@ -60,7 +60,7 @@ impl Plugin for BattlefieldPlugin {
             .add_systems(Startup, move |commands: Commands, images: ResMut<Assets<Image>>| {
                 spawn(commands, images, slots)
             })
-            .add_systems(Update, update.after(visualization_engine::EngineSet::Draw));
+            .add_systems(Update, (update, log_frames).after(visualization_engine::EngineSet::Draw));
         if self.hide_vehicles {
             app.add_systems(Update, layers);
         }
@@ -152,6 +152,18 @@ struct Cam {
     /// camera moved, and goes out with the eye of the frame it is.
     eyes: Vec<(Request, u32)>,
     ticks: u32,
+    /// Pictures sent since the last log line.
+    sent: u32,
+}
+
+/// How often the view logs its frame rate while an app is connected.
+const LOG_EVERY: Duration = Duration::from_secs(5);
+
+/// The frames rendered since the last log line, and when that was.
+#[derive(Resource)]
+struct FrameLog {
+    since: Instant,
+    frames: u32,
 }
 
 #[derive(Resource)]
@@ -173,9 +185,10 @@ fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>, slots: usize
             RenderLayers::layer(0),
             scene_look(),
         ));
-        cams.push(Cam { image, readback: None, frame: 0, last_sent: None, eyes: vec![], ticks: 0 });
+        cams.push(Cam { image, readback: None, frame: 0, last_sent: None, eyes: vec![], ticks: 0, sent: 0 });
     }
     commands.insert_resource(Cams(cams));
+    commands.insert_resource(FrameLog { since: Instant::now(), frames: 0 });
 }
 
 /// The planes go on a layer of their own, which every camera sees but the battlefields'.
@@ -269,6 +282,27 @@ fn update(
     }
 }
 
+/// While an app is connected, logs the view's frame rate and the pictures it sent, every few seconds.
+fn log_frames(links: Res<Links>, mut cams: ResMut<Cams>, mut log: ResMut<FrameLog>) {
+    log.frames += 1;
+    if log.since.elapsed() >= LOG_EVERY {
+        let secs = log.since.elapsed().as_secs_f32();
+        if links.0.iter().any(|s| s.clients.load(Ordering::Relaxed) > 0) {
+            let sent: Vec<String> = cams.0.iter().map(|c| format!("{:.0}", c.sent as f32 / secs)).collect();
+            println!(
+                "battlefield: the 3D view renders {:.0} frames a second ({:.1} ms a frame); pictures sent a second, by slot: {}",
+                log.frames as f32 / secs,
+                1000.0 * secs / log.frames.max(1) as f32,
+                sent.join(", ")
+            );
+        }
+        for c in &mut cams.0 {
+            c.sent = 0;
+        }
+        *log = FrameLog { since: Instant::now(), frames: 0 };
+    }
+}
+
 /// How many frames the camera must have held still for a picture to go out: more than the
 /// readback ever trails it by.
 const STEADY: usize = 4;
@@ -301,7 +335,8 @@ fn on_readback(i: usize, ev: &ReadbackComplete, links: &Links, cams: &mut Cams) 
     let stride = (w as u32 * 4).div_ceil(256) * 256;
     cam.last_sent = Some(Instant::now());
     cam.frame = cam.frame.wrapping_add(1);
-    let frame = Frame { width: w, height: h, stride, frame: cam.frame, eye: r.eye };
+    let frame = Frame { width: w, height: h, stride, frame: cam.frame, seq: r.seq, eye: r.eye };
+    cam.sent += 1;
     let shared = &links.0[i];
     *shared.latest.lock().unwrap() = Some((frame, Arc::new(ev.data.clone())));
     shared.new_frame.notify_all();
@@ -313,7 +348,7 @@ mod tests {
     use teleoperation_shared::battlefield::Eye;
 
     fn req(distance: f32) -> Request {
-        Request { eye: Eye { distance, ..Eye::default() }, width: 300, height: 200 }
+        Request { eye: Eye { distance, ..Eye::default() }, width: 300, height: 200, seq: 0 }
     }
 
     fn bytes(r: &Request) -> usize {

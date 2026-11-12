@@ -86,6 +86,7 @@ const EVENTS: &[&str] = &[
     "the commander waits for the battlefield",
     "the commander clicks the west tower on the minimap",
     "the commander pans the battlefield to the front",
+    "the commander pans the battlefield for 3 seconds",
     "the commander moves the mouse to the top edge of the battlefield",
     "the commander turns the battlefield camera to the right",
     "the commander zooms the battlefield in",
@@ -121,6 +122,8 @@ const OBSERVED: &[&str] = &[
     "the distance from the Blue base to the battlefield camera's point",
     "the heading of the battlefield camera",
     "the height of the battlefield camera",
+    "the lag of the battlefield picture",
+    "the new pictures of the battlefield each second",
 ];
 
 /// The states of the battlefield's camera that a test sets up, as the commander would with the keys
@@ -320,6 +323,19 @@ impl AppDriver {
         }
     }
 
+    /// Whether the battlefield shows the 3D view's picture, after waiting for the 3D view to load
+    /// the valley (which takes a while).
+    fn battlefield_live(&mut self) -> Result<bool, String> {
+        let end = Instant::now() + self.suite.cap(FEEDS);
+        loop {
+            let live = self.call(|v, _, _| v.battlefield_live())?;
+            if live || Instant::now() > end {
+                return Ok(live);
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    }
+
     /// Where to start looking after a failed test: the app's state, the end of the server's log,
     /// and the whole log saved beside it (the next test's server overwrites it).
     fn note(&self, what: impl Into<String>) {
@@ -437,9 +453,9 @@ impl AppDriver {
     }
 
     /// Holds the key `k` down for a while, then lets it go.
-    fn hold_key(&self, k: &'static str) -> Result<(), String> {
+    fn hold_key(&self, k: &'static str, how_long: Duration) -> Result<(), String> {
         self.with_window(move |w, cx| key(w, cx, k, true))?;
-        std::thread::sleep(HOLD);
+        std::thread::sleep(how_long);
         self.with_window(move |w, cx| key(w, cx, k, false))
     }
 
@@ -601,6 +617,9 @@ impl Driver for AppDriver {
         if is(subject, "the selected drone") || CAMERA.iter().any(|c| is(subject, c)) {
             return self.set(var, value);
         }
+        if is(subject, "the battlefield picture in the app") && text(value) == "live" {
+            return if self.battlefield_live()? { Ok(()) } else { Err("the 3D view sent no picture".into()) };
+        }
         if is(subject, "the order of the first Blue drone") && text(value) == "circle a point" {
             // As a commander does: B1 selected, and a circle drawn.
             self.click_button("drone-0")?;
@@ -666,6 +685,7 @@ impl Driver for AppDriver {
                 && (text(value) == "take the west tower" || text(value) == "circle a point"))
             || is(subject, "the points in the route of the first Blue drone")
             || is(subject, "the flight of the first Blue drone")
+            || (is(subject, "the battlefield picture in the app") && text(value) == "live")
     }
 
     fn set(&mut self, var: &Variable, value: &Value) -> Result<(), String> {
@@ -728,7 +748,23 @@ impl Driver for AppDriver {
             // The check that follows waits for the picture.
             "the commander waits for the battlefield" => Ok(()),
             "the commander clicks the west tower on the minimap" => self.click_minimap_tower("west"),
-            "the commander pans the battlefield to the front" => self.hold_key("w"),
+            "the commander pans the battlefield to the front" => self.hold_key("w", HOLD),
+            "the commander pans the battlefield for 3 seconds" => {
+                // The window draws as a screen would draw it, 60 times a second: in a test run the
+                // system does not draw it by itself, and the app asks for pictures as it draws.
+                let draw = |d: &Self| d.with_window(|w, cx| w.draw(cx).clear());
+                self.with_window(|w, cx| key(w, cx, "w", true))?;
+                let (pan, after) = (Duration::from_secs(3), Duration::from_millis(600));
+                let began = Instant::now();
+                while began.elapsed() < pan + after {
+                    if began.elapsed() >= pan {
+                        self.with_window(|w, cx| key(w, cx, "w", false))?;
+                    }
+                    draw(self)?;
+                    std::thread::sleep(Duration::from_millis(16));
+                }
+                self.with_window(|w, cx| key(w, cx, "w", false))
+            }
             "the commander moves the mouse to the top edge of the battlefield" => {
                 let b = self.call(|v, _, _| v.map_bounds.get())?;
                 let (top, middle) = (point(b.center().x, b.origin.y + px(2.0)), b.center());
@@ -803,15 +839,15 @@ impl Driver for AppDriver {
             }
         }
         if lower == "the battlefield picture in the app" {
-            // The 3D view loads the valley first, which takes a while.
-            let end = Instant::now() + self.suite.cap(FEEDS);
-            loop {
-                let live = self.call(|v, _, _| v.battlefield_live())?;
-                if live || Instant::now() > end {
-                    return Ok(Value::from(if live { "live" } else { "missing" }));
-                }
-                std::thread::sleep(Duration::from_millis(250));
-            }
+            return Ok(Value::from(if self.battlefield_live()? { "live" } else { "missing" }));
+        }
+        if lower == "the lag of the battlefield picture" || lower == "the new pictures of the battlefield each second" {
+            // The numbers of the camera's last motion (plans/battlefield-latency.md).
+            let m = self.call(|v, _, _| v.battlefield_motion())?.ok_or("the camera has not moved")?;
+            // The measurement itself is the point of the test: it goes in the output, pass or fail.
+            println!("expect: battlefield motion: {m:?}");
+            let x = if lower.starts_with("the lag") { m.lag_ms } else { m.pictures_per_s };
+            return Ok(Value::from(x.round() as f64));
         }
         if CAMERA.iter().any(|c| is(subject, c))
             || lower == "the point of the battlefield camera"
@@ -942,6 +978,7 @@ impl Driver for AppDriver {
                     || is(&v.subject, "the order of the first Blue drone")
                     || is(&v.subject, "the flight of the first Blue drone")
                     || is(&v.subject, "the points in the route of the first Blue drone")
+                    || is(&v.subject, "the battlefield picture in the app")
             }
             Need::Set(v) => is(&v.subject, "the selected drone") || CAMERA.iter().any(|c| is(&v.subject, c)),
             Need::Perform(e) => EVENTS.iter().any(|s| is(&e.text, s)),

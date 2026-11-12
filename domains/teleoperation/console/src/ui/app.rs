@@ -1378,7 +1378,7 @@ impl Gcs {
 
     /// The newest picture of the battlefield; the one the window had is freed from its atlas.
     fn battlefield_picture(&mut self, window: &mut Window) -> Option<(Arc<RenderImage>, Eye)> {
-        let new = self.battlefield.picture();
+        let new = self.battlefield.picture().map(|(image, eye, _)| (image, eye));
         let same = match (&self.picture, &new) {
             (Some((a, _)), Some((b, _))) => Arc::ptr_eq(a, b),
             (None, None) => true,

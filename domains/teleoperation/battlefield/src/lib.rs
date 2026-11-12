@@ -2,6 +2,7 @@
 //! and the commander app of Towers.
 //!
 //! - [`link`]: the 3D picture of the field from the operator's camera, from a 3D view;
+//! - [`lag`]: how far that picture trails the camera;
 //! - [`camera`]: the camera and its controls (keys, the mouse at an edge, the wheel, turns);
 //! - [`lens`]: where the field is on screen, through the camera and on the minimap;
 //! - [`paint`]: what both apps draw on the battlefield and the minimap;
@@ -10,6 +11,7 @@
 
 pub mod camera;
 pub mod draw;
+pub mod lag;
 pub mod lens;
 pub mod link;
 pub mod orders;
