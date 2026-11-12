@@ -42,7 +42,7 @@ frame rate every 5 s while an app is connected (`logs/towers/view.log`).
 ## How the test runs, and what it needed
 
 - The expectation «The picture keeps up with the camera» (`09-towers/02-battlefield.expect`) is
-  `Status: pending` until step 1: it fails today, by the numbers above.
+  `Status: pending` until it passes: it fails today, by the numbers above.
 - It has an event of its own (pan for 3 s). On the event that «The keys move the camera across
   the field» uses, the generator made a test for neither.
 - In a test run the system does not draw the app's window by itself, and the app asks for
@@ -94,6 +94,6 @@ Step 5 (a lighter 3D view) is now the step that decides the go/no-go: until the 
 GPU free most of each frame, neither the app nor the picture can be fast. In order:
 
 1. Cap the 3D view's frame rate, and render its own window only when someone looks at it.
-2. Find what costs most in its frame (the realism passes, the 39k trees, shadows) for the
+2. Find what costs most in its frame (the realism passes, the trees, shadows) for the
    battlefield's camera, which looks down from far and needs little of it.
 3. Measure again: the app's draws, then the picture.
