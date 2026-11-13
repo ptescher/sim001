@@ -39,6 +39,7 @@ Part: For developers
   Section: Making the executor better
 
 Part: Real hardware
+  Page: real-aircraft [desktop]
   Section: The flight computer
   Section: The TX15 on the serial line
   Section: Watching a real plane

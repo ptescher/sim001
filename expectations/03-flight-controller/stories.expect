@@ -10,6 +10,10 @@ Story: Your first hover
   this tutorial you lift off, hold the hover, and then you send the plane home. It flies back
   to the pilot box and lands by itself.
 
+  On the keyboard, a closed throttle (0) holds the height, and the keys 1 to 5 climb. The
+  keyboard cannot make the plane descend: QRTL brings it down. On a radio, the middle of the
+  throttle stick holds the height, and the stick below the middle makes the plane descend.
+
   Scenario: Arm, lift off, hold the hover and bring the plane home
     Given the autopilot is disarmed
     When the pilot arms the plane
@@ -28,8 +32,12 @@ Story: Learning with self-levelling
 
   In [[ANGLE]], the plane levels its wings when you release the sticks. Thus the plane stays
   under control while you learn. In this tutorial, you select ANGLE, throw the plane and roll
-  it. Then you release the stick, and the wings become level again. The VTOL has the same
-  help in FBWA: see [[Flying a VTOL with self-levelling]].
+  it. Then you release the stick, and the wings become level again.
+
+  ANGLE is a mode of the sim, not of ArduPilot. It works when the sticks fly the plane
+  directly. If the HUD says that ArduPilot has control, press J first to change to Direct
+  control. In Direct control the VTOL flies as a plane, so you throw it. With ArduPilot, the
+  VTOL has the same help in FBWA: see [[Flying a VTOL with self-levelling]].
 
   Scenario: Pick ANGLE mode and throw
     When the pilot changes flight mode
