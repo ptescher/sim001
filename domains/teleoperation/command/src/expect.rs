@@ -752,17 +752,39 @@ impl Driver for AppDriver {
             "the commander pans the battlefield for 3 seconds" => {
                 // The window draws as a screen would draw it, 60 times a second: in a test run the
                 // system does not draw it by itself, and the app asks for pictures as it draws.
-                let draw = |d: &Self| d.with_window(|w, cx| w.draw(cx).clear());
                 self.with_window(|w, cx| key(w, cx, "w", true))?;
                 let (pan, after) = (Duration::from_secs(3), Duration::from_millis(600));
                 let began = Instant::now();
+                let (mut draws, mut insides): (Vec<f32>, Vec<f32>) = (vec![], vec![]);
                 while began.elapsed() < pan + after {
                     if began.elapsed() >= pan {
                         self.with_window(|w, cx| key(w, cx, "w", false))?;
                     }
-                    draw(self)?;
+                    let d = Instant::now();
+                    let inside = self.with_window(|w, cx| {
+                        let t = Instant::now();
+                        w.draw(cx).clear();
+                        t.elapsed().as_secs_f32() * 1000.0
+                    })?;
+                    draws.push(d.elapsed().as_secs_f32() * 1000.0);
+                    insides.push(inside);
                     std::thread::sleep(Duration::from_millis(16));
                 }
+                insides.sort_by(f32::total_cmp);
+                println!(
+                    "expect: the draw itself: median {:.0} ms, 90 % {:.0} ms, longest {:.0} ms",
+                    insides[insides.len() / 2],
+                    insides[insides.len() * 9 / 10],
+                    insides[insides.len() - 1]
+                );
+                draws.sort_by(f32::total_cmp);
+                println!(
+                    "expect: {} draws of the window during the pan: median {:.0} ms, 90 % {:.0} ms, longest {:.0} ms",
+                    draws.len(),
+                    draws[draws.len() / 2],
+                    draws[draws.len() * 9 / 10],
+                    draws[draws.len() - 1]
+                );
                 self.with_window(|w, cx| key(w, cx, "w", false))
             }
             "the commander moves the mouse to the top edge of the battlefield" => {

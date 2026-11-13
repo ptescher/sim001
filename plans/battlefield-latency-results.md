@@ -42,7 +42,7 @@ frame rate every 5 s while an app is connected (`logs/towers/view.log`).
 ## How the test runs, and what it needed
 
 - The expectation «The picture keeps up with the camera» (`09-towers/02-battlefield.expect`) is
-  `Status: pending` until step 1: it fails today, by the numbers above.
+  `Status: pending` until it passes: it fails today, by the numbers above.
 - It has an event of its own (pan for 3 s). On the event that «The keys move the camera across
   the field» uses, the generator made a test for neither.
 - In a test run the system does not draw the app's window by itself, and the app asks for
@@ -50,3 +50,50 @@ frame rate every 5 s while an app is connected (`logs/towers/view.log`).
   does.
 - The valley takes over two minutes to load in a game: run the test with
   `SIM001_SUITE_BUDGET=600` (the default, 120 s, runs out first).
+
+## Step 1: each picture with its own camera, and no gate
+
+Each frame the 3D view spawns a `ReadbackOnce` whose observer keeps the request the frame was
+rendered for. Bevy extracts the readback with that frame and copies the texture after the frame's
+render graph (`bevy_render` 0.20, `renderer/mod.rs`), so the pairing is exact. `steady_request` is
+gone; `Outbox` (`visualization_battlefield::outbox`) sends a picture if it is the size asked for,
+not older than one sent, and at most 60 a second.
+
+**Alignment while moving:** screenshots of the window in the middle of a pan show the map on the
+valley (the towers' circles in their clearings, the lake's shore): what the gate was for holds
+without it.
+
+**The numbers, a 3 s pan** (several runs):
+
+| | Step 0 | Step 1 |
+| --- | --- | --- |
+| New pictures a second while moving | 0.3 | 14 to 23 |
+| Picture out of date by (median) | 544 ms | 420 to 630 ms |
+
+The picture now moves with the camera, but it is still far behind. The reason is new:
+
+**The commander app itself draws about 5 times a second while the 3D view runs.** The driver
+timed each draw of the window during the pan:
+
+| | The draw (on the UI thread) | The round trip | Draws in 3.6 s |
+| --- | --- | --- | --- |
+| With the 3D view running | 15 ms | 140 to 200 ms | 11 to 14 |
+| With no 3D view (`--no-cameras`) | 2 ms | 6 ms | 140 |
+| With the 3D view, the app not watching the drones' cameras | 15 ms | 200 ms | 12 |
+
+The draw itself is fast (the battlefield's paint, fog included, is 7 to 27 ms). The UI thread
+spends the rest of each frame waiting: GPUI's Metal renderer blocks in `next_drawable()`, and the
+3D view, at about 100 ms a frame, keeps the integrated GPU busy. The drones' cameras are not the
+cost. So in a game **the whole commander app runs at about 5 frames a second**, not only its
+battlefield, and the motion of the camera is measured in pieces (the app asks for a new camera
+only as it draws).
+
+## What this changes in the plan
+
+Step 5 (a lighter 3D view) is now the step that decides the go/no-go: until the 3D view leaves the
+GPU free most of each frame, neither the app nor the picture can be fast. In order:
+
+1. Cap the 3D view's frame rate, and render its own window only when someone looks at it.
+2. Find what costs most in its frame (the realism passes, the trees, shadows) for the
+   battlefield's camera, which looks down from far and needs little of it.
+3. Measure again: the app's draws, then the picture.
