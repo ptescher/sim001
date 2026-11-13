@@ -137,18 +137,25 @@ impl Server {
     }
 }
 
+/// The 3D view's arguments: it stops when its input closes, it takes its seat on the app's server,
+/// and its window is hidden. The app is its screen, and a window on top of the app's makes macOS
+/// throttle the app's drawing.
+fn view_args(seat_port: Option<&String>) -> Vec<String> {
+    let mut args = vec!["--stop-with-stdin".to_string(), "--hidden".to_string()];
+    if let Some(port) = seat_port {
+        args.extend(["--server".to_string(), format!("127.0.0.1:{port}")]);
+    }
+    args
+}
+
 /// Starts the 3D view of the game, which takes a spectator's seat on the server and serves the
 /// drones' cameras (it stops when its input closes).
 fn start_view(logs: &Path, seat_port: Option<&String>) -> Result<(Child, ChildStdin), String> {
     let program = place().program("towers_view").0;
     let log = std::fs::File::create(logs.join("view.log")).map_err(|e| e.to_string())?;
     let err = log.try_clone().map_err(|e| e.to_string())?;
-    let mut command = Command::new(&program);
-    command.arg("--stop-with-stdin");
-    if let Some(port) = seat_port {
-        command.arg("--server").arg(format!("127.0.0.1:{port}"));
-    }
-    let mut child = command
+    let mut child = Command::new(&program)
+        .args(view_args(seat_port))
         .stdin(Stdio::piped())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(err))
@@ -161,5 +168,19 @@ fn start_view(logs: &Path, seat_port: Option<&String>) -> Result<(Child, ChildSt
 impl Drop for Server {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod view_tests {
+    use super::*;
+
+    #[test]
+    fn the_app_starts_the_3d_view_with_its_window_hidden() {
+        // The app is the view's screen: a window on top of the app's makes macOS throttle the app's
+        // drawing (plans/battlefield-latency-results.md).
+        let args = view_args(Some(&"5960".to_string()));
+        assert!(args.iter().any(|a| a == "--hidden"), "{args:?}");
+        assert!(args.windows(2).any(|w| w[0] == "--server" && w[1] == "127.0.0.1:5960"), "{args:?}");
     }
 }

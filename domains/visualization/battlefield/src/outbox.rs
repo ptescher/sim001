@@ -3,8 +3,16 @@
 //! Each frame the view reads back the picture it rendered, with the request it rendered it for:
 //! the camera of a picture is known, not guessed, so a picture goes out while the camera moves.
 
+use glam::UVec2;
 use std::time::Instant;
 use teleoperation_shared::battlefield::{Frame, MAX_SIZE, Request};
+
+/// The size a battlefield renders at: the one the app asks for (up to the largest), and none (it
+/// does not render) while no app asks. Each camera costs its own shadows, sky and exposure
+/// whatever its size, so an idle one is switched off rather than made small.
+pub fn render_size(request: Option<&Request>) -> Option<UVec2> {
+    request.map(|r| UVec2::new(r.width.clamp(16, MAX_SIZE.0) as u32, r.height.clamp(16, MAX_SIZE.1) as u32))
+}
 
 /// The most pictures a second that go out to an app.
 pub const MAX_FPS: f64 = 60.0;
@@ -58,6 +66,18 @@ mod tests {
     /// The bytes of a readback of a picture `w` by `h`: rows padded to 256 bytes.
     fn bytes(w: u32, h: u32) -> usize {
         ((w * 4).div_ceil(256) * 256 * h) as usize
+    }
+
+    #[test]
+    fn a_battlefield_that_no_app_asks_for_does_not_render() {
+        assert_eq!(render_size(None), None);
+    }
+
+    #[test]
+    fn a_battlefield_renders_at_the_size_asked_for_up_to_the_largest() {
+        assert_eq!(render_size(Some(&req(1))), Some(glam::UVec2::new(300, 200)));
+        let huge = Request { width: MAX_SIZE.0 + 500, ..req(1) };
+        assert_eq!(render_size(Some(&huge)), Some(glam::UVec2::new(MAX_SIZE.0 as u32, 200)));
     }
 
     #[test]

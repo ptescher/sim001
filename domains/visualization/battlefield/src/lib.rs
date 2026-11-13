@@ -18,12 +18,13 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
-use teleoperation_shared::battlefield::{self, Eye, Frame, MAX_SIZE, Request, write_frame};
+use teleoperation_shared::battlefield::{self, Eye, Frame, Request, write_frame};
 use visualization_engine::camera::scene_look;
 use visualization_engine::loading::AppState;
 use visualization_engine::model::PlaneRoot;
 
 mod outbox;
+mod pacing;
 
 use outbox::Outbox;
 
@@ -67,6 +68,8 @@ impl Plugin for BattlefieldPlugin {
         if self.hide_vehicles {
             app.add_systems(Update, layers);
         }
+        // A view that serves battlefields keeps the GPU at most a frame or two behind it.
+        pacing::plugin(app);
     }
 }
 
@@ -228,29 +231,31 @@ fn update(
     links: Res<Links>,
     mut cams: ResMut<Cams>,
     mut images: ResMut<Assets<Image>>,
-    mut cameras: Query<(&BattlefieldCamera, &mut Transform, &mut Projection)>,
+    mut cameras: Query<(&BattlefieldCamera, &mut Transform, &mut Projection, &mut Camera)>,
     state: Res<State<AppState>>,
     origin: Res<Origin>,
 ) {
     // Until the valley has loaded, the world is a placeholder: no picture of it goes out.
     let loaded = *state.get() == AppState::Running;
-    for (BattlefieldCamera(i), mut t, mut projection) in &mut cameras {
+    for (BattlefieldCamera(i), mut t, mut projection, mut camera) in &mut cameras {
         let shared = &links.0[*i];
         let request = *shared.request.lock().unwrap();
         let live = loaded && shared.clients.load(Ordering::Relaxed) > 0 && request.is_some();
         let cam = &mut cams.0[*i];
-        let want = match request.filter(|_| live) {
-            Some(r) => {
-                *t = place(&r.eye, origin.0);
-                if let Projection::Perspective(p) = projection.as_mut() {
-                    p.fov = r.eye.vfov.to_radians();
-                }
-                UVec2::new(r.width.clamp(16, MAX_SIZE.0) as u32, r.height.clamp(16, MAX_SIZE.1) as u32)
+        if let Some(r) = request.filter(|_| live) {
+            *t = place(&r.eye, origin.0);
+            if let Projection::Perspective(p) = projection.as_mut() {
+                p.fov = r.eye.vfov.to_radians();
             }
-            None => IDLE_SIZE,
-        };
+        }
+        // A battlefield that no app asks for does not render at all.
+        let want = outbox::render_size(request.filter(|_| live).as_ref());
+        if camera.is_active != want.is_some() {
+            camera.is_active = want.is_some();
+        }
         let handle = cam.image.clone();
-        if images.get(&handle).is_some_and(|img| img.size() != want)
+        if let Some(want) = want
+            && images.get(&handle).is_some_and(|img| img.size() != want)
             && let Some(mut img) = images.get_mut(&handle)
         {
             img.resize(Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 });
