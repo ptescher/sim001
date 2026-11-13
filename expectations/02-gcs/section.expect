@@ -148,7 +148,7 @@ Vocabulary:
   Event: the plane reaches the last item
 
   Phrase: the console is connected to a plane on the ground
-    Say: in [[The launcher]], click GROUND STATION, then LAUNCH, as [[Picking what to launch]] shows. (From source, you can instead run `cd domains/teleoperation/console && cargo run --release -- --station`. Without a native ArduPlane build, the first start builds ArduPlane [[SITL]] in Docker, which takes approximately 15 minutes. After that, it starts in a few seconds.) Three windows open: the console, the [[sensor feed]] and the sim. The console connects to the plane. The plane is on the ground and disarmed, in MANUAL, with home set and no plan. Wait until the ARM button shows ARM, not ARM: NOT READY
+    Say: in [[The launcher]], click GROUND STATION, then WITH ARDUPILOT, then LAUNCH. (From source, you can instead run `cd domains/teleoperation/console && cargo run --release -- --station`. [[Requirements and installation]] tells you what the first start builds.) Three windows open: the console, the [[sensor feed]] and the sim. The console connects to the plane. The plane is on the ground and disarmed, in MANUAL, with home set and no plan. Wait until the ARM button shows ARM, not ARM: NOT READY
     Given the link is connected
     And the game clock is off
     And the vehicle is disarmed
@@ -266,7 +266,7 @@ Vocabulary:
     Say[iOS]: tap QLAND. The plane comes down straight and stops its motors
 
   Phrase: the console is connected to a VTOL on the ground
-    Say: the station flies the T1-S VTOL, the default plane, with its two tilt-rotors and its rear rotor. The console shows the Q modes (QHOVER, QLOITER, QLAND and QRTL) with the other modes. Wait until the ARM button shows ARM, not ARM: NOT READY
+    Say: the station flies the T1-S VTOL, the default plane, with its two tilt-rotors and its rear rotor. The console shows the Q modes (QHOVER, QLOITER, QLAND and QRTL) with the other modes
     Given the console is connected to a plane on the ground
     And the airframe is VTOL
 

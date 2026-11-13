@@ -1,6 +1,6 @@
 # Controls
 
-This page lists every way to fly SIM001: the keyboard, a Nintendo Switch Pro Controller, and a RadioMaster TX15 (or another EdgeTX radio). For the radio, it also shows how to set it up. Press H in the sim at any time to see the keys on screen.
+This page lists every way to fly SIM001: the keyboard, a Nintendo Switch Pro Controller, and a RadioMaster TX15 (or another EdgeTX radio). It also lists the keys of the commander app of Towers. For the radio, it also shows how to set it up. Press H in the sim at any time to see the keys on screen.
 
 ## Keyboard
 
@@ -64,6 +64,30 @@ P1 zooms the line-of-sight camera. P2 picks the view. Throttle is absolute, as o
 For the screen and the colours of the radio, there are two EdgeTX themes, SIM001 Night and SIM001 Day, in `domains/teleoperation/edgetx/THEMES`. Copy the folders to the `THEMES` folder of the SD card, and choose one under Radio Settings, Themes.
 
 To fly the VTOL with the radio, see [[Setting up the TX15]] and [[Flying with a radio]].
+
+## The commander app of Towers
+
+In [[Towers]] you do not fly. These keys and mouse actions command your drones and move the camera.
+
+| Key or mouse | Action |
+| --- | --- |
+| 1 to 9 | Select a drone. Hold Shift to add it to the selection. |
+| Click a drone or its card | Select it |
+| Drag a box on the battlefield | Select the drones in the box |
+| Cmd+A or Ctrl+A | Select all your drones |
+| Right-click a tower | Send the selected drones to take the tower |
+| Right-click the field | Send the selected drones to that point |
+| Shift and right-click | Add a point to the route of the selected drones |
+| H | HOLD: circle here |
+| B | HOME: go back over the base |
+| L | LOW: fly low along the lanes, or high again |
+| C, then drag | CIRCLE: circle a point at the distance that you drag |
+| W / S, A / D (or the arrow keys) | Move the camera |
+| Q / E | Turn the camera 45° to the left and to the right |
+| Mouse wheel | Move the camera nearer to the ground, or further from it |
+| Click the minimap | Look at that point |
+| Space | Move the camera to the selected drones |
+| Esc | Clear the selection |
 
 ## The file controls.cfg
 

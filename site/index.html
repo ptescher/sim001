@@ -39,7 +39,7 @@
 <header class="hero">
   <div class="wrap">
     <h1>SIM001</h1>
-    <p class="tag">A flight simulator for practising with small FPV planes. A 6-DOF flight model, a real ArduPilot flight controller, and your own radio.</p>
+    <p class="tag">Practise with small FPV planes, plan and fly missions from a ground station, or command a team of drones in a strategy game. A 6-DOF flight model, a real ArduPilot flight controller, and your own radio.</p>
     <div class="btns">
       <a class="btn primary" href="docs/site/">Read the manual</a>
       <a class="btn" href="docs/site/page-installing.html">Install</a>
@@ -50,6 +50,9 @@
 </header>
 <main class="wrap">
   <div class="cards">
+    <div class="card"><h2>Learn to fly</h2><p>Throw the plane, fly it by hand, crash for free and rewind. Then hover and fly the VTOL with self-levelling. <a href="docs/site/page-start-here.html#learn-to-fly">Start here</a>.</p></div>
+    <div class="card"><h2>Learn ground control</h2><p>Plan a mission on a map, write it to the plane and watch ArduPilot fly it. The same ground station connects to a real aircraft. <a href="docs/site/page-start-here.html#learn-ground-control">Start here</a>.</p></div>
+    <div class="card"><h2>Play Towers</h2><p>A real-time strategy game: command five drones, take the radio towers and hold them against the other team. <a href="docs/site/page-start-here.html#play-towers">Start here</a>.</p></div>
     <div class="card"><h2>Two planes</h2><p>The T1-S Ranger, a plain twin-motor plane, and the T1-S VTOL with two tilt-rotors, a rear rotor and ArduPilot.</p></div>
     <div class="card"><h2>A flight model from geometry</h2><p>Strip theory: stalls, adverse yaw, prop wash and V-tail coupling come out of the airframe, not a lookup table.</p></div>
     <div class="card"><h2>Your radio</h2><p>A RadioMaster TX15 or any EdgeTX/OpenTX radio over USB, a Switch Pro Controller, or the keyboard.</p></div>
@@ -63,8 +66,9 @@
   </div>
 
   <h2 class="sec">Run it</h2>
+  <p><a href="https://github.com/ptescher/sim001/releases/latest">Download the app</a> for a Mac with Apple Silicon or for Linux, and open it. <a href="docs/site/page-installing.html">Requirements and installation</a> has the details. Or build it from source:</p>
 <pre>ardupilot/build_native.sh   # once: builds ArduPlane SITL
-cargo run --release         # the VTOL, with its own ArduPilot</pre>
+cargo run --release         # the launcher: start the sim, the ground station or Towers</pre>
   <p>The <a href="docs/site/">manual</a> is generated from the behaviour specs the simulator is tested against: every page is a feature, a tutorial or a test result.</p>
 </main>
 <footer><div class="wrap">SIM001 &middot; <a href="docs/site/">Manual</a> &middot; <a href="https://github.com/ptescher/sim001">GitHub</a></div></footer>

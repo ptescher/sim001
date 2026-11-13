@@ -8,6 +8,7 @@ Use this page when you start the programs from a terminal. The launcher ([[The l
 | --- | --- |
 | `--aircraft t1s-vtol` | The T1-S VTOL with its own ArduPilot. This is the default. |
 | `--aircraft t1s-ranger` | The plain T1-S Ranger, with no flight controller |
+| `--aircraft seeker3` | The DeepSpace Seeker 3 quadcopter, with its own ArduPilot |
 | `--raytrace` | Ray-traced shadows, global illumination and reflections |
 | `--map NAME` | A real place: `cypress` or `berkeley` |
 | `--fullscreen` | Start in borderless full screen |
@@ -34,11 +35,15 @@ Use this page when you start the programs from a terminal. The launcher ([[The l
 | `--no-radio` | Connect to ArduPilot directly, with no radio stand-in |
 | `--flight-computer` | Use the simulated TX15 on the serial line |
 | `--sensor` | Open the sensor feed alone |
+| `--connect ADDR` | Without `--station`: connect the console to an aircraft at this address. See [[Connecting to a real aircraft]]. |
+| `--origin LAT,LON,ALT` | The point that the map measures from: your launch point |
+| `--aircraft ID` | With `--station`: the plane to fly, `t1s-vtol` or `seeker3` |
 
 ## Environment
 
 | Variable | What it does |
 | --- | --- |
+| `SIM001_MISSION_FILE` | The file that SAVE and LOAD of the console use. The default is `mission.wpl` in the folder that the station started in. |
 | `SIM001_TREE_FRAC` | The share of the forest to draw, for example `0.5` |
 | `SIM001_HOME`, `SIM001_BIN`, `SIM001_DATA` | Where the maps, the programs and your settings are. The app bundle sets them. |
 

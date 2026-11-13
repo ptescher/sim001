@@ -2,6 +2,10 @@ Feature: Mission files
   Save the plan to a file to keep it. Load the file later, for example to fly the same
   circuit again at the field. In Mission Planner, these are Save WP File and Load WP File.
 
+  The file is `mission.wpl`, in the folder that the station started in. Set
+  `SIM001_MISSION_FILE` to keep it in a different place. Mission Planner and QGroundControl
+  read this file, so you can plan here and fly the plan from them.
+
   Expectation: Saving keeps the plan in a file
     Given the plan has at least 1 item
     When the operator saves the plan to a file
