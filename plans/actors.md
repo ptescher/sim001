@@ -148,6 +148,48 @@ server.
    reads. The lookahead moves out of `Commander` and is the first advisor. Then a Claude
    advisor, once every few seconds. The app gets "accept". Gate: a league contest, the commander
    with the advisor against the commander without, on paired seeds.
+
+   **Results (advisors in the rules and the arena; the seat side is not built).** `recreation_towers`
+   has `Advise` (`advise(&mut self, view: &TeamView, hand: &Hand) -> Vec<Proposal>`), `Proposal
+   { drone, order, queue, gain, made, until, why }` and `Lookahead`, the old lookahead moved out of
+   `Commander` (same model, cadence and numbers). `Hand` is what the commander has in hand and the
+   map does not show: its orders after its own rules, the drones it may still change and the towers
+   each must stay away from; a seat has it, for the seat is the commander. A `Commander` holds
+   advisors, each with a delay in game time (`with_advisor(advisor, delay)`), and takes the best
+   proposal each decision that is not stale (`until`), gains more than `ADVICE_MARGIN` (2 points, a
+   constant: `CommanderTuning` is the league's candidate format and stays as it is) and still fits
+   (the drone is free and the tower is not one it gave up, nor, for a proposal made on an earlier map,
+   one the team holds now). `Commander::advise` puts proposals in hand from outside, for a person's
+   click or a process, and `Roster::with_advisor(team, advisor, delay)` gives a roster's team an
+   advisor in the arena. With `with_lookahead(false)` a commander has no advisor and does not think
+   ahead; `Commander::new` has the lookahead at delay 0 unless `SIM001_LOOKAHEAD=0`, as before. The
+   text `Advisor` is unchanged: its warnings are for a person and carry no order or gain, so it is not
+   an `Advise`. Not done: the seat side (proposals over the wire, the app's accept), a queue in the
+   lookahead's proposals (it proposes none), the Claude advisor.
+
+   Gate, no drift: `denial`, `ruleset v2 200` and `judge --game captain --champion timid --challenger
+   default --seeds 24` are byte-identical before and after, with `SIM001_LOOKAHEAD` unset and with it
+   `0`. (`denial` and every policy of `ruleset` but the last line play with the lookahead off, so
+   only `judge` and the line "default against default" test it: Blue wins 50 % with it, 68 % without.)
+
+   Gate, what advice is worth (`cargo run --release -p cognition_towers --example advice 400`:
+   commander + lookahead advisor at the delay, against a commander with no advisor, 400 seeds, both
+   sides, 800 games each; the lookahead's proposals are good for its 45 s horizon):
+
+   | Delay | Margin | Won | Lost |
+   | --- | --- | --- | --- |
+   | 0 s | -0.47 ± 0.04 | 268 | 532 |
+   | 2 s | -0.46 ± 0.04 | 272 | 528 |
+   | 5 s | -0.44 ± 0.04 | 276 | 524 |
+   | 10 s | -0.28 ± 0.05 | 333 | 467 |
+   | 30 s | -0.81 ± 0.04 | 182 | 618 |
+
+   In the arena by the default rules the lookahead is worth less than nothing: the commander that
+   thinks ahead loses to the one that does not, at every delay. Lateness up to 5 s costs nothing
+   measurable; at 10 s the harm is smaller and at 30 s it is worst. Why was not measured (the
+   proposals taken, and how many are stale or no longer fit, are not counted). So the
+   lookahead is a plumbing test for advisors, not a gain: it is the model and its enemy guesses that
+   need work, before advice from a slower and better advisor can be told from lateness.
 5. **A person flies a unit.** A `Unit` seat. The server gives that drone's radio channels to the
    seat: the sim (or a TX15 on CRSF) joins a game as one drone, with the drone's camera and the
    mission on its HUD. The pilot sees only what the drone sees. Take-off is the pilot's.

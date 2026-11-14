@@ -14,6 +14,7 @@
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
 
 mod actors;
+mod advice;
 mod advisor;
 mod belief;
 mod commander;
@@ -28,9 +29,10 @@ pub mod svg;
 mod view;
 
 pub use actors::{Autopilot, Command, Directive, OnBoard, Unit};
+pub use advice::{Advise, Hand, Lookahead, Proposal};
 pub use advisor::{Advice, AdviceKind, Advisor};
 pub use belief::Belief;
-pub use commander::{Commander, CommanderTuning};
+pub use commander::{ADVICE_MARGIN, Commander, CommanderTuning};
 pub use edge::{EdgeObs, EnemySeen, TowerSeen};
 pub use filter::LinkFilter;
 pub use instruction::{Instruction, MAX_QUEUE, Queued, Standing, When, queue_of};

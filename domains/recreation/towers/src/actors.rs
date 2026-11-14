@@ -37,11 +37,21 @@ pub trait Command {
     /// The directives for the drones whose order it changes. A drone it does not name goes on
     /// with what it was told.
     fn decide(&mut self, view: &TeamView) -> Result<Vec<Directive>, String>;
+
+    /// Gives the command an advisor, whose proposals reach it `delay` s of game time after the map
+    /// it is shown. Returns whether the command takes advice at all (by default it does not).
+    fn advised_by(&mut self, _advisor: Box<dyn crate::Advise>, _delay: f32) -> bool {
+        false
+    }
 }
 
 impl<C: Command + ?Sized> Command for &mut C {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<Directive>, String> {
         (**self).decide(view)
+    }
+
+    fn advised_by(&mut self, advisor: Box<dyn crate::Advise>, delay: f32) -> bool {
+        (**self).advised_by(advisor, delay)
     }
 }
 
@@ -49,11 +59,21 @@ impl<C: Command + ?Sized> Command for Box<C> {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<Directive>, String> {
         (**self).decide(view)
     }
+
+    fn advised_by(&mut self, advisor: Box<dyn crate::Advise>, delay: f32) -> bool {
+        (**self).advised_by(advisor, delay)
+    }
 }
 
 impl Command for crate::Commander {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<Directive>, String> {
-        Ok(crate::Commander::decide(self, view).into_iter().map(|(k, o)| Directive::new(k, o)).collect())
+        let orders = crate::Commander::decide(self, view);
+        Ok(orders.into_iter().map(|(k, o)| Directive::with_queue(k, o, self.advised_queue(k))).collect())
+    }
+
+    fn advised_by(&mut self, advisor: Box<dyn crate::Advise>, delay: f32) -> bool {
+        self.add_advisor(advisor, delay);
+        true
     }
 }
 

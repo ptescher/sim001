@@ -271,6 +271,19 @@ Vocabulary:
     Shows: a drone is down: the app shows an ADVISOR line that names the drone that is down
     Shows: the team is behind: the app shows an ADVISOR line with the score and the time left
     Shows: none: the ADVISOR line says nothing new
+  # The advisors of the computer commander (recreation_towers::advice): proposals that it takes or not.
+  State: the proposal in the hand of the Blue commander is none | the Red home tower for 5 points | the Red home tower for 1 point | the Red home tower for 5 points, good for 5 seconds | the Red home tower for 5 points, from the map of 3 seconds before
+    Shows: the Red home tower for 5 points: an advisor proposes that the first Blue drone takes the Red home tower, for a gain of 5 points
+    Shows: the Red home tower for 1 point: an advisor proposes the same, for a gain of 1 point
+    Shows: the Red home tower for 5 points, good for 5 seconds: an advisor proposes the same, for a gain of 5 points, good for 5 seconds
+    Shows: the Red home tower for 5 points, from the map of 3 seconds before: an advisor proposes the same, for a gain of 5 points, from the map as it was 3 seconds before
+  Event: the computer commander of Blue weighs the proposal
+    Say: wait for the next decision of the computer commander, which weighs the proposal in its hand
+  Event: the computer commander of Blue weighs the proposal 10 seconds later
+    Say: wait 10 seconds. Then wait for the next decision of the computer commander, which weighs the proposal in its hand
+  State: the advisor of the computer commander of Blue is the lookahead | none
+    Shows: the lookahead: the computer commander thinks ahead
+    Shows: none: the computer commander does not think ahead
   # The commander app (domains/teleoperation/command), in the Blue seat of a game on the server.
   State: the seat of the app is none | Blue | refused
     Shows: Blue: the top bar of the app says BLUE COMMANDER
