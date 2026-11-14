@@ -5,11 +5,16 @@
 //! of them. A light drone, a quadcopter, has no wing for AGENT to fly: it is switched to QLOITER and
 //! flown by the world's radio.
 //!
-//! The commander app runs this for its team, and the game server for a computer's. It talks
+//! The commander app runs this for its team, and so does a computer commander (`commander`): both
+//! take a seat on the game server (`seat`) and fly the team's drones from its station (`station`).
+//! It talks
 //! through a [`Transport`]: TCP to the simulated ground radio, or a serial line to a real one.
 //! What it knows of the game is a [`Situation`].
 
+pub mod commander;
 pub mod map;
+pub mod seat;
+pub mod station;
 
 use cognition_agent::Craft;
 use cognition_agent::link::{Link, LinkState, PositionReport, Sighting, Traffic};

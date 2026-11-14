@@ -356,7 +356,7 @@ impl CommanderView {
     fn place_eye(&mut self) {
         let Some(rules) = self.seat.state().rules else { return };
         let team = match self.seat.join() {
-            Join::Command(t) | Join::Watch(t) => t,
+            Join::Command(t) | Join::Compute(t) | Join::Watch(t) => t,
             Join::Spectate => Team::Blue,
         };
         self.rig.limit = rules.field_radius * 1.3;
@@ -672,13 +672,13 @@ impl Render for CommanderView {
         };
         let join = self.seat.join();
         let team = match join {
-            Join::Command(t) | Join::Watch(t) => Some(t),
+            Join::Command(t) | Join::Compute(t) | Join::Watch(t) => Some(t),
             Join::Spectate => None,
         };
         let seat_text = match &status {
             Status::Connecting => "CONNECTING TO THE GAME SERVER...".to_string(),
             Status::Refused(why) => format!("REFUSED: {why}"),
-            Status::Seated(Join::Command(t)) => format!("{} COMMANDER", team_name(*t)),
+            Status::Seated(Join::Command(t) | Join::Compute(t)) => format!("{} COMMANDER", team_name(*t)),
             Status::Seated(Join::Watch(t)) => format!("WATCHING {}", team_name(*t)),
             Status::Seated(Join::Spectate) => "SPECTATOR".into(),
         };
