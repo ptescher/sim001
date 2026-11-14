@@ -122,13 +122,13 @@ fn seat(
     }
     let Join::Command(team) = join else { return };
     for line in lines {
-        if let Ok(ToServer::Order { drone, order, low, standing }) = seat::decode::<ToServer>(&line)
+        if let Ok(ToServer::Order { drone, order, low, standing, queue }) = seat::decode::<ToServer>(&line)
             && drone < rules.drones
         {
             let mut w = world.lock().unwrap();
             let i = w.game.drone(team, drone);
             // A drone out of contact does not hear it.
-            w.command_standing(i, order, low, standing);
+            w.command_queue(i, order, low, recreation_towers::queue_of(standing, queue));
         }
     }
     // The commander has gone: its seat is free again.

@@ -9,7 +9,9 @@ use crate::terrain::Valley;
 use crate::trees::Forest;
 use glam::{Vec2, Vec3};
 use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
-use recreation_towers::{Class, Game, Instruction, Link, Order, Phase as Referee, Rules, Standing, Team};
+use recreation_towers::{
+    Class, Game, Instruction, Link, Order, Phase as Referee, Queued, Rules, Standing, Team, queue_of,
+};
 use recreation_towers_ground::leg_for;
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
@@ -122,7 +124,14 @@ pub struct World {
     pub orders: Vec<Option<Order>>,
     /// Each drone's order is flown low, along the lanes (by its index in the game).
     pub lows: Vec<bool>,
-    /// Each drone's standing order: what it does when it is out of contact (by its index in the game).
+    /// Each drone's queue of instructions: what it does when it is out of contact (by its index in
+    /// the game), and how many of them it has started. The server flies the whole queue for a
+    /// drone with no wing (`link_up`).
+    pub queue: Vec<Vec<Queued>>,
+    pub queue_taken: Vec<usize>,
+    /// Each drone's standing order: the first instruction of its queue that waits for the silence.
+    /// This is all that the flight controller has (one standing plan), so it is all that the
+    /// ground uploads to a drone on the wing; the rest of the queue is flown from here.
     pub standing: Vec<Option<Standing>>,
     /// The order each team last knew of for each drone, and whether it is low: what the drone
     /// was told while it was in contact. A drone out of contact flies on, and its team is not told
@@ -167,6 +176,8 @@ impl World {
             orders: vec![Some(Order::Home); n],
             told: lows.iter().map(|&low| (Some(Order::Home), low)).collect(),
             lows,
+            queue: vec![vec![]; n],
+            queue_taken: vec![0; n],
             standing: vec![None; n],
             terrain,
             forest,
@@ -265,9 +276,18 @@ impl World {
 
     /// The team gives drone `i` an order and a standing order.
     pub fn command_standing(&mut self, i: usize, order: Order, low: bool, standing: Option<Standing>) {
+        self.command_queue(i, order, low, queue_of(standing, vec![]))
+    }
+
+    /// The team gives drone `i` an order and a queue (cut to the most that a queue holds). The
+    /// order and the queue replace the old ones.
+    pub fn command_queue(&mut self, i: usize, order: Order, low: bool, queue: Vec<Queued>) {
+        let queue = queue_of(None, queue);
         self.orders[i] = Some(order);
         self.lows[i] = low;
-        self.standing[i] = standing;
+        self.standing[i] = Instruction { order: None, queue: queue.clone(), taken: 0 }.standing();
+        self.queue[i] = queue;
+        self.queue_taken[i] = 0;
     }
 
     /// What drone `i`'s sensor reports now, once a second of game time: each enemy drone in its
@@ -328,8 +348,13 @@ impl World {
             if !self.flown_from_here(i) {
                 continue;
             }
-            let mut flown = Instruction { order: self.orders[i], standing: self.standing[i] };
-            flown.tick(self.game.silent[i], self.game.rules.link_timeout, self.game.charge(i), self.game.rules.bingo);
+            let mut flown =
+                Instruction { order: self.orders[i], queue: self.queue[i].clone(), taken: self.queue_taken[i] };
+            let game = &self.game;
+            flown.tick_with(game.silent[i], game.rules.link_timeout, game.charge(i), game.rules.bingo, |o| {
+                game.order_done(i, o)
+            });
+            self.queue_taken[i] = flown.taken;
             if flown.order != self.orders[i] {
                 println!("failsafe: drone {i} out of contact, and flies {:?}", flown.order);
                 self.orders[i] = flown.order;
@@ -654,6 +679,34 @@ mod tests {
             w.link_up();
         }
         assert_eq!(w.orders[i], Some(Order::Hold), "30 s: the standing order, and not home");
+    }
+
+    #[test]
+    fn a_queue_given_in_contact_is_flown_down_in_the_shadow_and_a_longer_one_is_cut() {
+        let (mut w, i) = shadowed_light();
+        let west = w.game.tower("west");
+        w.game.drones[i].at = Vec2::new(-300.0, 0.0);
+        w.game.look();
+        let queue = vec![
+            Queued::silent(5.0, Order::Hold),
+            Queued::silent(10.0, Order::Take(west)),
+            Queued::silent(20.0, Order::Home),
+        ];
+        w.command_queue(i, Order::Take(west), false, queue.clone());
+        assert_eq!(w.standing[i], Some(Standing { after: 5.0, then: Order::Hold }), "the flight controller's one slot");
+        w.game.drones[i].at = w.game.towers[4].at - Vec2::new(100.0, 0.0);
+        for (secs, order) in
+            [(4.9, Order::Take(west)), (5.2, Order::Hold), (10.2, Order::Take(west)), (20.2, Order::Home)]
+        {
+            while w.game.silent[i] < secs - 0.05 {
+                w.game.step(0.1);
+                w.link_up();
+            }
+            assert_eq!(w.orders[i], Some(order), "{secs} s");
+        }
+        w.command_queue(i, Order::Hold, false, vec![Queued::done(Order::Home); 7]);
+        assert_eq!(w.queue[i].len(), recreation_towers::MAX_QUEUE);
+        assert_eq!(w.queue_taken[i], 0, "a new order starts the queue again");
     }
 
     #[test]
