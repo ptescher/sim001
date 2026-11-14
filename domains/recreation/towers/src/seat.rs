@@ -9,7 +9,7 @@
 //! server tells it only the umpire's word ([`ToSeat::Umpire`]) and what its towers and base see
 //! ([`ToSeat::Sites`]). Only a spectator gets the whole game ([`ToSeat::Truth`]).
 
-use crate::{Advice, Drone, Game, Order, Outcome, Rules, Sites, Standing, Team, TeamView, Tower, Umpire};
+use crate::{Advice, Drone, Game, Order, Outcome, Queued, Rules, Sites, Standing, Team, TeamView, Tower, Umpire};
 use serde::{Deserialize, Serialize};
 
 /// The game server's port for seats: never a SITL port (those end in 0, 2 or 3).
@@ -37,8 +37,13 @@ pub enum ToServer {
         #[serde(default)]
         low: bool,
         /// What the drone does if it is out of contact for a time: a plan for the radio shadows.
+        /// The old form of a queue of one; a queue, when there is one, wins (see [`crate::queue_of`]).
         #[serde(default)]
         standing: Option<Standing>,
+        /// The queue of instructions of the drone, for the radio shadows: up to
+        /// [`crate::MAX_QUEUE`], cut when longer. The commander replaces it with each order.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        queue: Vec<Queued>,
     },
 }
 
@@ -109,4 +114,29 @@ pub fn encode<T: Serialize>(msg: &T) -> String {
 
 pub fn decode<'a, T: Deserialize<'a>>(line: &'a str) -> Result<T, String> {
     serde_json::from_str(line.trim()).map_err(|e| format!("not a seat message ({e}): {line}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_order_with_a_queue_survives_the_wire() {
+        let msg = ToServer::Order {
+            drone: 1,
+            order: Order::Hold,
+            low: false,
+            standing: None,
+            queue: vec![Queued::silent(5.0, Order::Take(2)), Queued::done(Order::Home)],
+        };
+        assert_eq!(decode::<ToServer>(&encode(&msg)).unwrap(), msg);
+    }
+
+    #[test]
+    fn an_order_from_an_old_seat_has_no_queue_and_keeps_its_standing_order() {
+        let old = r#"{"Order":{"drone":0,"order":"Hold","standing":{"after":5.0,"then":"Home"}}}"#;
+        let Ok(ToServer::Order { standing, queue, .. }) = decode::<ToServer>(old) else { panic!("{old}") };
+        assert!(queue.is_empty());
+        assert_eq!(crate::queue_of(standing, queue), vec![Queued::silent(5.0, Order::Home)]);
+    }
 }

@@ -12,7 +12,8 @@ mod edge;
 mod formation;
 
 pub use autonomy::{
-    After, Autonomy, Comparison, Failsafe, Persist, Prepared, Surface, compare, compare_captains, compare_with,
+    After, Autonomy, Chain, Comparison, Failsafe, Persist, Prepared, Surface, Timed, compare, compare_captains,
+    compare_with,
 };
 pub use edge::{Edge, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
 pub use formation::{Formation, Post};
@@ -21,7 +22,8 @@ use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
 use recreation_towers::flight::{ORBIT_RADIUS, low_height, orbit_height};
 use recreation_towers::{
-    Commander, CommanderTuning, EdgeObs, Game, Instruction, Order, Outcome, Phase, Rules, Standing, Team, TeamView,
+    Commander, CommanderTuning, EdgeObs, Game, Instruction, Order, Outcome, Phase, Queued, Rules, Standing, Team,
+    TeamView,
 };
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -55,6 +57,12 @@ pub trait Captain {
         vec![]
     }
 
+    /// The queues that go with `orders`, given just now: `(drone, queue)`. A drone with no entry
+    /// gets none. By default each standing order is a queue of one.
+    fn queue(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Vec<Queued>)> {
+        self.standing(view, orders).into_iter().map(|(k, s)| (k, vec![Queued::from(s)])).collect()
+    }
+
     /// A drone that is out of contact flies `order`: its own decision from what it knows on
     /// board, once a second. `None` goes on with the order.
     fn edge(&mut self, _team: Team, _obs: &EdgeObs, _order: Order) -> Option<Order> {
@@ -69,6 +77,10 @@ impl<C: Captain + ?Sized> Captain for &mut C {
 
     fn standing(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
         (**self).standing(view, orders)
+    }
+
+    fn queue(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Vec<Queued>)> {
+        (**self).queue(view, orders)
     }
 
     fn edge(&mut self, team: Team, obs: &EdgeObs, order: Order) -> Option<Order> {
@@ -188,8 +200,8 @@ pub struct Match {
     /// How long an order takes to reach its drone (s).
     delay: f32,
     /// Orders on their way: (when the drone flies it, drone index, order).
-    pending: Vec<(f32, usize, Order, Option<Standing>)>,
-    /// What each drone was told: its order and its standing order.
+    pending: Vec<(f32, usize, Order, Vec<Queued>)>,
+    /// What each drone was told: its order and its queue.
     told: Vec<Instruction>,
     next_decision: f32,
     next_edge: f32,
@@ -261,21 +273,21 @@ impl Match {
                 let captain: &mut dyn Captain = if team == Team::Blue { &mut *blue } else { &mut *red };
                 let view = game.view(team);
                 let orders = captain.decide(&view)?;
-                let standing = captain.standing(&view, &orders);
+                let queues = captain.queue(&view, &orders);
                 for &(k, order) in orders.iter().filter(|(k, _)| *k < drones) {
-                    let s = standing.iter().find(|(j, _)| *j == k).map(|&(_, s)| s);
-                    self.pending.push((game.time + self.delay, game.drone(team, k), order, s));
+                    let q = queues.iter().find(|(j, _)| *j == k).map(|(_, q)| q.clone()).unwrap_or_default();
+                    self.pending.push((game.time + self.delay, game.drone(team, k), order, q));
                 }
             }
         }
         // An order reaches a drone that is in contact when it arrives; one in a radio shadow
         // never hears it.
-        self.pending.retain(|&(when, i, order, standing)| {
-            if game.time < when {
+        self.pending.retain(|(when, i, order, queue)| {
+            if game.time < *when {
                 return true;
             }
-            if !game.jammed[i] {
-                self.told[i].give(order, standing);
+            if !game.jammed[*i] {
+                self.told[*i].give_queue(*order, queue.clone());
             }
             false
         });
@@ -284,8 +296,10 @@ impl Match {
             self.next_edge += DECIDE_EVERY;
         }
         for (i, told) in self.told.iter_mut().enumerate() {
-            // Out of contact long enough, a drone flies its standing order, or home.
-            told.tick(game.silent[i], game.rules.link_timeout, game.charge(i), game.rules.bingo);
+            // Out of contact, a drone works down its queue, or flies home.
+            told.tick_with(game.silent[i], game.rules.link_timeout, game.charge(i), game.rules.bingo, |o| {
+                game.order_done(i, o)
+            });
             // A drone out of contact decides for itself, once a second, from what it knows on board.
             if edge_now
                 && game.silent[i] > 0.0
@@ -297,9 +311,8 @@ impl Match {
                 if let Some(new) = captain.edge(team, &game.edge_obs(i), order)
                     && new != order
                 {
-                    // Its own decision replaces the standing order: the failsafe still holds.
-                    told.order = Some(new);
-                    told.standing = None;
+                    // Its own decision replaces the queue: the failsafe still holds.
+                    told.decide(new);
                 }
             }
             if flyers[i].order != told.order {
@@ -659,11 +672,36 @@ mod tests {
         let mut captain = First(Order::Hold, Some(standing));
         run(&mut m, 3.0, &mut captain);
         assert_eq!(m.flyers[i].order, Some(Order::Hold));
-        assert_eq!(m.told[i].standing, Some(standing));
+        assert_eq!(m.told[i].standing(), Some(standing));
         // Into the shadow: out of contact. Not the failsafe's 20 s, but the standing order's 5 s.
         put_blue(&mut m, true);
         run(&mut m, 10.0, &mut Silent);
         assert_eq!(m.flyers[i].order, Some(Order::Home));
+    }
+
+    #[test]
+    fn a_queue_given_in_contact_is_flown_down_in_the_shadow() {
+        let mut m = Match::new(1);
+        let i = put_blue(&mut m, true);
+        let here = m.game.drones[i].at;
+        let queue = vec![Queued::silent(1.0, Order::Goto(here)), Queued::done(Order::Home)];
+        m.told[i].give_queue(Order::Hold, queue);
+        run(&mut m, 0.5, &mut Silent);
+        assert_eq!(m.flyers[i].order, Some(Order::Hold), "the first instruction waits for the silence");
+        run(&mut m, 3.0, &mut Silent);
+        assert_eq!(m.flyers[i].order, Some(Order::Home), "it is there, so the second instruction starts");
+    }
+
+    #[test]
+    fn a_policy_with_a_queue_of_three_gives_the_next_tower_and_home() {
+        let m = Match::new(1);
+        let view = m.game.view(Team::Blue);
+        let west = m.game.tower("west");
+        let q = Chain.queue(&view, 0, Order::Take(west));
+        assert_eq!(q.len(), 3);
+        assert_eq!(q[0], Queued::silent(0.0, Order::Take(west)));
+        assert!(matches!(q[1], Queued { when: recreation_towers::When::Done, order: Order::Take(t) } if t != west));
+        assert_eq!(q[2], Queued::done(Order::Home));
     }
 
     fn tired() -> Rules {
