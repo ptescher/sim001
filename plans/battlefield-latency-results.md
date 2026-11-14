@@ -190,3 +190,48 @@ client) do not depend on the app's window, and stand.
 
 **Next:** measure the app on a screen, with a person at it: start a practice game, pan the camera,
 and read `battlefield: the app draws …` and `battlefield: the camera moved …` from the app's output.
+
+## Step 5, third part: what a review found, and what it changed
+
+A review of the code (2026-11-13) found two mistakes in the conclusions above.
+
+1. **The lag figure ramped.** It counted from the first camera after the one on screen, so at the
+   start of a pan, with the picture from before it still on screen, it rose from 0 and could not
+   exceed the time since the pan began. A steady delay of 500 ms read as about 200 ms on a short
+   pan and 500 ms on a long one, which looked like a queue filling. There is no queue: the app,
+   the view and its outbox all keep only the newest request and picture. **Now** a paint says how
+   old its picture is: how long ago the app asked for the camera it shows. The picture from before
+   the motion is not counted, and the wait for the motion's first picture is logged apart.
+2. **The battlefield has no sun shadows to cut.** Bevy's sun casts shadows out to 150 m from each
+   camera, and the battlefield's camera is 450 m from the ground. The 14 ms of shadows belonged to
+   the view's own main camera, which followed the first drone among the trees and rendered at
+   1920 by 1080 for nobody, its window hidden.
+
+**Kept:**
+
+- With `--hidden` the view's main camera is parked: a 64 by 36 picture of the sky, where it
+  stands (`RenderScale::parked`). It cannot be turned off (Bevy's atmosphere needs a live view).
+- One frame in flight instead of two, and the pacer waits after Bevy asks for the frame's
+  readbacks, so the wait completes them too.
+
+**The view alone** (hidden, the test client panning at 1400 by 630, 10 s each):
+
+| Frames in flight | Request to arrival | Pictures a second | ms a frame |
+| --- | --- | --- | --- |
+| 2 | 203 ms | 20.5 | 48 |
+| 1 (kept) | 155 ms | 20.4 | 48 |
+| 0 | 122 ms | 17.8 | 55 |
+
+That is about 3 of the view's frames from request to arrival.
+
+**In a game** (the expectation's pan; the view's own log):
+
+| | Before (on screen, 2026-11-13) | Now |
+| --- | --- | --- |
+| The 3D view | 112 to 153 ms a frame (7 to 9 a second) | 56 to 64 ms (16 to 18 a second) |
+| Pictures it sent the app a second | 7 | 16 |
+
+The app's figures from this run rest on one paint (its window was off screen again) and are not
+used. **Next:** the same on-screen run as before, with the app in front; at about 3 frames of 60 ms,
+expect a picture about 200 ms old. The go/no-go (80 ms) then rests on step 3 (moving the last
+picture with the camera until the next arrives) or on option 2, not on a lighter look.
