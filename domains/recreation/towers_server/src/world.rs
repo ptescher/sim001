@@ -334,6 +334,26 @@ impl World {
                 self.crashes += 1;
                 let (at, alt) = to_field(self.planes[i].pos);
                 println!("crash: drone {i}: {} at {at} (north, east), {alt:.1} m", self.planes[i].crash_reason);
+                // What it was doing, and who was near: to tell a mid-air from a tree, a drone in a
+                // shadow from one in contact.
+                let here = glam::Vec3::new(at.x, at.y, alt);
+                let near = (0..self.game.drones.len())
+                    .filter(|&j| j != i && self.game.drones[j].phase == Referee::Flying)
+                    .map(|j| {
+                        let d = &self.game.drones[j];
+                        (j, glam::Vec3::new(d.at.x, d.at.y, d.alt).distance(here))
+                    })
+                    .min_by(|a, b| a.1.total_cmp(&b.1));
+                println!(
+                    "crash: drone {i}: t {:.0}s order {:?}{} speed {:.1} m/s, jammed {}, silent {:.1}s, nearest flying drone {}",
+                    self.game.time,
+                    self.orders[i],
+                    if self.lows[i] { " LOW" } else { " HIGH" },
+                    self.planes[i].vel.length(),
+                    self.game.jammed[i],
+                    self.game.silent[i],
+                    near.map_or("none".into(), |(j, d)| format!("{j} at {d:.0} m")),
+                );
             }
             self.down_for[i] += dt;
             if self.down_for[i] > RESPAWN {

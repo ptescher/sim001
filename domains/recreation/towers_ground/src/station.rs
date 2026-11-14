@@ -18,6 +18,11 @@ use std::time::{Duration, Instant};
 const LOOK_EVERY: Duration = Duration::from_millis(20);
 /// ArduPlane's FBWA, the mode of a drone that has taken off and waits for AGENT.
 const FBWA_MODE: u32 = 5;
+/// A drone in FBWA flies on the wing at this speed (m/s) or more: it is past the transition (the
+/// server's take-off counts the transition done at 15 m/s of airspeed).
+const WING_SPEED: f32 = 15.0;
+/// A drone is taken to have flown on in a straight line this long (s of the game) since it reported.
+const DEAD_RECKONING: f32 = 1.5;
 
 /// The drones' time as the app can know it: the time of the last map, and the rate at which that time
 /// runs (a game sped up runs ahead of the clock on the wall).
@@ -48,8 +53,9 @@ impl Clock {
             }
             (self.map_time, self.at) = (map_time, Instant::now());
         }
-        // Never ahead of the next map by more than a second, and never back.
-        let now = self.map_time as f64 + (self.at.elapsed().as_secs_f64() * self.rate).min(1.0);
+        // Never ahead of the next map by more than a wall second (a game sped up sends a map every
+        // few game seconds: a cap in game time would stall the plans between maps), and never back.
+        let now = self.map_time as f64 + self.at.elapsed().as_secs_f64().min(1.0) * self.rate;
         self.last = self.last.max(now);
         self.last
     }
@@ -161,11 +167,15 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
             let (position, sightings) = f.ground.telemetry(k);
             *report = position.map(|p| {
                 let (north, east) = cognition_plan::to_local(f.home.0, f.home.1, p.lat, p.lon);
+                let vel = Vec2::new(p.vel[0], p.vel[1]);
+                let age = p.heard.elapsed().as_secs_f32() * rate;
                 OwnReport {
-                    at: Vec2::new(north, east),
+                    // Where the drone has got to since it reported (it flies on): a plan from the
+                    // report's place would put the drone's entry to a tower, and its lane, behind it.
+                    at: Vec2::new(north, east) + vel * age.min(DEAD_RECKONING),
                     alt: p.alt,
-                    vel: Vec2::new(p.vel[0], p.vel[1]),
-                    age: p.heard.elapsed().as_secs_f32() * rate,
+                    vel,
+                    age,
                 }
             });
             seen.extend(sightings.iter().map(|s| {
@@ -202,8 +212,16 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
         let wing: Vec<bool> = (0..2 * n)
             .map(|i| {
                 let Some(k) = i.checked_sub(f.first).filter(|&k| k < n) else { return false };
-                let flying = view.drones[k].phase == Phase::Flying;
-                flying && f.ground.mode_of(k).is_some_and(|m| [FBWA_MODE, AGENT_MODE, QLOITER_MODE].contains(&m))
+                let d = &view.drones[k];
+                // On the wing: in FBWA with the transition done (fast enough to fly), or already in
+                // AGENT or QLOITER. AGENT asked for in the middle of the transition stalls the drone.
+                let mode = f.ground.mode_of(k);
+                let up = d.phase == Phase::Flying;
+                up && match mode {
+                    Some(FBWA_MODE) => d.vel.length() >= WING_SPEED,
+                    Some(m) => [AGENT_MODE, QLOITER_MODE].contains(&m),
+                    None => false,
+                }
             })
             .collect();
         let situation = Situation {
