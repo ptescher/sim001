@@ -235,3 +235,35 @@ The app's figures from this run rest on one paint (its window was off screen aga
 used. **Next:** the same on-screen run as before, with the app in front; at about 3 frames of 60 ms,
 expect a picture about 200 ms old. The go/no-go (80 ms) then rests on step 3 (moving the last
 picture with the camera until the next arrives) or on option 2, not on a lighter look.
+
+## The frame-time experiment: how fast can the view be?
+
+The question (from a review of step 3 against option 2): if the battlefield's camera gets to about
+20 ms a frame, a picture is about 60 ms old, and a picture warped to the camera now (step 3, as a
+ground plane) lines up within a few pixels. The view alone, hidden, the test client panning, each
+case stripped by a throwaway switch (not committed):
+
+| The battlefield camera, and | ms a frame | Request to arrival | Pictures a second |
+| --- | --- | --- | --- |
+| everything (#127) | 47.5 | 155 ms | 20.9 |
+| the sun's shadows off | 38.1 | 126 ms | 25.8 |
+| the view's main camera parked 10 km up | 42.2 | 137 ms | 23.6 |
+| and the view's HUD camera off | 41.5 | 136 ms | 23.6 |
+| no trees or grass | 35.1 | 118 ms | 27.8 |
+| no atmosphere, fog, clouds, exposure, bloom or TAA | 38.7 | 126 ms | 20.1 |
+| no trees, no look, no shadows | 24.6 | 87 ms | 39.9 |
+| main camera high, no HUD, no trees, no look | 25.7 | 90 ms | 38.3 |
+| nothing drawn at all | 31.1 | 105 ms | 32.1 |
+| nothing drawn, no look, no shadows, no HUD | 22.3 | 80 ms | 44.3 |
+
+What it says:
+
+1. **A picture is 3.5 of the view's frames old, whatever the frame costs.** From 155 ms at 48 ms a
+   frame to 80 ms at 22 ms.
+2. **The view costs 22 ms a frame with nothing to draw.** So the oldest a picture can be with this
+   view is about 80 ms, not 60.
+3. **The parked main camera still pays for shadows:** it stands among the trees and they fall in its
+   cascades. Parked 10 km up it saves 6 ms (but the 3D grass follows the main camera, and would be
+   dropped).
+4. **The rest is the look of the battlefield:** the trees cost 12 ms and the look 9 ms.
+   Together, with shadows, 23 ms.
