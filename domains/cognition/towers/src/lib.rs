@@ -3,9 +3,11 @@
 //! game's own; each captain sees only `Game::view(team)`. The drones fly their orders on their own,
 //! as the server's plans make them fly (see [`Flyer`]).
 //!
-//! A captain is anything that turns a team's view into orders ([`Captain`]): a `Commander` in this
-//! process, or one in a process of its own ([`SeatProcess`]), so that two captains with different
-//! code can play each other.
+//! A game is played by a roster ([`Roster`]): a [`Command`] for each team, which turns the team's
+//! view into orders, and a [`Unit`] for each drone, which flies on what the drone has on board
+//! (`recreation_towers::actors`). A [`Captain`] is the two together, as one object that is the
+//! team's commander and makes each drone's unit: a `Commander` in this process, or one in a process
+//! of its own ([`SeatProcess`]), so that two captains with different code can play each other.
 
 mod autonomy;
 mod edge;
@@ -15,19 +17,20 @@ pub use autonomy::{
     After, Autonomy, Chain, Comparison, Failsafe, Persist, Prepared, Surface, Timed, compare, compare_captains,
     compare_with,
 };
-pub use edge::{Edge, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
+pub use edge::{Edge, EdgeUnit, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
 pub use formation::{Formation, Post};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
+use recreation_towers::Commander;
 use recreation_towers::flight::{ORBIT_RADIUS, low_height, orbit_height};
 use recreation_towers::{
-    Commander, CommanderTuning, EdgeObs, Game, Instruction, Order, Outcome, Phase, Queued, Rules, Standing, Team,
-    TeamView,
+    Autopilot, Command, CommanderTuning, Directive, Game, Instruction, OnBoard, Order, Outcome, Phase, Queued, Rules,
+    Standing, Team, TeamView, Unit,
 };
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 
 /// The arena's step (s), and how often each captain decides (s).
 const DT: f32 = 0.1;
@@ -47,7 +50,9 @@ const G: f32 = 9.81;
 const WIND_MAX: f32 = 5.0;
 const DELAY: (f32, f32) = (0.3, 2.0);
 
-/// What turns a team's view into orders.
+/// A team's commander and the brain of each of its drones, as one object. It splits into a
+/// [`Command`] (see [`Directing`]) and a [`Unit`] for each drone ([`Captain::unit`]): nothing but the
+/// unit's own state goes on board.
 pub trait Captain {
     /// The orders for the team's drones: `(drone, order)` for each.
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String>;
@@ -63,10 +68,11 @@ pub trait Captain {
         self.standing(view, orders).into_iter().map(|(k, s)| (k, vec![Queued::from(s)])).collect()
     }
 
-    /// A drone that is out of contact flies `order`: its own decision from what it knows on
-    /// board, once a second. `None` goes on with the order.
-    fn edge(&mut self, _team: Team, _obs: &EdgeObs, _order: Order) -> Option<Order> {
-        None
+    /// The unit of drone `k` of `team`: its own brain on board. By default the [`Autopilot`]. It
+    /// is made once, before the game, and shares nothing with the captain that a drone could not
+    /// have on board.
+    fn unit(&self, _team: Team, _k: usize) -> Box<dyn Unit> {
+        Box::new(Autopilot)
     }
 }
 
@@ -83,14 +89,68 @@ impl<C: Captain + ?Sized> Captain for &mut C {
         (**self).queue(view, orders)
     }
 
-    fn edge(&mut self, team: Team, obs: &EdgeObs, order: Order) -> Option<Order> {
-        (**self).edge(team, obs, order)
+    fn unit(&self, team: Team, k: usize) -> Box<dyn Unit> {
+        (**self).unit(team, k)
     }
 }
 
-impl Captain for Commander {
+impl Captain for recreation_towers::Commander {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
-        Ok(Commander::decide(self, view))
+        Ok(recreation_towers::Commander::decide(self, view))
+    }
+}
+
+/// A captain as a [`Command`]: its orders go out with the queues it prepares for them.
+pub struct Directing<C>(pub C);
+
+impl<C: Captain> Command for Directing<C> {
+    fn decide(&mut self, view: &TeamView) -> Result<Vec<Directive>, String> {
+        let orders = self.0.decide(view)?;
+        let queues = self.0.queue(view, &orders);
+        Ok(orders
+            .into_iter()
+            .map(|(k, order)| {
+                let queue = queues.iter().find(|(j, _)| *j == k).map(|(_, q)| q.clone()).unwrap_or_default();
+                Directive { drone: k, order, queue }
+            })
+            .collect())
+    }
+}
+
+/// Who plays: a [`Command`] for each team and a [`Unit`] for each drone, the drones of Blue first.
+pub struct Roster<'a> {
+    pub blue: Box<dyn Command + 'a>,
+    pub red: Box<dyn Command + 'a>,
+    pub units: Vec<Box<dyn Unit + 'a>>,
+}
+
+impl<'a> Roster<'a> {
+    /// The two commanders, and `unit(team, k)` for drone `k` of each team.
+    pub fn new(
+        rules: &Rules,
+        blue: impl Command + 'a,
+        red: impl Command + 'a,
+        mut unit: impl FnMut(Team, usize) -> Box<dyn Unit + 'a>,
+    ) -> Roster<'a> {
+        let units =
+            Team::BOTH.into_iter().flat_map(|t| (0..rules.drones).map(move |k| (t, k))).map(|(t, k)| unit(t, k));
+        Roster { blue: Box::new(blue), red: Box::new(red), units: units.collect() }
+    }
+
+    /// Two captains, each with the units it makes.
+    pub fn of_captains(rules: &Rules, blue: impl Captain + 'a, red: impl Captain + 'a) -> Roster<'a> {
+        let units = Team::BOTH.into_iter().flat_map(|t| (0..rules.drones).map(move |k| (t, k))).map(|(t, k)| {
+            let captain = if t == Team::Blue { &blue as &dyn Captain } else { &red };
+            captain.unit(t, k)
+        });
+        let units = units.collect();
+        Roster { blue: Box::new(Directing(blue)), red: Box::new(Directing(red)), units }
+    }
+
+    /// Replaces the unit of drone `k` of `team`.
+    pub fn with_unit(mut self, rules: &Rules, team: Team, k: usize, unit: impl Unit + 'a) -> Roster<'a> {
+        self.units[team.index() * rules.drones + k] = Box::new(unit);
+        self
     }
 }
 
@@ -192,7 +252,7 @@ impl TowersResult {
 }
 
 /// A game in progress: the referee, the drones flying their orders, and the orders on their way.
-pub struct Match {
+pub struct Match<'u> {
     pub game: Game,
     pub flyers: Vec<Flyer>,
     seed: u64,
@@ -204,23 +264,31 @@ pub struct Match {
     /// What each drone was told: its order and its queue.
     told: Vec<Instruction>,
     next_decision: f32,
-    next_edge: f32,
     dark: [f32; 2],
     /// Each drone is down now, and how many times each team's drones went down.
     down: Vec<bool>,
     downs: [usize; 2],
     /// Each drone has taken off.
     took_off: Vec<bool>,
+    /// The unit of each drone: its own brain, run on every step.
+    units: Vec<Box<dyn Unit + 'u>>,
 }
 
-impl Match {
+impl<'u> Match<'u> {
     /// The start of a game on `seed`: the drones on the ground, the wind and the delay drawn.
-    pub fn new(seed: u64) -> Match {
+    pub fn new(seed: u64) -> Match<'u> {
         Match::with_rules(Rules::default(), seed)
     }
 
-    /// The same, with the rules of the game.
-    pub fn with_rules(rules: Rules, seed: u64) -> Match {
+    /// The same, with the rules of the game. Every drone has the default unit.
+    pub fn with_rules(rules: Rules, seed: u64) -> Match<'u> {
+        let units = (0..2 * rules.drones).map(|_| Box::new(Autopilot) as Box<dyn Unit + 'u>).collect();
+        Match::with_units(rules, seed, units)
+    }
+
+    /// The same, with a unit for each drone, the drones of Blue first.
+    pub fn with_units(rules: Rules, seed: u64, units: Vec<Box<dyn Unit + 'u>>) -> Match<'u> {
+        assert_eq!(units.len(), 2 * rules.drones, "a unit for each drone");
         let mut rng = fastrand::Rng::with_seed(seed);
         let mut game = Game::new(rules);
         let wind = {
@@ -254,29 +322,31 @@ impl Match {
             pending: vec![],
             told: vec![Instruction::default(); 2 * rules.drones],
             next_decision: 0.0,
-            next_edge: 0.0,
             dark: [0.0; 2],
             down: vec![false; 2 * rules.drones],
             downs: [0; 2],
             took_off: vec![false; 2 * rules.drones],
+            units,
         }
     }
 
-    /// One step: the captains decide when it is time, the orders arrive, the drones fly, the
-    /// referee steps.
+    /// One step with captains: see [`Match::step_with`]. Each team's commander is its captain's
+    /// [`Directing`]; the drones' units are the ones the match was built with.
     pub fn step(&mut self, blue: &mut dyn Captain, red: &mut dyn Captain) -> Result<(), String> {
+        self.step_with(&mut Directing(blue), &mut Directing(red))
+    }
+
+    /// One step: the commanders decide when it is time, the orders arrive, each unit flies its
+    /// drone, the referee steps.
+    pub fn step_with(&mut self, blue: &mut dyn Command, red: &mut dyn Command) -> Result<(), String> {
         let (game, flyers) = (&mut self.game, &mut self.flyers);
         let drones = game.rules.drones;
         if game.time >= self.next_decision {
             self.next_decision += DECIDE_EVERY;
             for team in Team::BOTH {
-                let captain: &mut dyn Captain = if team == Team::Blue { &mut *blue } else { &mut *red };
-                let view = game.view(team);
-                let orders = captain.decide(&view)?;
-                let queues = captain.queue(&view, &orders);
-                for &(k, order) in orders.iter().filter(|(k, _)| *k < drones) {
-                    let q = queues.iter().find(|(j, _)| *j == k).map(|(_, q)| q.clone()).unwrap_or_default();
-                    self.pending.push((game.time + self.delay, game.drone(team, k), order, q));
+                let commander: &mut dyn Command = if team == Team::Blue { &mut *blue } else { &mut *red };
+                for d in commander.decide(&game.view(team))?.into_iter().filter(|d| d.drone < drones) {
+                    self.pending.push((game.time + self.delay, game.drone(team, d.drone), d.order, d.queue));
                 }
             }
         }
@@ -291,33 +361,13 @@ impl Match {
             }
             false
         });
-        let edge_now = game.time >= self.next_edge;
-        if edge_now {
-            self.next_edge += DECIDE_EVERY;
-        }
         for (i, told) in self.told.iter_mut().enumerate() {
-            // Out of contact, a drone works down its queue, or flies home.
-            told.tick_with(game.silent[i], game.rules.link_timeout, game.charge(i), game.rules.bingo, |o| {
-                game.order_done(i, o)
-            });
-            // A drone out of contact decides for itself, once a second, from what it knows on board.
-            if edge_now
-                && game.silent[i] > 0.0
-                && game.drones[i].phase == Phase::Flying
-                && let Some(order) = told.order
-            {
-                let team = game.drones[i].team;
-                let captain: &mut dyn Captain = if team == Team::Blue { &mut *blue } else { &mut *red };
-                if let Some(new) = captain.edge(team, &game.edge_obs(i), order)
-                    && new != order
-                {
-                    // Its own decision replaces the queue: the failsafe still holds.
-                    told.decide(new);
-                }
-            }
-            if flyers[i].order != told.order {
+            // Each drone's unit runs on every step, in contact or not, from what the drone has on
+            // board and what it was told. What it returns is the order the drone flies.
+            let flown = self.units[i].fly(&OnBoard::new(game, i), told);
+            if flyers[i].order != flown {
                 flyers[i].hold = flyers[i].at;
-                flyers[i].order = told.order;
+                flyers[i].order = flown;
             }
         }
         for (i, f) in flyers.iter_mut().enumerate() {
@@ -338,6 +388,7 @@ impl Match {
                 let heading = if d.team == Team::Blue { 0.0 } else { std::f32::consts::PI };
                 *f = Flyer { at: d.at, alt: 0.0, heading, flying: false, order: None, hold: d.at, ..*f };
                 self.told[i] = Instruction::default();
+                self.units[i].restart();
             }
             f.step(game, self.wind, TAKEOFF_APART * (i % drones) as f32, DT);
             self.took_off[i] |= f.flying;
@@ -393,7 +444,12 @@ pub fn play_with(
     red: &mut dyn Captain,
     seed: u64,
 ) -> Result<TowersResult, String> {
-    let mut m = Match::with_rules(rules, seed);
+    let units = Team::BOTH
+        .into_iter()
+        .flat_map(|t| (0..rules.drones).map(move |k| (t, k)))
+        .map(|(t, k)| if t == Team::Blue { blue.unit(t, k) } else { red.unit(t, k) })
+        .collect();
+    let mut m = Match::with_units(rules, seed, units);
     loop {
         if let Some(result) = m.result() {
             return Ok(result);
@@ -402,13 +458,58 @@ pub fn play_with(
     }
 }
 
+/// Plays one game by the rules, with a roster: a commander for each team and a unit for each drone.
+pub fn play_roster(rules: Rules, roster: Roster<'_>, seed: u64) -> Result<TowersResult, String> {
+    let Roster { mut blue, mut red, units } = roster;
+    let mut m = Match::with_units(rules, seed, units);
+    loop {
+        if let Some(result) = m.result() {
+            return Ok(result);
+        }
+        m.step_with(&mut blue, &mut red)?;
+    }
+}
+
 /// A captain in a process of its own: the seat's JSON lines on its stdin and stdout. It gets
 /// `{"Start": {"team": ..., "tuning": [...]}}` before each game and a `TeamView` for each
-/// decision, and answers each with a line: `"ok"`, or a list of `[drone, order]`.
+/// decision, and answers each with a line: `"ok"`, or a list of `[drone, order]` or
+/// `[drone, order, queue]` (the queue that goes with the order, as a list of [`Queued`]). Only
+/// `decide` crosses: the drones' units are the default.
 pub struct SeatProcess {
     child: Child,
     to: ChildStdin,
     from: BufReader<ChildStdout>,
+    /// The queues of the last reply.
+    queues: Vec<(usize, Vec<Queued>)>,
+}
+
+/// One order of a captain's reply: the old reply is `[drone, order]`, a reply with a queue
+/// `[drone, order, queue]`. Both are read.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Reply {
+    Plain(usize, Order),
+    Queued(usize, Order, Vec<Queued>),
+}
+
+impl From<&Directive> for Reply {
+    /// An order with no queue is sent as it always was.
+    fn from(d: &Directive) -> Reply {
+        if d.queue.is_empty() {
+            Reply::Plain(d.drone, d.order)
+        } else {
+            Reply::Queued(d.drone, d.order, d.queue.clone())
+        }
+    }
+}
+
+impl From<Reply> for Directive {
+    fn from(r: Reply) -> Directive {
+        match r {
+            Reply::Plain(drone, order) => Directive::new(drone, order),
+            Reply::Queued(drone, order, queue) => Directive::with_queue(drone, order, queue),
+        }
+    }
 }
 
 /// A line to a captain's process.
@@ -421,7 +522,7 @@ pub enum ToCaptain {
 impl SeatProcess {
     /// Starts `command` (with `args`, in `dir`), a program that runs [`serve`].
     pub fn spawn(command: &str, args: &[&str], dir: &std::path::Path) -> Result<SeatProcess, String> {
-        let mut child = Command::new(command)
+        let mut child = std::process::Command::new(command)
             .args(args)
             .current_dir(dir)
             .stdin(Stdio::piped())
@@ -431,7 +532,7 @@ impl SeatProcess {
             .map_err(|e| format!("{command}: {e}"))?;
         let to = child.stdin.take().unwrap();
         let from = BufReader::new(child.stdout.take().unwrap());
-        Ok(SeatProcess { child, to, from })
+        Ok(SeatProcess { child, to, from, queues: vec![] })
     }
 
     fn ask(&mut self, msg: &ToCaptain) -> Result<String, String> {
@@ -453,7 +554,14 @@ impl SeatProcess {
 impl Captain for SeatProcess {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         let line = self.ask(&ToCaptain::View(Box::new(view.clone())))?;
-        serde_json::from_str(&line).map_err(|e| format!("the captain said {line:?}: {e}"))
+        let reply: Vec<Reply> = serde_json::from_str(&line).map_err(|e| format!("the captain said {line:?}: {e}"))?;
+        let directives: Vec<Directive> = reply.into_iter().map(Directive::from).collect();
+        self.queues = directives.iter().filter(|d| !d.queue.is_empty()).map(|d| (d.drone, d.queue.clone())).collect();
+        Ok(directives.into_iter().map(|d| (d.drone, d.order)).collect())
+    }
+
+    fn queue(&mut self, _: &TeamView, _: &[(usize, Order)]) -> Vec<(usize, Vec<Queued>)> {
+        std::mem::take(&mut self.queues)
     }
 }
 
@@ -466,8 +574,18 @@ impl Drop for SeatProcess {
 
 /// Serves a captain on `input` and `output` (a [`SeatProcess`]'s other end): this build's
 /// `Commander`, with the tuning each game starts with.
-pub fn serve(input: impl BufRead, mut output: impl Write) -> Result<(), String> {
-    let mut captain: Option<Commander> = None;
+pub fn serve(input: impl BufRead, output: impl Write) -> Result<(), String> {
+    serve_with(input, output, |tuning| Box::new(Commander::with_tuning(league_rules(), tuning)))
+}
+
+/// The same with any [`Command`], made from the tuning each game starts with. Each reply carries
+/// the queue of each order that has one.
+pub fn serve_with(
+    input: impl BufRead,
+    mut output: impl Write,
+    make: impl Fn(CommanderTuning) -> Box<dyn Command>,
+) -> Result<(), String> {
+    let mut captain: Option<Box<dyn Command>> = None;
     for line in input.lines() {
         let line = line.map_err(|e| e.to_string())?;
         let reply = match serde_json::from_str::<ToCaptain>(&line).map_err(|e| e.to_string())? {
@@ -476,12 +594,13 @@ pub fn serve(input: impl BufRead, mut output: impl Write) -> Result<(), String> 
                     .ok()
                     .and_then(|a| CommanderTuning::from_array(&a))
                     .ok_or("a tuning out of bounds")?;
-                captain = Some(Commander::with_tuning(league_rules(), tuning));
+                captain = Some(make(tuning));
                 "\"ok\"".to_string()
             }
             ToCaptain::View(view) => {
                 let c = captain.as_mut().ok_or("a view before the start")?;
-                serde_json::to_string(&Commander::decide(c, &view)).unwrap()
+                let reply: Vec<Reply> = c.decide(&view)?.iter().map(Reply::from).collect();
+                serde_json::to_string(&reply).unwrap()
             }
         };
         writeln!(output, "{reply}").map_err(|e| e.to_string())?;
@@ -738,5 +857,166 @@ mod tests {
         m.game.time = m.game.rules.duration - 10.0;
         run(&mut m, 11.0, &mut Silent);
         assert_eq!(m.result().unwrap().downs, [1, 0]);
+    }
+
+    // ---- The roster: a commander for each team, a unit for each drone ----
+
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    /// What a counting unit saw, for each drone: steps it ran, steps it ran flying in contact, and
+    /// flying out of contact.
+    type Calls = Rc<RefCell<Vec<[usize; 3]>>>;
+
+    /// A unit that counts its calls and flies as the autopilot does.
+    struct Counting(usize, Calls);
+
+    impl Unit for Counting {
+        fn fly(&mut self, on: &OnBoard, told: &mut Instruction) -> Option<Order> {
+            let mut calls = self.1.borrow_mut();
+            calls[self.0][0] += 1;
+            if on.flying() {
+                calls[self.0][if on.in_contact() { 1 } else { 2 }] += 1;
+            }
+            Autopilot.fly(on, told)
+        }
+    }
+
+    /// A unit that always flies home, whatever it was told, in contact or not.
+    struct Recall;
+
+    impl Unit for Recall {
+        fn fly(&mut self, _: &OnBoard, told: &mut Instruction) -> Option<Order> {
+            told.decide(Order::Home);
+            told.order
+        }
+    }
+
+    fn commander() -> Commander {
+        Commander::new(Rules::default()).with_lookahead(false)
+    }
+
+    #[test]
+    fn a_unit_runs_on_every_step_for_every_drone_in_contact_or_not() {
+        let rules = Rules::default();
+        let calls: Calls = Rc::new(RefCell::new(vec![[0; 3]; 2 * rules.drones]));
+        let units = (0..2 * rules.drones).map(|i| Box::new(Counting(i, calls.clone())) as Box<dyn Unit>).collect();
+        let mut m = Match::with_units(rules, 1, units);
+        // Blue's first drone flies in a radio shadow; the others take off and fly in contact.
+        let shadowed = put_blue(&mut m, true);
+        let steps = 200;
+        for _ in 0..steps {
+            m.step_with(&mut Directing(Silent), &mut Directing(Silent)).unwrap();
+        }
+        let calls = calls.borrow();
+        assert!(calls.iter().all(|c| c[0] == steps), "each drone's unit ran on every step: {calls:?}");
+        assert!(calls[shadowed][2] > 50, "a unit flying out of contact runs: {:?}", calls[shadowed]);
+        let linked: usize = calls.iter().enumerate().filter(|(i, _)| *i != shadowed).map(|(_, c)| c[1]).sum();
+        assert!(linked > 50, "units flying in contact run too: {calls:?}");
+    }
+
+    #[test]
+    fn a_roster_of_default_units_plays_the_game_that_play_does() {
+        let rules = Rules::default();
+        let by_roster = play_roster(rules, Roster::of_captains(&rules, commander(), commander()), 4).unwrap();
+        assert_eq!(by_roster, play_with(rules, &mut commander(), &mut commander(), 4).unwrap());
+    }
+
+    /// Plays Blue's commander against Red's, with `unit(team, k)` for each drone.
+    fn mixed(seed: u64, unit: impl FnMut(Team, usize) -> Box<dyn Unit>) -> TowersResult {
+        let rules = Rules::default();
+        play_roster(rules, Roster::new(&rules, commander(), commander(), unit), seed).unwrap()
+    }
+
+    fn default_units(_: Team, _: usize) -> Box<dyn Unit> {
+        Box::new(Autopilot)
+    }
+
+    #[test]
+    fn the_two_teams_can_fly_different_units() {
+        // Blue's drones on the autopilot; Red's go home when one enemy is near, as they take a tower.
+        let red_edge = |t: Team, _| -> Box<dyn Unit> {
+            if t == Team::Blue { Box::new(Autopilot) } else { Box::new(EdgeUnit::new(t, Outnumbered { n: 1 })) }
+        };
+        let mut differs = 0;
+        for seed in 1..=6 {
+            let (a, b) = (mixed(seed, red_edge), mixed(seed, red_edge));
+            assert_eq!(a, b, "the same seed plays the same game");
+            differs += (a != mixed(seed, default_units)) as usize;
+        }
+        assert!(differs > 0, "Red's unit never changed a game");
+    }
+
+    #[test]
+    fn one_drone_can_fly_a_unit_unlike_its_team_mates() {
+        // Blue's first drone ignores its orders and flies home; its team-mates fly them.
+        let recall = |t: Team, k: usize| -> Box<dyn Unit> {
+            if (t, k) == (Team::Blue, 0) { Box::new(Recall) } else { Box::new(Autopilot) }
+        };
+        let (a, b) = (mixed(2, recall), mixed(2, recall));
+        assert_eq!(a, b);
+        assert_ne!(a, mixed(2, default_units), "the drone that flew home changed the game");
+    }
+
+    #[test]
+    fn a_roster_can_swap_the_unit_of_one_drone() {
+        let rules = Rules::default();
+        let play = || {
+            let roster = Roster::of_captains(&rules, commander(), commander()).with_unit(&rules, Team::Red, 1, Recall);
+            play_roster(rules, roster, 2).unwrap()
+        };
+        assert_eq!(play(), play());
+        assert_ne!(play(), play_with(rules, &mut commander(), &mut commander(), 2).unwrap());
+    }
+
+    #[test]
+    fn an_old_reply_with_no_queue_is_read_and_a_queue_comes_with_the_order() {
+        let old: Vec<Reply> = serde_json::from_str(r#"[[0,"Hold"],[3,{"Take":2}]]"#).unwrap();
+        assert_eq!(old, vec![Reply::Plain(0, Order::Hold), Reply::Plain(3, Order::Take(2))]);
+        let queue = vec![Queued::silent(5.0, Order::Home), Queued::done(Order::Hold)];
+        let new = Reply::from(&Directive::with_queue(1, Order::Take(2), queue.clone()));
+        let line = serde_json::to_string(&vec![new.clone()]).unwrap();
+        assert_eq!(serde_json::from_str::<Vec<Reply>>(&line).unwrap(), vec![new]);
+        // An order with no queue goes out as before.
+        let plain = serde_json::to_string(&vec![Reply::from(&Directive::new(0, Order::Hold))]).unwrap();
+        assert_eq!(plain, r#"[[0,"Hold"]]"#);
+        assert_eq!(Directive::from(Reply::Queued(1, Order::Home, queue.clone())).queue, queue);
+    }
+
+    #[test]
+    fn a_commander_served_in_a_process_sends_each_order_with_its_queue() {
+        struct Queueing;
+        impl Command for Queueing {
+            fn decide(&mut self, _: &TeamView) -> Result<Vec<Directive>, String> {
+                Ok(vec![Directive::with_queue(0, Order::Hold, vec![Queued::silent(5.0, Order::Home)])])
+            }
+        }
+        let (to_r, mut to_w) = std::io::pipe().unwrap();
+        let (from_r, from_w) = std::io::pipe().unwrap();
+        std::thread::spawn(move || serve_with(BufReader::new(to_r), from_w, |_| Box::new(Queueing)));
+        let mut from = BufReader::new(from_r);
+        let start = ToCaptain::Start { team: Team::Blue, tuning: CommanderTuning::DEFAULT.to_array().to_vec() };
+        let view = ToCaptain::View(Box::new(Game::new(Rules::default()).view(Team::Blue)));
+        let mut line = String::new();
+        for msg in [start, view] {
+            writeln!(to_w, "{}", serde_json::to_string(&msg).unwrap()).unwrap();
+            line.clear();
+            from.read_line(&mut line).unwrap();
+        }
+        let reply: Vec<Reply> = serde_json::from_str(&line).unwrap();
+        assert_eq!(reply, vec![Reply::Queued(0, Order::Hold, vec![Queued::silent(5.0, Order::Home)])]);
+    }
+
+    #[test]
+    fn a_seat_process_hands_the_queues_of_its_reply_to_the_match() {
+        // A shell that answers every line with one order and a queue, and one order with none.
+        let reply = r#"[[0,"Hold",[{"when":{"Silent":5.0},"order":"Home"}]],[1,"Hold"]]"#;
+        let script = format!("while read l; do echo '{reply}'; done");
+        let mut seat = SeatProcess::spawn("sh", &["-c", &script], std::path::Path::new(".")).unwrap();
+        let view = Game::new(Rules::default()).view(Team::Blue);
+        let ds = Directing(&mut seat).decide(&view).unwrap();
+        assert_eq!((ds[0].order, ds[1].order), (Order::Hold, Order::Hold));
+        assert_eq!(ds[0].queue, vec![Queued::silent(5.0, Order::Home)]);
+        assert!(ds[1].queue.is_empty());
     }
 }
