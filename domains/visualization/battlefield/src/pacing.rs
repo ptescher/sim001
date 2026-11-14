@@ -12,8 +12,10 @@ use bevy::render::{Render, RenderApp, RenderSystems};
 use std::collections::VecDeque;
 use std::time::Duration;
 
-/// How many frames the GPU may be behind the CPU.
-pub const IN_FLIGHT: usize = 2;
+/// How many frames the GPU may be behind the CPU. Measured with the view alone, panning
+/// (plans/battlefield-latency-results.md): 2 gave pictures 203 ms after their request, 1 gave
+/// 155 ms at the same frame rate, 0 gave 122 ms but 13 % fewer pictures.
+pub const IN_FLIGHT: usize = 1;
 /// The longest the render thread waits for the GPU (a frame the GPU never finishes must not hang
 /// the view).
 const WAIT_AT_MOST: Duration = Duration::from_millis(500);
@@ -41,10 +43,11 @@ impl<T> Pacer<T> {
 struct Frames(Pacer<wgpu::SubmissionIndex>);
 
 /// After each frame is rendered, the render thread waits for the GPU to finish the frame
-/// [`IN_FLIGHT`] frames before.
+/// [`IN_FLIGHT`] frames before. It waits after Bevy has asked for the frame's readbacks
+/// (`map_buffers`, in `Cleanup`), so that the wait also completes the readback of that frame.
 pub fn plugin(app: &mut App) {
     if let Some(render) = app.get_sub_app_mut(RenderApp) {
-        render.init_resource::<Frames>().add_systems(Render, pace.in_set(RenderSystems::Cleanup));
+        render.init_resource::<Frames>().add_systems(Render, pace.in_set(RenderSystems::PostCleanup));
     }
 }
 
