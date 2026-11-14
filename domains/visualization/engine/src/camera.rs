@@ -77,6 +77,9 @@ pub struct RenderScale {
     /// The camera draws a part of the picture and the rest is rebuilt over time (see `upscale`),
     /// rather than the picture being smaller and stretched. SIM001_UPSCALE=0 turns it off.
     pub upscale: bool,
+    /// Nobody looks at the main camera (an app shows the other cameras' pictures): it draws a
+    /// tiny picture of the sky. It cannot be turned off, for the same reason as `suspended`.
+    pub parked: bool,
 }
 
 #[derive(Component)]
@@ -112,6 +115,7 @@ pub fn spawn_camera(
         image: image.clone(),
         suspended: true,
         upscale,
+        parked: false,
     });
 
     // Window camera: draws the upscaled scene image and the HUD at full resolution.
@@ -330,13 +334,7 @@ fn update_render_scale(
     }
     // With temporal upscaling the picture is always the window's size and the camera draws a
     // part of it; without, the picture itself is smaller and the screen stretches it.
-    let want = if rs.suspended {
-        UVec2::new(64, 36)
-    } else if rs.upscale {
-        phys
-    } else {
-        (phys.as_vec2() * rs.scale).round().as_uvec2().max(UVec2::splat(64))
-    };
+    let want = scene_size(rs.suspended, rs.parked, rs.upscale, rs.scale, phys);
     for mut u in &mut upscale {
         u.scale = rs.scale;
     }
@@ -351,6 +349,35 @@ fn update_render_scale(
             });
         }
         auto.settle = 2;
+    }
+}
+
+/// The size of the main camera's picture. While loading or parked it is tiny; with temporal
+/// upscaling it is always the window's size and the camera draws a part of it; without, the
+/// picture itself is smaller and the screen stretches it.
+fn scene_size(suspended: bool, parked: bool, upscale: bool, scale: f32, phys: UVec2) -> UVec2 {
+    if suspended || parked {
+        UVec2::new(64, 36)
+    } else if upscale {
+        phys
+    } else {
+        (phys.as_vec2() * scale).round().as_uvec2().max(UVec2::splat(64))
+    }
+}
+
+/// Points a parked camera at the sky: nothing to draw, nor to cast a shadow into its view. It
+/// stays where it is, so the grass near it is the same.
+fn park(t: &mut Transform) {
+    let at = t.translation;
+    t.look_at(at + Vec3::Y, Vec3::Z);
+}
+
+/// After [`update_camera`]: a parked main camera looks up.
+pub fn park_main_camera(rs: Res<RenderScale>, mut cam: Query<&mut Transform, With<MainCamera>>) {
+    if rs.parked {
+        for mut t in &mut cam {
+            park(&mut t);
+        }
     }
 }
 
@@ -561,6 +588,22 @@ fn solari_settings() -> SolariLighting {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_parked_camera_draws_a_tiny_picture() {
+        let phys = UVec2::new(2560, 1440);
+        assert_eq!(scene_size(false, true, false, 1.0, phys), UVec2::new(64, 36));
+        assert_eq!(scene_size(false, false, false, 1.0, phys), phys);
+        assert_eq!(scene_size(true, false, false, 1.0, phys), UVec2::new(64, 36), "loading");
+    }
+
+    #[test]
+    fn a_parked_camera_looks_straight_up_from_where_it_was() {
+        let mut t = Transform::from_xyz(10.0, 1.7, -5.0).looking_at(Vec3::new(0.0, 5.0, -60.0), Vec3::Y);
+        park(&mut t);
+        assert!(t.forward().y > 0.999, "{:?}", t.forward());
+        assert_eq!(t.translation, Vec3::new(10.0, 1.7, -5.0), "it stays put, so the grass near it does too");
+    }
 
     /// The ray tracer's samples are few, and without ReSTIR (which shares them between pixels and
     /// frames) the shade of a wall or a wing is binary noise: each pixel sees the bright sky or

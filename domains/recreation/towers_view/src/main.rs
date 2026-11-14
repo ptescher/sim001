@@ -96,6 +96,7 @@ fn main() {
         .insert_resource(links)
         .add_systems(Update, publish.before(EngineSet::Draw));
     feeds::plugin(&mut app, size);
+    park_if_hidden(&mut app, hidden);
     if let Some(dir) = arg("--capture") {
         visualization_engine::capture::plugin(
             &mut app,
@@ -114,6 +115,14 @@ fn main() {
         origin: Vec3::ZERO,
     });
     app.run();
+}
+
+/// With `--hidden` nobody sees the view's own camera: it draws a tiny picture of the sky
+/// (`camera::RenderScale::parked`), and the GPU is free for the pictures the app shows.
+fn park_if_hidden(app: &mut App, hidden: bool) {
+    if hidden {
+        app.add_systems(PostStartup, |mut rs: ResMut<camera::RenderScale>| rs.parked = true);
+    }
 }
 
 /// The view's window. With `--hidden` it is not on screen: the commander app starts the view so,
@@ -190,5 +199,23 @@ mod window_tests {
     fn with_hidden_the_view_has_no_window_on_screen() {
         assert!(!window(true).visible);
         assert!(window(false).visible);
+    }
+
+    #[test]
+    fn with_hidden_the_main_camera_is_parked() {
+        for hidden in [true, false] {
+            let mut app = App::new();
+            app.insert_resource(camera::RenderScale {
+                scale: 1.0,
+                auto: false,
+                image: Handle::default(),
+                suspended: false,
+                upscale: false,
+                parked: false,
+            });
+            park_if_hidden(&mut app, hidden);
+            app.update();
+            assert_eq!(app.world().resource::<camera::RenderScale>().parked, hidden);
+        }
     }
 }
