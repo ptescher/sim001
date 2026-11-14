@@ -388,6 +388,19 @@ Term: Commander
   team, and gives a drone an order and its [[queue]]. It is a computer ([[captain]]) or a person at
   the commander app, in the team's [[seat]].
 
+Term: Advisor
+  In [[Towers]], what helps a [[commander]]: it looks at the map of the team, as the commander
+  does, and sends a [[proposal]] when it sees a better move. It does not give orders. It can be slow: its proposals then
+  reach the commander some seconds late. The first advisor is the lookahead, which plays the
+  game forward in a small model. A person who commands also has an advisor, which warns of
+  danger in words.
+
+Term: Proposal
+  In [[Towers]], what an [[advisor]] sends to a [[commander]]: one order for a drone, the
+  [[queue]] that goes with it, the points that the advisor expects to gain by it, and the time
+  after which it is stale. A computer commander takes a proposal that gains more than 2 points
+  and is not stale.
+
 Term: Unit
   In [[Towers]], what flies one drone: one for each drone. It runs all the time, in contact or not,
   and knows only what its drone has on board: what its camera sees, its [[battery]], whether it is

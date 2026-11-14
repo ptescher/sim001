@@ -25,8 +25,8 @@ use glam::Vec2;
 use recreation_towers::Commander;
 use recreation_towers::flight::{ORBIT_RADIUS, low_height, orbit_height};
 use recreation_towers::{
-    Autopilot, Command, CommanderTuning, Directive, Game, Instruction, OnBoard, Order, Outcome, Phase, Queued, Rules,
-    Standing, Team, TeamView, Unit,
+    Advise, Autopilot, Command, CommanderTuning, Directive, Game, Instruction, OnBoard, Order, Outcome, Phase, Queued,
+    Rules, Standing, Team, TeamView, Unit,
 };
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -74,6 +74,11 @@ pub trait Captain {
     fn unit(&self, _team: Team, _k: usize) -> Box<dyn Unit> {
         Box::new(Autopilot)
     }
+
+    /// Gives the captain an advisor (see [`Command::advised_by`]); whether it takes advice.
+    fn advised_by(&mut self, _advisor: Box<dyn Advise>, _delay: f32) -> bool {
+        false
+    }
 }
 
 impl<C: Captain + ?Sized> Captain for &mut C {
@@ -92,11 +97,25 @@ impl<C: Captain + ?Sized> Captain for &mut C {
     fn unit(&self, team: Team, k: usize) -> Box<dyn Unit> {
         (**self).unit(team, k)
     }
+
+    fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
+        (**self).advised_by(advisor, delay)
+    }
 }
 
 impl Captain for recreation_towers::Commander {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         Ok(recreation_towers::Commander::decide(self, view))
+    }
+
+    /// The queues of the proposals that it took.
+    fn queue(&mut self, _view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Vec<Queued>)> {
+        orders.iter().map(|&(k, _)| (k, self.advised_queue(k))).filter(|(_, q)| !q.is_empty()).collect()
+    }
+
+    fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
+        self.add_advisor(advisor, delay);
+        true
     }
 }
 
@@ -114,6 +133,10 @@ impl<C: Captain> Command for Directing<C> {
                 Directive { drone: k, order, queue }
             })
             .collect())
+    }
+
+    fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
+        self.0.advised_by(advisor, delay)
     }
 }
 
@@ -145,6 +168,23 @@ impl<'a> Roster<'a> {
         });
         let units = units.collect();
         Roster { blue: Box::new(Directing(blue)), red: Box::new(Directing(red)), units }
+    }
+
+    /// Gives `team`'s commander an advisor, whose proposals reach it `delay` s of game time after the
+    /// map it was shown (the arena has no threads: the delay is in game time, so a game is
+    /// reproducible for its seed). Fails if the commander takes no advice.
+    pub fn with_advisor(
+        mut self,
+        team: Team,
+        advisor: impl Advise + 'static,
+        delay: f32,
+    ) -> Result<Roster<'a>, String> {
+        let command = if team == Team::Blue { &mut self.blue } else { &mut self.red };
+        if command.advised_by(Box::new(advisor), delay) {
+            Ok(self)
+        } else {
+            Err(format!("the {team:?} commander takes no advice"))
+        }
     }
 
     /// Replaces the unit of drone `k` of `team`.
@@ -920,6 +960,31 @@ mod tests {
         let rules = Rules::default();
         let by_roster = play_roster(rules, Roster::of_captains(&rules, commander(), commander()), 4).unwrap();
         assert_eq!(by_roster, play_with(rules, &mut commander(), &mut commander(), 4).unwrap());
+    }
+
+    #[test]
+    fn a_roster_gives_a_team_an_advisor_that_is_late_in_game_time() {
+        use recreation_towers::Lookahead;
+        let rules = Rules::default();
+        let bare = || Commander::new(rules).with_lookahead(false);
+        let thinking = || Commander::new(rules);
+        let play = |roster: Result<Roster<'_>, String>| play_roster(rules, roster.unwrap(), 6).unwrap();
+        // No delay: the lookahead as an advisor is the commander that thinks ahead.
+        let at_once = Roster::of_captains(&rules, bare(), bare()).with_advisor(Team::Blue, Lookahead::new(rules), 0.0);
+        let by_default = Roster::of_captains(&rules, thinking(), bare());
+        assert_eq!(play(at_once), play(Ok(by_default)));
+        // Late, it is another game, and the same game each time.
+        let late = || Roster::of_captains(&rules, bare(), bare()).with_advisor(Team::Blue, Lookahead::new(rules), 7.0);
+        assert_eq!(play(late()), play(late()));
+        // A commander that takes no advice says so.
+        struct Deaf;
+        impl Command for Deaf {
+            fn decide(&mut self, _: &TeamView) -> Result<Vec<Directive>, String> {
+                Ok(vec![])
+            }
+        }
+        let deaf = Roster::new(&rules, Deaf, bare(), |_, _| Box::new(Autopilot));
+        assert!(deaf.with_advisor(Team::Blue, Lookahead::new(rules), 0.0).is_err());
     }
 
     /// Plays Blue's commander against Red's, with `unit(team, k)` for each drone.

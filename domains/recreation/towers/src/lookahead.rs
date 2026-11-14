@@ -15,8 +15,6 @@ const CRUISE: f32 = 16.0;
 /// How far ahead the model looks (s), and its step (s).
 pub const HORIZON: f32 = 45.0;
 const STEP: f32 = 1.0;
-/// A change of orders must be worth this many points to be made.
-const MARGIN: f32 = 2.0;
 /// How many futures the search draws for the enemy.
 const FUTURES: usize = 8;
 /// The value of each point of progress on a tower's bar, in points a second held for a minute.
@@ -149,9 +147,10 @@ fn toward(from: Vec2, to: Vec2, step: f32) -> Vec2 {
     if d.length() <= step { to } else { from + d.normalize() * step }
 }
 
-/// The one change to `orders` that the model likes best: drone `k` goes to tower `t` instead. `None`
-/// if no change is worth [`MARGIN`] points. `free` says which drones may be given a new order, and
-/// `away` which towers a drone must stay away from.
+/// The one change to `orders` that the model likes best: drone `k` goes to tower `t` instead, and
+/// the points it expects to gain by it: `(k, t, gain)`. `None` if there is no change to try. Whether
+/// the gain is worth making is for the commander to say. `free` says which drones may be given a new
+/// order, and `away` which towers a drone must stay away from.
 pub fn best_change(
     rules: &Rules,
     view: &TeamView,
@@ -159,7 +158,7 @@ pub fn best_change(
     free: &[bool],
     away: &[Vec<bool>],
     belief: &Belief,
-) -> Option<(usize, usize)> {
+) -> Option<(usize, usize, f32)> {
     let towers = view.towers.len();
     let base = rules.base(view.team);
     // A drone is not sent where its battery cannot last the flight, the capture and the way home.
@@ -194,7 +193,8 @@ pub fn best_change(
     }
     let (best, total) =
         gain.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1)).filter(|&(_, g)| g.is_finite())?;
-    (total / FUTURES as f32 > MARGIN).then(|| candidates[best])
+    let (k, t) = candidates[best];
+    Some((k, t, total / FUTURES as f32))
 }
 
 #[cfg(test)]
@@ -292,11 +292,11 @@ mod tests {
         let change = best_change(&rules, &view, &orders, &free, &no_away(&view), &belief);
         let centre = g.tower("centre");
         // A free tower: the east, or the centre, which is worth more. Not the west.
-        assert!(matches!(change, Some((0, t)) if t == east || t == centre), "{change:?}");
+        assert!(matches!(change, Some((0, t, gain)) if (t == east || t == centre) && gain > 2.0), "{change:?}");
     }
 
     #[test]
-    fn it_leaves_the_orders_alone_when_nothing_is_better() {
+    fn it_has_no_change_to_try_when_no_drone_is_free() {
         let (rules, g) = setup();
         let view = g.view(Team::Blue);
         let belief = Belief::new(rules, Team::Blue);

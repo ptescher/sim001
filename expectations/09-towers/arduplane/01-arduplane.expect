@@ -9,9 +9,17 @@ Feature: Playing Towers with ArduPilot drones
   for its order about once each second. To take a tower, a drone circles it 40 m out, inside its
   circle.
 
-  Each team has a [[seat]]. A computer commander or a person at the commander app sits in it.
-  A seat gets only the map of its team, four times each second. Thus the fog is the same for a
-  person and for a computer. Other seats can watch a team, or the whole game.
+  Each team has a [[seat]]. A computer commander or a person at the commander app sits in it: the
+  same seat, with the same messages. The seat is the team's ground station. The server tells it
+  the umpire's word and what the team's towers and base report, and the seat makes its own map
+  from what its drones report in their telemetry. Thus the fog is the same for a person and for a
+  computer: a computer commander knows of an enemy only what a person would. The server decides
+  and sends no plan for any team. Other seats can watch a team, or the whole game.
+
+  The seat can change hands during a game. A person who joins a team that a computer commands takes
+  the seat, and goes on from the orders that the drones have. When a person leaves, a computer
+  commander takes the seat. One person for each team can play. (The server's own tests check this
+  with seat clients and no ArduPilot: `cargo test --release -p recreation_towers_server`.)
 
   Expectation: Every drone flies the game in AGENT mode
     When two computer teams play a game of Towers

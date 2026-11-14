@@ -12,7 +12,7 @@ Section: The rules of Towers
   [[Radio shadows]] tells you how a tower blocks the radio of the enemy. [[The mesh]] tells you how a friend relays the radio. [[The battery]] tells you what limits the time that a drone flies. [[Kinds of tower]] tells you how a fort, a spire and a depot differ. [[Standing orders]] tell
   you what a drone does when it is out of contact. [[The queue of a drone]] tells you how it works down a list of them. [[The mountains]] tells
   you what stands at the edge of the field.
-  [[The computer commander]] tells you how the computer plays a team.
+  [[The computer commander]] tells you how the computer plays a team. [[Advice for the commander]] tells you how an advisor helps it.
 
 Background:
   Follows: the launcher has just opened

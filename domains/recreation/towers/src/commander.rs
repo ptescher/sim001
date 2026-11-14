@@ -5,7 +5,7 @@
 //! strategy that improves commanders may change; the rules, the referee, the fog and the view
 //! are elsewhere.
 
-use crate::{Kind, Order, Phase, Rules, TeamView};
+use crate::{Advise, Hand, Kind, Lookahead, Order, Phase, Proposal, Queued, Rules, TeamView};
 use serde::{Deserialize, Serialize};
 
 /// Declares the tunable numbers: for each, a constant (its default) and a field of
@@ -75,10 +75,8 @@ const CRUISE: f32 = 16.0;
 /// this margin (s); it goes back to work when the battery is this much full.
 const REFUEL_MARGIN: f32 = 15.0;
 const BACK_TO_WORK: f32 = 0.9;
-/// A commander that thinks ahead does so this often (s).
-const LOOK_EVERY: f32 = 5.0;
-/// ...and not before this time in the game (s): at the start the belief is only a prior.
-const LOOK_AFTER: f32 = 10.0;
+/// A commander takes a proposal of an advisor only if it gains more than this many points.
+pub const ADVICE_MARGIN: f32 = 2.0;
 
 /// A computer in a team's seat.
 #[derive(Clone, Debug)]
@@ -95,10 +93,18 @@ pub struct Commander {
     recharging: Vec<bool>,
     /// The game time of the last decision.
     last: Option<f32>,
-    /// Thinks ahead: a belief about the enemy, and when the model last changed an order.
-    look: Option<(crate::Belief, f32)>,
-    /// For measuring: the belief is never updated, so the model knows nothing of the enemy.
-    blind: bool,
+    /// The advisors that look at the map each time it decides, each with the delay (s of game
+    /// time) between the map it is shown and the moment its proposals reach the commander. A
+    /// commander with none does not think ahead.
+    advisors: Vec<(Box<dyn Advise>, f32)>,
+    /// Proposals on their way: when each arrives (game time, s).
+    late: Vec<(f32, Proposal)>,
+    /// Proposals in hand, not yet taken and not yet stale.
+    proposals: Vec<Proposal>,
+    /// A proposal must gain more than this many points to be taken.
+    advice_margin: f32,
+    /// The queue that goes with the order a proposal gave a drone, while it still flies it.
+    queues: Vec<Option<(Order, Vec<Queued>)>>,
 }
 
 impl Commander {
@@ -116,18 +122,65 @@ impl Commander {
             away: vec![None; n],
             recharging: vec![false; n],
             last: None,
-            look: None,
-            blind: std::env::var("SIM001_LOOKAHEAD").as_deref() == Ok("blind"),
+            advisors: vec![],
+            late: vec![],
+            proposals: vec![],
+            advice_margin: ADVICE_MARGIN,
+            queues: vec![None; n],
         }
         .with_lookahead(std::env::var("SIM001_LOOKAHEAD").as_deref() != Ok("0"))
     }
 
-    /// Thinks ahead or not (crate::lookahead): once in a while a commander that does rolls a model of
-    /// the game forward from what it believes about the enemy, and changes an order if that is
-    /// better. A commander thinks ahead unless `SIM001_LOOKAHEAD` is `0`.
+    /// Thinks ahead or not: with the [`Lookahead`] advisor, at no delay, or with no advisor at all
+    /// (this takes every advisor away). A commander has the lookahead unless `SIM001_LOOKAHEAD` is
+    /// `0`; with it set to `blind`, the lookahead never updates its belief.
     pub fn with_lookahead(mut self, on: bool) -> Commander {
-        self.look = on.then(|| (crate::Belief::new(self.rules, crate::Team::Blue), f32::NEG_INFINITY));
+        self.advisors.clear();
+        self.late.clear();
+        if on {
+            let blind = std::env::var("SIM001_LOOKAHEAD").as_deref() == Ok("blind");
+            self.advisors.push((Box::new(Lookahead::new(self.rules).blind(blind)), 0.0));
+        }
         self
+    }
+
+    /// Adds an advisor. Its proposals reach the commander `delay` s of game time after the map it
+    /// was shown (the map of each decision), so a slow advisor is a late one.
+    pub fn with_advisor(mut self, advisor: impl Advise + 'static, delay: f32) -> Commander {
+        self.advisors.push((Box::new(advisor), delay.max(0.0)));
+        self
+    }
+
+    /// Adds an advisor that is already boxed (see [`Commander::with_advisor`]).
+    pub fn add_advisor(&mut self, advisor: Box<dyn Advise>, delay: f32) {
+        self.advisors.push((advisor, delay.max(0.0)));
+    }
+
+    /// How many advisors the commander has (none: it does not think ahead).
+    pub fn advisors(&self) -> usize {
+        self.advisors.len()
+    }
+
+    /// A proposal must gain more than `points` to be taken (default [`ADVICE_MARGIN`]).
+    pub fn with_advice_margin(mut self, points: f32) -> Commander {
+        self.advice_margin = points;
+        self
+    }
+
+    /// Puts proposals in hand, as if they had just arrived: from an advisor outside this process, or
+    /// one that a person accepted. The commander takes them at its next decision, or lets them go
+    /// if they are stale or do not fit then.
+    pub fn advise(&mut self, proposals: impl IntoIterator<Item = Proposal>) {
+        self.proposals.extend(proposals);
+    }
+
+    /// The queue that goes with drone `k`'s order: the one a proposal gave it, while it flies that
+    /// order; else none.
+    pub fn advised_queue(&self, k: usize) -> Vec<Queued> {
+        match (self.queues.get(k), self.order(k)) {
+            (Some(Some((o, q))), Some(now)) if *o == now => q.clone(),
+            _ => vec![],
+        }
     }
 
     pub fn tuning(&self) -> CommanderTuning {
@@ -303,22 +356,9 @@ impl Commander {
                 .min_by(|&&a, &&b| view.towers[a].at.distance(at).total_cmp(&view.towers[b].at.distance(at)));
             *order = spare.map(|&t| Order::Take(t));
         }
-        if let Some((belief, last_look)) = &mut self.look {
-            if belief.team() != view.team {
-                *belief = crate::Belief::new(self.rules, view.team);
-            }
-            if !self.blind {
-                belief.update(view);
-            }
-            if view.time >= LOOK_AFTER && view.time - *last_look >= LOOK_EVERY {
-                *last_look = view.time;
-                let free: Vec<bool> = (0..self.orders.len()).map(|k| up[k] && charge[k].is_none()).collect();
-                if let Some((k, t)) =
-                    crate::lookahead::best_change(&self.rules, view, &self.orders, &free, &away, belief)
-                {
-                    self.orders[k] = Some(Order::Take(t));
-                }
-            }
+        if !self.advisors.is_empty() || !self.late.is_empty() || !self.proposals.is_empty() {
+            let free: Vec<bool> = (0..self.orders.len()).map(|k| up[k] && charge[k].is_none()).collect();
+            self.take_advice(view, free, away);
         }
         for (k, order) in charge.into_iter().enumerate() {
             if order.is_some() {
@@ -326,6 +366,61 @@ impl Commander {
             }
         }
         self.orders.iter().enumerate().filter(|(k, _)| linked[*k]).filter_map(|(k, o)| o.map(|o| (k, o))).collect()
+    }
+
+    /// Shows the advisors the map, collects the proposals that have reached the commander, and takes
+    /// the best one that can be taken: not stale, gaining more than the margin, and still fitting
+    /// (see [`Commander::fits`]). A proposal that is stale or does not fit is dropped; one that gains too
+    /// little waits for its time to run out.
+    fn take_advice(&mut self, view: &TeamView, free: Vec<bool>, away: Vec<Vec<bool>>) {
+        let hand = Hand { orders: self.orders.clone(), free, away };
+        for (advisor, delay) in &mut self.advisors {
+            for p in advisor.advise(view, &hand) {
+                self.late.push((view.time + *delay, p));
+            }
+        }
+        let now = view.time;
+        let (arrived, waiting): (Vec<_>, Vec<_>) =
+            std::mem::take(&mut self.late).into_iter().partition(|(at, _)| *at <= now);
+        self.late = waiting;
+        self.proposals.extend(arrived.into_iter().map(|(_, p)| p));
+        self.proposals.retain(|p| p.until >= now);
+        let mut best: Option<usize> = None;
+        let mut keep = vec![true; self.proposals.len()];
+        for (i, p) in self.proposals.iter().enumerate() {
+            if !self.fits(p, view, &hand) {
+                keep[i] = false;
+            } else if p.gain > self.advice_margin && best.is_none_or(|b| p.gain > self.proposals[b].gain) {
+                best = Some(i);
+            }
+        }
+        if let Some(b) = best {
+            let p = self.proposals[b].clone();
+            self.orders[p.drone] = Some(p.order);
+            self.queues[p.drone] = Some((p.order, p.queue.clone()));
+            for (i, q) in self.proposals.iter().enumerate() {
+                keep[i] &= q.drone != p.drone;
+            }
+        }
+        let mut keep = keep.into_iter();
+        self.proposals.retain(|_| keep.next().unwrap_or(false));
+    }
+
+    /// Whether a proposal still makes sense: its drone is one of the team's and free, the order
+    /// is not the one the drone has, a tower it sends the drone to is not one the drone gave up, and
+    /// (for a proposal made on an earlier map) is not one the team holds now.
+    fn fits(&self, p: &Proposal, view: &TeamView, hand: &Hand) -> bool {
+        if p.drone >= self.orders.len() || !hand.free[p.drone] || hand.orders[p.drone] == Some(p.order) {
+            return false;
+        }
+        match p.order {
+            Order::Take(t) => {
+                t < view.towers.len()
+                    && !hand.away[p.drone][t]
+                    && !(p.made < view.time && view.towers[t].holder == Some(view.team))
+            }
+            _ => true,
+        }
     }
 }
 
@@ -595,5 +690,157 @@ mod tests {
         g.rules = Rules::default().without_batteries();
         let mut c = Commander::new(g.rules);
         assert_ne!(decide(&mut c, &g)[0], Some(Order::Home));
+    }
+
+    /// An advisor that proposes the same thing on every map.
+    #[derive(Clone, Debug)]
+    struct Fixed(Proposal);
+
+    impl Advise for Fixed {
+        fn advise(&mut self, view: &TeamView, _: &Hand) -> Vec<Proposal> {
+            vec![Proposal { made: view.time, until: view.time + 5.0, ..self.0.clone() }]
+        }
+
+        fn clone_box(&self) -> Box<dyn Advise> {
+            Box::new(self.clone())
+        }
+    }
+
+    fn proposal(drone: usize, order: Order, gain: f32) -> Proposal {
+        Proposal { drone, order, queue: vec![], gain, made: 0.0, until: 10.0, why: "test".into() }
+    }
+
+    fn bare(g: &Game) -> Commander {
+        Commander::new(g.rules).with_lookahead(false)
+    }
+
+    #[test]
+    fn a_proposal_with_enough_gain_is_taken() {
+        let g = Game::new(Rules::default());
+        let red_home = Order::Take(g.tower("Red home"));
+        let mut c = bare(&g);
+        c.advise([proposal(0, red_home, 5.0)]);
+        c.decide(&g.view(Team::Blue));
+        assert_eq!(c.order(0), Some(red_home));
+    }
+
+    #[test]
+    fn a_proposal_that_gains_little_is_not_taken() {
+        let g = Game::new(Rules::default());
+        let mut c = bare(&g);
+        c.advise([proposal(0, Order::Take(g.tower("Red home")), ADVICE_MARGIN)]);
+        let advised = c.decide(&g.view(Team::Blue));
+        assert_eq!(advised, bare(&g).decide(&g.view(Team::Blue)));
+    }
+
+    #[test]
+    fn a_stale_proposal_is_not_taken() {
+        let mut g = Game::new(Rules::default());
+        let red_home = Order::Take(g.tower("Red home"));
+        let mut c = bare(&g);
+        c.decide(&g.view(Team::Blue));
+        let before = c.order(0);
+        g.step(10.0);
+        c.advise([Proposal { made: 0.0, until: 5.0, ..proposal(0, red_home, 9.0) }]);
+        c.decide(&g.view(Team::Blue));
+        assert_eq!(c.order(0), before);
+    }
+
+    #[test]
+    fn a_proposal_for_a_drone_that_is_not_free_is_dropped() {
+        let mut g = Game::new(Rules::default());
+        let red_home = Order::Take(g.tower("Red home"));
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i].phase = Phase::Down;
+        let mut c = bare(&g);
+        c.advise([proposal(0, Order::Hold, 9.0), proposal(99, red_home, 9.0)]);
+        c.decide(&g.view(Team::Blue));
+        assert_ne!(c.order(0), Some(Order::Hold));
+        // It is not kept for later either: the drone is up again, and the proposal is gone.
+        g.drones[i].phase = Phase::Ground;
+        c.decide(&g.view(Team::Blue));
+        assert_ne!(c.order(0), Some(Order::Hold));
+    }
+
+    #[test]
+    fn a_proposal_made_on_an_old_map_is_not_taken_for_a_tower_that_the_team_holds_now() {
+        let mut g = Game::new(Rules::default());
+        let west = g.tower("west");
+        let mut c = bare(&g);
+        c.decide(&g.view(Team::Blue));
+        g.step(1.0);
+        g.towers[west].holder = Some(Team::Blue);
+        g.towers[west].control = 1.0;
+        g.look();
+        c.advise([proposal(1, Order::Take(west), 9.0)]);
+        c.decide(&g.view(Team::Blue));
+        assert_ne!(c.order(1), Some(Order::Take(west)));
+    }
+
+    #[test]
+    fn the_best_proposal_is_taken_first_and_one_at_a_decision() {
+        let g = Game::new(Rules::default());
+        let (a, b) = (Order::Take(g.tower("Red home")), Order::Take(g.tower("east")));
+        let mut c = bare(&g);
+        c.advise([proposal(0, a, 4.0), proposal(0, b, 6.0), proposal(2, Order::Hold, 3.0)]);
+        c.decide(&g.view(Team::Blue));
+        assert_eq!((c.order(0), c.order(2) == Some(Order::Hold)), (Some(b), false));
+        c.decide(&g.view(Team::Blue));
+        assert_eq!(c.order(2), Some(Order::Hold));
+    }
+
+    #[test]
+    fn a_taken_proposal_gives_its_queue_to_the_drone() {
+        let g = Game::new(Rules::default());
+        let red_home = Order::Take(g.tower("Red home"));
+        let mut c = bare(&g);
+        let q = vec![Queued::done(Order::Home)];
+        c.advise([Proposal { queue: q.clone(), ..proposal(0, red_home, 5.0) }]);
+        c.decide(&g.view(Team::Blue));
+        assert_eq!(c.advised_queue(0), q);
+        assert!(c.advised_queue(1).is_empty());
+    }
+
+    #[test]
+    fn an_advisor_that_is_late_is_taken_when_its_proposal_arrives() {
+        let mut g = Game::new(Rules::default());
+        let red_home = Order::Take(g.tower("Red home"));
+        let mut c = bare(&g).with_advisor(Fixed(proposal(0, red_home, 5.0)), 3.0);
+        for _ in 0..3 {
+            c.decide(&g.view(Team::Blue));
+            assert_ne!(c.order(0), Some(red_home), "at {}", g.time);
+            g.step(1.0);
+        }
+        c.decide(&g.view(Team::Blue));
+        assert_eq!(c.order(0), Some(red_home));
+    }
+
+    #[test]
+    fn an_advisor_with_no_delay_is_taken_at_once_and_one_that_is_later_than_its_proposal_lasts_is_not() {
+        let mut g = Game::new(Rules::default());
+        let red_home = Order::Take(g.tower("Red home"));
+        let mut now = bare(&g).with_advisor(Fixed(proposal(0, red_home, 5.0)), 0.0);
+        now.decide(&g.view(Team::Blue));
+        assert_eq!(now.order(0), Some(red_home));
+        // Good for 5 s, and 8 s late: stale when it arrives.
+        let mut late = bare(&g).with_advisor(Fixed(proposal(0, red_home, 5.0)), 8.0);
+        for _ in 0..30 {
+            late.decide(&g.view(Team::Blue));
+            assert_ne!(late.order(0), Some(red_home), "at {}", g.time);
+            g.step(1.0);
+        }
+    }
+
+    #[test]
+    fn the_lookahead_as_an_advisor_is_the_commander_that_thinks_ahead() {
+        let mut g = Game::new(Rules::default());
+        let mut inside = Commander::new(g.rules);
+        let mut advised = bare(&g).with_advisor(Lookahead::new(g.rules), 0.0);
+        for _ in 0..120 {
+            let view = g.view(Team::Blue);
+            let (a, b) = (inside.decide(&view), advised.decide(&view));
+            assert_eq!(a, b, "at {}", g.time);
+            g.step(1.0);
+        }
     }
 }
