@@ -131,8 +131,8 @@ Results of step 3 (branch `actors-seats`):
   away; fixed, no such crash in the 8 games after. (2) The station's clock was held to one game
   second past the last map, so at 10x (a map each 2.5 game seconds) plans went out about 0.8 a
   second instead of 1; now the cap is a wall second. (3) Plans were made from the position of the
-  last report; the station now carries it on by its velocity. In all 24 games no crash had another
-  drone within 25 m, so the executors' loss of the enemy's true positions as traffic does not show in
+  last report; the station now carries it on by its velocity. In all 24 games the only crashes with another
+  drone within 30 m were the two take-off ones above (10 to 11 m) and one in plain `actors-plan` (24 m), so the executors' loss of the enemy's true positions as traffic does not show in
   the crashes; they are tree strikes while taking a tower (6 to 25 m), in the open or in a shadow,
   in both paths.
 - Not done: the Orders echo is the server's `told` (what the drones last heard), not read from the
