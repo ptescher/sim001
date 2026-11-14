@@ -36,7 +36,7 @@ use teleoperation_battlefield::draw::*;
 use teleoperation_battlefield::orders::CircleTool;
 use teleoperation_battlefield::theme::*;
 use teleoperation_battlefield::widgets::{camera_tile, command, panel, recorder};
-use teleoperation_battlefield::{Battlefield, Flat, Lens, Rig};
+use teleoperation_battlefield::{Battlefield, Flat, Lens, Rig, warp};
 use teleoperation_shared::battlefield::Eye;
 
 pub use teleoperation_battlefield::widgets::button_bounds;
@@ -122,6 +122,17 @@ impl CommanderView {
             }
         })
         .detach();
+        // A picture that comes is drawn at once, not at the next tick.
+        if let Some(mut arrivals) = battlefield.arrivals() {
+            cx.spawn(async move |this, cx| {
+                while arrivals.next().await {
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
         let focus = cx.focus_handle();
         window.focus(&focus);
         CommanderView {
@@ -161,6 +172,11 @@ impl CommanderView {
     /// How far the battlefield's picture trailed the camera in its motion now, or its last.
     pub fn battlefield_motion(&self) -> Option<teleoperation_battlefield::lag::Motion> {
         self.battlefield.motion()
+    }
+
+    /// How far the battlefield as drawn trailed the camera in its motion now, or its last.
+    pub fn battlefield_drawn_motion(&self) -> Option<teleoperation_battlefield::lag::Motion> {
+        self.battlefield.drawn_motion()
     }
 
     /// The battlefield through the camera now.
@@ -666,6 +682,11 @@ impl CommanderView {
 impl Render for CommanderView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.place_eye();
+        // While the camera moves, it moves and the window draws at the screen's own rate.
+        if self.rig.moving(self.map_bounds.get()) {
+            self.rig.tick(self.map_bounds.get());
+            window.request_animation_frame();
+        }
         let (status, rules, view) = {
             let s = self.seat.state();
             (s.status.clone(), s.rules, s.view.clone())
@@ -759,13 +780,14 @@ impl Render for CommanderView {
             move |b, _, window, cx| {
                 bounds.set(b);
                 let (_, _, w, h) = rect(b);
-                battlefield.ask(eye, w.round() as u16, h.round() as u16);
-                // The picture's own eye, so that the map lies on it where it was rendered.
-                let (image, lens) = match &picture {
-                    Some((img, at, _)) => (Some(img.clone()), Lens::new(*at, b)),
-                    None => (None, Lens::new(eye, b)),
-                };
-                battlefield.painted(picture.as_ref().map(|(.., seq)| *seq));
+                // A picture with a margin, which the battlefield moves to the camera until the next.
+                let (wide, pw, ph) = warp::margin(eye, w, h);
+                battlefield.ask(wide, pw as u16, ph as u16);
+                // The camera now; after a turn, as the picture is turned until its own comes.
+                let shown = picture.as_ref().map_or(eye, |(_, from, _)| warp::shown(eye, *from));
+                let lens = Lens::new(shown, b);
+                let image = picture.as_ref().map(|(img, from, _)| (img.clone(), *from));
+                battlefield.painted(picture.as_ref().map(|(.., seq)| *seq), shown == eye);
                 if let (Some(v), Some(r), Some(m)) = (&v2, &r2, &valley) {
                     let scene = Scene {
                         picture: image,

@@ -4,7 +4,7 @@
 //! tile from `terrain_render::ground_cover`, streamed in and out around the camera. Card
 //! normals follow the ground so the grass shades like the turf it stands on.
 
-use crate::camera::MainCamera;
+use crate::camera::{MainCamera, ParkedFrom};
 use crate::foliage::Canvas;
 use crate::meadow::{self, Flower, Parts};
 use crate::terrain;
@@ -336,14 +336,20 @@ pub fn setup_grass(
     commands.insert_resource(GrassAssets { material, solid_material, tiles: HashMap::default() });
 }
 
+/// Where the grass is streamed round: the main camera, or where it stood if it is parked.
+fn centre(camera: Vec3, parked_from: Option<Vec3>) -> Vec3 {
+    parked_from.unwrap_or(camera)
+}
+
 pub fn stream_grass(
     mut commands: Commands,
     mut grass: ResMut<GrassAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     camera: Query<&GlobalTransform, With<MainCamera>>,
+    parked: Res<ParkedFrom>,
 ) {
     let Ok(cam) = camera.single() else { return };
-    let p = cam.translation();
+    let p = centre(cam.translation(), parked.0);
     let agl = p.y - terrain::ground_height(p.x, p.z);
     let grass = &mut *grass;
     let eye = Vec2::new(p.x, p.z);
@@ -444,6 +450,15 @@ pub fn stream_grass(
 mod tests {
     use super::*;
     use crate::meadow::Flower;
+
+    /// A parked main camera is far up in the sky; the grass stays where it stood, for the drones'
+    /// cameras near it.
+    #[test]
+    fn the_grass_stays_where_a_parked_camera_stood() {
+        let (cam, stood) = (Vec3::new(5.0, 10_000.0, 7.0), Vec3::new(5.0, 2.0, 7.0));
+        assert_eq!(centre(cam, Some(stood)), stood);
+        assert_eq!(centre(cam, None), cam);
+    }
 
     /// Where the clumps and flowers of a tile are, and what they are: the same for the painted
     /// cards and the solid meadow, so that one hands over to the other without anything jumping.

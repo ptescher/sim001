@@ -315,7 +315,9 @@ Vocabulary:
     Set: turn the mouse wheel until the camera is {value} m above the ground
     Shows: the camera is {value} m above the ground
   State: the lag of the battlefield picture is 0..10000 ms
-    Shows: the picture of the valley follows the camera {value} ms after the camera moves
+    Shows: each picture of the valley is {value} ms old when it is on the screen
+  State: the lag of the battlefield's motion is 0..10000 ms
+    Shows: the valley and the map on it move {value} ms after the camera moves
   State: the new pictures of the battlefield each second are 0..240
     Shows: the picture of the valley changes {value} times each second while the camera moves
   Event: the commander waits for the battlefield
@@ -326,6 +328,8 @@ Vocabulary:
     Say: hold W, or the up arrow, for one second
   Event: the commander pans the battlefield for 3 seconds
     Say: hold W, or the up arrow, for three seconds
+  Event: the commander pans the battlefield for 5 seconds
+    Say: hold W, or the up arrow, for five seconds
   Event: the commander moves the mouse to the top edge of the battlefield
     Say: move the mouse to the top edge of the battlefield, and keep it there for one second
   Event: the commander turns the battlefield camera to the right

@@ -92,10 +92,29 @@ impl Rig {
         self.hover = at;
     }
 
+    /// Whether the keys held or the mouse at an edge of `bounds` move the camera.
+    pub fn moving(&self, bounds: Bounds<Pixels>) -> bool {
+        self.push(bounds) != (0.0, 0.0)
+    }
+
     /// Moves the camera by the keys held and the mouse at an edge of `bounds` (the battlefield).
     pub fn tick(&mut self, bounds: Bounds<Pixels>) {
         let dt = self.last_tick.elapsed().as_secs_f32().min(0.1);
         self.last_tick = Instant::now();
+        let (fwd, right) = self.push(bounds);
+        if fwd == 0.0 && right == 0.0 {
+            return;
+        }
+        let h = self.eye.heading.to_radians();
+        let (ahead, side) = (Vec2::new(h.cos(), h.sin()), Vec2::new(-h.sin(), h.cos()));
+        // Faster the higher the camera is, as in a strategy game.
+        let speed = (self.eye.height() * 1.3).max(120.0);
+        let to = self.eye.look + (ahead * fwd + side * right).normalize_or_zero() * speed * dt;
+        self.look_at(to);
+    }
+
+    /// Which way the keys held and the mouse at an edge push the camera: (ahead, right).
+    fn push(&self, bounds: Bounds<Pixels>) -> (f32, f32) {
         let held = |k: &[&str]| k.iter().any(|k| self.held.contains(*k));
         let (mut fwd, mut right) = (0.0f32, 0.0f32);
         if held(&["w", "up"]) {
@@ -125,15 +144,7 @@ impl Rig {
                 fwd -= 1.0;
             }
         }
-        if fwd == 0.0 && right == 0.0 {
-            return;
-        }
-        let h = self.eye.heading.to_radians();
-        let (ahead, side) = (Vec2::new(h.cos(), h.sin()), Vec2::new(-h.sin(), h.cos()));
-        // Faster the higher the camera is, as in a strategy game.
-        let speed = (self.eye.height() * 1.3).max(120.0);
-        let to = self.eye.look + (ahead * fwd + side * right).normalize_or_zero() * speed * dt;
-        self.look_at(to);
+        (fwd, right)
     }
 
     /// The camera looks at `at`, kept within `limit` of the middle of the field.
@@ -215,6 +226,19 @@ mod tests {
         let at = rig.eye.look;
         rig.tick(bounds());
         assert_eq!(rig.eye.look, at);
+    }
+
+    #[test]
+    fn the_camera_moves_while_a_key_is_held_or_the_mouse_is_at_an_edge() {
+        let mut rig = Rig::default();
+        assert!(!rig.moving(bounds()));
+        rig.key_down("d", Modifiers::default());
+        assert!(rig.moving(bounds()));
+        rig.key_up("d");
+        rig.hover(Some((400.0, 250.0)));
+        assert!(!rig.moving(bounds()), "the mouse in the middle");
+        rig.hover(Some((797.0, 250.0)));
+        assert!(rig.moving(bounds()));
     }
 
     #[test]

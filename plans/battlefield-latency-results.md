@@ -267,3 +267,37 @@ What it says:
    dropped).
 4. **The rest is the look of the battlefield:** the trees cost 12 ms and the look 9 ms.
    Together, with shadows, 23 ms.
+
+## Steps 2 and 3, and the main camera parked high
+
+Chosen after the experiment: move the last picture to the camera now, rather than make the picture
+younger.
+
+- **The picture moves with the camera (step 3, `teleoperation_battlefield::warp`).** The app asks
+  for a picture with a margin: 10 % each side, 8 % above and 35 % below, where the near ground
+  moves fastest. It is as sharp as the battlefield in the middle, and about 1.7 times the pixels.
+  The camera of the picture looks a little lower and wider from the same place. The app draws it
+  as the camera now sees the flat ground, in 64 bands. A pan or a zoom keeps the rows of the
+  ground as rows, so each band is the picture moved and scaled; GPUI draws it with `paint_image`
+  under a content mask. The map is drawn with the camera now. A turn cannot be drawn this way: the
+  battlefield keeps the picture's heading until its picture comes.
+  - Unit tests: at rest the picture lies on the map within 0.5 px; after 0.15 s of a full-speed pan
+    either way, or a step of the wheel, within 1 px; the margin covers the battlefield after such
+    a pan.
+  - Hills are not flat: they slide against the map by a few pixels at 90 ms of age, up to about
+    35 px at 140 ms on the steepest slopes (the advisor's numbers). Not measured on screen yet.
+- **A picture that comes is drawn at once (step 2).** The link wakes the window through a channel
+  (`Battlefield::arrivals`), not the 33 ms timer. While a key or the mouse at an edge moves the
+  camera, the window asks for animation frames and moves the camera in each.
+- **The main camera of the view is parked 10 km up** (with `--hidden`), so no tree falls in its
+  shadow cascades. The grass is streamed round where it stood (`ParkedFrom`).
+- **The measure.** A new figure, the lag of the battlefield as drawn: how long ago the app asked
+  for the camera it draws from. The expectation «The valley moves with the camera» (at most 20 ms)
+  failed before the warp with 429 ms and passes with it at 0 ms (forced draws in a test run). The
+  picture's own age keeps its pending expectation, now on a pan of its own (5 s): the harness
+  skips every plan that shares an event with a pending expectation.
+- **A fix in the measure:** a motion none of whose pictures was drawn read as 0 ms late; it now
+  reads as long as the motion.
+
+Still to do: an on-screen game to see the warp and the hills, and the app's draw rate with
+animation frames.
