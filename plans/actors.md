@@ -25,7 +25,9 @@ ArduPlane SITL, and with real aircraft.
   the failsafe (home) is the end of every queue.
 - **A person's unit gets the same queue.** It is shown as a mission (the tower to take, the
   point to hold, what to do if the radio goes quiet). The person flies; the game does not check
-  that they obey. In a radio shadow the mission on the screen stops changing, as it does for the
+  that they obey. The commander still sees the drone: its telemetry comes down like any other
+  unit's, so the map shows where it really is, and the commander can go on giving it
+  instructions. In a radio shadow the mission on the screen stops changing, as it does for the
   executor.
 - **A bigger computer on board stays possible.** The unit's interface is what crosses the
   drone's radio: the queue down, telemetry and sightings up. A single-board computer beside the
@@ -44,7 +46,7 @@ the referee's view, and its ground sends the true places of the enemy as traffic
 An advisor gets the team's map and gives **proposals**: a unit, an instruction, the gain it
 expects, and the time until the proposal is stale. It runs beside the commander, not in its loop.
 A person sees proposals in the ADVISOR panel and accepts one with a click. A computer commander
-takes a proposal whose gain is above a threshold (the lookahead's rule today: more than 2
+takes advice by itself: it takes a proposal whose gain is above a threshold (the lookahead's rule today: more than 2
 points). In the fast arena an advisor's delay is counted in game time, so a game stays
 reproducible.
 
@@ -100,10 +102,6 @@ Steps 1 and 3 do not depend on each other. Step 2 needs 1; step 4 needs 3; step 
 - **What "done" means** for an order on board: a unit out of contact knows who holds a tower
   only by its own camera (`expectations/09-towers/rules/14-on-board.expect`), and the executor
   has no camera. A time on station may have to stand in for it.
-- **A person's unit that does not obey.** The rules allow it. Whether the commander is told
-  (the unit's order on the map is the pilot's mission, not what the pilot flies) is open.
-- **Whether a computer commander takes advice by itself.** The plan says yes above a threshold,
-  as the lookahead does today. The other choice is that advice only ever goes to a person.
 - **The single-board computer.** Which board, how it joins the flight controller (a MAVLink
   serial port is the plain choice), and what sensors it has. Not before the queue shows what a
   drone still cannot do alone.
