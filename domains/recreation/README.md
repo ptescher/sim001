@@ -16,7 +16,7 @@ In the sim, **G** starts a pylon race and **T** a game of tag. The same key agai
 | `recreation_tag` | [tag/](tag) | Tag: the arena and its referee (who is it, touches, no tag-backs, leaving the arena, the clock). Depends only on `glam` |
 | `recreation_pilot` | [pilot/](pilot) | The computer pilot: hands that hold a bank and a climb rate, and steering to a point, along a line or onto another plane. Its [`Skill`](pilot/src/lib.rs) sets how hard it turns and how fast it flies |
 | `recreation_towers` | [towers/](towers) | Towers, a team game for drones flown by plan: the towers and their circles, capture, points, the end of the game, the valley (forest, lanes, lake) and what each team sees through the fog and the trees. Depends only on `glam`. See [plans/towers.md](../../plans/towers.md) |
-| `recreation_towers_server` | [towers_server/](towers_server) | The game server of Towers (binary `towers_server`): an ArduPlane SITL in AGENT mode for each drone, the flight model (with the trees), the referee, and a seat for each team over TCP |
+| `recreation_towers_server` | [towers_server/](towers_server) | The game server of Towers (binary `towers_server`): an ArduPlane SITL in AGENT mode for each drone, the flight model (with the trees), the referee, and a seat for each team over TCP, for a person or a computer commander |
 | `recreation_towers_view` | [towers_view/](towers_view) | The 3D view of a game of Towers (binary `towers_view`): the valley, the six drones, and the camera of each drone on the sensor feed of the sim (TCP 5601 to 5606) |
 | `recreation_games` | [games/](games) | A game in play: the countdown, the computer pilots (Kestrel the ace, Merlin the club pilot, Swift the rookie) and what they decide to do, their planes on the flight model, and the referee. Also a stand-in that flies your plane, which the acceptance tests use |
 
@@ -164,9 +164,19 @@ QHOVER to 15 m, FBWA); once it flies on the wing, the ground switches it to AGEN
 plan for its order about once a second (a tower: an orbit 40 m out, at a height of its own) and the
 other drones as `ADSB_VEHICLE` traffic. A crashed drone is back at its base after 15 s.
 
-Each team has a seat on TCP port 5955 (`recreation_towers::seat`, a JSON message a line): a
-computer commander, or a person (`--blue person`, `--red person`; GO waits for them). A seat that
-commands or watches a team gets only that team's map, four times a second; a spectator gets the
+Each team has a seat on TCP port 5955 (`recreation_towers::seat`, a JSON message a line), and it is
+one seat for a person and for a computer. A seat that commands is the team's ground station: it
+gets the umpire's word, what its towers and base report, and the way to its drones (the air), makes
+its own map from its drones' telemetry, flies the drones from it, and sends orders. The server decides and sends
+no plan for any team. `--blue computer` (the default) makes the server start a computer commander
+(`recreation_towers_ground::commander`, also the binary `towers_commander --team blue|red [--host H]
+[--port P] [--idle]`) that takes the seat over loopback TCP, as `Join::Compute`; `nobody` starts one
+that gives no orders; `person` keeps the seat for a person, and GO waits for them. One person for
+each team may play. A seat changes hands during a game: a person who joins a team that a computer
+commands takes the seat (the computer is relieved; the person's seat starts with the orders the
+drones have, which the server sends once after the welcome), and when a person leaves, a second later
+a computer commander takes the seat (`--on-leave computer`, the default; `--on-leave wait` leaves
+the drones on their last orders until a person comes back). A seat that watches a team gets only that team's map, four times a second; a spectator gets the
 whole game. At the end the server prints `RESULT` lines (the outcome, drones in AGENT, refused
 commands, crashes, towers each team took).
 

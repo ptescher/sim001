@@ -92,6 +92,28 @@ server.
 7. **The field.** The open items of `plans/unified-link.md`: the bench, a serial radio per drone,
    the field umpire. Then real and simulated drones in one game.
 
+Results of step 3 (branch `actors-seats`):
+
+- `recreation_towers_ground` now holds the seat client (`seat`), the station (`station`: its own
+  `Ground` over the air ports, the map from telemetry) and the computer commander (`commander::run`,
+  binary `towers_commander --team blue|red [--host H] [--port P] [--idle]`). The commander app uses
+  the same `seat` and `station`.
+- The server no longer decides or sends a plan for any team: its in-process `commanders` and its
+  truth-based `Ground` are gone. For a computer (or `nobody`) team it starts `commander::run` in a
+  thread that connects over loopback as `Join::Compute`; it keeps the light quads' sticks, take-off,
+  the referee and the air.
+- Handover: a `Join::Command` (person) relieves a `Join::Compute` holder (`Refused("relieved...")`
+  and the connection is closed); the server sends `ToSeat::Orders` once after every welcome of a
+  seat that commands, and the new commander starts from them. When a person leaves, a computer takes
+  the seat after 1 s (`--on-leave computer`, default; `--on-leave wait` does not).
+- Gate A: tests in `towers_server/src/seats.rs` (same messages for both seats; a Red scout in the
+  open is in the spectator's truth and not on the map built from a seat's messages; takeover; the
+  computer takes a freed seat; two people) and `towers_ground/tests/commander.rs` (a commander
+  against a fake server gives orders from the umpire's word and sites alone, leaves when relieved).
+- Not done: the Orders echo is the server's `told` (what the drones last heard), not read from the
+  drones' telemetry; no GUI check of a takeover in the app; no full-SITL expectation for a takeover
+  (the arduplane driver only plays a computer-against-computer game).
+
 Steps 1 and 3 do not depend on each other. Step 2 needs 1; step 4 needs 3; step 5 needs 1 and 3.
 
 ## Not settled

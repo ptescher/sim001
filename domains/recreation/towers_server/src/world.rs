@@ -207,10 +207,6 @@ impl World {
         self.now() >= self.go
     }
 
-    pub fn on_the_wing(&self, i: usize) -> bool {
-        self.preflight[i].on_the_wing() && airborne(&self.planes[i])
-    }
-
     /// One physics step of drone `i` from its autopilot's outputs, then the referee (by drone 0).
     /// Returns what its radio sends.
     pub fn step_drone(&mut self, i: usize, pwm: &[u16; 16], dt: f32) -> Radio {
@@ -259,6 +255,7 @@ impl World {
 
     /// The team gives drone `i` an order. The team does not know whether it is heard: the order is
     /// the team's, and the air carries it to the drone, or drops it (see `air`).
+    #[cfg(test)]
     pub fn command(&mut self, i: usize, order: Order, low: bool) {
         self.command_standing(i, order, low, None)
     }
@@ -294,18 +291,6 @@ impl World {
                 cognition_agent::link::sighting_frame(i as u8 + 1, self.sense_seq[i], j, &t)
             })
             .collect()
-    }
-
-    /// What the ground sees of the game: all of it.
-    pub fn situation(&self) -> recreation_towers_ground::Situation<'_> {
-        recreation_towers_ground::Situation {
-            now: self.now(),
-            game: &self.game,
-            orders: &self.orders,
-            lows: &self.lows,
-            standing: &self.standing,
-            wing: (0..self.orders.len()).map(|i| self.on_the_wing(i)).collect(),
-        }
     }
 
     /// The drone has no wing for the on-board executor to fly (a quadcopter), so its order is flown from
