@@ -105,6 +105,8 @@ pub struct Commander {
     advice_margin: f32,
     /// The queue that goes with the order a proposal gave a drone, while it still flies it.
     queues: Vec<Option<(Order, Vec<Queued>)>>,
+    /// What the commander had in hand at its last decision (for advisors beside it).
+    hand: Option<Hand>,
 }
 
 impl Commander {
@@ -127,6 +129,7 @@ impl Commander {
             proposals: vec![],
             advice_margin: ADVICE_MARGIN,
             queues: vec![None; n],
+            hand: None,
         }
         .with_lookahead(std::env::var("SIM001_LOOKAHEAD").as_deref() != Ok("0"))
     }
@@ -181,6 +184,14 @@ impl Commander {
             (Some(Some((o, q))), Some(now)) if *o == now => q.clone(),
             _ => vec![],
         }
+    }
+
+    /// What the commander had in hand at its last decision: its orders after its own rules, the
+    /// drones it may still change and the towers each must stay away from. It is what an advisor
+    /// that runs beside the commander (at a seat) is shown with the map. `None` before the first
+    /// decision.
+    pub fn hand(&self) -> Option<&Hand> {
+        self.hand.as_ref()
     }
 
     pub fn tuning(&self) -> CommanderTuning {
@@ -356,8 +367,9 @@ impl Commander {
                 .min_by(|&&a, &&b| view.towers[a].at.distance(at).total_cmp(&view.towers[b].at.distance(at)));
             *order = spare.map(|&t| Order::Take(t));
         }
+        let free: Vec<bool> = (0..self.orders.len()).map(|k| up[k] && charge[k].is_none()).collect();
+        self.hand = Some(Hand { orders: self.orders.clone(), free: free.clone(), away: away.clone() });
         if !self.advisors.is_empty() || !self.late.is_empty() || !self.proposals.is_empty() {
-            let free: Vec<bool> = (0..self.orders.len()).map(|k| up[k] && charge[k].is_none()).collect();
             self.take_advice(view, free, away);
         }
         for (k, order) in charge.into_iter().enumerate() {
@@ -433,6 +445,18 @@ mod tests {
     fn decide(c: &mut Commander, g: &Game) -> Vec<Option<Order>> {
         c.decide(&g.view(Team::Blue));
         (0..3).map(|k| c.order(k)).collect()
+    }
+
+    #[test]
+    fn after_a_decision_it_has_a_hand_for_the_advisors_beside_it() {
+        let g = Game::new(Rules { drones: 3, ..Rules::default() });
+        let mut c = Commander::new(g.rules).with_lookahead(false);
+        assert!(c.hand().is_none(), "no hand before the first decision");
+        c.decide(&g.view(Team::Blue));
+        let hand = c.hand().expect("a hand");
+        assert_eq!(hand.orders, (0..3).map(|k| c.order(k)).collect::<Vec<_>>());
+        assert_eq!(hand.free.len(), 3);
+        assert_eq!(hand.away.len(), 3);
     }
 
     #[test]

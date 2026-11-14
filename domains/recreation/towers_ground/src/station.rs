@@ -70,6 +70,9 @@ pub struct Tally {
     pub in_agent: [AtomicUsize; 2],
     /// Commands that the drones refused, by team.
     pub refused: [AtomicUsize; 2],
+    /// Proposals that the advisors of the commanders made, and the ones a commander took, by team.
+    pub proposals: [AtomicUsize; 2],
+    pub taken: [AtomicUsize; 2],
     /// A line about each drone of the game, by number in the game.
     pub lines: Mutex<Vec<String>>,
     /// Warnings of the stations, by team.
@@ -79,6 +82,14 @@ pub struct Tally {
 impl Tally {
     pub fn in_agent(&self) -> usize {
         self.in_agent.iter().map(|n| n.load(Ordering::SeqCst)).sum()
+    }
+
+    pub fn proposals(&self) -> usize {
+        self.proposals.iter().map(|n| n.load(Ordering::SeqCst)).sum()
+    }
+
+    pub fn taken(&self) -> usize {
+        self.taken.iter().map(|n| n.load(Ordering::SeqCst)).sum()
     }
 
     pub fn refused(&self) -> usize {

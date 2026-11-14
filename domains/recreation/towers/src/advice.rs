@@ -11,9 +11,10 @@
 
 use crate::lookahead::{self, HORIZON};
 use crate::{Belief, Order, Queued, Rules, Team, TeamView};
+use serde::{Deserialize, Serialize};
 
 /// A proposal: one order for one drone, with what the advisor expects to gain by it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Proposal {
     /// The drone, by its number in the team.
     pub drone: usize,
@@ -32,7 +33,7 @@ pub struct Proposal {
 
 /// What a commander has in hand when an advisor looks: the part of its own state that an advisor
 /// needs and that the map does not show. A seat has it, for the seat is the commander.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Hand {
     /// The order each drone is to fly, by its number in the team.
     pub orders: Vec<Option<Order>>,
@@ -44,7 +45,7 @@ pub struct Hand {
 
 /// Looks at the team's map and proposes moves. It may be slow; it is called when the map is shown
 /// to it, and what it answers reaches the commander later.
-pub trait Advise: std::fmt::Debug {
+pub trait Advise: std::fmt::Debug + Send {
     /// The proposals on this map, if any. Called with each map the advisor is shown (the
     /// commander shows it one each second); it decides for itself how often it thinks.
     fn advise(&mut self, view: &TeamView, hand: &Hand) -> Vec<Proposal>;

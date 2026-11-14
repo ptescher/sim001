@@ -60,6 +60,14 @@ tree); LOW again makes it fly high. The drone's orders after that keep the setti
 and NONE do what Ctrl/Cmd+A, Space and Esc do. Until you give a drone an order, it circles over
 your base (HOME).
 
+## Advice
+
+Beside your commander runs an advisor (the lookahead; `--advisor none|lookahead|COMMAND` chooses, see
+`domains/recreation/README.md`). The ADVISOR panel, top left of the battlefield, lists what it
+proposes now, in green, best first, with the seconds left: click a line, or press Y for the first,
+and the drone gets that order. A proposal that is stale leaves the panel. The amber lines are the
+older warnings in words.
+
 ## Tests
 
 `cargo run --release -- --expect` runs the app's tests of the "Towers" section

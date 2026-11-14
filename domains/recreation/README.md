@@ -180,6 +180,42 @@ the drones on their last orders until a person comes back). A seat that watches 
 whole game. At the end the server prints `RESULT` lines (the outcome, drones in AGENT, refused
 commands, crashes, towers each team took).
 
+#### Advisors beside a commander
+
+A commander has an advisor that looks at the team's map in its own time and proposes moves
+(`recreation_towers::Advise`: a `Proposal` is a drone, an order and queue, the points it expects
+to gain and the game time until which it is good). At a seat, the advisors do not run in the
+commander's loop: each runs on a thread of its own at the station behind a mailbox
+(`recreation_towers_ground::advisors::Runner`: the newest map and hand go in, older ones that were
+not looked at are dropped, proposals come out when they are ready). The computer commander puts
+what has arrived in hand with `Commander::advise` before each decision, takes the best proposal
+that gains more than 2 points, is not stale and still fits, and then shows the advisors the map
+and its hand. It never waits. Which advisor each computer team has:
+
+```bash
+towers_server --blue-advisor lookahead --red-advisor none     # the default is lookahead on both
+towers_server --blue-advisor "towers_advisor --claude"        # asks claude -p every 8 s; costs money
+towers_commander --team blue --advisor "towers_advisor"       # the same flag on the stand-alone commander
+```
+
+`lookahead` is the lookahead on a thread of the station, `none` no advisor, and anything else a
+command (run with `sh -c`; `towers_advisor` is found beside the other binaries) that serves an
+advisor: one JSON line in for each map, `{"Look": {"view": TeamView, "hand": Hand}}`, one line out,
+a list of proposals (`[]` for none), after one `{"Start": {"team": "Blue", "rules": {...}}}` that is
+answered `"ok"` (`recreation_towers_ground::advisors::{ToAdvisor, serve}`; any `Advise` can be such a
+process). A process that dies, hangs (90 s), writes what is not a list of proposals or proposes for a
+drone or tower that is not in the game is dropped with a line on stderr, and the game goes on. The
+binary `towers_advisor` serves the lookahead; `towers_advisor --claude [--model NAME] [--every S]`
+every few seconds gives `claude -p` (JSON output, a budget of 0.25 dollars a question, no tools, the
+command from `SIM001_CLAUDE` if set) a text picture of the map and the hand, asks for at most two
+proposals as JSON, reads them strictly and stamps `until` itself. The server's log shows each
+proposal that arrives and each that a commander takes (`advice Blue: ...`), and the final `RESULT`
+lines count them (`proposals`, `proposals_taken`).
+
+A person's seat runs advisors too (`advisors::attend`, in the commander app, `--advisor` as above,
+lookahead by default): the app's ADVISOR panel lists the live proposals, best first, and a click on
+one, or the key Y for the first, sends that order and queue for that drone.
+
 The rules and the commander are specified in [expectations/09-towers](../../expectations/09-towers)
 and run with no window by `cargo test --release -p recreation_towers`; a whole game with
 ArduPilot, with the fog checked from a seat against a spectator, by

@@ -27,6 +27,7 @@ use gpui::{
 use recreation_towers::map::Map;
 use recreation_towers::seat::Join;
 use recreation_towers::{Class, Order, Phase, Rules, Team, TeamView};
+use recreation_towers_ground::advisors;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -236,6 +237,14 @@ impl CommanderView {
         matches!(self.seat.state().status, Status::Seated(Join::Command(_)))
     }
 
+    /// ACCEPT (Y, or a click on a proposal): takes the `nth` proposal of the ADVISOR panel, the one that
+    /// gains most first. The drone gets that order and queue. Nothing happens if it went stale.
+    pub fn accept(&mut self, nth: usize) {
+        if self.commands() {
+            self.seat.accept(nth);
+        }
+    }
+
     /// Selects drone `k` alone, or none.
     pub fn select(&mut self, k: Option<usize>) {
         self.selected = k.into_iter().collect();
@@ -398,6 +407,7 @@ impl CommanderView {
             "b" => self.give(Order::Home),
             "l" => self.toggle_low(),
             "c" => self.arm_circle(),
+            "y" => self.accept(0),
             "escape" => {
                 self.circle.cancel();
                 self.selected.clear()
@@ -805,6 +815,39 @@ impl Render for CommanderView {
                     .text_sm()
                     .text_color(c(AMBER))
                     .child(format!("ADVISOR  {line}")),
+            );
+        }
+        // The advisors' proposals: one line each, best first. A click on one, or Y for the first,
+        // gives that order. A stale one is gone.
+        let proposed: Vec<(String, f32)> = match &view {
+            Some(v) if self.commands() => advisors::listed(&self.seat.state().proposals, v)
+                .into_iter()
+                .map(|p| (p.why.clone(), p.until - v.time))
+                .collect(),
+            _ => vec![],
+        };
+        for (i, (why, left)) in proposed.into_iter().enumerate() {
+            let key = if i == 0 { "  [Y]" } else { "" };
+            toasts = toasts.child(
+                div()
+                    .id(SharedString::from(format!("proposal-{i}")))
+                    .relative()
+                    .px_2()
+                    .py(px(3.0))
+                    .bg(ca(0x000000, 0.7))
+                    .border_l_2()
+                    .border_color(c(GREEN))
+                    .text_sm()
+                    .text_color(c(GREEN))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(ca(0x203020, 0.85)))
+                    .child(format!("ADVISOR  {why}  ({left:.0} s){key}"))
+                    .child(recorder(format!("proposal-{i}").into()))
+                    .occlude()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.accept(i);
+                        cx.notify();
+                    })),
             );
         }
         let map = div()

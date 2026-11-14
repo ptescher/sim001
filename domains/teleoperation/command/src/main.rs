@@ -24,6 +24,7 @@ use gpui::{
 };
 use recreation_towers::Team;
 use recreation_towers::seat::{Join, PORT};
+use recreation_towers_ground::advisors::AdvisorChoice;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -43,6 +44,9 @@ sim001_command [options]
                      each on a fresh game of its own server (needs the AGENT build of ArduPlane), and exit
   --platform field   with --expect: read the suite as the field and run it on the bench (a ground radio and a
                      flight controller: SIM001_FIELD_RADIO, SIM001_FIELD_FC); without them, nothing is supported yet
+  --advisor NAME     the advisor beside your commander: lookahead (the default), none (the default with --expect, which puts its own proposals in the panel), or a command that
+                     serves an advisor, such as towers_advisor --claude (costs money). Its proposals
+                     are in the ADVISOR panel; press Y or click one to give that order
   --only TEXT        with --expect: run only the tests whose title contains TEXT
   --docs DIR         with --expect: write the results and screenshots of the window to DIR (merged with the others')";
 
@@ -118,6 +122,14 @@ fn main() {
     // A seat that commands is the team's ground station: it flies the team's drones itself.
     if matches!(join, Join::Command(_)) {
         station::start(seat.clone(), addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string(), None);
+        // Its advisors run beside it, and what they propose is listed in the ADVISOR panel.
+        let advisor = arg("--advisor")
+            .map_or(Ok(if expect { AdvisorChoice::None } else { AdvisorChoice::Lookahead }), |a| a.parse())
+            .unwrap_or_else(|e: String| {
+                eprintln!("--advisor: {e}");
+                std::process::exit(2);
+            });
+        recreation_towers_ground::advisors::attend(seat.clone(), advisor);
     }
     // The pictures from the team's drones: the 3D view of the game is on the server's machine.
     let host = addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string();

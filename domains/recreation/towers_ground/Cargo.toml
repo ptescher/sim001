@@ -5,6 +5,10 @@ edition = "2024"
 description = "Recreation domain: the ground of Towers: the MAVLink side of a team's drones (AGENT mode, plans, standing orders, traffic) behind a Transport, as the commander app runs it and as the game server runs it for a computer team"
 
 [[bin]]
+name = "towers_advisor"
+path = "src/bin/towers_advisor.rs"
+
+[[bin]]
 name = "towers_commander"
 path = "src/bin/towers_commander.rs"
 
@@ -14,3 +18,5 @@ simulation_sitl = { path = "../../simulation/sitl" }
 cognition_agent = { path = "../../cognition/agent" }
 cognition_plan = { path = "../../cognition/plan" }
 glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true

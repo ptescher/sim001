@@ -284,6 +284,17 @@ Vocabulary:
   State: the advisor of the computer commander of Blue is the lookahead | none
     Shows: the lookahead: the computer commander thinks ahead
     Shows: none: the computer commander does not think ahead
+  # The ADVISOR panel of the app: the proposals of the advisor beside a person's commander.
+  State: the proposal in the ADVISOR panel is none | the west tower for the first Blue drone, 6 points | the west tower for the first Blue drone, 6 points, good for 3 seconds
+    Shows: none: the panel has no green line
+    Shows: the west tower for the first Blue drone, 6 points: the panel has a green line that sends the first Blue drone to the west tower, and shows the time that is left
+    Shows: the west tower for the first Blue drone, 6 points, good for 3 seconds: the panel has the same line, and it goes after 3 seconds of the game
+  Event: the commander clicks the proposal
+    Say: click the green line of the proposal in the ADVISOR panel
+  Event: the commander presses the accept key
+    Say: press Y
+  Event: the time of the proposal is over
+    Say: wait until the seconds that the panel shows are 0
   # The commander app (domains/teleoperation/command), in the Blue seat of a game on the server.
   State: the seat of the app is none | Blue | refused
     Shows: Blue: the top bar of the app says BLUE COMMANDER

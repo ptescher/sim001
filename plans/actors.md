@@ -190,6 +190,41 @@ server.
    proposals taken, and how many are stale or no longer fit, are not counted). So the
    lookahead is a plumbing test for advisors, not a gain: it is the model and its enemy guesses that
    need work, before advice from a slower and better advisor can be told from lateness.
+   **Results (the seat side: advisors beside the commander, a process advisor, a Claude advisor,
+   and the app's accept).** Done in `recreation_towers_ground::{advisors, claude}`, the commander
+   app and the server. An advisor at a seat runs on a thread of its own (`advisors::Runner`) behind
+   a mailbox: the newest map and hand go in, an older one that was not looked at is dropped, never
+   queued, and proposals come out when they are ready (`Advisors::take(now)` drops the ones that are
+   stale on arrival). A computer commander on a seat (`commander::run_with`) has its built-in
+   lookahead off and never calls an advisor in `decide`: before each decision it puts what has
+   arrived in hand (`Commander::advise`), after it it shows the advisors the map and
+   `Commander::hand()` (new: the orders after its rules, the drones it may change, the towers each
+   keeps away from). `Advise` is now `Send`. Tests: an advisor that sleeps 3 s does not delay ten
+   decisions (the slowest takes under 100 ms, the advisor looked at one map); a late proposal is
+   dropped once stale; the mailbox keeps the newest of five maps (looks at the first and the last);
+   an advisor that panics is dropped; and, through the commander on a fake server, a process that
+   never answers does not slow its orders, while one that proposes gets its proposal taken.
+   `ProcessAdvisor` (`sh -c COMMAND`, `serve` for the other end, binary `towers_advisor`): one JSON
+   line in (`{"Start":{"team","rules"}}` once, answered `"ok"`; then `{"Look":{"view","hand"}}`),
+   one out (a list of proposals). A process that dies, hangs (90 s), writes what is not a list or
+   proposes for a drone or tower that is not in the game is dropped with a line, and the game goes
+   on. The Claude advisor (`towers_advisor --claude`, `SIM001_CLAUDE` for the command) is tested only
+   against stand-in commands (good, malformed, error, slow, no command): **it has not been run
+   against the real `claude`**. Flags: `towers_commander --advisor`, `towers_server --blue-advisor`
+   and `--red-advisor`, the app's `--advisor` (`none` by default under `--expect`). The app lists
+   the live proposals in the ADVISOR panel (best first, seconds left, a click or Y takes it; the
+   text warnings stay) and `expectations/09-towers/05-advice.expect` covers it.
+
+   On SITL (the server's acceptance test, the lookahead as a station advisor on both sides, two
+   games at 10x): both games play to the end and both teams take towers (Blue 1 and Red 2; Blue 2
+   and Red 1). The server's log shows the proposals arriving and the commanders taking some: 91
+   proposals and 61 taken in the first game, 86 and 44 in the second (`RESULT proposals`,
+   `proposals_taken`; "taken" counts a proposal whose drone and order the commander's decision then
+   had, so one that matched its own order anyway is counted too). Failing: "No drone crashes" (7 and
+   3), the known one, and in the first game "the commands that the drones refused are 0" (1 refused;
+   0 in the second game, and not seen again: not looked into). The app's expectations ran in the
+   real window (`--expect --only proposal --no-cameras`): the four tests of 05-advice pass; the
+   empty-panel check inside the story "Your first tower" was not run (it needs the cameras).
 5. **A person flies a unit.** A `Unit` seat. The server gives that drone's radio channels to the
    seat: the sim (or a TX15 on CRSF) joins a game as one drone, with the drone's camera and the
    mission on its HUD. The pilot sees only what the drone sees. Take-off is the pilot's.
