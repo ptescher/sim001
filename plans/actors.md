@@ -155,6 +155,53 @@ server.
 7. **The field.** The open items of `plans/unified-link.md`: the bench, a serial radio per drone,
    the field umpire. Then real and simulated drones in one game.
 
+Results of step 3 (branch `actors-seats`):
+
+- `recreation_towers_ground` now holds the seat client (`seat`), the station (`station`: its own
+  `Ground` over the air ports, the map from telemetry) and the computer commander (`commander::run`,
+  binary `towers_commander --team blue|red [--host H] [--port P] [--idle]`). The commander app uses
+  the same `seat` and `station`.
+- The server no longer decides or sends a plan for any team: its in-process `commanders` and its
+  truth-based `Ground` are gone. For a computer (or `nobody`) team it starts `commander::run` in a
+  thread that connects over loopback as `Join::Compute`; it keeps the light quads' sticks, take-off,
+  the referee and the air.
+- Handover: a `Join::Command` (person) relieves a `Join::Compute` holder (`Refused("relieved...")`
+  and the connection is closed); the server sends `ToSeat::Orders` once after every welcome of a
+  seat that commands, and the new commander starts from them. When a person leaves, a computer takes
+  the seat after 1 s (`--on-leave computer`, default; `--on-leave wait` does not).
+- Gate A: tests in `towers_server/src/seats.rs` (same messages for both seats; a Red scout in the
+  open is in the spectator's truth and not on the map built from a seat's messages; takeover; the
+  computer takes a freed seat; two people) and `towers_ground/tests/commander.rs` (a commander
+  against a fake server gives orders from the umpire's word and sites alone, leaves when relieved).
+- Crashes on SITL (`towers_server --speedup 10 --timeout 200`, one game at a time; crashes per game,
+  4 games each, batches interleaved with plain `actors-plan`; the server now prints a second line
+  for each crash with the time, order, low or high, jammed, silent time and the nearest flying drone):
+
+  | Batch | Path | Crashes per game | Total |
+  | --- | --- | --- | --- |
+  | 1 | new, first version | 1, 2, 3, 3 | 9 |
+  | 1 | actors-plan | 0, 3, 0, 0 | 3 |
+  | 2 | new + AGENT only after the transition, clock cap in wall time | 3, 0, 2, 4 | 9 |
+  | 2 | actors-plan | 1, 1, 0, 5 | 7 |
+  | 3 | new + dead reckoning of the drones' reports | 1, 1, 0, 0 | 2 |
+  | 3 | actors-plan | 4, 7, 4, 2 | 17 |
+
+  Plain `actors-plan` also crashes 0 to 7 drones per game here (12 games: 27 crashes), more in a batch
+  that ran while the machine was busy, so the acceptance test's "No drone crashes" is not a gate
+  that either path passes reliably. What was a defect of the new path: (1) the station asked for
+  AGENT as soon as a drone was in FBWA, in the middle of the transition (the server waits for 15 m/s):
+  two games lost a drone at its base at t = 10 s, "Hard impact" at 22 m/s, the other drone 10 m
+  away; fixed, no such crash in the 8 games after. (2) The station's clock was held to one game
+  second past the last map, so at 10x (a map each 2.5 game seconds) plans went out about 0.8 a
+  second instead of 1; now the cap is a wall second. (3) Plans were made from the position of the
+  last report; the station now carries it on by its velocity. In all 24 games the only crashes with another
+  drone within 30 m were the two take-off ones above (10 to 11 m) and one in plain `actors-plan` (24 m), so the executors' loss of the enemy's true positions as traffic does not show in
+  the crashes; they are tree strikes while taking a tower (6 to 25 m), in the open or in a shadow,
+  in both paths.
+- Not done: the Orders echo is the server's `told` (what the drones last heard), not read from the
+  drones' telemetry; no GUI check of a takeover in the app; no full-SITL expectation for a takeover
+  (the arduplane driver only plays a computer-against-computer game).
+
 Steps 1 and 3 do not depend on each other. Step 2 needs 1; step 4 needs 3; step 5 needs 1 and 3.
 
 ## Not settled
