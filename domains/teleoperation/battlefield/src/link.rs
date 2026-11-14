@@ -97,8 +97,13 @@ impl Battlefield {
         let seq = seq.unwrap_or_else(|| link.request.lock().unwrap().map_or(0, |(r, _)| r.seq));
         if let Some(m) = link.lag.lock().unwrap().painted(seq, Instant::now()) {
             println!(
-                "battlefield: the camera moved {:.1} s; {} pictures ({:.0} a second); behind by {:.0} ms (median), {:.0} ms (90 %)",
-                m.secs, m.pictures, m.pictures_per_s, m.lag_ms, m.lag_p90_ms
+                "battlefield: the camera moved {:.1} s; {} pictures ({:.0} a second); each as old as {:.0} ms (median), {:.0} ms (90 %); the first after {}",
+                m.secs,
+                m.pictures,
+                m.pictures_per_s,
+                m.lag_ms,
+                m.lag_p90_ms,
+                m.first_ms.map_or("none came".into(), |f| format!("{f:.0} ms"))
             );
         }
     }

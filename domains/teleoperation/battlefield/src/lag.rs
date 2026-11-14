@@ -2,8 +2,9 @@
 //!
 //! The app asks for a picture each time the camera changes, each request with the next `seq`, and
 //! each picture comes back with the `seq` it was rendered for. While the camera moves, each paint
-//! says how long the picture on screen has been out of date: since the app asked for the first
-//! camera that the picture does not show. A motion ends when the camera has not changed for
+//! of a picture of the motion says how old it is: how long ago the app asked for the camera it
+//! shows. The picture from before the motion is not counted; the wait for the motion's first one
+//! is kept apart. A motion ends when the camera has not changed for
 //! [`STILL`]; its numbers are kept until the next one starts.
 
 use std::collections::VecDeque;
@@ -26,6 +27,8 @@ pub struct Motion {
     /// the median and the 90th percentile.
     pub lag_ms: f32,
     pub lag_p90_ms: f32,
+    /// From the motion's first request to the first picture of it on screen (ms), if one came.
+    pub first_ms: Option<f32>,
 }
 
 #[derive(Default)]
@@ -37,6 +40,7 @@ struct Run {
     to: Option<Instant>,
     pictures: usize,
     lags: Vec<f32>,
+    first_ms: Option<f32>,
 }
 
 impl Run {
@@ -56,6 +60,7 @@ impl Run {
             pictures_per_s: self.pictures as f32 / secs,
             lag_ms: at(0.5),
             lag_p90_ms: at(0.9),
+            first_ms: self.first_ms,
         })
     }
 }
@@ -93,9 +98,13 @@ impl Lag {
     pub fn painted(&mut self, seq: u32, now: Instant) -> Option<Motion> {
         let ended = self.finish_if_still(now);
         if self.moving(now) {
-            // Out of date since the first camera after the one it shows.
-            let behind = self.asked.iter().find(|(s, _)| *s > seq).map_or(0.0, |(_, at)| ms(now - *at));
-            self.run.lags.push(behind);
+            // As old as the camera it shows, if that camera is one of this motion's.
+            let from = self.run.from;
+            let shown = self.asked.iter().find(|(s, at)| *s == seq && from.is_some_and(|f| *at >= f));
+            if let (Some(&(_, at)), Some(from)) = (shown, from) {
+                self.run.lags.push(ms(now - at));
+                self.run.first_ms.get_or_insert(ms(now - from));
+            }
         }
         ended
     }
@@ -134,25 +143,59 @@ mod tests {
     }
 
     #[test]
-    fn a_picture_of_the_newest_camera_is_not_behind() {
-        let t0 = Instant::now();
-        let mut lag = Lag::default();
-        lag.asked(1, t0);
-        lag.asked(2, t0 + ms(16));
-        lag.painted(2, t0 + ms(30));
-        assert_eq!(lag.motion(t0 + ms(30)).unwrap().lag_ms, 0.0);
-    }
-
-    #[test]
-    fn a_picture_is_behind_since_the_first_camera_it_does_not_show() {
+    fn a_picture_is_as_old_as_the_camera_it_shows() {
         let t0 = Instant::now();
         let mut lag = Lag::default();
         lag.asked(1, t0);
         lag.asked(2, t0 + ms(16));
         lag.asked(3, t0 + ms(33));
-        // Still the picture of camera 1: it has been out of date since camera 2 was asked for.
+        // The picture of camera 1, asked for 50 ms ago.
         lag.painted(1, t0 + ms(50));
-        assert_eq!(lag.motion(t0 + ms(50)).unwrap().lag_ms, 34.0);
+        assert_eq!(lag.motion(t0 + ms(50)).unwrap().lag_ms, 50.0);
+    }
+
+    #[test]
+    fn a_steady_delay_reads_the_same_on_a_short_pan_and_a_long_one() {
+        // Each picture is painted 500 ms after its camera was asked for, the app asking 30 times
+        // a second and painting each time it asks.
+        let pan = |secs: u64| {
+            let t0 = Instant::now();
+            let mut lag = Lag::default();
+            let n = (secs * 30 / 1000) as u32;
+            for k in 0..n {
+                let now = t0 + ms(33 * k as u64);
+                lag.asked(k + 1, now);
+                // The newest picture painted: of the camera asked for 500 ms ago (15 asks).
+                if k >= 15 {
+                    lag.painted(k + 1 - 15, now);
+                }
+            }
+            lag.motion(t0 + ms(33 * n as u64)).unwrap().lag_ms
+        };
+        let (short, long) = (pan(700), pan(3000));
+        assert!((short - 495.0).abs() < 10.0, "short pan: {short}");
+        assert!((long - 495.0).abs() < 10.0, "long pan: {long}");
+    }
+
+    #[test]
+    fn the_picture_from_before_the_motion_is_not_counted_and_the_wait_for_the_first_new_one_is() {
+        let t0 = Instant::now();
+        let mut lag = Lag::default();
+        // The camera placed; its picture on screen.
+        lag.asked(1, t0);
+        lag.painted(1, t0 + ms(100));
+        // A pan starts a second later; the old picture stays on screen for a while.
+        for k in 0..10u32 {
+            let now = t0 + ms(1000 + 33 * k as u64);
+            lag.asked(2 + k, now);
+            lag.painted(1, now);
+        }
+        // The first picture of the pan, 300 ms after it began.
+        lag.arrived(2, t0 + ms(1299));
+        lag.painted(2, t0 + ms(1300));
+        let m = lag.motion(t0 + ms(1300)).unwrap();
+        assert_eq!(m.lag_ms, 300.0, "only the pan's own picture counts");
+        assert_eq!(m.first_ms, Some(300.0));
     }
 
     #[test]
@@ -179,12 +222,12 @@ mod tests {
         lag.painted(1, t0 + ms(40));
         // Still for a second: the motion is over, and is what motion() says.
         let done = lag.motion(t0 + ms(1040)).unwrap();
-        assert_eq!(done.lag_ms, 20.0);
+        assert_eq!(done.lag_ms, 40.0);
         // A new motion: its own numbers only.
         lag.asked(3, t0 + ms(2000));
         lag.asked(4, t0 + ms(2016));
         lag.painted(4, t0 + ms(2030));
-        assert_eq!(lag.motion(t0 + ms(2030)).unwrap().lag_ms, 0.0);
+        assert_eq!(lag.motion(t0 + ms(2030)).unwrap().lag_ms, 14.0);
     }
 
     #[test]
