@@ -87,6 +87,7 @@ const EVENTS: &[&str] = &[
     "the commander clicks the west tower on the minimap",
     "the commander pans the battlefield to the front",
     "the commander pans the battlefield for 3 seconds",
+    "the commander pans the battlefield for 5 seconds",
     "the commander moves the mouse to the top edge of the battlefield",
     "the commander turns the battlefield camera to the right",
     "the commander zooms the battlefield in",
@@ -123,6 +124,7 @@ const OBSERVED: &[&str] = &[
     "the heading of the battlefield camera",
     "the height of the battlefield camera",
     "the lag of the battlefield picture",
+    "the lag of the battlefield's motion",
     "the new pictures of the battlefield each second",
 ];
 
@@ -749,11 +751,13 @@ impl Driver for AppDriver {
             "the commander waits for the battlefield" => Ok(()),
             "the commander clicks the west tower on the minimap" => self.click_minimap_tower("west"),
             "the commander pans the battlefield to the front" => self.hold_key("w", HOLD),
-            "the commander pans the battlefield for 3 seconds" => {
+            e @ ("the commander pans the battlefield for 3 seconds"
+            | "the commander pans the battlefield for 5 seconds") => {
                 // The window draws as a screen would draw it, 60 times a second: in a test run the
                 // system does not draw it by itself, and the app asks for pictures as it draws.
                 self.with_window(|w, cx| key(w, cx, "w", true))?;
-                let (pan, after) = (Duration::from_secs(3), Duration::from_millis(600));
+                let secs = if e.contains("for 5") { 5 } else { 3 };
+                let (pan, after) = (Duration::from_secs(secs), Duration::from_millis(600));
                 let began = Instant::now();
                 let (mut draws, mut insides): (Vec<f32>, Vec<f32>) = (vec![], vec![]);
                 while began.elapsed() < pan + after {
@@ -870,6 +874,11 @@ impl Driver for AppDriver {
             println!("expect: battlefield motion: {m:?}");
             let x = if lower.starts_with("the lag") { m.lag_ms } else { m.pictures_per_s };
             return Ok(Value::from(x.round() as f64));
+        }
+        if lower == "the lag of the battlefield's motion" {
+            let m = self.call(|v, _, _| v.battlefield_drawn_motion())?.ok_or("the camera has not moved")?;
+            println!("expect: battlefield as drawn: {m:?}");
+            return Ok(Value::from(m.lag_ms.round() as f64));
         }
         if CAMERA.iter().any(|c| is(subject, c))
             || lower == "the point of the battlefield camera"
