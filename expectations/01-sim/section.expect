@@ -52,7 +52,7 @@ Vocabulary:
     Shows: running: PAUSED (P) goes away, and the flight continues from the point where it stopped
   State: the battery is 0..100 %
     Shows: at least 99 %: the BAT reading on the HUD is approximately 100 % again
-  # The games of the Recreation section. Without one, you fly freely.
+  # The games of the section Pylon race and tag. Without one, you fly freely.
   State: the game is free flight | a race | tag
     Shows: free flight: the game panel, the pylons and the other planes go away
     Shows: a race: three tall pylons stand on the field, and the game panel says RACE
