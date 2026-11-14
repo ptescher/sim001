@@ -383,6 +383,17 @@ Term: Captain
   The computer in the seat of a team in [[Towers]]: `recreation_towers::Commander`. It reads
   the map of its team and gives each drone an order. The [[league]] makes better captains.
 
+Term: Commander
+  In [[Towers]], what gives the orders of a team: one for each team. It sees only the map of its
+  team, and gives a drone an order and its [[queue]]. It is a computer ([[captain]]) or a person at
+  the commander app, in the team's [[seat]].
+
+Term: Unit
+  In [[Towers]], what flies one drone: one for each drone. It runs all the time, in contact or not,
+  and knows only what its drone has on board: what its camera sees, its [[battery]], whether it is
+  in contact, and the order and [[queue]] it was last given. By default it flies the order, works
+  down the queue when it is out of contact, and flies home at the end of it.
+
 Term: PreArm
   A check that ArduPilot does before it arms. If a check fails, ArduPilot does not arm, and it
   sends a message that starts with "PreArm:" and says why.
