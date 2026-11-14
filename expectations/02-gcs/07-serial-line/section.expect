@@ -4,8 +4,10 @@
 # and sends the telemetry back to the TX15, which shows it on its screen. The sim writes that
 # screen to a file that the console's driver reads (--tx15-screen).
 
-Section: The TX15 on the serial line
+Section: A flight with the flight computer
   On: desktop
+  This section flies a whole flight through [[The flight computer]], from the ground station.
+
   On the real plane, the TX15 is not a USB game controller. It sends its sticks and switches to
   the [[flight computer]] on a serial line, in the protocol of ExpressLRS. The flight computer
   gives ArduPilot the radio channels. ArduPilot sends its state back on the same line, and the

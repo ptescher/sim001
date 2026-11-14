@@ -3,7 +3,7 @@
 # computer pilot) flies the pilot's sticks for the steps that need flying: a lap, a cut, a
 # tag. See src/acceptance.rs.
 
-Section: Recreation
+Section: Pylon race and tag
   Fly games against three [[computer pilots]]. Each one flies a T1-S, on the same physics as
   your plane. Press G for a [[pylon race]]. Press T for a game of [[tag]]. Press the same key
   again to stop the game and fly freely.

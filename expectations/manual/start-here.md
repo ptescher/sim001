@@ -1,6 +1,6 @@
 # Start here
 
-This manual has three paths through it. Pick the one for what you want to do, and do its pages in order. Each tutorial takes a few minutes. Each path starts at [[Requirements and installation]].
+This manual has three paths through it. Pick the one for what you want to do, and do its pages in order. Each tutorial takes a few minutes. Each path starts at [[Requirements and installation]]. The parts of the manual follow the paths: Learn to fly, Ground control and Towers.
 
 ## Learn to fly
 

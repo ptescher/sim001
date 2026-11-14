@@ -1,7 +1,12 @@
 # The order of the manual. Each Part is a group of chapters in the navigation; a Section is a
-# top-level directory of this suite (the name in its `Section:` line), and a Page is a
-# hand-written file in manual/. [desktop] keeps a page out of the other platforms' manuals.
-# A top-level section that no part names goes into a last part, "More".
+# section of this suite (the name in its `Section:` line), and a Page is a hand-written file in
+# manual/. [desktop] keeps a page out of the other platforms' manuals. A top-level section that
+# no part names goes into a last part, "More".
+#
+# The parts follow what a reader wants to do: learn to fly, do ground control, play Towers.
+# A section goes in the part where that reader looks for it, not where its code or its parent
+# section is: Flying a VTOL and the radio sections are parts of the ground station in the
+# suite, and chapters of Learn to fly here.
 #
 # The manual is for readers: the reader edition leaves out the test machinery (the test report
 # stays, under "For developers"), and Next goes from tutorial to tutorial.
@@ -13,36 +18,35 @@ Part: Getting started
   Page: installing [desktop]
   Section: The launcher
   Page: controls [desktop]
-  Section: Setting up the radio
 
-Part: Flying in the sim
+Part: Learn to fly
   Section: The simulator
-
-Part: Flying the VTOL
   Section: Flying with a flight controller
   Section: Flying a VTOL
+  Section: Setting up the radio
   Section: Flying with a radio
+  Section: Pylon race and tag
+  Section: Pylon race and tag from the station
 
-Part: The ground station
+Part: Ground control
+  Page: ground-station-screens [desktop]
   Section: Ground control station
   Section: Other aircraft
-  Page: ground-station-screens [desktop]
+  Page: real-aircraft [desktop]
 
-Part: Games
-  Section: Recreation
-  Section: Games with ArduPilot
-  Section: The rules of Towers
+Part: Towers
   Section: Towers
+  Section: The rules of Towers
+
+Part: Real hardware
+  Section: The flight computer
+  Section: A flight with the flight computer
+  Section: Watching a real plane
 
 Part: For developers
   Section: Flying by plan
   Section: Making the executor better
-
-Part: Real hardware
-  Page: real-aircraft [desktop]
-  Section: The flight computer
-  Section: The TX15 on the serial line
-  Section: Watching a real plane
+  Section: The game with ArduPlane drones
 
 Part: Reference
   Page: places-and-scenery [desktop]

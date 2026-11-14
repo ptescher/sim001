@@ -4,9 +4,9 @@
 # console's driver (domains/teleoperation/console/src/expect.rs) starts the game in the sim over the sensor feed link,
 # and sees the other planes as the operator does, on the tactical map.
 
-Section: Games with ArduPilot
+Section: Pylon race and tag from the station
   On: desktop
-  When the station flies your plane, the [[computer pilots]] fly theirs with [[ArduPilot]]
+  These are the games of [[Pylon race and tag]], flown from the ground station. When the station flies your plane, the [[computer pilots]] fly theirs with [[ArduPilot]]
   too. Each one has a T1-S VTOL of its own, with an autopilot of its own. It flies the plane
   with a radio, as you do with the TX15: the sticks, the arm switch and the mode buttons. So
   each plane takes the same time to get into the air.
