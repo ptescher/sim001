@@ -36,6 +36,7 @@ pub use commander::{ADVICE_MARGIN, Commander, CommanderTuning};
 pub use edge::{EdgeObs, EnemySeen, TowerSeen};
 pub use filter::LinkFilter;
 pub use instruction::{Instruction, MAX_QUEUE, Queued, Standing, When, queue_of};
+pub use lookahead::Model;
 pub use map::Map;
 pub use view::{EnemyDrone, Order, OwnDrone, Sites, TeamView, TowerView, Umpire};
 

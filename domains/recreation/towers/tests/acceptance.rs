@@ -1018,7 +1018,7 @@ mod advice {
         w.run(10.0);
         w.blue_decides();
         assert_ne!(w.blue.order(0), red_home(&w));
-        assert_eq!(w.say(w.blue.order(0)), "take the centre tower");
+        assert_eq!(w.say(w.blue.order(0)), "take the west tower");
     }
 
     #[test]
