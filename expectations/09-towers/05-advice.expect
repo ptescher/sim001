@@ -1,0 +1,41 @@
+Feature: Advice in the app
+  Beside your commander, an [[advisor]] looks at the map of your team in its own time. By default
+  it is the lookahead. When it sees a better move, it sends a [[proposal]]. The ADVISOR panel, at
+  the top left of the battlefield, lists each proposal that is good now. A line gives the
+  reason, and the time that is left before the proposal is stale. The line with the most points
+  is the first.
+
+  The advisor does not give orders. You decide. To take a proposal, click its line, or press Y
+  to take the first one. The drone gets the order and the [[queue]] of the proposal, and the
+  line leaves the panel. If you do not take a proposal, it goes when its time is over. The
+  advisor can be slow, so a proposal can be some seconds old when it arrives.
+
+  The warnings of [[The advisor]] stay as they are. They appear as one line each, in amber. The
+  proposals are green.
+
+  Expectation: The ADVISOR panel is empty when the advisor has no proposal
+    When the commander joins the game
+    Then the proposal in the ADVISOR panel is none
+
+  Expectation: The ADVISOR panel lists a proposal with its drone, its order and its points
+    Given the proposal in the ADVISOR panel is the west tower for the first Blue drone, 6 points
+    Then the proposal in the ADVISOR panel is the west tower for the first Blue drone, 6 points
+
+  Expectation: A click on a proposal gives its order
+    Given the proposal in the ADVISOR panel is the west tower for the first Blue drone, 6 points
+    When the commander clicks the proposal
+    Then the order of the first Blue drone is take the west tower
+    And the proposal in the ADVISOR panel is none
+
+  Expectation: The accept key gives the order of the first proposal
+    Given the proposal in the ADVISOR panel is the west tower for the first Blue drone, 6 points
+    When the commander presses the accept key
+    Then the order of the first Blue drone is take the west tower
+    And the proposal in the ADVISOR panel is none
+
+  Expectation: A proposal that is stale leaves the panel
+    The proposal is good for 3 seconds. Nobody takes it.
+
+    Given the proposal in the ADVISOR panel is the west tower for the first Blue drone, 6 points, good for 3 seconds
+    When the time of the proposal is over
+    Then the proposal in the ADVISOR panel is none

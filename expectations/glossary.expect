@@ -392,14 +392,18 @@ Term: Advisor
   In [[Towers]], what helps a [[commander]]: it looks at the map of the team, as the commander
   does, and sends a [[proposal]] when it sees a better move. It does not give orders. It can be slow: its proposals then
   reach the commander some seconds late. The first advisor is the lookahead, which plays the
-  game forward in a small model. A person who commands also has an advisor, which warns of
-  danger in words.
+  game forward in a small model. An advisor runs beside the commander, in its own time, and
+  the commander never waits for it. It can be a program of its own: one that asks Claude, for
+  example. A person who commands has the same advisors: the ADVISOR panel of the app lists
+  their proposals, and a click on one gives its order. The person also has an advisor that warns
+  of danger in words.
 
 Term: Proposal
   In [[Towers]], what an [[advisor]] sends to a [[commander]]: one order for a drone, the
   [[queue]] that goes with it, the points that the advisor expects to gain by it, and the time
   after which it is stale. A computer commander takes a proposal that gains more than 2 points
-  and is not stale.
+  and is not stale. A person takes a proposal with a click on its line in the ADVISOR panel, or
+  with the key Y.
 
 Term: Unit
   In [[Towers]], what flies one drone: one for each drone. It runs all the time, in contact or not,

@@ -3,7 +3,7 @@
 //! the server is not up yet, it tries again.
 
 use recreation_towers::seat::{self, Join, ToSeat, ToServer};
-use recreation_towers::{Advice, Order, Rules, Sites, TeamView, Umpire};
+use recreation_towers::{Advice, Order, Proposal, Rules, Sites, TeamView, Umpire};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -35,6 +35,9 @@ pub struct State {
     pub orders: Vec<(Option<Order>, bool)>,
     /// What the advisor said lately, and when (the last few).
     pub advice: Vec<(Advice, Instant)>,
+    /// What the advisors beside the seat propose now (advisors.rs: `attend`), each good until its
+    /// own game time. The app lists them and `Seat::accept` takes one.
+    pub proposals: Vec<Proposal>,
 }
 
 /// How many pieces of advice the seat keeps.
@@ -71,6 +74,7 @@ impl Seat {
                 air: vec![],
                 orders: vec![],
                 advice: vec![],
+                proposals: vec![],
             })),
             orders: Mutex::new(tx),
             generation: Arc::new(AtomicU64::new(0)),
@@ -109,6 +113,30 @@ impl Seat {
         let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low, standing: None, queue });
     }
 
+    /// Puts proposals among the live ones, as if an advisor had just sent them.
+    pub fn offer(&self, proposals: impl IntoIterator<Item = Proposal>) {
+        self.state().proposals.extend(proposals);
+    }
+
+    /// Takes the proposal that is `nth` in the list a person sees (`advisors::listed`, the one that
+    /// gains most first): gives the drone its order and queue, flown as it flies now, and takes the
+    /// proposal off the list. False if there is no such proposal (it went stale).
+    pub fn accept(&self, nth: usize) -> bool {
+        let taken = {
+            let mut s = self.state();
+            let Some(view) = s.view.clone() else { return false };
+            let Some(p) = crate::advisors::listed(&s.proposals, &view).get(nth).map(|p| (*p).clone()) else {
+                return false;
+            };
+            s.proposals.retain(|q| *q != p);
+            let low = view.drones.get(p.drone).is_some_and(|d| d.low);
+            (p, low)
+        };
+        let (p, low) = taken;
+        self.order_with_queue(p.drone, p.order, low, p.queue);
+        true
+    }
+
     /// Stops connecting: the connection that is open ends with its server, and is not made
     /// again. (Before the server stops, so that it does not take the seat of the next game first.)
     pub fn hang_up(&self) {
@@ -138,6 +166,7 @@ impl Seat {
             air: vec![],
             orders: vec![],
             advice: vec![],
+            proposals: vec![],
         };
         let (tx, rx) = channel();
         *self.orders.lock().unwrap() = tx;
@@ -223,5 +252,52 @@ fn run(addr: &str, join: Join, state: &Mutex<State>, orders: Receiver<ToServer>,
         }
         state.lock().unwrap().status = Status::Connecting;
         std::thread::sleep(Duration::from_millis(300));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use recreation_towers::{Game, Phase, Team};
+
+    /// A seat on a server that is not there, with a map of the game at `time`.
+    fn seat_at(time: f32) -> Arc<Seat> {
+        let seat = Seat::connect("127.0.0.1:1", Join::Command(Team::Blue));
+        let mut g = Game::new(Rules::default());
+        g.time = time;
+        for k in 0..g.rules.drones {
+            let i = g.drone(Team::Blue, k);
+            g.drones[i].phase = Phase::Flying;
+        }
+        let mut view = g.view(Team::Blue);
+        view.drones[1].low = true;
+        seat.state().view = Some(view);
+        seat
+    }
+
+    fn take(drone: usize, tower: usize, gain: f32, until: f32) -> Proposal {
+        Proposal { drone, order: Order::Take(tower), queue: vec![], gain, made: 20.0, until, why: String::new() }
+    }
+
+    #[test]
+    fn accepting_a_proposal_gives_the_order_as_the_drone_flies_and_takes_it_off_the_list() {
+        let seat = seat_at(20.0);
+        seat.offer([take(0, 1, 3.0, 50.0), take(1, 2, 8.0, 50.0)]);
+        // The list a person sees has the proposal that gains most first.
+        assert!(seat.accept(0));
+        assert_eq!(seat.state().orders[1], (Some(Order::Take(2)), true), "drone 2 flies low, and keeps it");
+        assert_eq!(seat.state().proposals, vec![take(0, 1, 3.0, 50.0)]);
+        assert!(seat.accept(0));
+        assert_eq!(seat.state().orders[0], (Some(Order::Take(1)), false));
+        assert!(seat.state().proposals.is_empty());
+        assert!(!seat.accept(0), "nothing is left to take");
+    }
+
+    #[test]
+    fn a_stale_proposal_is_not_taken() {
+        let seat = seat_at(60.0);
+        seat.offer([take(0, 1, 9.0, 50.0)]);
+        assert!(!seat.accept(0));
+        assert!(seat.state().orders.is_empty(), "no order went out");
     }
 }

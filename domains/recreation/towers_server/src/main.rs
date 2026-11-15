@@ -1,6 +1,6 @@
 //! The game server of Towers (see plans/towers.md): `cargo run --release -p
 //! recreation_towers_server -- [--speedup N] [--blue computer|person|nobody] [--red computer|person|nobody]
-//! [--on-leave computer|wait]`.
+//! [--on-leave computer|wait] [--blue-advisor ADVISOR] [--red-advisor ADVISOR]`.
 //!
 //! Each drone has an ArduPlane SITL of its own, flying the plane of its class (`recreation_towers::Class`: standard T1-S VTOLs, a heavy T2 Cruza and a light Seeker 3) (MAVLink system ids 1 to 10), with
 //! the AGENT mode and `ardupilot/towers.parm`. The SITL instances are 30 to 39
@@ -17,6 +17,13 @@
 //! binary `towers_commander`) as a thread of its own that takes the seat over loopback TCP; for
 //! `nobody` one that gives no orders. What the server does itself is the flight of the light quads
 //! from the orders the seat gave, the take-off, the referee and the air.
+//!
+//! A computer commander has an advisor beside it, on a thread of its own: it never waits for it, and
+//! takes the proposals that have arrived (plans/actors.md). `--blue-advisor` and `--red-advisor`
+//! choose each computer team's: `lookahead` (the default), `none`, or a command that serves an advisor
+//! (run with `sh -c`: `towers_advisor`, `"towers_advisor --claude"`, which costs money). An advisor
+//! that dies, hangs or writes nonsense is dropped with a line in the log, and the game goes on. A
+//! person's seat runs its own advisors in the commander app.
 //!
 //! A seat changes hands during the game. A person who joins a team that a computer commands takes
 //! the seat (the computer is relieved; the person's seat starts with the orders the drones have). When
@@ -36,6 +43,7 @@ mod world;
 use glam::Vec3;
 use recreation_games::Radio;
 use recreation_towers::{Advisor, Class, Outcome, Rules, Team};
+use recreation_towers_ground::advisors::AdvisorChoice;
 use recreation_towers_ground::commander::{self, Brain};
 use recreation_towers_ground::station::Tally;
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
@@ -69,6 +77,8 @@ struct Args {
     /// A computer takes the seat that a person leaves.
     on_leave_computer: bool,
     stop_with_stdin: bool,
+    /// The advisor beside each team's computer commander.
+    advisors: [AdvisorChoice; 2],
 }
 
 fn args() -> Args {
@@ -86,6 +96,14 @@ fn args() -> Args {
         nobody: [nobody("--blue"), nobody("--red")],
         on_leave_computer: arg("--on-leave").is_none_or(|v| v != "wait"),
         stop_with_stdin: args.iter().any(|a| a == "--stop-with-stdin"),
+        advisors: ["--blue-advisor", "--red-advisor"].map(|flag| {
+            arg(flag).map_or(AdvisorChoice::Lookahead, |v| {
+                v.parse().unwrap_or_else(|e| {
+                    eprintln!("{flag}: {e}");
+                    std::process::exit(2);
+                })
+            })
+        }),
     }
 }
 
@@ -241,12 +259,13 @@ fn main() {
     // The computer commanders are seats of their own, in this process, over loopback TCP.
     let tally = Arc::new(Tally::default());
     let spawn_commander: Arc<dyn Fn(Team, Brain) + Send + Sync> = {
-        let (port_cell, tally) = (port_cell.clone(), tally.clone());
+        let (port_cell, tally, advisors) = (port_cell.clone(), tally.clone(), a.advisors.clone());
         Arc::new(move |team, brain| {
             let (addr, tally) = (format!("127.0.0.1:{}", port_cell.load(Ordering::SeqCst)), tally.clone());
+            let advisor = advisors[team.index()].clone();
             std::thread::Builder::new()
                 .name(format!("commander-{team:?}"))
-                .spawn(move || commander::run(&addr, team, brain, Some(tally), &AtomicBool::new(false)))
+                .spawn(move || commander::run_with(&addr, team, brain, Some(tally), &AtomicBool::new(false), &advisor))
                 .expect("a commander thread");
         })
     };
@@ -406,6 +425,8 @@ fn main() {
             println!("RESULT in_agent={in_agent}");
             println!("RESULT refused={refused}");
             println!("RESULT crashes={}", w.crashes);
+            println!("RESULT proposals={}", tally.proposals());
+            println!("RESULT proposals_taken={}", tally.taken());
             println!("RESULT taken_blue={}", w.taken[0]);
             println!("RESULT taken_red={}", w.taken[1]);
             let light: Vec<usize> = w.of_class(Class::Light).collect();

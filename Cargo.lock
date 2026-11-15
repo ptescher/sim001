@@ -8070,6 +8070,8 @@ dependencies = [
  "cognition_plan",
  "glam",
  "recreation_towers",
+ "serde",
+ "serde_json",
  "simulation_sitl",
 ]
 

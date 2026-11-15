@@ -11,6 +11,8 @@
 //! through a [`Transport`]: TCP to the simulated ground radio, or a serial line to a real one.
 //! What it knows of the game is a [`Situation`].
 
+pub mod advisors;
+pub mod claude;
 pub mod commander;
 pub mod map;
 pub mod seat;

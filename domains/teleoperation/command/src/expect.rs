@@ -83,6 +83,9 @@ const EVENTS: &[&str] = &[
     "the commander clicks the camera of the second Blue drone",
     "the game runs for 2 minutes",
     "the game runs for 3 minutes",
+    "the time of the proposal is over",
+    "the commander clicks the proposal",
+    "the commander presses the accept key",
     "the commander waits for the battlefield",
     "the commander clicks the west tower on the minimap",
     "the commander pans the battlefield to the front",
@@ -107,6 +110,7 @@ const OBSERVED: &[&str] = &[
     "the order of the second Blue drone",
     "the order of the third Blue drone",
     "the flight of the first Blue drone",
+    "the proposal in the ADVISOR panel",
     "the camera feeds in the app",
     "the drones that the app flies in AGENT mode",
     "the position reports that the app heard from its drones",
@@ -274,7 +278,61 @@ struct AppDriver {
     suite: suite_budget::Budget,
 }
 
+/// A proposal as the spec words it: `the west tower for the first Blue drone, 6 points`, and `, good
+/// for 3 seconds` if it is good for less than 20 s.
+fn proposal_words(p: &recreation_towers::Proposal, view: &TeamView) -> String {
+    let Order::Take(t) = p.order else { return "something else".into() };
+    let life = p.until - p.made;
+    format!(
+        "the {} tower for {}, {:.0} points{}",
+        view.towers[t].name,
+        DRONES.get(p.drone).map_or("another drone", |d| d),
+        p.gain,
+        if life < 20.0 { format!(", good for {life:.0} seconds") } else { String::new() }
+    )
+}
+
+/// What a spec's proposal says: the tower, the drone, the points and how long it is good for (s).
+fn proposal_of(words: &str) -> Option<(&str, usize, f32, f32)> {
+    let rest = words.strip_prefix("the ")?;
+    let (tower, rest) = rest.split_once(" tower for ")?;
+    let k = DRONES.iter().position(|d| rest.starts_with(&d.to_lowercase()))?;
+    let (_, rest) = rest.split_once(", ")?;
+    let (points, rest) = rest.split_once(" points")?;
+    let life = rest
+        .strip_prefix(", good for ")
+        .and_then(|r| r.strip_suffix(" seconds"))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(60.0);
+    Some((tower, k, points.parse().ok()?, life))
+}
+
 impl AppDriver {
+    /// A proposal reaches the app, as if an advisor had sent it (`words` as in the spec): the
+    /// ADVISOR panel lists it until its time is over.
+    fn propose(&self, words: &str) -> Result<(), String> {
+        let (tower, drone, gain, life) = proposal_of(words).ok_or_else(|| format!("no proposal like {words}"))?;
+        let tower = tower.to_string();
+        let ok = self.call(move |v, _, cx| {
+            let view = v.seat.state().view.clone()?;
+            let t = view.towers.iter().position(|x| x.name == tower)?;
+            v.seat.offer([recreation_towers::Proposal {
+                drone,
+                order: Order::Take(t),
+                queue: vec![],
+                gain,
+                made: view.time,
+                until: view.time + life,
+                why: format!("Send drone {} to the {tower} tower: about {gain:.0} points.", drone + 1),
+            }]);
+            cx.notify();
+            Some(())
+        })?;
+        ok.ok_or_else(|| format!("the app has no map or no tower for {words}"))?;
+        std::thread::sleep(Duration::from_millis(200));
+        Ok(())
+    }
+
     /// Runs `f` on the UI thread, with the app's view, and returns what it returns.
     fn call<T: Send + 'static>(
         &self,
@@ -620,6 +678,9 @@ impl Driver for AppDriver {
         if is(subject, "the battlefield picture in the app") && text(value) == "live" {
             return if self.battlefield_live()? { Ok(()) } else { Err("the 3D view sent no picture".into()) };
         }
+        if is(subject, "the proposal in the ADVISOR panel") {
+            return self.propose(&text(value));
+        }
         if is(subject, "the order of the first Blue drone") && text(value) == "circle a point" {
             // As a commander does: B1 selected, and a circle drawn.
             self.click_button("drone-0")?;
@@ -677,7 +738,8 @@ impl Driver for AppDriver {
 
     fn can_arrange(&self, var: &Variable, value: &Value) -> bool {
         let subject = var.subject.as_str();
-        START.iter().any(|(s, v)| is(subject, s) && text(value) == v.to_lowercase())
+        is(subject, "the proposal in the ADVISOR panel") && proposal_of(&text(value)).is_some()
+            || START.iter().any(|(s, v)| is(subject, s) && text(value) == v.to_lowercase())
             || is(subject, "the selected drone")
             || CAMERA.iter().any(|c| is(subject, c))
             || (is(subject, "the first Blue drone") && text(value) == "in the west circle")
@@ -745,6 +807,9 @@ impl Driver for AppDriver {
                 self.until(ANSWER, "the server's answer to LOW", |v| v.drones.first().is_some_and(|d| d.low))
             }
             "the commander clicks the camera of the second blue drone" => self.click_button("camera-1"),
+            // The panel's first line is the proposal that gains most.
+            "the commander clicks the proposal" => self.click_button("proposal-0"),
+            "the commander presses the accept key" => self.press_key("y"),
             // The check that follows waits for the picture.
             "the commander waits for the battlefield" => Ok(()),
             "the commander clicks the west tower on the minimap" => self.click_minimap_tower("west"),
@@ -810,17 +875,26 @@ impl Driver for AppDriver {
             "the commander centres the battlefield on the selected drone" => self.press_key("space"),
             "the commander draws a circle of 120 m on the battlefield" => self.draw_circle(120.0),
             "the commander adds a point to the route of the selected drone" => self.add_route_point(),
+            // The game's clock runs past the time of the proposal that the panel lists.
+            "the time of the proposal is over" => {
+                let (now, until) = self.call(|v, _, _| {
+                    let s = v.seat.state();
+                    let now = s.view.as_ref().map_or(0.0, |v| v.time);
+                    (now, s.proposals.iter().map(|p| p.until).fold(now, f32::max))
+                })?;
+                self.until(GAME, "the proposal's time to be over", move |v| v.time > until + 1.0 || v.time < now)
+            }
             e @ ("the game runs for 2 minutes" | "the game runs for 3 minutes") => {
-                let minutes: f32 = if e.ends_with("2 minutes") { 2.0 } else { 3.0 };
+                let seconds: f32 = if e.ends_with("2 minutes") { 120.0 } else { 180.0 };
                 let from = self.view()?.map_or(0.0, |v| v.time);
                 let end = Instant::now() + self.suite.cap(GAME);
                 loop {
                     let v = self.view()?;
-                    if v.as_ref().is_some_and(|v| v.time >= from + 60.0 * minutes || v.outcome.is_some()) {
+                    if v.as_ref().is_some_and(|v| v.time >= from + seconds || v.outcome.is_some()) {
                         return Ok(());
                     }
                     if Instant::now() > end {
-                        return Err(format!("the game's clock did not run for {minutes} minutes"));
+                        return Err(format!("the game's clock did not run for {seconds} s"));
                     }
                     std::thread::sleep(Duration::from_millis(200));
                 }
@@ -936,6 +1010,16 @@ impl Driver for AppDriver {
                 std::thread::sleep(Duration::from_millis(250));
             }
         }
+        if lower == "the proposal in the advisor panel" {
+            // What the panel lists first: the same list that it draws.
+            let shown = self.call(|v, _, _| {
+                let s = v.seat.state();
+                let view = s.view.clone()?;
+                let live = recreation_towers_ground::advisors::listed(&s.proposals, &view);
+                live.first().map(|p| proposal_words(p, &view))
+            })?;
+            return Ok(Value::from(shown.unwrap_or_else(|| "none".into())));
+        }
         let (status, view, selected) = self.call(|v, _, _| {
             let s = v.seat.state();
             (s.status.clone(), s.view.clone(), v.selected.first().copied())
@@ -1001,6 +1085,7 @@ impl Driver for AppDriver {
                     || is(&v.subject, "the flight of the first Blue drone")
                     || is(&v.subject, "the points in the route of the first Blue drone")
                     || is(&v.subject, "the battlefield picture in the app")
+                    || is(&v.subject, "the proposal in the ADVISOR panel")
             }
             Need::Set(v) => is(&v.subject, "the selected drone") || CAMERA.iter().any(|c| is(&v.subject, c)),
             Need::Perform(e) => EVENTS.iter().any(|s| is(&e.text, s)),
@@ -1161,5 +1246,25 @@ mod room_tests {
         let near = edge - glam::Vec2::new(0.0, 100.0);
         assert!(map.mountain_height(near) < 1.0, "the centre itself is on the field");
         assert!(!room_to_circle(&map, near, 120.0), "but a circle round it reaches the mountains");
+    }
+}
+
+#[cfg(test)]
+mod proposal_tests {
+    use super::*;
+
+    #[test]
+    fn a_proposal_is_worded_as_the_spec_words_it_and_read_back() {
+        assert_eq!(
+            proposal_of("the west tower for the first blue drone, 6 points"),
+            Some(("west", 0, 6.0, 60.0)),
+            "a proposal is good for a minute unless the spec says"
+        );
+        assert_eq!(
+            proposal_of("the west tower for the first blue drone, 6 points, good for 3 seconds"),
+            Some(("west", 0, 6.0, 3.0))
+        );
+        assert_eq!(proposal_of("none"), None);
+        assert_eq!(proposal_of("the west tower for the sixth blue drone, 6 points"), None);
     }
 }
