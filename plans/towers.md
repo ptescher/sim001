@@ -50,6 +50,45 @@ There is no fighting in version 1: a team keeps the other out of a tower by bein
 - The seat protocol carries `low` with an order, and the drone's `low` in the map. LOW (or `L`) in
   the app toggles it for the selected drone.
 
+## Tree strikes (2026-11-14)
+
+`towers_server` prints, for each crash, a `crashinfo:` line (the drone, its order, where it was, the
+tree it hit and how far its middle was from the trunk) and the last 10 s of the drone at 10 Hz
+(`track`: height, speed, bank, distance from the tower and from the clearing's edge, the leg the
+ground sends for its order, the executor's `AG_PLAN`, `AG_ENV` and `AG_FALL`, the nearest other
+drone, and how long it has been out of contact). 33 crashes in 14 games (2.4 a game; one game in 14
+had none) fell into these, by what the tracks show:
+
+| Cause | Crashes | What the track shows |
+| --- | --- | --- |
+| Out of contact: the plan ran out | 9 | A drone that takes an enemy tower is in its radio shadow (160 to 200 m, past the 80 m clearing), where no plan reaches it unless a friend relays. A plan was good for 3 s; then the executor loiters round the point where it ran out (`AG_FALL` 1), a circle of 50 m round a drone that is already 40 to 50 m out: it reaches 90 to 107 m from the tower, 12 to 17 s later, into the trees |
+| The heavy drone loses control | 11 | The T2 Cruza cruises at 17 m/s and its airspeed minimum is 13: at the 50 degrees of bank that `t1s.parm` allows, the stall speed is 15 m/s. A step in the roll it is asked for (an order that changes, a separation escape, the entry to a circle) overshoots to 70 or 80 degrees (a standard drone: 53 at most) and ends in a spiral dive, in the clearing or on a lane |
+| The take-off after a respawn | 9 | "Hard impact" at 21 m/s at the base, 15 to 40 s after the drone was put back. Every take-off dives in the forward transition (pitch -33 degrees at 9 m/s) and comes out of it; a respawned one did not (9 of 33 in the first 14 games, 5 of 24 in the next, then 1 in 16 and none in 16 games of the old code on a quieter machine: it looks like the machine's load, not the drone). The pack had flown (17.4 V at rest, 15.0 V under load at the transition) and is full again now, which is right whatever the cause; the dive itself is not found out |
+| An enemy in the circle | 4 (and the cause of some heavy ones) | Red and Blue take the same tower going round opposite ways (one comes from the south, the other from the north), so they meet head on in one circle, inside the envelope's separation zone (4 m and its buffer of 3 m). The escape takes the drone out of the circle; 10 of the 11 drones that had another within 12 m in the last 10 s had an enemy |
+
+What was changed, and what it did (interleaved games, old code against new, 16 each: crashes in 16
+games went from 16 to 9, and the games without one from 6 to 8; the numbers are in the pull request):
+
+- The plans the ground sends are good for the rest of the game (`towers_ground::plan_ttl`), not 3 s:
+  no crash of a drone out of contact in the 16 games (9 in 16 of the old code). Their standing plan
+  (home after 45 s) is not what takes over: `AG_FALL` read 1 and the plan id in `AG_PLAN` did not
+  change when the plan ran out, so the executor's standing plan did not take over (not found out). The
+  standing plan of a drone that takes a tower, or circles low, is the circle over the trees
+  (`standing_for`), so that it does not fly home low if it ever does.
+- The two teams circle a tower on rings 10 m apart (`flight::orbit_radius`: Blue 40 m, Red 50 m).
+- A drone below 30 m in the clearing of the tower it takes stays down when it strays more than 60 m
+  from the tower, and does not climb out (`flight::leg`).
+- The heavy drone's bank is held to 45 degrees (`ROLL_LIMIT_DEG` by `PARAM_SET`, as the floor is). It
+  did not stop the heavy drone's crashes (7 of the 9 left).
+- A crashed drone is put back with a full pack (`World::radio`): right in itself, and not shown to
+  be what made the respawned ones dive.
+
+What is left is the heavy drone (T2 Cruza): 7 of the 9 crashes, all with a bank of 72 to 83 degrees
+at the end, most with another drone within 16 m in the 10 s before (the envelope's separation
+escape: a climb at pitch +25 degrees on a throttle of 0.27, in a bank of 45) on a lane, 350 to 735
+m from the tower, at the lane's edge. That is the escape in `cognition_executor`'s safety
+envelope and the roll loop of `ardupilot/t2-cruza.parm`, which this work does not change.
+
 ## The drones' cameras
 
 `towers_view` (`domains/recreation/towers_view`) is the 3D view of a game: a spectator seat on the

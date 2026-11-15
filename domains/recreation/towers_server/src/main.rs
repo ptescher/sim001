@@ -349,6 +349,13 @@ fn main() {
                 );
                 std::process::exit(2);
             }
+            // The executors' reports, for the track dump of a crash.
+            {
+                let status = tally.status.lock().unwrap();
+                for (i, st) in status.iter().enumerate().take(w.env.len()) {
+                    w.env[i] = *st;
+                }
+            }
             // GO waits for the people.
             if !seats.people_seated() && !w.started() {
                 w.go = w.go.max(w.now() + 1.0);

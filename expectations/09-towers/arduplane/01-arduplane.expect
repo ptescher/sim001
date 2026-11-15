@@ -6,8 +6,8 @@ Feature: Playing Towers with ArduPilot drones
   At GO, each drone arms at its base and climbs in QHOVER. At 15 m it changes to FBWA, and then
   the server switches it to [[AGENT mode]]. A light drone is a quadcopter with no wing, so it
   does not change to FBWA: at 3 m the server flies it in QLOITER, with the sticks of its radio. From then on, the server sends each drone the plan
-  for its order about once each second. To take a tower, a drone circles it 40 m out, inside its
-  circle.
+  for its order about once each second. To take a tower, a drone circles it 40 m out (Red, 50 m, so
+  that the two teams do not meet head on in one circle), inside its circle.
 
   Each team has a [[seat]]. A computer commander or a person at the commander app sits in it: the
   same seat, with the same messages. The seat is the team's ground station. The server tells it

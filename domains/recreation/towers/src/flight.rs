@@ -3,11 +3,22 @@
 //! flies drones for the game (a headless arena) uses the same numbers.
 
 use crate::Team;
-use crate::map::{LaneName, Map};
+use crate::map::{LaneName, Map, TOWER_CLEARING};
 use glam::Vec2;
 
 /// How far out a drone circles what it is sent to (m): inside a tower's circle of 60 m.
 pub const ORBIT_RADIUS: f32 = 40.0;
+/// Red circles this much wider than Blue (m). The two teams meet at a tower they both want, and
+/// drones that circle the same circle meet head on (one team comes from the south, the other from
+/// the north: they go round opposite ways) inside the envelope's separation zone (a drone in the
+/// way is escaped from, and a low drone that escapes leaves the clearing). Rings this far apart
+/// do not meet unless a drone is well off its circle.
+pub const RED_RING: f32 = 10.0;
+
+/// How far out a drone of `team` circles (m): its own ring.
+pub fn orbit_radius(team: Team) -> f32 {
+    ORBIT_RADIUS + if team == Team::Red { RED_RING } else { 0.0 }
+}
 
 /// The height drone `k` of `team` circles at (m): each its own, 4 m apart, so that drones at the
 /// same tower are apart above and below. Well over the trees (20 to 30 m): a drone dips 15 m or
@@ -34,8 +45,20 @@ const STAYS: f32 = 75.0;
 /// (m), so that the way runs along it: the drone flies on into the circle and is not turned
 /// across the lane. The circle stays inside the tower's circle (60 m) with its radius of 40 m.
 const TANGENT: f32 = 15.0;
+/// The circle and its offset stay inside this far from the tower (m): the tower's circle is 60 m.
+const INSIDE: f32 = 55.0;
+
+/// How far to the right of the end of its way the circle of `team` is (m): at most [`TANGENT`], and
+/// less for the wider ring, so that the whole circle is inside the tower's circle.
+fn tangent(team: Team) -> f32 {
+    TANGENT.min(INSIDE - orbit_radius(team))
+}
 /// Above this height (m) a drone is clear of the trees and flies on.
 const CLEAR: f32 = 45.0;
+/// A drone that has come down below this height (m) in the clearing of a tower it takes stays
+/// down while it is in the clearing, however far it strays from its circle: to climb out in a hard
+/// turn, among the trees, is how it was lost.
+const DOWN: f32 = 30.0;
 
 /// How a drone gets to its order: straight over the forest, or low along the lanes.
 #[derive(Clone, Debug, PartialEq)]
@@ -93,11 +116,13 @@ pub struct Leg {
 /// The leg of drone `k` of `team`, at `pos` and `alt` now, for `plan`.
 pub fn leg(map: &Map, plan: &Plan, team: Team, k: usize, pos: Vec2, alt: f32) -> Leg {
     let high = orbit_height(team, k);
-    let circle = |point: Vec2, alt: f32| Leg { orbit: true, point, alt, radius: ORBIT_RADIUS };
+    let radius = orbit_radius(team);
+    let circle = |point: Vec2, alt: f32| Leg { orbit: true, point, alt, radius };
     if !plan.low || plan.path.is_empty() {
         // A drone that came over the forest to circle low comes down once it is on its circle,
         // in the clearing, and stays down.
-        if plan.circle_low && pos.distance(plan.target) <= ORBIT_RADIUS + 20.0 {
+        let near = pos.distance(plan.target);
+        if plan.circle_low && (near <= radius + 20.0 || (alt < DOWN && near <= TOWER_CLEARING)) {
             return circle(plan.target, low_height(team, k));
         }
         // A drone that is still below the treetops (it has just taken off, or it was flying low)
@@ -120,11 +145,11 @@ pub fn leg(map: &Map, plan: &Plan, team: Team, k: usize, pos: Vec2, alt: f32) ->
     }
     let end = *plan.path.last().unwrap();
     // Arrived: well inside the clearing; and once it circles, it stays on the circle.
-    let beside_of = |c: Vec2| c + right_of(&plan.path) * TANGENT;
+    let beside_of = |c: Vec2| c + right_of(&plan.path) * tangent(team);
     let circling = pos.distance(end) <= STAYS
-        && pos.distance(beside_of(if plan.circle_low { plan.target } else { plan.climb_at })) <= ORBIT_RADIUS + 20.0;
+        && pos.distance(beside_of(if plan.circle_low { plan.target } else { plan.climb_at })) <= radius + 20.0;
     if pos.distance(end) <= ARRIVED || circling {
-        let beside = |c: Vec2| c + right_of(&plan.path) * TANGENT;
+        let beside = |c: Vec2| c + right_of(&plan.path) * tangent(team);
         return if plan.circle_low {
             circle(beside(plan.target), low_height(team, k))
         } else if alt < CLEAR {
@@ -214,6 +239,47 @@ mod tests {
         heights.sort_by(f32::total_cmp);
         assert!(heights.windows(2).all(|w| w[1] - w[0] >= 0.3), "{heights:?}");
         assert!(heights[0] >= 16.0 && heights[2 * n - 1] < rules.circle_ceiling, "{heights:?}");
+    }
+
+    #[test]
+    fn the_two_teams_circle_a_tower_on_rings_that_keep_them_out_of_each_others_separation_zone() {
+        // The executor's separation zone: 4 m and the buffer of 3 m (`AGENT_SEP`), both ways. Red
+        // and Blue go round a tower they both take in opposite directions, so on one circle they
+        // meet head on and the envelope escapes (and a low drone that escapes leaves the clearing).
+        let zone = 4.0 + 3.0;
+        let (blue, red) = (orbit_radius(Team::Blue), orbit_radius(Team::Red));
+        assert!(red - blue >= zone + 3.0, "rings {blue} and {red} m");
+        // Each ring, with the circle's offset of a lane approach, is inside the tower's circle of 60
+        // m, and a drone that is 25 m off it is still in the clearing.
+        let rules = Rules::default();
+        for t in Team::BOTH {
+            assert!(orbit_radius(t) + tangent(t) <= rules.circle_radius - 5.0, "{t:?}");
+            assert!(orbit_radius(t) + tangent(t) + 25.0 <= TOWER_CLEARING, "{t:?}");
+            // And the executor can fly it: at least the turn radius of a plane at 18 m/s and 85 % of
+            // a 50 degree bank, with a tenth to spare (`cognition_executor`'s `orbit_radius`).
+            assert!(orbit_radius(t) >= 1.1 * 18.0 * 18.0 / (9.80665 * (0.85f32 * 50.0).to_radians().tan()) - 1.0);
+        }
+    }
+
+    #[test]
+    fn a_low_drone_that_strays_from_its_circle_in_the_clearing_stays_down_and_does_not_climb_out() {
+        let m = map();
+        let p = take(&m, m.bases[0], m.towers[1], false);
+        for team in Team::BOTH {
+            for k in 0..5 {
+                // 65 to 79 m from the tower, under the treetops, in its clearing: the circle's own
+                // limit (60 m) once sent it back up to its high height, in a hard turn among the
+                // trees.
+                for d in [65.0, 72.0, 79.0] {
+                    let l = leg(&m, &p, team, k, m.towers[1] + Vec2::new(d, 0.0), 18.0);
+                    assert!(l.orbit && l.point == m.towers[1], "{l:?}");
+                    assert_eq!(l.alt, low_height(team, k), "{team:?} {k} {d}");
+                }
+                // High up, the same distance: it flies on at its height until it is on its circle.
+                let l = leg(&m, &p, team, k, m.towers[1] + Vec2::new(76.0, 0.0), 60.0);
+                assert_eq!(l.alt, orbit_height(team, k));
+            }
+        }
     }
 
     #[test]

@@ -17,6 +17,7 @@ use recreation_towers_ground::{drone_name, leg_for};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
 use simulation_physics::{Environment, FlightState, Phase, Start, step};
+use std::collections::VecDeque;
 use std::time::Instant;
 
 /// A new pilot's sticks are the drone's this long (wall seconds) after the pilot took the seat: the
@@ -28,6 +29,36 @@ const MODE_PULSE: f32 = 1.5;
 
 /// A crashed drone is back at its base this long after the crash (s).
 pub const RESPAWN: f32 = 15.0;
+/// The track dump of a crash holds this many seconds of the drone before it, at `TRAIL_EVERY`.
+const TRAIL_SECONDS: f32 = 10.0;
+const TRAIL_EVERY: f32 = 0.1;
+/// The plan's leg shown in a sample is worked out this often (s): it is the plan the ground sends.
+const LEG_EVERY: f32 = 0.5;
+
+/// What a drone was doing at one moment: a line of a crash's track dump.
+#[derive(Clone, Debug)]
+pub struct Sample {
+    pub t: f32,
+    pub at: Vec2,
+    pub alt: f32,
+    pub vel: Vec2,
+    pub airspeed: f32,
+    pub roll: f32,
+    pub pitch: f32,
+    pub heading: f32,
+    /// The executor's `AG_PLAN`, `AG_ENV` and `AG_FALL` (-1: not said).
+    pub env: [i32; 3],
+    /// The leg of the plan the ground sends for its order: orbit or go, the point, height, radius.
+    pub leg: Option<recreation_towers::flight::Leg>,
+    pub order: Option<Order>,
+    pub low: bool,
+    /// The nearest other flying drone: its number, how far across, and how far above (m, below if
+    /// negative). A separation escape of the envelope needs one near.
+    pub near: Option<(usize, f32, f32)>,
+    /// How long it has been out of contact (the radio shadow of an enemy tower), s; 0 in contact.
+    pub silent: f32,
+}
+
 /// A drone this far from where it started (m) has left its base.
 const AWAY: f32 = 100.0;
 
@@ -172,6 +203,12 @@ pub struct World {
     /// GO: when the drones' own time (drone 0's, s) gets here, the game starts.
     pub go: f64,
     pub crashes: u32,
+    /// The last seconds of each drone, for the track dump of a crash, and when it was last added to.
+    trail: Vec<VecDeque<Sample>>,
+    next_trail: Vec<f64>,
+    leg: Vec<(f32, Option<recreation_towers::flight::Leg>)>,
+    /// What each drone's executor reports (`AG_PLAN`, `AG_ENV`, `AG_FALL`), set by the server.
+    pub env: Vec<[i32; 3]>,
     /// Towers each team took (Blue's, Red's).
     pub taken: [u32; 2],
     /// When each drone was first 100 m from where it started (the game's time, s).
@@ -213,6 +250,10 @@ impl World {
             near: vec![],
             go,
             crashes: 0,
+            trail: vec![VecDeque::new(); n],
+            next_trail: vec![0.0; n],
+            leg: vec![(f32::MIN, None); n],
+            env: vec![[-1; 3]; n],
             taken: [0; 2],
             away: vec![None; n],
             top_speed: vec![0.0; n],
@@ -262,8 +303,9 @@ impl World {
             &self.near,
             dt,
         );
-        let radio = self.radio(i, dt);
         self.sync(i);
+        self.record(i);
+        let radio = self.radio(i, dt);
         if i == 0 {
             // Before GO the game stands still, but the drones still hear their orders (and the
             // commander sees them).
@@ -283,6 +325,142 @@ impl World {
             }
         }
         radio
+    }
+
+    /// Adds a sample of drone `i` to its trail, ten times a second of the game.
+    fn record(&mut self, i: usize) {
+        let s = &self.planes[i];
+        let crashed = s.phase == Phase::Crashed;
+        if (crashed && self.down_for[i] > 0.0) || (!crashed && !airborne(s)) {
+            self.trail[i].clear();
+            return;
+        }
+        // The step that crashes the drone is the last sample, whenever it falls.
+        if s.time < self.next_trail[i] && !(crashed && self.down_for[i] == 0.0) {
+            return;
+        }
+        self.next_trail[i] = s.time + TRAIL_EVERY as f64;
+        let t = self.game.time;
+        if t - self.leg[i].0 >= LEG_EVERY || t < self.leg[i].0 {
+            let order = self.orders[i].unwrap_or(Order::Home);
+            let leg = (self.game.drones[i].phase == Referee::Flying && !self.is_quad(i))
+                .then(|| leg_for(&self.game, i, order, self.lows[i]));
+            self.leg[i] = (t, leg);
+        }
+        let (roll, pitch, heading) = {
+            let (r, p, y) = simulation_physics::euler(s.rot);
+            (r.to_degrees(), p.to_degrees(), y.to_degrees())
+        };
+        let (at, alt) = to_field(s.pos);
+        let near = (0..self.game.drones.len())
+            .filter(|&j| j != i && self.game.drones[j].phase == Referee::Flying)
+            .map(|j| {
+                let d = &self.game.drones[j];
+                (j, d.at.distance(at), d.alt - alt)
+            })
+            .min_by(|a, b| a.1.hypot(a.2).total_cmp(&b.1.hypot(b.2)));
+        let sample = Sample {
+            silent: self.game.silent[i],
+            near,
+            t,
+            at,
+            alt,
+            vel: vel_to_field(s.vel),
+            airspeed: s.airspeed,
+            roll,
+            pitch,
+            heading,
+            env: self.env[i],
+            leg: self.leg[i].1,
+            order: self.orders[i],
+            low: self.lows[i],
+        };
+        let trail = &mut self.trail[i];
+        trail.push_back(sample);
+        while trail.len() as f32 * TRAIL_EVERY > TRAIL_SECONDS {
+            trail.pop_front();
+        }
+    }
+
+    fn is_quad(&self, i: usize) -> bool {
+        self.game.drones[i].class == Class::Light
+    }
+
+    /// The track dump of drone `i`'s crash: how it was flying, and the tree it hit.
+    fn dump_crash(&self, i: usize) {
+        let d = &self.game.drones[i];
+        let (at, alt) = to_field(self.planes[i].pos);
+        let tree = self
+            .near
+            .iter()
+            .filter(|o| o.top > self.planes[i].pos.y)
+            .map(|o| {
+                let (tat, _) = to_field(o.pos);
+                (tat.distance(at) - o.radius, tat, o.top, o.radius)
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        let towers: Vec<String> =
+            self.game.towers.iter().enumerate().map(|(k, t)| format!("{k}:{:.0}", t.at.distance(at))).collect();
+        let clearing = self.game.map.nearest_clearing(at);
+        println!(
+            "crashinfo: drone {i} {:?} {} t {:.1} reason {:?} order {:?} low {} at ({:.0}, {:.0}) alt {alt:.1} | tower dist {} | nearest clearing at ({:.0}, {:.0}) r {:.0} dist {:.0} in_clearing {} open {} | tree {}",
+            d.class,
+            drone_name(&self.game.rules, i),
+            self.game.time,
+            self.planes[i].crash_reason,
+            self.orders[i],
+            self.lows[i],
+            at.x,
+            at.y,
+            towers.join(" "),
+            clearing.at.x,
+            clearing.at.y,
+            clearing.radius,
+            clearing.at.distance(at),
+            self.game.map.in_clearing(at),
+            self.game.map.open(at),
+            tree.map_or("none".into(), |(gap, tat, top, r)| format!(
+                "gap {gap:.1} m at ({:.0}, {:.0}) top {top:.1} r {r:.1}",
+                tat.x, tat.y
+            )),
+        );
+        for s in &self.trail[i] {
+            let tower = match s.order {
+                Some(Order::Take(k)) => Some((k, self.game.towers[k].at)),
+                _ => None,
+            };
+            let clearing = self.game.map.nearest_clearing(s.at);
+            println!(
+                "track {i} t {:.1} at {:.0} {:.0} alt {:.1} gs {:.1} as {:.1} vel {:.1} {:.1} roll {:.0} pitch {:.0} hdg {:.0} env {:?} order {:?} low {} tower {} leg {} clearing_edge {:.0} near {} silent {:.1}",
+                s.t,
+                s.at.x,
+                s.at.y,
+                s.alt,
+                s.vel.length(),
+                s.airspeed,
+                s.vel.x,
+                s.vel.y,
+                s.roll,
+                s.pitch,
+                s.heading,
+                s.env,
+                s.order,
+                s.low,
+                tower.map_or("-".into(), |(k, p)| format!("{k} d {:.0}", p.distance(s.at))),
+                s.leg.map_or("-".into(), |l| format!(
+                    "{} to ({:.0}, {:.0}) alt {:.1} r {:.0} dist {:.0}",
+                    if l.orbit { "ORBIT" } else { "GO" },
+                    l.point.x,
+                    l.point.y,
+                    l.alt,
+                    l.radius,
+                    l.point.distance(s.at)
+                )),
+                clearing.radius - clearing.at.distance(s.at),
+                s.near.map_or("-".into(), |(j, across, above)| format!("{j} {across:.0} {above:+.0}")),
+                s.silent,
+            );
+        }
     }
 
     /// The radio reaches drone `i` now: the air carries its frames. A drone in a radio shadow, or
@@ -394,6 +572,7 @@ impl World {
                 self.crashes += 1;
                 let (at, alt) = to_field(self.planes[i].pos);
                 println!("crash: drone {i}: {} at {at} (north, east), {alt:.1} m", self.planes[i].crash_reason);
+                self.dump_crash(i);
                 // What it was doing, and who was near: to tell a mid-air from a tree, a drone in a
                 // shadow from one in contact.
                 let here = glam::Vec3::new(at.x, at.y, alt);
@@ -420,6 +599,13 @@ impl World {
                 self.down_for[i] = 0.0;
                 let start = World::start_of(&self.game, i);
                 self.planes[i].reset_to_hand(p, &start);
+                // Back at its base it is as it was at the start of the game: with its battery full
+                // (the plane's own pack, which sags: 17.4 V at rest and 15.0 V under load at the
+                // take-off transition after 400 mAh spent). "Hard impact" at the base after a
+                // respawn was 9 of 33 crashes in 14 games (and 1 in 16 later, none with the old
+                // code in 16 quieter ones): the take-off transition dives (pitch -33 degrees at 9
+                // m/s) and a respawned drone did not always come out of it. Not shown to be the pack.
+                self.planes[i].recharge();
                 self.preflight[i].reset();
             }
             return off;
@@ -729,13 +915,16 @@ mod tests {
         w.game.drones[red].alt = 60.0;
         w.game.drones[red].phase = Referee::Flying;
         let plan = plan_for(&w.game, red, Order::Take(west), false, home, 7);
-        assert_eq!((plan.primitive, plan.radius, plan.id, plan.alt), (Primitive::Orbit, flight::ORBIT_RADIUS, 7, 67.0));
+        assert_eq!(
+            (plan.primitive, plan.radius, plan.id, plan.alt),
+            (Primitive::Orbit, flight::orbit_radius(Team::Red), 7, 67.0)
+        );
         assert!(plan.radius < rules.circle_radius);
         let (n, e) = cognition_plan::to_local(home.0, home.1, plan.lat, plan.lon);
         let at = w.game.towers[west].at;
         assert!((n - at.x).abs() < 0.1 && (e - at.y).abs() < 0.1, "{n} {e}");
         // On its circle at the tower it comes down below the treetops: only a low drone takes it.
-        w.game.drones[red].at = at + Vec2::new(flight::ORBIT_RADIUS, 0.0);
+        w.game.drones[red].at = at + Vec2::new(flight::orbit_radius(Team::Red), 0.0);
         let plan = plan_for(&w.game, red, Order::Take(west), false, home, 8);
         assert_eq!(plan.alt, flight::low_height(Team::Red, 1));
         assert!(plan.alt < rules.circle_ceiling);
@@ -1016,6 +1205,18 @@ mod tests {
             w.step_drone(0, &pwm, 0.0025);
         }
         assert_eq!(w.planes[0].phase, Phase::Crashed, "{:?}", w.planes[0].crash_reason);
+    }
+
+    #[test]
+    fn a_crashed_drone_is_back_at_its_base_with_a_full_battery() {
+        let mut w = world();
+        w.planes[0].phase = Phase::Crashed;
+        w.planes[0].used_mah = 600.0;
+        // Down for as long as it takes to be brought back.
+        w.down_for[0] = RESPAWN;
+        w.radio(0, 0.05);
+        assert_ne!(w.planes[0].phase, Phase::Crashed);
+        assert_eq!(w.planes[0].used_mah, 0.0);
     }
 
     #[test]
