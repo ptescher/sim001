@@ -228,6 +228,27 @@ server.
 5. **A person flies a unit.** A `Unit` seat. The server gives that drone's radio channels to the
    seat: the sim (or a TX15 on CRSF) joins a game as one drone, with the drone's camera and the
    mission on its HUD. The pilot sees only what the drone sees. Take-off is the pilot's.
+   **Results (a person flies a unit; branch `actors-pilot`).** Done: the seat, the station leaving a
+   piloted drone alone, the mission, a cockpit and a scripted pilot (`domains/recreation/README.md`,
+   "A person flies a unit"). `Join::Unit { team, drone }`, `ToServer::Sticks`, `ToSeat::Piloted`,
+   `ToSeat::Mission`. The server's `Preflight` still takes the drone off; the pilot's own take-off is not
+   done. Sticks silent for 2 s or the seat gone gives the drone back. A pilot joining a drone already in
+   AGENT takes it out of AGENT by moving the radio's mode switch off FBWA for 1.5 game seconds.
+   On SITL (one game at 10x, scripted pilot on Blue2 from 40 s of play for 25 s): the drone was in AGENT
+   0 looks while piloted (`RESULT piloted_in_agent=0`, over 5 s after take-over), the Blue station had
+   its telemetry 805 times (`piloted_mapped`), the pilot banked through 1033 degrees, saw the
+   commander's order as its mission, no mission changed while it was out of contact (29 looks out of
+   contact), and after the pilot left Blue2 was in AGENT with a plan again. Not done: the pilot's own
+   take-off, a queue shown with the next step highlighted, a check of the TX15 mapping on the radio,
+   other drones' friends in the cockpit view. The view's six-drone cap (`PLANES`, feed ports) was
+   raised to ten. The rules are tests, not expectations (`arduplane/02-pilot.expect` has the three SITL
+   ones): an expectation state that no driver of the suite shows makes every coverage plan of the
+   suite unsupported (tried, and backed out). In the suite's own run (`cargo test -p
+   recreation_towers_server --test acceptance`) only the first of the three runs (the coverage plans
+   reach one); it passed (`piloted_in_agent=0`, `piloted_mapped=1101`). The cockpit started against a
+   practice game, took the seat (server: "Blue2 is flown by a person") and held centred sticks; the
+   screen could not be captured here (a screenshot showed only the desktop) and the keys were not
+   pressed, so its picture, HUD and keys were not seen.
 6. **The quad on the wire**, so that every unit is ArduPilot behind the same radio.
 7. **The field.** The open items of `plans/unified-link.md`: the bench, a serial radio per drone,
    the field umpire. Then real and simulated drones in one game.

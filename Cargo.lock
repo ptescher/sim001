@@ -8103,6 +8103,7 @@ dependencies = [
  "bevy",
  "glam",
  "recreation_towers",
+ "recreation_towers_ground",
  "teleoperation_shared",
  "visualization_battlefield",
  "visualization_engine",

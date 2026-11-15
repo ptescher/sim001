@@ -3,6 +3,12 @@
 //! may watch a team or the whole game. Each gets what it may know, from the same moment of the game,
 //! four times a second.
 //!
+//! A pilot's seat (`Join::Unit`) is not a seat of a team: it flies one winged drone by the sticks it
+//! sends (`ToServer::Sticks`), and gets what that drone itself knows (`ToSeat::Mission`), nothing
+//! of the team's map or the truth. The seats that command are told which drones are flown by a person
+//! (`ToSeat::Piloted`), so that the team's ground station leaves them alone. When the pilot's
+//! sticks stop for `STICKS_TIMEOUT` s, or the seat goes, the drone is the computer's again.
+//!
 //! A seat changes hands during a game. A person who joins a team that a computer commands takes the
 //! seat: the computer is told it is relieved and its connection is closed. When a person's client
 //! leaves, the seat is free; if it is still free after a grace time, the server has a computer
@@ -116,14 +122,60 @@ impl Seats {
         let mut truth = Truth::of(game);
         truth.attitudes = world.planes.iter().map(|p| p.rot.to_array()).collect();
         let truth = seat::encode(&ToSeat::Truth(truth));
+        let piloted = [Team::Blue, Team::Red].map(|t| seat::encode(&ToSeat::Piloted(world.piloted(t))));
         self.clients.lock().unwrap().retain_mut(|c| match c.join {
             Join::Command(t) | Join::Compute(t) => {
-                writeln!(c.stream, "{umpire}").is_ok() && writeln!(c.stream, "{}", sites[t.index()]).is_ok()
+                writeln!(c.stream, "{umpire}").is_ok()
+                    && writeln!(c.stream, "{}", sites[t.index()]).is_ok()
+                    && writeln!(c.stream, "{}", piloted[t.index()]).is_ok()
+            }
+            Join::Unit { team, drone } => {
+                let mission = seat::encode(&ToSeat::Mission(world.mission(game.drone(team, drone))));
+                writeln!(c.stream, "{mission}").is_ok()
             }
             Join::Watch(t) => writeln!(c.stream, "{}", views[t.index()]).is_ok(),
             Join::Spectate => writeln!(c.stream, "{truth}").is_ok(),
         });
     }
+}
+
+/// A pilot's seat: it flies drone `drone` of `team` by its sticks until it goes.
+fn pilot(mut out: TcpStream, lines: impl Iterator<Item = String>, team: Team, drone: usize, shared: Shared) {
+    let Shared { clients, world, next_id, .. } = shared;
+    let id = next_id.fetch_add(1, Ordering::SeqCst);
+    let (rules, i) = {
+        let mut w = world.lock().unwrap();
+        let rules = w.game.rules;
+        if drone >= rules.drones {
+            let why = format!("{team:?} has no drone {}", drone + 1);
+            let _ = writeln!(out, "{}", seat::encode(&ToSeat::Refused(why)));
+            return;
+        }
+        let i = w.game.drone(team, drone);
+        if let Err(why) = w.claim_pilot(i, id) {
+            let _ = writeln!(out, "{}", seat::encode(&ToSeat::Refused(why)));
+            return;
+        }
+        (rules, i)
+    };
+    let join = Join::Unit { team, drone };
+    let welcome = seat::encode(&ToSeat::Welcome { join, rules, air: vec![] });
+    let Ok(stream) = out.try_clone() else {
+        world.lock().unwrap().release_pilot(i, id);
+        return;
+    };
+    if writeln!(out, "{welcome}").is_err() {
+        world.lock().unwrap().release_pilot(i, id);
+        return;
+    }
+    clients.lock().unwrap().push(Client { id, join, stream });
+    for line in lines {
+        if let Ok(ToServer::Sticks(sticks)) = seat::decode::<ToServer>(&line) {
+            world.lock().unwrap().fly(i, id, sticks);
+        }
+    }
+    clients.lock().unwrap().retain(|c| c.id != id);
+    world.lock().unwrap().release_pilot(i, id);
 }
 
 /// One seat's connection: what it is, then its orders.
@@ -136,6 +188,9 @@ fn seat(stream: TcpStream, shared: Shared) {
         return;
     };
     let ToServer::Join(join) = join else { return };
+    if let Join::Unit { team, drone } = join {
+        return pilot(out, lines, team, drone, Shared { clients, world, air, free, next_id });
+    }
     let (rules, told): (Rules, Vec<_>) = {
         let w = world.lock().unwrap();
         (w.game.rules, w.told.clone())
@@ -212,7 +267,8 @@ fn seat(stream: TcpStream, shared: Shared) {
 mod tests {
     use super::*;
     use glam::Vec2;
-    use recreation_towers::{Order, Phase};
+    use recreation_towers::seat::{STICKS_TIMEOUT, Sticks};
+    use recreation_towers::{Order, Phase, Queued};
     use recreation_towers_ground::map;
     use std::collections::BTreeSet;
     use std::sync::mpsc::{Receiver, channel};
@@ -263,8 +319,15 @@ mod tests {
                     ToSeat::Orders(_) => "Orders",
                     ToSeat::Truth(_) => "Truth",
                     ToSeat::Advice(_) => "Advice",
+                    ToSeat::Piloted(_) => "Piloted",
+                    ToSeat::Mission(_) => "Mission",
                 })
                 .collect()
+        }
+
+        fn send(&self, msg: &ToServer) {
+            let mut w = self.out.try_clone().unwrap();
+            writeln!(w, "{}", seat::encode(msg)).unwrap();
         }
 
         fn leave(self) {
@@ -322,7 +385,7 @@ mod tests {
         }
         spectator.wait("the truth", |m| m.iter().any(|m| matches!(m, ToSeat::Truth(_))));
         assert_eq!(person.kinds(), computer.kinds(), "the same kind of messages");
-        assert_eq!(person.kinds(), ["Orders", "Sites", "Umpire", "Welcome"].into());
+        assert_eq!(person.kinds(), ["Orders", "Piloted", "Sites", "Umpire", "Welcome"].into());
         // The map of Blue's seat, made from what it got and no telemetry, has no enemy in it.
         let (umpire, sites) = {
             let got = person.got.lock().unwrap();
@@ -387,6 +450,159 @@ mod tests {
         again.leave();
         assert_eq!(rx.recv_timeout(Duration::from_secs(3)), Ok(Team::Blue), "the seat is free: a computer takes it");
         assert!(!seats.people_seated());
+    }
+
+    fn pilot_of(team: Team, drone: usize) -> Join {
+        Join::Unit { team, drone }
+    }
+
+    fn refused(c: &Client, what: &str) {
+        c.wait("a refusal", |m| m.iter().any(|m| matches!(m, ToSeat::Refused(w) if w.contains(what))));
+    }
+
+    fn wait_for(f: impl Fn() -> bool) {
+        let end = Instant::now() + Duration::from_secs(5);
+        while !f() {
+            assert!(Instant::now() < end, "timed out");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn a_pilots_sticks_reach_the_drones_radio_and_the_quad_and_a_second_pilot_are_refused() {
+        let (seats, world, _) = server([false, false], 50);
+        let i = world.lock().unwrap().game.drone(Team::Blue, 1);
+        let pilot = Client::join(seats.port(), pilot_of(Team::Blue, 1));
+        pilot.wait("a welcome", |m| matches!(m.first(), Some(ToSeat::Welcome { .. })));
+        assert!(world.lock().unwrap().pilots[i].is_some(), "the drone has its pilot");
+        pilot.send(&ToServer::Sticks(Sticks { roll: 0.4, pitch: -0.2, throttle: 0.9, yaw: 0.1 }));
+        wait_for(|| world.lock().unwrap().pilots[i].as_ref().is_some_and(|p| p.sticks.aileron == 0.4));
+        let sticks = world.lock().unwrap().pilots[i].as_ref().unwrap().sticks;
+        assert_eq!((sticks.aileron, sticks.elevator, sticks.throttle, sticks.rudder), (0.4, -0.2, 0.9, 0.1));
+        // The quad is the server's, and a drone has one pilot.
+        let quad = Client::join(seats.port(), pilot_of(Team::Blue, 4));
+        refused(&quad, "quad");
+        let second = Client::join(seats.port(), pilot_of(Team::Blue, 1));
+        refused(&second, "has its pilot");
+        let nobody = Client::join(seats.port(), pilot_of(Team::Blue, 9));
+        refused(&nobody, "no drone");
+        let w = world.lock().unwrap();
+        assert!(w.pilots[w.game.drone(Team::Blue, 4)].is_none());
+    }
+
+    #[test]
+    fn sticks_that_stop_or_a_seat_that_goes_give_the_drone_back_to_its_computer() {
+        let (seats, world, _) = server([false, false], 50);
+        let (a, b) = {
+            let w = world.lock().unwrap();
+            (w.game.drone(Team::Blue, 0), w.game.drone(Team::Red, 2))
+        };
+        let silent = Client::join(seats.port(), pilot_of(Team::Blue, 0));
+        let leaving = Client::join(seats.port(), pilot_of(Team::Red, 2));
+        for c in [&silent, &leaving] {
+            c.wait("a welcome", |m| matches!(m.first(), Some(ToSeat::Welcome { .. })));
+        }
+        silent.send(&ToServer::Sticks(Sticks::CENTRED));
+        assert_eq!(world.lock().unwrap().piloted(Team::Blue), vec![0]);
+        // The one that leaves is given back at once.
+        leaving.leave();
+        wait_for(|| world.lock().unwrap().pilots[b].is_none());
+        // The one that stays silent is given back after the time the sticks may stop for.
+        std::thread::sleep(Duration::from_secs_f32(STICKS_TIMEOUT + 0.3));
+        world.lock().unwrap().expire_pilots();
+        assert!(world.lock().unwrap().pilots[a].is_none(), "its sticks stopped");
+        // If its sticks come back and nobody else has the drone, it has it again.
+        silent.send(&ToServer::Sticks(Sticks::CENTRED));
+        wait_for(|| world.lock().unwrap().pilots[a].is_some());
+    }
+
+    #[test]
+    fn a_seat_that_commands_learns_which_drones_are_piloted_and_a_pilots_seat_gets_no_map() {
+        let (seats, world, _) = server([false, false], 50);
+        let commander = Client::join(seats.port(), Join::Compute(Team::Blue));
+        let red = Client::join(seats.port(), Join::Compute(Team::Red));
+        let pilot = Client::join(seats.port(), pilot_of(Team::Blue, 2));
+        let spectator = Client::join(seats.port(), Join::Spectate);
+        for c in [&commander, &red, &pilot, &spectator] {
+            c.wait("a welcome", |m| m.iter().any(|m| matches!(m, ToSeat::Welcome { .. })));
+        }
+        tick(&seats, &world);
+        commander.wait("the piloted drones", |m| m.iter().any(|m| *m == ToSeat::Piloted(vec![2])));
+        red.wait("the piloted drones", |m| m.iter().any(|m| *m == ToSeat::Piloted(vec![])));
+        pilot.wait("its mission", |m| m.iter().any(|m| matches!(m, ToSeat::Mission(_))));
+        spectator.wait("the truth", |m| m.iter().any(|m| matches!(m, ToSeat::Truth(_))));
+        // Welcome and Mission: no map of the team (View), no umpire, no sites, no truth, no orders.
+        assert_eq!(pilot.kinds(), ["Mission", "Welcome"].into());
+        let got = pilot.got.lock().unwrap();
+        let Some(ToSeat::Welcome { air, .. }) = got.first() else { panic!("{got:?}") };
+        assert!(air.is_empty(), "a pilot has no way to the team's drones");
+    }
+
+    #[test]
+    fn the_mission_follows_an_order_in_contact_and_stays_as_it_was_out_of_contact() {
+        let (seats, world, _) = server([false, false], 50);
+        let rules = world.lock().unwrap().game.rules;
+        let i = world.lock().unwrap().game.drone(Team::Blue, 1);
+        let commander = Client::join(seats.port(), Join::Compute(Team::Blue));
+        let pilot = Client::join(seats.port(), pilot_of(Team::Blue, 1));
+        for c in [&commander, &pilot] {
+            c.wait("a welcome", |m| m.iter().any(|m| matches!(m, ToSeat::Welcome { .. })));
+        }
+        let ordered = |order: Order| ToServer::Order {
+            drone: 1,
+            order,
+            low: false,
+            standing: None,
+            queue: vec![Queued::done(Order::Home)],
+        };
+        let mission_of = |p: &Client| {
+            p.got
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .find_map(|m| if let ToSeat::Mission(m) = m { Some(m.clone()) } else { None })
+        };
+        let step = || {
+            // The radio's link, as drone 0's physics thread works it after each step of the referee.
+            {
+                let mut w = world.lock().unwrap();
+                w.game.look();
+                w.link_up();
+            }
+            tick(&seats, &world);
+        };
+        commander.send(&ordered(Order::Take(2)));
+        wait_for(|| world.lock().unwrap().orders[i] == Some(Order::Take(2)));
+        step();
+        pilot.wait("the order as its mission", |m| {
+            m.iter().any(|m| matches!(m, ToSeat::Mission(x) if x.order == Some(Order::Take(2)) && x.in_contact))
+        });
+        let m = mission_of(&pilot).unwrap();
+        assert_eq!((m.drone, m.queue.clone()), (1, vec![Queued::done(Order::Home)]));
+        assert_eq!(m.towers.len(), world.lock().unwrap().game.towers.len());
+        assert!(m.obs.at.distance(rules.base(Team::Blue)) < 40.0, "what the drone knows is where it is");
+        // The radio is cut: the commander's next order does not reach the pilot's screen.
+        {
+            let mut w = world.lock().unwrap();
+            let red_home = w.game.tower("Red home");
+            w.game.towers[red_home].holder = Some(Team::Red);
+            w.game.drones[i].at = w.game.towers[red_home].at + glam::Vec2::new(10.0, 0.0);
+            (w.game.drones[i].alt, w.game.drones[i].phase) = (30.0, Phase::Flying);
+        }
+        commander.send(&ordered(Order::Hold));
+        wait_for(|| world.lock().unwrap().orders[i] == Some(Order::Hold));
+        step();
+        pilot.wait("out of contact", |m| m.iter().any(|m| matches!(m, ToSeat::Mission(x) if !x.in_contact)));
+        let m = mission_of(&pilot).unwrap();
+        assert!(!m.in_contact);
+        assert_eq!(m.order, Some(Order::Take(2)), "the mission does not change in a shadow");
+        // It catches up when the radio reaches the drone again.
+        world.lock().unwrap().game.drones[i].at = rules.base(Team::Blue);
+        step();
+        pilot.wait("the new order", |m| {
+            m.iter().any(|m| matches!(m, ToSeat::Mission(x) if x.order == Some(Order::Hold) && x.in_contact))
+        });
     }
 
     #[test]

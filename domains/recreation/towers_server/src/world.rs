@@ -9,13 +9,22 @@ use crate::terrain::Valley;
 use crate::trees::Forest;
 use glam::{Vec2, Vec3};
 use recreation_games::{Controls, Preflight, Radio, flying_slot, mode_slot};
+use recreation_towers::seat::{Mission, STICKS_TIMEOUT, Sticks};
 use recreation_towers::{
     Class, Game, Instruction, Link, Order, Phase as Referee, Queued, Rules, Standing, Team, queue_of,
 };
-use recreation_towers_ground::leg_for;
+use recreation_towers_ground::{drone_name, leg_for};
 use simulation_aircraft::{ActuatorCommands, AircraftParams};
 use simulation_physics::Obstacle;
 use simulation_physics::{Environment, FlightState, Phase, Start, step};
+use std::time::Instant;
+
+/// A new pilot's sticks are the drone's this long (wall seconds) after the pilot took the seat: the
+/// ground station of the team is told at once, and has this long to leave the drone alone.
+pub const HANDOVER: f32 = 1.0;
+/// A pilot who takes a drone that flies in AGENT sends it a radio mode that is not FBWA this long
+/// (s of the game) before FBWA: ArduPilot only changes mode when the switch moves.
+const MODE_PULSE: f32 = 1.5;
 
 /// A crashed drone is back at its base this long after the crash (s).
 pub const RESPAWN: f32 = 15.0;
@@ -111,6 +120,19 @@ pub fn aircraft(class: recreation_towers::Class) -> AircraftParams {
     (simulation_aircraft::find(class.aircraft()).expect("a plane for every class").params)()
 }
 
+/// A person who flies a drone by the sticks (a seat that is `Join::Unit`).
+pub struct Pilot {
+    /// The seat's connection.
+    pub id: u64,
+    pub sticks: Controls,
+    /// When the sticks were last heard, and when the pilot took the drone (wall time).
+    heard: Instant,
+    since: Instant,
+    /// The game seconds left of the switch that takes a drone out of AGENT (`MODE_PULSE`); `None`
+    /// until the sticks are the pilot's. A drone that takes off under its pilot needs none.
+    pulse: Option<f32>,
+}
+
 /// The game and the drones' planes.
 pub struct World {
     pub game: Game,
@@ -137,6 +159,11 @@ pub struct World {
     /// was told while it was in contact. A drone out of contact flies on, and its team is not told
     /// what it flies now (the order is the team's, and the drone's own failsafe is not).
     pub told: Vec<(Option<Order>, bool)>,
+    /// The person who flies each drone, if one does (by its index in the game).
+    pub pilots: Vec<Option<Pilot>>,
+    /// The mission each drone's pilot is shown: the order, whether it is low, and the queue that
+    /// last reached the drone, which is the commander's last word while the radio reached it.
+    pub shown: Vec<(Option<Order>, bool, Vec<Queued>)>,
     /// The ground: flat, with the mountains.
     terrain: Valley,
     /// The trees, for the flight model, and the ones near the plane being stepped.
@@ -179,6 +206,8 @@ impl World {
             queue: vec![vec![]; n],
             queue_taken: vec![0; n],
             standing: vec![None; n],
+            pilots: (0..n).map(|_| None).collect(),
+            shown: vec![(Some(Order::Home), false, vec![]); n],
             terrain,
             forest,
             near: vec![],
@@ -323,8 +352,13 @@ impl World {
     /// What the drones' radios do after a step of the referee: a drone in contact tells its team
     /// its order; one that is out of contact long enough flies its standing order, or, with none,
     /// home (the failsafe), and stays on that order until the team can give it another.
-    fn link_up(&mut self) {
+    pub(crate) fn link_up(&mut self) {
         for i in 0..self.orders.len() {
+            // The mission on a pilot's screen is what reached the drone: it does not change in a
+            // radio shadow, and catches up when the radio reaches the drone again.
+            if self.in_reach(i) {
+                self.shown[i] = (self.orders[i], self.lows[i], self.queue[i].clone());
+            }
             if self.game.link(i) == Link::Up {
                 self.told[i] = (self.orders[i], self.lows[i]);
                 continue;
@@ -396,7 +430,28 @@ impl World {
             return off;
         }
         let agl = s.pos.y;
-        self.preflight[i].radio(p, s, agl, dt).unwrap_or_else(|| {
+        match self.preflight[i].radio(p, s, agl, dt) {
+            Some(radio) => {
+                // A pilot who has the drone before it is on the wing needs no switch to get it out
+                // of AGENT: it has not been in it.
+                if let Some(pilot) = self.pilots[i].as_mut() {
+                    pilot.pulse.get_or_insert(0.0);
+                }
+                radio
+            }
+            None => self.on_the_wing(i, dt),
+        }
+    }
+
+    /// What drone `i`'s radio sends once it is on the wing: the pilot's sticks, if a person flies
+    /// it; else the sticks of the server's quad, or the sticks centred for the AGENT mode.
+    fn on_the_wing(&mut self, i: usize, dt: f32) -> Radio {
+        if let Some(radio) = self.pilot_radio(i, dt) {
+            return radio;
+        }
+        let p = &self.params[i];
+        let s = &self.planes[i];
+        {
             // A drone on the wing is flown by its plan. One with no wing is flown by the sticks
             // to where its order sends it.
             let sticks = if self.game.drones[i].class == recreation_towers::Class::Light {
@@ -410,7 +465,110 @@ impl World {
                 Controls { throttle: 0.5, ..Default::default() }
             };
             Radio { sticks, arm: true, mode: flying_slot(p) }
-        })
+        }
+    }
+
+    /// Takes the wing of drone `i` for the pilot `id`, or says why not.
+    pub fn claim_pilot(&mut self, i: usize, id: u64) -> Result<(), String> {
+        let name = drone_name(&self.game.rules, i);
+        if self.game.drones[i].class == Class::Light {
+            return Err(format!("{name} is a quad: the server flies it, and only a winged drone has a pilot"));
+        }
+        if self.pilots[i].is_some() {
+            return Err(format!("{name} has its pilot"));
+        }
+        let now = Instant::now();
+        self.pilots[i] = Some(Pilot {
+            id,
+            sticks: Controls { throttle: 0.5, ..Default::default() },
+            heard: now,
+            since: now,
+            pulse: None,
+        });
+        println!("pilot: {name} is flown by a person");
+        Ok(())
+    }
+
+    /// The pilot `id` sends its sticks. A pilot whose sticks had stopped, and whose drone nobody
+    /// else has taken, has it again.
+    pub fn fly(&mut self, i: usize, id: u64, sticks: Sticks) {
+        if self.pilots[i].is_none() {
+            let _ = self.claim_pilot(i, id);
+        }
+        if let Some(pilot) = self.pilots[i].as_mut().filter(|p| p.id == id) {
+            let s = sticks.clamped();
+            pilot.sticks = Controls { aileron: s.roll, elevator: s.pitch, rudder: s.yaw, throttle: s.throttle };
+            pilot.heard = Instant::now();
+        }
+    }
+
+    /// The pilot `id` has gone: the drone is the computer's again.
+    pub fn release_pilot(&mut self, i: usize, id: u64) {
+        if self.pilots[i].as_ref().is_some_and(|p| p.id == id) {
+            self.pilots[i] = None;
+            println!("pilot: {} is given back to the computer: the seat is gone", drone_name(&self.game.rules, i));
+        }
+    }
+
+    /// Gives back the drones whose pilots' sticks have stopped for [`STICKS_TIMEOUT`] s.
+    pub fn expire_pilots(&mut self) {
+        for i in 0..self.pilots.len() {
+            if self.pilots[i].as_ref().is_some_and(|p| p.heard.elapsed().as_secs_f32() > STICKS_TIMEOUT) {
+                self.pilots[i] = None;
+                println!(
+                    "pilot: {} is given back to the computer: the sticks stopped",
+                    drone_name(&self.game.rules, i)
+                );
+            }
+        }
+    }
+
+    /// The drones of `team` (by their number in the team) that a person flies now.
+    pub fn piloted(&self, team: Team) -> Vec<usize> {
+        let n = self.game.rules.drones;
+        (0..n).filter(|&k| self.pilots[self.game.drone(team, k)].is_some()).collect()
+    }
+
+    /// What the radio of drone `i` sends when its pilot flies it: the pilot's sticks, the mode
+    /// switch at FBWA; `None` while the drone is the computer's. For [`HANDOVER`] s after the pilot
+    /// takes it the computer's station still has it; then, if it is in AGENT, the mode switch moves
+    /// to another mode for a moment, so that the switch's return to FBWA is a change ArduPilot takes.
+    fn pilot_radio(&mut self, i: usize, dt: f32) -> Option<Radio> {
+        self.expire_pilots();
+        let params = &self.params[i];
+        let pilot = self.pilots[i].as_mut()?;
+        if pilot.since.elapsed().as_secs_f32() < HANDOVER {
+            return None;
+        }
+        let pulse = pilot.pulse.get_or_insert(MODE_PULSE);
+        let fbwa = flying_slot(params);
+        if *pulse > 0.0 {
+            *pulse -= dt;
+            let other =
+                params.rc_modes.iter().position(|m| *m == "CRUISE").unwrap_or((fbwa + 1) % params.rc_modes.len());
+            return Some(Radio { sticks: Controls { throttle: 0.5, ..Default::default() }, arm: true, mode: other });
+        }
+        Some(Radio { sticks: pilot.sticks, arm: true, mode: fbwa })
+    }
+
+    /// What drone `i`'s pilot is shown: the mission and what the drone itself knows.
+    pub fn mission(&self, i: usize) -> Mission {
+        let game = &self.game;
+        let d = &game.drones[i];
+        Mission {
+            drone: i % game.rules.drones,
+            order: self.shown[i].0,
+            low: self.shown[i].1,
+            queue: self.shown[i].2.clone(),
+            in_contact: self.in_reach(i),
+            obs: game.edge_obs(i),
+            vel: d.vel,
+            attitude: self.planes[i].rot.to_array(),
+            towers: game.towers.iter().map(|t| (t.name.clone(), t.at)).collect(),
+            time: game.time,
+            time_left: game.time_left(),
+            outcome: game.outcome,
+        }
     }
 
     /// Drone `i` in the referee's game as its plane is.
@@ -451,6 +609,92 @@ mod tests {
 
     fn world() -> World {
         World::new(Rules::default().without_batteries(), 0.0)
+    }
+
+    #[test]
+    fn a_pilots_sticks_are_the_drones_radio_after_the_handover_and_a_drone_in_agent_is_taken_out_of_it() {
+        let mut w = world();
+        let i = w.game.drone(Team::Blue, 1);
+        let fbwa = flying_slot(&w.params[i]);
+        let sticks = Sticks { roll: 0.5, pitch: -0.25, throttle: 0.8, yaw: -0.5 };
+        w.claim_pilot(i, 7).unwrap();
+        w.fly(i, 7, sticks);
+        // For the first second the computer's station still has the drone: sticks centred, FBWA.
+        let r = w.on_the_wing(i, 0.1);
+        assert_eq!((r.sticks.aileron, r.mode), (0.0, fbwa));
+        // Then the sticks are the pilot's. The drone may be in AGENT: the mode switch leaves FBWA
+        // for a moment (1.5 s of the game) and comes back, which is a change that ArduPilot takes.
+        w.pilots[i].as_mut().unwrap().since = Instant::now() - std::time::Duration::from_secs(2);
+        let r = w.on_the_wing(i, 0.5);
+        assert_ne!(r.mode, fbwa, "the switch moves");
+        assert_eq!(r.sticks.aileron, 0.0, "the sticks are centred meanwhile");
+        for _ in 0..3 {
+            w.on_the_wing(i, 0.5);
+        }
+        let r = w.on_the_wing(i, 0.5);
+        assert_eq!(r.mode, fbwa);
+        assert!(r.arm);
+        assert_eq!((r.sticks.aileron, r.sticks.elevator, r.sticks.throttle, r.sticks.rudder), (0.5, -0.25, 0.8, -0.5));
+        // A pilot whose sticks have stopped for good gives the drone back: centred again.
+        w.pilots[i].as_mut().unwrap().heard = Instant::now() - std::time::Duration::from_secs(3);
+        let r = w.on_the_wing(i, 0.1);
+        assert_eq!((r.sticks.aileron, r.sticks.throttle, r.mode), (0.0, 0.5, fbwa));
+        assert!(w.pilots[i].is_none());
+    }
+
+    #[test]
+    fn a_pilot_who_took_the_drone_before_the_wing_needs_no_switch() {
+        let mut w = world();
+        let i = w.game.drone(Team::Blue, 0);
+        w.claim_pilot(i, 1).unwrap();
+        w.fly(i, 1, Sticks { roll: 1.0, ..Sticks::CENTRED });
+        w.pilots[i].as_mut().unwrap().since = Instant::now() - std::time::Duration::from_secs(2);
+        // The drone is still taking off: the preflight flies it, and the pilot has not been in AGENT.
+        w.pilots[i].as_mut().unwrap().pulse.get_or_insert(0.0);
+        let r = w.on_the_wing(i, 0.1);
+        assert_eq!((r.sticks.aileron, r.mode), (1.0, flying_slot(&w.params[i])));
+    }
+
+    #[test]
+    fn a_quad_has_no_pilot_and_a_drone_has_one() {
+        let mut w = world();
+        let quad = w.game.drone(Team::Red, 4);
+        assert!(w.claim_pilot(quad, 1).unwrap_err().contains("quad"));
+        let i = w.game.drone(Team::Red, 0);
+        assert!(w.claim_pilot(i, 1).is_ok());
+        assert!(w.claim_pilot(i, 2).unwrap_err().contains("has its pilot"));
+        // Another seat's sticks are not the pilot's.
+        w.fly(i, 2, Sticks { roll: 1.0, ..Sticks::CENTRED });
+        assert_eq!(w.pilots[i].as_ref().unwrap().sticks.aileron, 0.0);
+        w.release_pilot(i, 2);
+        assert!(w.pilots[i].is_some(), "a seat gives up only its own drone");
+        w.release_pilot(i, 1);
+        assert_eq!(w.piloted(Team::Red), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn the_mission_a_pilot_is_shown_is_the_last_order_that_reached_the_drone() {
+        let mut w = world();
+        let i = w.game.drone(Team::Blue, 0);
+        w.command(i, Order::Take(1), false);
+        w.link_up();
+        assert_eq!(w.mission(i).order, Some(Order::Take(1)));
+        // Out of reach (a shadow): the team gives another order, and the mission stays.
+        let red_home = w.game.tower("Red home");
+        w.game.towers[red_home].holder = Some(Team::Red);
+        w.game.drones[i].at = w.game.towers[red_home].at;
+        w.game.drones[i].phase = Referee::Flying;
+        w.game.look();
+        w.command(i, Order::Hold, true);
+        w.link_up();
+        let m = w.mission(i);
+        assert_eq!((m.order, m.low, m.in_contact), (Some(Order::Take(1)), false, false));
+        assert!(m.obs.silent >= 0.0);
+        w.game.drones[i].at = w.game.rules.base(Team::Blue);
+        w.game.look();
+        w.link_up();
+        let m = w.mission(i);
+        assert_eq!((m.order, m.low, m.in_contact), (Some(Order::Hold), true, true));
     }
 
     #[test]

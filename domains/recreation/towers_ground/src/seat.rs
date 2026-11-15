@@ -2,7 +2,7 @@
 //! map the server sent and sends the orders the commander gives. If the connection is lost, or
 //! the server is not up yet, it tries again.
 
-use recreation_towers::seat::{self, Join, ToSeat, ToServer};
+use recreation_towers::seat::{self, Join, Mission, Sticks, ToSeat, ToServer};
 use recreation_towers::{Advice, Order, Proposal, Rules, Sites, TeamView, Umpire};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
@@ -38,6 +38,11 @@ pub struct State {
     /// What the advisors beside the seat propose now (advisors.rs: `attend`), each good until its
     /// own game time. The app lists them and `Seat::accept` takes one.
     pub proposals: Vec<Proposal>,
+    /// The drones of the team (by number in the team) that a person flies by the sticks now: the
+    /// station leaves them alone (station.rs). Told to a seat that commands.
+    pub piloted: Vec<usize>,
+    /// For a pilot's seat: the mission and what the drone knows, as the server last said.
+    pub mission: Option<Mission>,
 }
 
 /// How many pieces of advice the seat keeps.
@@ -75,6 +80,8 @@ impl Seat {
                 orders: vec![],
                 advice: vec![],
                 proposals: vec![],
+                piloted: vec![],
+                mission: None,
             })),
             orders: Mutex::new(tx),
             generation: Arc::new(AtomicU64::new(0)),
@@ -111,6 +118,12 @@ impl Seat {
             s.orders[drone] = (Some(order), low);
         }
         let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low, standing: None, queue });
+    }
+
+    /// A pilot's seat: sends the sticks (20 times a second or more, or the server gives the drone
+    /// back to its computer).
+    pub fn sticks(&self, sticks: Sticks) {
+        let _ = self.orders.lock().unwrap().send(ToServer::Sticks(sticks));
     }
 
     /// Puts proposals among the live ones, as if an advisor had just sent them.
@@ -167,6 +180,8 @@ impl Seat {
             orders: vec![],
             advice: vec![],
             proposals: vec![],
+            piloted: vec![],
+            mission: None,
         };
         let (tx, rx) = channel();
         *self.orders.lock().unwrap() = tx;
@@ -224,6 +239,8 @@ fn run(addr: &str, join: Join, state: &Mutex<State>, orders: Receiver<ToServer>,
                 ToSeat::Sites(sites) => s.sites = Some(sites),
                 ToSeat::Orders(orders) => s.orders = orders,
                 ToSeat::Truth(_) => {}
+                ToSeat::Piloted(p) => s.piloted = p,
+                ToSeat::Mission(m) => s.mission = Some(m),
                 ToSeat::Advice(a) => {
                     s.advice.push((a, Instant::now()));
                     let extra = s.advice.len().saturating_sub(ADVICE_KEPT);

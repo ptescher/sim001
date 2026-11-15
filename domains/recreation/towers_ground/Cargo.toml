@@ -9,6 +9,10 @@ name = "towers_advisor"
 path = "src/bin/towers_advisor.rs"
 
 [[bin]]
+name = "towers_pilot"
+path = "src/bin/towers_pilot.rs"
+
+[[bin]]
 name = "towers_commander"
 path = "src/bin/towers_commander.rs"
 

@@ -93,6 +93,11 @@ Term: Mission
   The list of items that the autopilot flies in AUTO: waypoints, loiters, a takeoff, a
   landing or a return home. The map shows the mission on the vehicle as a solid line.
 
+  In [[Towers]], the mission is what a [[pilot]] sees of the orders of the [[commander]]: the
+  order of the drone and its [[queue]], on the pilot's screen, with the bearing and distance of the
+  tower. The pilot decides how to fly it, and the game does not check. In a radio shadow the mission
+  does not change.
+
 Term: Pilot box
   The place where you stand at the field to fly. The sim starts there, with the plane in
   your hand.
@@ -404,6 +409,12 @@ Term: Proposal
   after which it is stale. A computer commander takes a proposal that gains more than 2 points
   and is not stale. A person takes a proposal with a click on its line in the ADVISOR panel, or
   with the key Y.
+
+Term: Pilot
+  In [[Towers]], a person who flies one drone by the sticks, in place of the computer. The pilot
+  takes the seat of one winged drone. The drone's camera and the [[mission]] are on the pilot's
+  screen. The [[commander]] still sees the drone and can give it orders. If the sticks stop for 2
+  seconds, the drone is the computer's again.
 
 Term: Unit
   In [[Towers]], what flies one drone: one for each drone. It runs all the time, in contact or not,

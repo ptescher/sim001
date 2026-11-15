@@ -19,8 +19,8 @@ use visualization_engine::optics::SENSOR_MOUNT;
 
 /// Drone `i`'s feed is on this port plus `i`.
 pub const FIRST_PORT: u16 = 5601;
-/// Blue's three drones, then Red's.
-pub const DRONES: usize = 6;
+/// Blue's five drones, then Red's.
+pub const DRONES: usize = 10;
 /// A camera nobody watches renders this small.
 const IDLE_SIZE: UVec2 = UVec2::new(64, 36);
 const MAX_FPS: f64 = 30.0;

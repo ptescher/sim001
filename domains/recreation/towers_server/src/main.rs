@@ -25,6 +25,10 @@
 //! that dies, hangs or writes nonsense is dropped with a line in the log, and the game goes on. A
 //! person's seat runs its own advisors in the commander app.
 //!
+//! A person can fly one winged drone by the sticks (`Join::Unit`, see seats.rs and the README): the
+//! server takes it off as always, the pilot's sticks become its radio, the team's station leaves it
+//! alone, and the commander's order is the pilot's mission. Sticks silent for 2 s hand it back.
+//!
 //! A seat changes hands during the game. A person who joins a team that a computer commands takes
 //! the seat (the computer is relieved; the person's seat starts with the orders the drones have). When
 //! a person leaves, the seat is free; a second later, with `--on-leave computer` (the default), a
@@ -365,6 +369,7 @@ fn main() {
             // Each drone's physics moves it on its own: look again, so that every map is of this
             // moment, the moment the spectator gets.
             w.game.look();
+            w.expire_pilots();
             seats.send(&w);
         }
         let mut w = world.lock().unwrap();
@@ -425,6 +430,8 @@ fn main() {
             println!("RESULT in_agent={in_agent}");
             println!("RESULT refused={refused}");
             println!("RESULT crashes={}", w.crashes);
+            println!("RESULT piloted_mapped={}", tally.piloted_mapped());
+            println!("RESULT piloted_in_agent={}", tally.piloted_in_agent());
             println!("RESULT proposals={}", tally.proposals());
             println!("RESULT proposals_taken={}", tally.taken());
             println!("RESULT taken_blue={}", w.taken[0]);

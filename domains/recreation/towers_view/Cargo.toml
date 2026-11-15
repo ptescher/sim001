@@ -10,6 +10,8 @@ path = "src/main.rs"
 
 [dependencies]
 recreation_towers = { path = "../towers" }
+# The seat client, for the cockpit (`--fly`): a pilot's seat on the game server.
+recreation_towers_ground = { path = "../towers_ground" }
 visualization_engine = { path = "../../visualization/engine" }
 # The battlefield of each team, for its commander app.
 visualization_battlefield = { path = "../../visualization/battlefield" }
