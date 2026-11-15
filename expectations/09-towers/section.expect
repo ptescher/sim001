@@ -431,6 +431,23 @@ Vocabulary:
   Event: two computer teams play a game of Towers
     Say: wait for the end of the game. The server flies the drones with a computer commander for each team
 
+  # A person flies a drone (plans/actors.md, step 5): the seat of a pilot. The rules are checked by the
+  # server's tests with seat clients; the whole game with a scripted pilot is arduplane/02-pilot.expect.
+  State: the looks at the second Blue drone in AGENT mode while a person flies it are 0..100000
+    Shows: 0: the report of the server says `RESULT piloted_in_agent=0`
+  State: the turn of the second Blue drone under its pilot is 0..3600 degrees
+    Shows: at least 45: the scripted pilot, from what its seat showed it, says that its drone turned 45 degrees or more
+  State: the looks of the Blue ground at the second Blue drone on its map while a person flies it are 0..100000
+    Shows: at least 1: the report of the server says `RESULT piloted_mapped=` with 1 or more
+  State: the orders that the pilot of the second Blue drone saw as its mission are 0..100
+    Shows: at least 1: the scripted pilot says that it saw 1 or more orders
+  State: the missions that changed on the pilot's screen out of contact are 0..100000
+    Shows: 0: the scripted pilot says that no mission changed while its drone was out of contact
+  State: the second Blue drone after the pilot let go is not in AGENT mode | in AGENT mode with a plan
+    Shows: in AGENT mode with a plan: the report of the server says AGENT and a plan for B2 after the pilot let go
+  Event: two computer teams play a game of Towers while a person flies the second Blue drone
+    Say: wait for the end of the game. The server flies the drones with a computer commander for each team. A scripted pilot takes the second Blue drone after 40 s of play and lets go 25 s later
+
   Phrase: a game of Towers is in play
     Say: wait until all the drones stand at their bases, and the clock shows 600 s
     Given the game of Towers is in play

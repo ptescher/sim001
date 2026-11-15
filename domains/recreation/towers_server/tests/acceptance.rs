@@ -26,6 +26,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const EVENT: &str = "two computer teams play a game of Towers";
+const PILOT_EVENT: &str = "two computer teams play a game of Towers while a person flies the second Blue drone";
 /// The seat port the test's server listens on.
 const PORT: u16 = 5955;
 /// A whole game takes about a minute and a half at ten times real time.
@@ -208,6 +209,132 @@ fn play(bin: &Path) -> Result<Played, String> {
     Ok(played)
 }
 
+/// A game with a scripted pilot on the second Blue drone: what the server and the pilot left.
+#[derive(Clone, Default)]
+struct PilotGame {
+    results: HashMap<String, String>,
+    flown: recreation_towers_ground::pilot::Flown,
+    /// After the server said it gave the drone back, a report shows Blue2 in AGENT with a plan.
+    agent_after: bool,
+    log: Vec<String>,
+}
+
+/// The game time (s) of the latest report line in the server's log, if any.
+fn game_time(lines: &[String]) -> Option<f32> {
+    lines.iter().rev().find_map(|l| {
+        let (_, rest) = l.split_once("] t ")?;
+        rest.split_once("s (playing)")?.0.trim().parse().ok()
+    })
+}
+
+/// Plays a game at 10x with computer commanders, and, after `JOIN_AT` s of play, a scripted pilot
+/// that takes the second Blue drone, banks it for `FLY_FOR` s (wall) and lets go. Only the server's
+/// own process is stopped: the test never kills another game's SITL.
+fn play_piloted(bin: &Path) -> Result<PilotGame, String> {
+    const JOIN_AT: f32 = 40.0;
+    const FLY_FOR: u64 = 25;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_towers_server"))
+        .args(["--speedup", "10", "--timeout", "350", "--seat-port", &PORT.to_string()])
+        .env("SIM001_BIN", bin)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|e| format!("couldn't start the game server: {e}"))?;
+    let out = child.stdout.take().unwrap();
+    let lines = Arc::new(Mutex::new(Vec::<String>::new()));
+    let l2 = lines.clone();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(out).lines().map_while(Result::ok) {
+            println!("server: {line}");
+            l2.lock().unwrap().push(line);
+        }
+    });
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut pilot = None;
+    let end = Instant::now() + PATIENCE;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(s)) => break Some(s),
+            _ if Instant::now() > end => break None,
+            _ => {}
+        }
+        if pilot.is_none() && game_time(&lines.lock().unwrap()).is_some_and(|t| t >= JOIN_AT) {
+            let stop = stop.clone();
+            pilot = Some(std::thread::spawn(move || {
+                recreation_towers_ground::pilot::fly(
+                    &format!("127.0.0.1:{PORT}"),
+                    Team::Blue,
+                    1,
+                    &recreation_towers_ground::pilot::Script::bank(),
+                    Duration::from_secs(FLY_FOR),
+                    &stop,
+                )
+            }));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    if status.is_none() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    let _ = reader.join();
+    let lines = lines.lock().unwrap().clone();
+    let tail = || lines.iter().rev().take(20).rev().cloned().collect::<Vec<_>>().join("\n");
+    match status {
+        Some(s) if s.success() => {}
+        Some(s) => return Err(format!("the game server failed ({s}); its last lines:\n{}", tail())),
+        None => return Err(format!("the game server did not finish; its last lines:\n{}", tail())),
+    }
+    let flown = pilot.ok_or("the game ended before the pilot could join")?.join().map_err(|_| "the pilot panicked")?;
+    if let Some(why) = &flown.refused {
+        return Err(format!("the pilot's seat was refused: {why}"));
+    }
+    let mut game = PilotGame { flown, ..Default::default() };
+    for l in &lines {
+        if let Some((k, v)) = l.strip_prefix("RESULT ").and_then(|r| r.split_once('=')) {
+            game.results.insert(k.to_string(), v.to_string());
+        }
+    }
+    let back = lines.iter().position(|l| l.contains("pilot: Blue2 is given back"));
+    game.agent_after = back.is_some_and(|b| {
+        lines[b..].iter().any(|l| l.contains("Blue2 AGENT plan") && !l.contains("plan -") && !l.contains("[PILOTED]"))
+    });
+    println!(
+        "pilot game: turned {:.0} degrees, {} orders seen, {} missions in the dark ({} changed), AGENT with a plan after hand-back: {}",
+        game.flown.turned,
+        game.flown.orders.len(),
+        game.flown.dark,
+        game.flown.changed_in_the_dark,
+        game.agent_after
+    );
+    game.log = lines;
+    Ok(game)
+}
+
+fn observe_piloted(g: &PilotGame, subject: &str) -> Option<Value> {
+    let result = |k: &str| g.results.get(k).and_then(|v| v.parse::<f64>().ok());
+    Some(match subject {
+        "the looks at the second Blue drone in AGENT mode while a person flies it" => {
+            Value::from(result("piloted_in_agent")?)
+        }
+        "the looks of the Blue ground at the second Blue drone on its map while a person flies it" => {
+            Value::from(result("piloted_mapped")?)
+        }
+        "the turn of the second Blue drone under its pilot" => Value::from(f64::from(g.flown.turned.abs())),
+        "the orders that the pilot of the second Blue drone saw as its mission" => {
+            Value::from(g.flown.orders.len() as f64)
+        }
+        "the missions that changed on the pilot's screen out of contact" => {
+            Value::from(g.flown.changed_in_the_dark as f64)
+        }
+        "the second Blue drone after the pilot let go" => {
+            Value::from(if g.agent_after { "in AGENT mode with a plan" } else { "not in AGENT mode" })
+        }
+        _ => return None,
+    })
+}
+
 /// The states a fresh game starts in: the section's start, the only one the server can arrange.
 const START: &[(&str, &str)] = &[
     ("the game of Towers", "in play"),
@@ -239,6 +366,12 @@ const OBSERVED: &[&str] = &[
     "the seconds that the first light drone took to leave its base",
     "the top speed of the light drones",
     "the light drones that fly low",
+    "the looks at the second Blue drone in AGENT mode while a person flies it",
+    "the turn of the second Blue drone under its pilot",
+    "the looks of the Blue ground at the second Blue drone on its map while a person flies it",
+    "the orders that the pilot of the second Blue drone saw as its mission",
+    "the missions that changed on the pilot's screen out of contact",
+    "the second Blue drone after the pilot let go",
 ];
 
 fn is(v: &Variable, subject: &str) -> bool {
@@ -252,6 +385,9 @@ fn text(v: &Value) -> String {
 struct Server {
     bin: PathBuf,
     played: Option<Result<Played, String>>,
+    /// The game with a pilot is one game for each expectation that asks about it: it is played
+    /// once (a game takes minutes, and only one may run on this machine).
+    piloted: Option<Result<PilotGame, String>>,
 }
 
 impl Driver for Server {
@@ -273,6 +409,12 @@ impl Driver for Server {
     }
 
     fn perform(&mut self, event: &Event) -> Result<(), String> {
+        if event.text.eq_ignore_ascii_case(PILOT_EVENT) {
+            if self.piloted.is_none() {
+                self.piloted = Some(play_piloted(&self.bin));
+            }
+            return self.piloted.clone().and_then(Result::err).map_or(Ok(()), Err);
+        }
         if !event.text.eq_ignore_ascii_case(EVENT) {
             return Err(format!("the game server can't make {} happen", event.text));
         }
@@ -288,6 +430,11 @@ impl Driver for Server {
             && let Some((_, v)) = START.iter().find(|(s, _)| is(var, s))
         {
             return Ok(v.parse::<f64>().map_or_else(|_| Value::from(*v), Value::from));
+        }
+        if let Some(Ok(g)) = &self.piloted
+            && let Some(v) = observe_piloted(g, &var.subject)
+        {
+            return Ok(v);
         }
         let Some(Ok(p)) = &self.played else { return Err("no game has been played".into()) };
         let result = |k: &str| p.results.get(k).and_then(|v| v.parse::<f64>().ok()).ok_or(format!("no RESULT {k}"));
@@ -334,7 +481,7 @@ impl Driver for Server {
         match need {
             Need::Arrange(v) => START.iter().any(|(s, _)| is(v, s)),
             Need::Set(_) => false,
-            Need::Perform(e) => e.text.eq_ignore_ascii_case(EVENT),
+            Need::Perform(e) => e.text.eq_ignore_ascii_case(EVENT) || e.text.eq_ignore_ascii_case(PILOT_EVENT),
             Need::Observe(v) => OBSERVED.iter().any(|s| is(v, s)) || START.iter().any(|(s, _)| is(v, s)),
         }
     }
@@ -346,7 +493,7 @@ fn the_server_plays_a_game_with_arduplane() {
     let a = Acceptance::load_for(&dir, "sim").unwrap_or_else(|e| panic!("{e}")).with_coverage();
     let section = a.suite.sections.iter().find(|s| s.slug == "towers").expect("a towers section").id;
     let ours = a.suite.subtree(section);
-    let mut driver = Server { bin: agent_dir(), played: None };
+    let mut driver = Server { bin: agent_dir(), played: None, piloted: None };
     let mut services = Services::new().with(agent_service());
     let missing = services.missing(&["ardupilot-agent"]);
     if let Some(why) = missing.first() {

@@ -75,6 +75,11 @@ pub struct Tally {
     pub taken: [AtomicUsize; 2],
     /// A line about each drone of the game, by number in the game.
     pub lines: Mutex<Vec<String>>,
+    /// Looks of a station at a drone that a person flies: how many had its telemetry (a report
+    /// under 3 s old: it is on the team's map), and how many found it in AGENT mode more than 5 s
+    /// (wall) after the pilot took it (it should never be). By team.
+    pub piloted_mapped: [AtomicUsize; 2],
+    pub piloted_in_agent: [AtomicUsize; 2],
     /// Warnings of the stations, by team.
     pub warnings: Mutex<[Vec<String>; 2]>,
 }
@@ -90,6 +95,14 @@ impl Tally {
 
     pub fn taken(&self) -> usize {
         self.taken.iter().map(|n| n.load(Ordering::SeqCst)).sum()
+    }
+
+    pub fn piloted_mapped(&self) -> usize {
+        self.piloted_mapped.iter().map(|n| n.load(Ordering::SeqCst)).sum()
+    }
+
+    pub fn piloted_in_agent(&self) -> usize {
+        self.piloted_in_agent.iter().map(|n| n.load(Ordering::SeqCst)).sum()
     }
 
     pub fn refused(&self) -> usize {
@@ -119,6 +132,22 @@ struct Flying {
     first: usize,
     clock: Clock,
     home: (f64, f64, f32),
+    /// Since when a person has flown each drone of the team (wall time).
+    piloted_since: Vec<Option<Instant>>,
+}
+
+/// Whether the ground flies a drone: it has taken off and is past the transition. A drone that a
+/// person flies is left alone whatever its mode (the ground does not put it in AGENT or send it
+/// plans) and its telemetry still comes down. In FBWA with the transition done (fast enough to
+/// fly), or already in AGENT or QLOITER: AGENT asked for in the middle of the transition stalls the drone.
+fn on_the_wing(piloted: bool, up: bool, mode: Option<u32>, speed: f32) -> bool {
+    !piloted
+        && up
+        && match mode {
+            Some(FBWA_MODE) => speed >= WING_SPEED,
+            Some(m) => [AGENT_MODE, QLOITER_MODE].contains(&m),
+            None => false,
+        }
 }
 
 fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
@@ -129,9 +158,9 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
         if seat.stopped() {
             return;
         }
-        let (status, rules, umpire, sites, air, orders) = {
+        let (status, rules, umpire, sites, air, orders, piloted) = {
             let s = seat.state();
-            (s.status.clone(), s.rules, s.umpire, s.sites.clone(), s.air.clone(), s.orders.clone())
+            (s.status.clone(), s.rules, s.umpire, s.sites.clone(), s.air.clone(), s.orders.clone(), s.piloted.clone())
         };
         let (Status::Seated(join), Some(rules), Some(umpire), Some(sites)) = (status, rules, umpire, sites) else {
             flying = None;
@@ -166,6 +195,7 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
                 first,
                 clock: Clock::new(),
                 home: sitl_home(),
+                piloted_since: vec![None; n],
             });
         }
         let f = flying.as_mut().expect("a ground");
@@ -201,6 +231,22 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
             }));
         }
         let view = map::build(&umpire, &sites, &own, &seen, &orders, &f.rules);
+        for (k, report) in own.iter().enumerate() {
+            if !piloted.contains(&k) {
+                f.piloted_since[k] = None;
+                continue;
+            }
+            let since = *f.piloted_since[k].get_or_insert_with(Instant::now);
+            if let Some(t) = tally {
+                let ti = team.index();
+                if report.as_ref().is_some_and(|r| r.age < 3.0) {
+                    t.piloted_mapped[ti].fetch_add(1, Ordering::SeqCst);
+                }
+                if since.elapsed() > Duration::from_secs(5) && f.ground.mode_of(k) == Some(AGENT_MODE) {
+                    t.piloted_in_agent[ti].fetch_add(1, Ordering::SeqCst);
+                }
+            }
+        }
         // The picture the ground plans from is the map: the drones where the team has them.
         for d in &view.drones {
             let g = &mut f.game.drones[f.first + d.k];
@@ -224,15 +270,7 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
             .map(|i| {
                 let Some(k) = i.checked_sub(f.first).filter(|&k| k < n) else { return false };
                 let d = &view.drones[k];
-                // On the wing: in FBWA with the transition done (fast enough to fly), or already in
-                // AGENT or QLOITER. AGENT asked for in the middle of the transition stalls the drone.
-                let mode = f.ground.mode_of(k);
-                let up = d.phase == Phase::Flying;
-                up && match mode {
-                    Some(FBWA_MODE) => d.vel.length() >= WING_SPEED,
-                    Some(m) => [AGENT_MODE, QLOITER_MODE].contains(&m),
-                    None => false,
-                }
+                on_the_wing(piloted.contains(&k), d.phase == Phase::Flying, f.ground.mode_of(k), d.vel.length())
             })
             .collect();
         let situation = Situation {
@@ -255,11 +293,32 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
                 let mut lines = t.lines.lock().unwrap();
                 lines.resize(2 * n, String::new());
                 for k in 0..n {
-                    lines[f.first + k] = f.ground.describe(f.first + k);
+                    lines[f.first + k] =
+                        f.ground.describe(f.first + k) + if piloted.contains(&k) { " [PILOTED]" } else { "" };
                 }
                 t.warnings.lock().unwrap()[ti] = f.ground.verdict();
             }
         }
         seat.state().view = Some(view);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_station_leaves_a_drone_that_a_person_flies_alone_in_any_mode() {
+        for mode in [Some(FBWA_MODE), Some(AGENT_MODE), Some(QLOITER_MODE), None] {
+            assert!(!on_the_wing(true, true, mode, 25.0), "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn the_station_takes_a_drone_when_it_is_past_the_transition_and_the_pilot_has_gone() {
+        assert!(on_the_wing(false, true, Some(FBWA_MODE), 20.0), "fast in FBWA");
+        assert!(!on_the_wing(false, true, Some(FBWA_MODE), 5.0), "still in the transition");
+        assert!(on_the_wing(false, true, Some(AGENT_MODE), 5.0));
+        assert!(!on_the_wing(false, false, Some(AGENT_MODE), 20.0), "on the ground");
     }
 }

@@ -2,6 +2,7 @@
 //!
 //!   cargo run --release -p recreation_towers_view -- [--server ADDR] [--feed-port N] [--feed-size WxH]
 //!                                                    [--stop-with-stdin] [--hidden]
+//!   cargo run --release -p recreation_towers_view -- --fly blue:2 [--server ADDR]
 //!   cargo run --release -p recreation_towers_view -- --export-map DIR
 //!   cargo run --release -p recreation_towers_view -- --capture DIR --at NAME=x,agl,z,tx,tagl,tz[,fov] ...
 //!
@@ -15,6 +16,15 @@
 //! (the commander app starts it so, and it stops with the app). With `--hidden` its window is not
 //! on screen (the commander app starts it so too: a window on top of the app's slows the app).
 //!
+//! `--fly blue:2` is the cockpit: the view takes the seat of a drone's pilot (the second Blue
+//! drone: the team, a colon, the drone's number from 1) instead of a spectator's, shows the nose
+//! camera of that drone full screen with a HUD (speed, height, battery, whether the drone is in
+//! contact, and the mission with the tower's bearing and distance) and flies it by the sticks:
+//! a gamepad or a RadioMaster TX15 (a USB joystick), or the keyboard (W/S throttle, arrows roll and
+//! pitch, A/D yaw, space centres the sticks). It draws only what the drone's seat is told: the drone
+//! and the enemy drones its camera sees. See `cockpit.rs`. A winged drone only (not the fifth of
+//! a team, the light quad), and one pilot to a drone.
+//!
 //! `--export-map DIR` writes the top-down map of the valley (`terrain_map.png`, `terrain_height.bin`
 //! and `terrain_map.txt`, as `sim001 --export-map` writes the sim's) and exits. It is the ground of
 //! this view, drawn from the same trees and lake, in metres north and east of the field's centre
@@ -23,6 +33,7 @@
 //! `--capture DIR` saves a picture of the valley from each `--at` view as `DIR/NAME.png` and
 //! exits, as `sim001_view --capture` does (see the visualization domain's README).
 
+mod cockpit;
 mod feeds;
 mod valley;
 
@@ -76,25 +87,37 @@ fn main() {
             std::process::exit(0);
         });
     }
+    let fly = arg("--fly").map(|f| {
+        cockpit::parse(&f).unwrap_or_else(|e| {
+            eprintln!("{e}");
+            std::process::exit(2);
+        })
+    });
+    let mut app = App::new();
+    let hidden = args.iter().any(|a| a == "--hidden");
+    app.add_plugins(DefaultPlugins.set(WindowPlugin { primary_window: Some(window(hidden)), ..default() }));
+    // The pictures of the cameras do not need the window on screen: the UI is drawn offscreen. The
+    // cockpit is the window: its picture and its HUD are on screen.
+    if fly.is_none() {
+        app.insert_resource(camera::UiOffscreen(UVec2::new(1280, 720)));
+    }
+    app.add_plugins(EnginePlugin {
+        raytracing: false,
+        // Blue's five drones, then Red's.
+        liveries: (0..10)
+            .map(|i| if i < 5 { Color::srgb(0.10, 0.42, 1.0) } else { Color::srgb(1.0, 0.18, 0.12) })
+            .collect(),
+        tips: vec!["Waiting for the valley. The drones appear when the game server sends them."],
+    });
+    if let Some(fly) = fly {
+        cockpit::plugin(&mut app, fly, &server);
+        app.run();
+        return;
+    }
     let game = Game::default();
     spawn_spectator(server, game.0.clone());
     let links = feeds::serve(first_port);
-
-    let mut app = App::new();
-    let hidden = args.iter().any(|a| a == "--hidden");
-    app.add_plugins(DefaultPlugins.set(WindowPlugin { primary_window: Some(window(hidden)), ..default() }))
-        // The pictures of the cameras do not need the window on screen: the UI is drawn offscreen.
-        .insert_resource(camera::UiOffscreen(UVec2::new(1280, 720)))
-        .add_plugins(EnginePlugin {
-            raytracing: false,
-            liveries: (0..6)
-                .map(|i| if i < 3 { Color::srgb(0.10, 0.42, 1.0) } else { Color::srgb(1.0, 0.18, 0.12) })
-                .collect(),
-            tips: vec!["Waiting for the valley. The drones appear when the game server sends them."],
-        })
-        .insert_resource(game)
-        .insert_resource(links)
-        .add_systems(Update, publish.before(EngineSet::Draw));
+    app.insert_resource(game).insert_resource(links).add_systems(Update, publish.before(EngineSet::Draw));
     feeds::plugin(&mut app, size);
     if let Some(dir) = arg("--capture") {
         visualization_engine::capture::plugin(

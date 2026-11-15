@@ -216,6 +216,51 @@ A person's seat runs advisors too (`advisors::attend`, in the commander app, `--
 lookahead by default): the app's ADVISOR panel lists the live proposals, best first, and a click on
 one, or the key Y for the first, sends that order and queue for that drone.
 
+#### A person flies a unit
+
+A drone always runs: the basic unit is ArduPilot in AGENT mode. A person can fly one winged drone by
+the sticks instead (the quad is the server's and is refused; one pilot to a drone). The seat is
+`Join::Unit { team, drone }` (drone from 0); the client sends `ToServer::Sticks { roll, pitch,
+throttle, yaw }` (roll and yaw right positive, pitch positive for the stick pulled back, throttle 0
+to 1) at 20 Hz or more.
+
+- **Take-over.** The server still takes the drone off and puts it on the wing in FBWA with its own
+  `Preflight` (the pilot's own take-off is later). Then the sticks are the drone's radio channels in
+  place of the server's, mode switch at FBWA. A pilot who joins after the ground put the drone in AGENT
+  gets it too: one second after the seat is taken (the ground station is told at once), the mode switch
+  leaves FBWA for 1.5 s of game time and comes back, which ArduPilot takes as a change.
+- **The commander.** Seats that command get `ToSeat::Piloted(Vec<usize>)` with each update: the drones
+  (numbers in the team) a person flies. The station does not put them in AGENT or send plans, but still
+  hears their telemetry, so they stay on the team's map; orders for them still go to the server.
+- **The mission.** The pilot's seat gets `ToSeat::Mission` four times a second: the commander's order,
+  low flag and queue, as last heard by the drone (they do not change while the drone is out of contact
+  by `World::in_reach`, the radio rule of `air.rs`, and catch up after), plus what the drone knows
+  (`EdgeObs`: enemies and towers its camera sees, battery, time out of contact), its velocity, attitude,
+  the tower names and places, the clock and the outcome. No map, no umpire, no truth.
+- **Hand-back.** Sticks silent for 2 s (`STICKS_TIMEOUT`), or the seat gone: the drone is the computer's;
+  its station switches it to AGENT and it flies its order. Sticks that come back reclaim a free drone.
+
+```bash
+towers_view --fly blue:2                      # the cockpit: drone 2 of Blue (names count from 1), --server ADDR
+towers_pilot --team blue --drone 2 --after 5 --for 30    # a scripted pilot: a gentle bank, then lets go
+```
+
+The cockpit shows the drone's nose camera full screen (the engine's FPV view, drawn from the mission's
+own place and attitude and the enemies its camera sees: no other drone, and the truth is not read) with
+a HUD: speed, height, heading, battery, in contact or out (with the time), enemies in sight, and the
+mission (the order with the tower's name, bearing and distance; the queue). Keys: W/S throttle,
+Left/Right roll, Up/Down pitch (Up pushes the stick forward: nose down), A/D yaw, Space centres the
+sticks. A gamepad is read as mode 2 (right stick roll and pitch, left stick rudder and throttle); a
+joystick whose name looks like a radio (TX15, EdgeTX, ...) as AETR channels. The TX15 mapping is the sim's
+default axes and has not been tried on a radio here. The window is on screen only with `--fly`.
+
+The rules are checked by the server's tests with seat clients and no ArduPilot
+(`cargo test --release -p recreation_towers_server --bins` and `-p recreation_towers_ground`); they are
+not expectations, because a state that no driver of the suite shows breaks the suite's coverage plans.
+The game with a scripted pilot on SITL is
+[expectations/09-towers/arduplane/02-pilot.expect](../../expectations/09-towers/arduplane/02-pilot.expect),
+run by `cargo test --release -p recreation_towers_server --test acceptance`.
+
 The rules and the commander are specified in [expectations/09-towers](../../expectations/09-towers)
 and run with no window by `cargo test --release -p recreation_towers`; a whole game with
 ArduPilot, with the fog checked from a seat against a spectator, by

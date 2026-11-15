@@ -15,6 +15,7 @@ pub mod advisors;
 pub mod claude;
 pub mod commander;
 pub mod map;
+pub mod pilot;
 pub mod seat;
 pub mod station;
 

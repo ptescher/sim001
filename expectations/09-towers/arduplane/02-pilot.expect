@@ -1,0 +1,54 @@
+Feature: A person flies a drone
+  A drone always runs. A computer flies it: ArduPilot, in [[AGENT mode]], with the order and the
+  [[queue]] that the [[commander]] gave. A person can fly it instead. The person is the drone's
+  [[pilot]]. The pilot takes the seat of one drone, and the sticks of the pilot become the radio
+  channels of that drone. The server still takes the drone off, and puts it on its wing. Then the
+  pilot has it. Only a winged drone has a pilot. The light quad does not. A drone has one pilot.
+
+  The pilot gets a [[mission]] on the screen. The mission is the order of the commander and its
+  queue. The pilot decides how to fly it. The game does not check that the pilot obeys. The pilot
+  also gets what the drone itself knows: what its camera sees, its battery and the time since it
+  was last in contact. The pilot does not get the map of the team, and does not get the truth.
+
+  The commander still sees a drone that a person flies. Its telemetry comes down like that of any
+  other drone, so the map of the team shows where the drone is. The commander can go on giving
+  it orders. The ground station of the team leaves the drone alone: it does not put it in AGENT
+  mode and sends it no plan.
+
+  In a radio shadow no order gets through to the drone. The mission on the pilot's screen does not
+  change, as the order of a computer drone does not change. It changes when the radio reaches the
+  drone again.
+
+  If the sticks of the pilot stop for 2 seconds, or the pilot leaves the seat, the drone is the
+  computer's again. The ground station puts it in AGENT mode, and the drone flies its order itself.
+
+  The server's own tests check these rules with seat clients and no ArduPilot: the sticks reach the
+  radio of the drone, the quad and a second pilot are refused, sticks that stop give the drone back,
+  a seat that commands is told which drones are piloted, the mission follows an order in contact and
+  stays in a radio shadow, and a pilot gets no map and no truth
+  (`cargo test --release -p recreation_towers_server --bins` and `-p recreation_towers_ground`).
+  They are not expectations here: a state that no driver of the suite can show would make the
+  suite's coverage plans unsupported. The expectations below are the game on ArduPlane SITL with a
+  scripted pilot.
+
+
+  A scripted pilot takes the second Blue drone after 40 seconds of play, flies a gentle bank by the
+  sticks for 25 seconds and lets go. The two computer commanders play on.
+
+  Expectation: A drone that a person flies is not in AGENT mode, and it turns with the sticks
+    The ground station of Blue leaves the drone alone while the pilot has it. Its telemetry still
+    comes down, so it stays on the map of Blue.
+
+    When two computer teams play a game of Towers while a person flies the second Blue drone
+    Then the looks at the second Blue drone in AGENT mode while a person flies it are 0
+    And the turn of the second Blue drone under its pilot is at least 45 degrees
+    And the looks of the Blue ground at the second Blue drone on its map while a person flies it are at least 1
+
+  Expectation: The pilot sees the order of the commander as a mission
+    When two computer teams play a game of Towers while a person flies the second Blue drone
+    Then the orders that the pilot of the second Blue drone saw as its mission are at least 1
+    And the missions that changed on the pilot's screen out of contact are 0
+
+  Expectation: When the pilot lets go, the drone flies its order in AGENT mode
+    When two computer teams play a game of Towers while a person flies the second Blue drone
+    Then the second Blue drone after the pilot let go is in AGENT mode with a plan
