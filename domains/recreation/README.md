@@ -189,7 +189,7 @@ commander's loop: each runs on a thread of its own at the station behind a mailb
 (`recreation_towers_ground::advisors::Runner`: the newest map and hand go in, older ones that were
 not looked at are dropped, proposals come out when they are ready). The computer commander puts
 what has arrived in hand with `Commander::advise` before each decision, takes the best proposal
-that gains more than 2 points, is not stale and still fits, and then shows the advisors the map
+that gains more than 5 points, is not stale and still fits, and then shows the advisors the map
 and its hand. It never waits. Which advisor each computer team has:
 
 ```bash

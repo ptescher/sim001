@@ -21,7 +21,7 @@ Feature: The computer commander
 
   The commander also thinks ahead. Every 5 s it plays the game forward 45 s in a small model.
   The enemy drones in the model are guesses from its belief. It tries to send each free drone to
-  each other tower. It makes the change that gives most points, if the gain is more than 2
+  each other tower. It makes the change that gives most points, if the gain is more than 5
   points. Thus it does not send a drone to a tower where the enemy has more drones than the
   team can bring. This is the first [[advisor]] of the commander: [[Advice for the commander]]
   tells how a commander takes advice, and what it does with no advisor.

@@ -406,7 +406,7 @@ Term: Advisor
 Term: Proposal
   In [[Towers]], what an [[advisor]] sends to a [[commander]]: one order for a drone, the
   [[queue]] that goes with it, the points that the advisor expects to gain by it, and the time
-  after which it is stale. A computer commander takes a proposal that gains more than 2 points
+  after which it is stale. A computer commander takes a proposal that gains more than 5 points
   and is not stale. A person takes a proposal with a click on its line in the ADVISOR panel, or
   with the key Y.
 

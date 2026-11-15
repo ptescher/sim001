@@ -46,7 +46,7 @@ the referee's view, and its ground sends the true places of the enemy as traffic
 An advisor gets the team's map and gives **proposals**: a unit, an instruction, the gain it
 expects, and the time until the proposal is stale. It runs beside the commander, not in its loop.
 A person sees proposals in the ADVISOR panel and accepts one with a click. A computer commander
-takes advice by itself: it takes a proposal whose gain is above a threshold (the lookahead's rule today: more than 2
+takes advice by itself: it takes a proposal whose gain is above a threshold (the lookahead's rule today: more than 5
 points). In the fast arena an advisor's delay is counted in game time, so a game stays
 reproducible.
 
@@ -156,7 +156,7 @@ server.
    map does not show: its orders after its own rules, the drones it may still change and the towers
    each must stay away from; a seat has it, for the seat is the commander. A `Commander` holds
    advisors, each with a delay in game time (`with_advisor(advisor, delay)`), and takes the best
-   proposal each decision that is not stale (`until`), gains more than `ADVICE_MARGIN` (2 points, a
+   proposal each decision that is not stale (`until`), gains more than `ADVICE_MARGIN` (5 points since the fresh-seed test below; 2 before, a
    constant: `CommanderTuning` is the league's candidate format and stays as it is) and still fits
    (the drone is free and the tower is not one it gave up, nor, for a proposal made on an earlier map,
    one the team holds now). `Commander::advise` puts proposals in hand from outside, for a person's
@@ -275,7 +275,7 @@ server.
    What it comes to. The model's missing flight was the defect: with it the lookahead goes from -0.47
    to +0.05 ± 0.04 (430 won, 370 lost), which is level with no advisor, not a gain. A larger margin
    (5 points) wins by +0.18 ± 0.04; that is a number found by looking at the result, and is not in the
-   code (`ADVICE_MARGIN` is 2 as before). Not fixed, and for the owner: whether the default commander
+   code (`ADVICE_MARGIN` is 2 as before; tested on fresh seeds below). Not fixed, and for the owner: whether the default commander
    keeps the lookahead. With the fix `judge --game captain --champion timid --challenger default
    --seeds 24` gives the default commander +0.384 (lower bound +0.048, promoted) with the lookahead,
    +0.268 (+0.031) with `SIM001_LOOKAHEAD=0`, and +0.175 (-0.132, kept out) with the lookahead as it was.
@@ -293,6 +293,27 @@ server.
    drones still lose (-6.4 ± 1.5 a move with the flight model); why drift and redeploy, which are the
    referee's and the commander's own rules, measure worse than leaving them out (about 2 sigma each, not
    checked at more seeds); why 20 s and 40 s of cooldown per drone are so much worse than 10 s.
+
+   **Margin on fresh seeds.** Rule written before the run: adopt 5 only if, on seeds 10001..=10800
+   (nobody had looked at them; 1600 games a row, both sides), a commander with margin 5 beats one with
+   margin 2 head to head, paired, with a 95 % lower bound (margin - 1.96 error) above 0; do not pick
+   another number from the table. `cargo run --release -p cognition_towers --example margin 800 10000`:
+
+   | Margin | Against no advisor | Won | Lost | Against margin 2 (lower bound) | Won | Lost |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | 2 | -0.004 ± 0.031 | 833 | 767 | +0.000 ± 0.031 (-0.060) | 799 | 799 |
+   | 3 | -0.031 ± 0.031 | 814 | 786 | +0.074 ± 0.030 (+0.015) | 841 | 758 |
+   | 5 | +0.159 ± 0.032 | 916 | 683 | +0.245 ± 0.030 (**+0.187**) | 945 | 653 |
+   | 7 | +0.103 ± 0.033 | 884 | 716 | +0.076 ± 0.030 (+0.017) | 836 | 763 |
+   | 10 | +0.172 ± 0.033 | 923 | 677 | +0.064 ± 0.030 (+0.005) | 829 | 770 |
+
+   Verdict: the rule passes, and `ADVICE_MARGIN` is 5. Margin 10 is level with 5 against no advisor
+   (+0.172 against +0.159, well inside the error) and was not tested head to head against 5: a lead
+   for another fresh test, not a change. After (`advice 400`, margin 5; before in brackets):
+   0 s +0.19 ± 0.04 (+0.05), 2 s +0.03 (-0.16), 5 s -0.09 (-0.27), 10 s -0.19 (-0.55), 30 s -0.84
+   (-0.94); 0 s: 468 won, 332 lost (430, 370). `judge --game captain --champion timid --challenger
+   default --seeds 24`: +0.453, lower bound +0.215, promoted (+0.384, +0.048 before); 32 won, 16 lost
+   (30, 18). Both before numbers were re-run on this master and equal the ones above.
    **Results (the seat side: advisors beside the commander, a process advisor, a Claude advisor,
    and the app's accept).** Done in `recreation_towers_ground::{advisors, claude}`, the commander
    app and the server. An advisor at a seat runs on a thread of its own (`advisors::Runner`) behind
