@@ -13,6 +13,7 @@
 //! The referee only needs where each drone is and whether it flies; the host moves the drones.
 //! Positions are on the field: north and east of its centre (m), and a height above it (m).
 
+mod actors;
 mod advisor;
 mod belief;
 mod commander;
@@ -26,6 +27,7 @@ pub mod seat;
 pub mod svg;
 mod view;
 
+pub use actors::{Autopilot, Command, Directive, OnBoard, Unit};
 pub use advisor::{Advice, AdviceKind, Advisor};
 pub use belief::Belief;
 pub use commander::{Commander, CommanderTuning};

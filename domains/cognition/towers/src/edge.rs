@@ -1,9 +1,14 @@
 //! Decisions on the drone, for when the radio is blocked (plans/edge.md): an [`Edge`] policy looks
 //! at what a drone knows on board ([`EdgeObs`]) each second it is out of contact, and may change
-//! its order. [`Edged`] puts one on any captain, over the standing order "fly the order on".
+//! its order. [`Edged`] puts one on any captain, over the standing order "fly the order on". A policy
+//! is not a unit of its own: [`EdgeUnit`] is the default unit (the autopilot) with the policy asked
+//! once a second while the drone is out of contact.
 
 use crate::{Captain, Comparison, Persist, Prepared, compare_captains};
-use recreation_towers::{Commander, EdgeObs, Order, Rules, Standing, Team, TeamView};
+use recreation_towers::{
+    Autopilot, Commander, EdgeObs, Instruction, OnBoard, Order, Rules, Standing, Team, TeamView, Unit,
+};
+use std::rc::Rc;
 
 /// What a cut-off drone decides on its own.
 pub trait Edge {
@@ -57,6 +62,51 @@ impl Edge for FinishThenReturn {
     }
 }
 
+impl<E: Edge + ?Sized> Edge for Rc<E> {
+    fn name(&self) -> String {
+        (**self).name()
+    }
+
+    fn act(&self, team: Team, obs: &EdgeObs, order: Order) -> Option<Order> {
+        (**self).act(team, obs, order)
+    }
+}
+
+/// The default unit with an on-board policy: it flies as the autopilot does, and once a second,
+/// while the drone is flying out of contact, asks `edge` what to do from what the drone sees. A
+/// new order from the policy replaces the queue: the failsafe still holds.
+pub struct EdgeUnit<E> {
+    team: Team,
+    edge: E,
+    next: f32,
+}
+
+impl<E: Edge> EdgeUnit<E> {
+    pub fn new(team: Team, edge: E) -> EdgeUnit<E> {
+        EdgeUnit { team, edge, next: 0.0 }
+    }
+}
+
+impl<E: Edge> Unit for EdgeUnit<E> {
+    fn fly(&mut self, on: &OnBoard, told: &mut Instruction) -> Option<Order> {
+        Autopilot.fly(on, told);
+        let now = on.time() >= self.next;
+        if now {
+            self.next += 1.0;
+        }
+        if now
+            && !on.in_contact()
+            && on.flying()
+            && let Some(order) = told.order
+            && let Some(new) = self.edge.act(self.team, on.obs(), order)
+            && new != order
+        {
+            told.decide(new);
+        }
+        told.order
+    }
+}
+
 /// A captain with an on-board policy: its orders go out with "fly the order on", and the policy
 /// decides for a drone that is out of contact.
 pub struct Edged<C, E> {
@@ -64,7 +114,7 @@ pub struct Edged<C, E> {
     pub edge: E,
 }
 
-impl<C: Captain, E: Edge> Captain for Edged<C, E> {
+impl<C: Captain, E: Edge + Clone + 'static> Captain for Edged<C, E> {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         self.captain.decide(view)
     }
@@ -73,26 +123,17 @@ impl<C: Captain, E: Edge> Captain for Edged<C, E> {
         orders.iter().map(|&(k, o)| (k, Standing { after: 0.0, then: o })).collect()
     }
 
-    fn edge(&mut self, team: Team, obs: &EdgeObs, order: Order) -> Option<Order> {
-        self.edge.act(team, obs, order)
+    /// Each drone gets its own copy of the policy: the policy is all the captain gives a drone.
+    fn unit(&self, team: Team, _: usize) -> Box<dyn Unit> {
+        Box::new(EdgeUnit::new(team, self.edge.clone()))
     }
 }
 
 /// `edge` against a captain that flies the order on (the baseline), on paired seeds.
-pub fn compare_edge(rules: Rules, edge: &dyn Edge, seeds: &[u64]) -> Result<Comparison, String> {
-    struct Dyn<'a>(&'a dyn Edge);
-    impl Edge for Dyn<'_> {
-        fn name(&self) -> String {
-            self.0.name()
-        }
-
-        fn act(&self, team: Team, obs: &EdgeObs, order: Order) -> Option<Order> {
-            self.0.act(team, obs, order)
-        }
-    }
+pub fn compare_edge(rules: Rules, edge: Rc<dyn Edge>, seeds: &[u64]) -> Result<Comparison, String> {
     compare_captains(
         rules,
-        &|| Box::new(Edged { captain: Commander::new(rules).with_lookahead(false), edge: Dyn(edge) }),
+        &|| Box::new(Edged { captain: Commander::new(rules).with_lookahead(false), edge: edge.clone() }),
         &|| Box::new(Prepared { captain: Commander::new(rules).with_lookahead(false), autonomy: Persist }),
         seeds,
     )
@@ -145,7 +186,7 @@ mod tests {
     /// A team that keeps its order plays the same game as one with the standing order "fly on".
     #[test]
     fn an_edge_that_goes_on_plays_like_persist() {
-        let c = compare_edge(Rules::default(), &Keep, &[1, 2, 3]).unwrap();
+        let c = compare_edge(Rules::default(), Rc::new(Keep), &[1, 2, 3]).unwrap();
         assert!(c.margin.abs() < 1e-6, "{c:?}");
         assert_eq!(c.won, c.lost);
     }
@@ -163,7 +204,7 @@ mod tests {
                 Some(Order::Home)
             }
         }
-        let c = compare_edge(Rules::default(), &AlwaysHome, &[1, 2, 3]).unwrap();
+        let c = compare_edge(Rules::default(), Rc::new(AlwaysHome), &[1, 2, 3]).unwrap();
         assert!(c.margin.abs() > 1e-3, "the policy never ran: {c:?}");
     }
 }

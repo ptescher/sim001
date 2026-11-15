@@ -111,6 +111,35 @@ server.
 2. **Split `Captain`.** In `cognition_towers`: a commander for a team, a unit for each drone
    (the default flies the queue), advisors. `Match` takes a roster. The out-of-process seat
    carries the queue. Gate: the same results on the same seeds.
+   **Results (commander, units and a roster).** Done in the arena; advisors are step 4's. The two
+   roles are traits in `recreation_towers` (`actors.rs`, no I/O, for the arena and the server):
+   `Command { decide(&mut self, &TeamView) -> Result<Vec<Directive>, String> }`, a `Directive` being
+   `{ drone, order, queue }`, and `Unit { fly(&mut self, &OnBoard, &mut Instruction) -> Option<Order>;
+   restart() }`. `OnBoard` has private fields and methods for what a drone has on board only: its team
+   and number, whether it flies, its clock, `silent()` and `in_contact()`, battery, the link timeout
+   and bingo level, `obs()` (its `EdgeObs`, worked out when asked) and `done(order)`. The default unit
+   is `Autopilot`: `Instruction::tick_with`. `Match::with_units` takes a unit for each of the ten
+   drones; `Match::step_with(&mut dyn Command, &mut dyn Command)` takes the commanders; `Roster`
+   (`Roster::new(rules, blue, red, |team, k| unit)`, `Roster::of_captains`, `with_unit`) and
+   `play_roster` put them together. A unit runs on every step of the arena (ten a second), for every
+   drone, in contact or not: the queue has to be worked at that rate for the games to stay the same.
+   The edge policies run once a second inside `EdgeUnit`, as before.
+
+   `Captain` is kept: `Directing(captain)` is its `Command` (orders with `queue`), and
+   `Captain::unit(team, k)` replaces `Captain::edge` and makes the unit of each drone (default
+   `Autopilot`; `Edged` makes an `EdgeUnit` with its own copy of the policy). No `edge` read captain
+   state, so nothing was shared: `Edged`'s policy is stateless and cloned (`compare_edge` takes an
+   `Rc<dyn Edge>` for that). `Prepared` only changes the queue that goes with an order, so it is on the
+   command side. The seat protocol: a reply is a list of `[drone, order]` or `[drone, order, queue]`
+   (`Reply`); an old reply is read as before, and `serve_with` serves any `Command`.
+
+   Same results on the same seeds, digit for digit: `denial`, `ruleset v2 200`, `edge 30` and
+   `cognition_league judge --game captain --champion timid --challenger default --seeds 24` print the
+   same before and after. New tests: a counting unit runs on every step of every drone, in contact
+   or not; a roster with different units for the two teams, and for one drone, plays the same game
+   twice and not the game of the default units; the old and the new reply; a served and a spawned seat
+   with a queue.
+
 3. **One commander path.** The computer commander takes a `Command` seat like a person, with
    its own `Ground` and a map from telemetry. A seat can be given up and taken during a game,
    and the computer takes a seat that a person leaves. Two people can play (phase 4 of
