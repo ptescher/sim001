@@ -2,7 +2,7 @@
 //! since it was last in contact. A drone in a radio shadow has nothing else, so an on-board
 //! decision uses this and no more (plans/edge.md).
 
-use crate::{Class, Game, Phase, Team};
+use crate::{Class, Game, Order, Phase, Team};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +43,26 @@ pub struct EdgeObs {
     pub silent: f32,
 }
 
+/// A drone this near a point (m) is there.
+pub const THERE: f32 = 35.0;
+
+/// Whether `order` is done, as a drone of `team` can tell from what it knows on board: a tower
+/// it takes is done when its own camera sees that its team holds it; a point it goes to, when it
+/// is there. To hold, to circle and to go home are never done.
+pub fn order_done(obs: &EdgeObs, team: Team, order: Order) -> bool {
+    match order {
+        Order::Take(t) => obs.towers.iter().any(|s| s.index == t && s.holder == Some(team)),
+        Order::Goto(p) => obs.at.distance(p) <= THERE,
+        Order::Hold | Order::Circle(..) | Order::Home => false,
+    }
+}
+
 impl Game {
+    /// Whether `order` is done for drone `i`, by what it knows on board ([`order_done`]).
+    pub fn order_done(&self, i: usize, order: Order) -> bool {
+        order_done(&self.edge_obs(i), self.drones[i].team, order)
+    }
+
     /// What drone `i` knows on board now.
     pub fn edge_obs(&self, i: usize) -> EdgeObs {
         let d = &self.drones[i];

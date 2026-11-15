@@ -212,12 +212,18 @@ Vocabulary:
   State: the condition of the first Blue drone is flying | down | on the ground
     Shows: down: B1 is out of the game, and the card of B1 shows DOWN
   # Standing orders: what a drone out of contact does.
-  State: the order that the first Blue drone flies is none | take the west tower | hold | go home
+  State: the order that the first Blue drone flies is none | take the west tower | take the east tower | take the centre tower | hold | go home
     Shows: the order {value} is the order that B1 flies now. In the app, the card of B1 shows it
   State: the standing order of the first Blue drone is none | hold after 5 s | go home after 5 s | hold after 30 s
     Shows: hold after 5 s: the card of B1 shows STANDING HOLD under its order
     Shows: go home after 5 s: the card of B1 shows STANDING HOME under its order
     Shows: hold after 30 s: the card of B1 shows STANDING HOLD 30 under its order
+  State: the queue of the first Blue drone is none | take the east tower after 5 s, then take the west tower when done | take the east tower after 5 s, then go home when done | go home when done | hold at 80 s of battery | hold after 5 s, then go home when done
+    Shows: take the east tower after 5 s, then go home when done: the card of B1 shows QUEUE EAST 5, then HOME
+    Shows: go home when done: the card of B1 shows QUEUE HOME
+  State: the number of instructions in the queue of the first Blue drone is 0..4
+  Event: the first Blue drone is given the order to hold with a queue of five instructions
+    Say: order the first Blue drone to hold, with a queue of five instructions
   Event: the first Blue drone flies through the radio shadow for 10 seconds
     Say: order the first Blue drone to fly to a point 100 m from the Red home tower, wait 10 seconds, and order it back to the Blue home tower
   Event: the first Blue drone is given the order to hold

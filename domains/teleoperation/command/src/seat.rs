@@ -98,7 +98,7 @@ impl Seat {
             }
             s.orders[drone] = (Some(order), low);
         }
-        let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low, standing: None });
+        let _ = self.orders.lock().unwrap().send(ToServer::Order { drone, order, low, standing: None, queue: vec![] });
     }
 
     /// Stops connecting: the connection that is open ends with its server, and is not made

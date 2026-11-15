@@ -454,10 +454,17 @@ Term: Picket
   inside it. See [[The mesh]].
 
 Term: Standing order
-  In [[Towers]], a plan that a commander gives to a drone with its order. It says what the drone
+  In [[Towers]], the [[queue]] of one instruction: a plan that a commander gives to a drone with its order. It says what the drone
   does if it is out of contact for some seconds: for example, hold, or go home. The drone stays
   on the standing order until the commander gives it a new order. A drone with no standing order
   flies home when its link is lost.
+
+Term: Queue
+  In [[Towers]], the list of up to four instructions that a commander gives to a drone with its
+  order. Each instruction has an order and the condition that starts it: the drone is out of
+  contact for some seconds, the order before it is done, or the [[battery]] is down to some
+  seconds. A drone out of contact works down its queue. A [[standing order]] is a queue of one
+  instruction.
 
 Term: Mountains
   In [[Towers]], the tall mountains round the edge of the field. They are higher than a drone

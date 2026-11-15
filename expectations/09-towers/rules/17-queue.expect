@@ -1,0 +1,94 @@
+Feature: The queue of a drone
+  A commander can give a drone a [[queue]] with its order. The queue is a list of up to four
+  instructions. Each one has an order and the condition that starts it. The condition is one of
+  three: the drone has been out of contact for some seconds, the order before it is done, or
+  the [[battery]] of the drone is down to some seconds.
+
+  A [[standing order]] is a queue of one instruction. The queue is for a plan that has more
+  steps: take a tower, then take the next one, then go home.
+
+  A drone takes the instructions of its queue only when it is out of contact. In contact, the
+  commander gives the orders. A drone in contact keeps its order. An order is done when the drone
+  sees that it is done: a drone that takes a tower is done when its own camera sees that its team
+  holds the tower. A drone that goes to a point is done when it is there. A drone that holds, circles or goes home is
+  never done.
+
+  A drone that has started on its queue stays on its order, also when it is in contact again,
+  until the commander gives it a new order. A drone with no queue flies home when its link is
+  lost: see [[Standing orders]].
+
+  Expectation: A drone out of contact works down its queue
+    The first instruction is due 5 s after the link is cut. The drone sees that its team holds
+    the east tower, so the second instruction starts.
+
+    Given the centre tower is held by Red
+    And the towers held by Blue are 2
+    And the west tower is neutral
+    And the east tower is held by Blue
+    And the order that the first Blue drone flies is take the centre tower
+    And the queue of the first Blue drone is take the east tower after 5 s, then take the west tower when done
+    And the first Blue drone is 190 m from the centre tower
+    When the game runs for 10 seconds
+    Then the order that the first Blue drone flies is take the west tower
+
+  Expectation: A drone waits for the order before an instruction to be done
+    The east tower is not held by Blue. The order to take it is not done.
+
+    Given the centre tower is held by Red
+    And the east tower is neutral
+    And the order that the first Blue drone flies is take the centre tower
+    And the queue of the first Blue drone is take the east tower after 5 s, then go home when done
+    And the first Blue drone is 190 m from the centre tower
+    When the game runs for 10 seconds
+    Then the order that the first Blue drone flies is take the east tower
+
+  Expectation: A drone that is done with its queue flies home
+    The last instruction of the queue is to go home. This is the end of every queue.
+
+    Given the centre tower is held by Red
+    And the towers held by Blue are 2
+    And the west tower is neutral
+    And the east tower is held by Blue
+    And the order that the first Blue drone flies is take the centre tower
+    And the queue of the first Blue drone is take the east tower after 5 s, then go home when done
+    And the first Blue drone is 190 m from the centre tower
+    When the game runs for 10 seconds
+    Then the order that the first Blue drone flies is go home
+
+  Expectation: An order is done when the camera of the drone sees that it is done
+    The drone is far from the east tower, and its camera does not see it. Its team holds the east
+    tower, but the drone does not know it.
+
+    Given the Red home tower is held by Red
+    And the towers held by Blue are 2
+    And the west tower is neutral
+    And the east tower is held by Blue
+    And the order that the first Blue drone flies is take the east tower
+    And the queue of the first Blue drone is go home when done
+    And the first Blue drone is near the Red home tower
+    When the game runs for 10 seconds
+    Then the order that the first Blue drone flies is take the east tower
+
+  Expectation: A drone starts an instruction when its battery is low
+    Overrides: A drone out of contact keeps its order until the standing order is due
+    The instruction starts when the battery is down to 80 s, 10 s before the drone has to go home.
+
+    Given the batteries are on
+    And the Red home tower is held by Red
+    And the order that the first Blue drone flies is take the west tower
+    And the queue of the first Blue drone is hold at 80 s of battery
+    And the battery of the first Blue drone is 70 s
+    And the first Blue drone is near the Red home tower
+    When the game runs for 3 seconds
+    Then the order that the first Blue drone flies is hold
+
+  Expectation: A new order replaces the queue
+    Given the order that the first Blue drone flies is take the west tower
+    And the queue of the first Blue drone is hold after 5 s, then go home when done
+    When the first Blue drone is given the order to hold
+    Then the queue of the first Blue drone is none
+
+  Expectation: A queue has at most four instructions
+    Given the order that the first Blue drone flies is take the west tower
+    When the first Blue drone is given the order to hold with a queue of five instructions
+    Then the number of instructions in the queue of the first Blue drone is 4

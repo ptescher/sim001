@@ -6,7 +6,7 @@
 //! team's map. An [`Autonomy`] chooses it. [`Prepared`] puts one on any captain.
 
 use crate::{Captain, TowersResult, play_with};
-use recreation_towers::{Commander, Order, Rules, Standing, Team, TeamView};
+use recreation_towers::{Commander, Order, Queued, Rules, Standing, Team, TeamView};
 
 /// Chooses the standing order that goes with an order.
 pub trait Autonomy {
@@ -15,6 +15,12 @@ pub trait Autonomy {
     /// The standing order for drone `k`, given `order` now, from what the team's map shows now.
     /// `None` is the failsafe: home after the link is lost.
     fn standing(&self, view: &TeamView, k: usize, order: Order) -> Option<Standing>;
+
+    /// The queue for drone `k`, given `order` now. By default the standing order, as a queue of one.
+    /// An empty queue is the failsafe.
+    fn queue(&self, view: &TeamView, k: usize, order: Order) -> Vec<Queued> {
+        self.standing(view, k, order).map(Queued::from).into_iter().collect()
+    }
 }
 
 impl<A: Autonomy + ?Sized> Autonomy for &A {
@@ -24,6 +30,10 @@ impl<A: Autonomy + ?Sized> Autonomy for &A {
 
     fn standing(&self, view: &TeamView, k: usize, order: Order) -> Option<Standing> {
         (**self).standing(view, k, order)
+    }
+
+    fn queue(&self, view: &TeamView, k: usize, order: Order) -> Vec<Queued> {
+        (**self).queue(view, k, order)
     }
 }
 
@@ -93,6 +103,77 @@ impl Autonomy for Surface {
     }
 }
 
+/// A drone out of contact flies its order on. For an order that takes a tower, when the tower
+/// is held by the team (as the drone's own camera sees), it takes the nearest tower that the team
+/// does not hold; when that is done, it flies home. A queue of three: the order on, the next
+/// tower, home. For another order, the order on, then home when it is done.
+pub struct Chain;
+
+impl Chain {
+    /// The nearest tower to `from` that the team does not hold, other than `not`.
+    fn next(view: &TeamView, from: glam::Vec2, not: usize) -> Option<usize> {
+        view.towers
+            .iter()
+            .enumerate()
+            .filter(|(i, t)| *i != not && t.holder != Some(view.team))
+            .min_by(|(_, a), (_, b)| a.at.distance(from).total_cmp(&b.at.distance(from)))
+            .map(|(i, _)| i)
+    }
+}
+
+impl Autonomy for Chain {
+    fn name(&self) -> String {
+        "chain".into()
+    }
+
+    fn standing(&self, _: &TeamView, _: usize, order: Order) -> Option<Standing> {
+        Some(Standing { after: 0.0, then: order })
+    }
+
+    fn queue(&self, view: &TeamView, _: usize, order: Order) -> Vec<Queued> {
+        let mut queue = vec![Queued::silent(0.0, order)];
+        if let Order::Take(t) = order
+            && let Some(at) = view.towers.get(t).map(|t| t.at)
+            && let Some(next) = Chain::next(view, at, t)
+        {
+            queue.push(Queued::done(Order::Take(next)));
+        }
+        queue.push(Queued::done(Order::Home));
+        queue
+    }
+}
+
+/// The same chain, by the clock. A drone that holds its tower is in contact again, so an
+/// instruction that waits for the order to be done may never start in the valley (see
+/// `plans/actors.md`). This one waits for the silence: the order on, then the nearest tower that
+/// the team does not hold after `next` s out of contact, then home after `home` s.
+pub struct Timed {
+    pub next: f32,
+    pub home: f32,
+}
+
+impl Autonomy for Timed {
+    fn name(&self) -> String {
+        format!("timed {} s, {} s", self.next, self.home)
+    }
+
+    fn standing(&self, _: &TeamView, _: usize, order: Order) -> Option<Standing> {
+        Some(Standing { after: 0.0, then: order })
+    }
+
+    fn queue(&self, view: &TeamView, _: usize, order: Order) -> Vec<Queued> {
+        let mut queue = vec![Queued::silent(0.0, order)];
+        if let Order::Take(t) = order
+            && let Some(at) = view.towers.get(t).map(|t| t.at)
+            && let Some(next) = Chain::next(view, at, t)
+        {
+            queue.push(Queued::silent(self.next, Order::Take(next)));
+        }
+        queue.push(Queued::silent(self.home, Order::Home));
+        queue
+    }
+}
+
 /// A captain with an autonomy: its orders go out with the autonomy's standing orders.
 pub struct Prepared<C, A> {
     pub captain: C,
@@ -106,6 +187,10 @@ impl<C: Captain, A: Autonomy> Captain for Prepared<C, A> {
 
     fn standing(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
         orders.iter().filter_map(|&(k, o)| self.autonomy.standing(view, k, o).map(|s| (k, s))).collect()
+    }
+
+    fn queue(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Vec<Queued>)> {
+        orders.iter().map(|&(k, o)| (k, self.autonomy.queue(view, k, o))).filter(|(_, q)| !q.is_empty()).collect()
     }
 }
 

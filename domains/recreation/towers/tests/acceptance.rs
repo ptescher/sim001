@@ -10,8 +10,8 @@ use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
 use recreation_towers::{
-    Advice, AdviceKind, Advisor, Belief, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase, Rules,
-    Standing, Team,
+    Advice, AdviceKind, Advisor, Belief, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase, Queued,
+    Rules, Standing, Team, When,
 };
 use std::path::Path;
 
@@ -86,13 +86,32 @@ impl World {
                 self.belief_at = self.game.time + 1.0;
                 self.belief.update(&self.game.view(Team::Blue));
             }
-            self.told.tick(
-                self.game.silent[blue],
-                self.game.rules.link_timeout,
-                self.game.charge(blue),
-                self.game.rules.bingo,
-            );
+            let game = &self.game;
+            self.told.tick_with(game.silent[blue], game.rules.link_timeout, game.charge(blue), game.rules.bingo, |o| {
+                game.order_done(blue, o)
+            });
         }
+    }
+
+    /// An instruction of a queue, as the spec words it: `ORDER after N s`, `ORDER when done` or
+    /// `ORDER at N s of battery`.
+    fn parse_queued(&self, text: &str) -> Queued {
+        let order = |words: &str| match words {
+            "hold" => Order::Hold,
+            "go home" => Order::Home,
+            w => {
+                let name = w.strip_prefix("take the ").and_then(|w| w.strip_suffix(" tower")).unwrap();
+                Order::Take(self.game.tower(name))
+            }
+        };
+        if let Some(o) = text.strip_suffix(" when done") {
+            return Queued::done(order(o));
+        }
+        if let Some((o, n)) = text.split_once(" after ") {
+            return Queued::silent(n.trim_end_matches(" s").parse().unwrap(), order(o));
+        }
+        let (o, n) = text.split_once(" at ").unwrap();
+        Queued::battery(n.trim_end_matches(" s of battery").parse().unwrap(), order(o))
     }
 
     /// Blue's belief, brought up to date with the map now.
@@ -736,17 +755,50 @@ fn bindings() -> Bindings<World> {
                 _ => None,
             };
         })
-        .observe("the standing order of the first Blue drone", |w| match w.told.standing {
+        .observe("the standing order of the first Blue drone", |w| match w.told.standing() {
             None => "none".to_string(),
             Some(s) => format!("{} after {} s", w.say(Some(s.then)), s.after),
         })
         .arrange("the standing order of the first Blue drone", |w, v| {
-            w.told.standing = match v.as_str() {
+            let standing = match v.as_str() {
                 Some("hold after 5 s") => Some(Standing { after: 5.0, then: Order::Hold }),
                 Some("go home after 5 s") => Some(Standing { after: 5.0, then: Order::Home }),
                 Some("hold after 30 s") => Some(Standing { after: 30.0, then: Order::Hold }),
                 _ => None,
             };
+            w.told.queue = standing.map(Queued::from).into_iter().collect();
+            w.told.taken = 0;
+        })
+        // The queue.
+        .observe("the queue of the first Blue drone", |w| {
+            if w.told.queue.is_empty() {
+                return "none".to_string();
+            }
+            let entries: Vec<String> = w
+                .told
+                .queue
+                .iter()
+                .map(|q| {
+                    let order = w.say(Some(q.order));
+                    match q.when {
+                        When::Silent(s) => format!("{order} after {s} s"),
+                        When::Done => format!("{order} when done"),
+                        When::Battery(b) => format!("{order} at {b} s of battery"),
+                    }
+                })
+                .collect();
+            entries.join(", then ")
+        })
+        .arrange("the queue of the first Blue drone", |w, v| {
+            let text = v.as_str().unwrap_or("none");
+            let queue =
+                if text == "none" { vec![] } else { text.split(", then ").map(|e| w.parse_queued(e)).collect() };
+            w.told.queue = queue;
+            w.told.taken = 0;
+        })
+        .observe("the number of instructions in the queue of the first Blue drone", |w| w.told.queue.len() as f64)
+        .on("the first Blue drone is given the order to hold with a queue of five instructions", |w| {
+            w.told.give_queue(Order::Hold, vec![Queued::done(Order::Home); 5]);
         })
         .on("the first Blue drone is given the order to hold", |w| w.told.give(Order::Hold, None))
         // The mountains.
@@ -824,4 +876,68 @@ fn the_section_documents_itself_with_pictures_of_the_map() {
     let shot = out.join("screenshots/towers--rules--coverage--one-drone-takes-a-neutral-tower-in-20-seconds/01.svg");
     let svg = std::fs::read_to_string(&shot).unwrap_or_else(|e| panic!("{}: {e}", shot.display()));
     assert!(svg.contains("BLUE 20") && svg.contains("RED 20"), "the score after 20 s with a home tower each: {svg}");
+}
+
+/// The queue's expectations (`17-queue.expect`) played by hand: the suite's coverage runs only a
+/// few expectations of a section, and these must all hold.
+mod queue {
+    use super::*;
+
+    const BOTH: &str = "take the east tower after 5 s, then take the west tower when done";
+    const THEN_HOME: &str = "take the east tower after 5 s, then go home when done";
+
+    /// The centre tower is Red's (a radio shadow 200 m across), the east tower is `east`'s, and
+    /// the first Blue drone flies `queue` 190 m from the centre tower, where its camera sees the
+    /// east tower.
+    fn world(east: Option<Team>, queue: &str) -> World {
+        let mut w = World::new();
+        w.blue_holds(2);
+        w.hold("west", &Value::from("neutral"));
+        w.hold("centre", &Value::from("held by Red"));
+        w.hold("east", &Value::from(holder_name(east)));
+        w.place_blue(&Value::from("190 m from the centre tower"));
+        w.told.order = Some(Order::Take(w.game.tower("centre")));
+        w.told.queue = queue.split(", then ").map(|e| w.parse_queued(e)).collect();
+        w
+    }
+
+    #[test]
+    fn a_drone_out_of_contact_keeps_its_order_until_its_first_instruction_is_due() {
+        let mut w = world(Some(Team::Blue), BOTH);
+        w.run(3.0);
+        assert_eq!(w.say(w.told.order), "take the centre tower");
+    }
+
+    #[test]
+    fn a_drone_out_of_contact_works_down_its_queue() {
+        let mut w = world(Some(Team::Blue), BOTH);
+        w.run(10.0);
+        assert_eq!(w.say(w.told.order), "take the west tower");
+    }
+
+    #[test]
+    fn a_drone_waits_for_the_order_before_an_instruction_to_be_done() {
+        let mut w = world(None, THEN_HOME);
+        w.run(10.0);
+        assert_eq!(w.say(w.told.order), "take the east tower");
+    }
+
+    #[test]
+    fn a_drone_that_is_done_with_its_queue_flies_home() {
+        let mut w = world(Some(Team::Blue), THEN_HOME);
+        w.run(10.0);
+        assert_eq!(w.say(w.told.order), "go home");
+    }
+
+    #[test]
+    fn an_order_is_done_when_the_camera_of_the_drone_sees_that_it_is_done() {
+        let mut w = World::new();
+        w.hold("Red home", &Value::from("held by Red"));
+        w.hold("east", &Value::from("held by Blue"));
+        w.place_blue(&Value::from("near the Red home tower"));
+        w.told.order = Some(Order::Take(w.game.tower("east")));
+        w.told.queue = vec![w.parse_queued("go home when done")];
+        w.run(10.0);
+        assert_eq!(w.say(w.told.order), "take the east tower");
+    }
 }

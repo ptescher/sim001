@@ -64,6 +64,10 @@ pub struct Situation<'a> {
     /// By drone number in the game.
     pub orders: &'a [Option<Order>],
     pub lows: &'a [bool],
+    /// The standing order of each drone: the first `Silent` instruction of its queue. The flight
+    /// controller has one standing plan, so this is all of the queue that the ground uploads (the
+    /// rest is flown by the server for a drone with no wing, and by the arena). An on-board
+    /// queue is a later step (`plans/actors.md`).
     pub standing: &'a [Option<Standing>],
     /// Which drones fly on the wing (taken off, and past the take-off transition).
     pub wing: Vec<bool>,

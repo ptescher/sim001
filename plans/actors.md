@@ -74,6 +74,40 @@ server.
    commander app can send one (today it always sends `standing: None`). Gate: the `denial`
    table of `plans/edge.md` is unchanged, and a new policy with a three-entry queue (take, then
    the next tower, then home) is measured against persist.
+
+   **Results (the queue in the rules, the arena, the server and the seat protocol).** Not yet
+   done: the on-board slots (`cognition_plan` ABI 4, the executor, `COMMAND_INT`) and a queue in
+   the commander app. The flight controller still has one standing slot: the ground uploads the
+   first `Silent` instruction of a queue as the standing plan, as before; the server flies the
+   whole queue for a drone with no wing, and the arena flies it for every drone. A `Standing` is
+   a queue of one (`From<Standing> for Queued`), a queue has at most `MAX_QUEUE` = 4
+   instructions (a longer one is cut), and `ToServer::Order` has a `queue` beside the old
+   `standing` (both default, so an old seat still works). "Done" is told from the drone's own
+   camera and position (`order_done` in `edge.rs`): a `Take` is done when the camera sees the
+   team's tower held by the team, a `Goto` when the drone is within 35 m, and `Hold`, `Circle`
+   and `Home` never.
+
+   The `denial` table (100 seeds, both sides, against the failsafe) is the same, row for row,
+   before and after. The new policies are in the last rows, and the last block is against persist:
+
+   | policy | margin | error | won | lost |
+   | --- | --- | --- | --- | --- |
+   | persist (unchanged) | +0.060 | 0.095 | 103 | 97 |
+   | hold after 5 s (unchanged) | -0.441 | 0.095 | 69 | 131 |
+   | home after 5 s (unchanged) | -0.807 | 0.083 | 48 | 152 |
+   | home after 30 s (unchanged) | -0.272 | 0.095 | 81 | 119 |
+   | chain (persist, next tower when done, home), against failsafe | +0.060 | 0.095 | 103 | 97 |
+   | chain, against persist | -0.000 | 0.094 | 100 | 100 |
+   | timed 20 s, 60 s, against persist | -0.730 | 0.082 | 50 | 150 |
+   | timed 30 s, 90 s, against persist | -0.350 | 0.093 | 75 | 125 |
+
+   A queue with a longer plan does not beat persisting in the valley. `chain` plays exactly as
+   persist: a drone that takes a tower flips the tower, the shadow of that tower goes, the drone
+   is in contact again, and a drone in contact does not take an instruction, so "done" never
+   starts the next one (the probe counted no drone past its first instruction). `timed`, which
+   waits for the silence instead, pulls drones off their towers and loses. The next question is
+   for a plan that has a reason to leave a tower: a battery entry, or an order that goes to a
+   point.
 2. **Split `Captain`.** In `cognition_towers`: a commander for a team, a unit for each drone
    (the default flies the queue), advisors. `Match` takes a roster. The out-of-process seat
    carries the queue. Gate: the same results on the same seeds.
