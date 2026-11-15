@@ -117,7 +117,7 @@ fn main() {
     let seat = seat::Seat::connect(&addr, join);
     // A seat that commands is the team's ground station: it flies the team's drones itself.
     if matches!(join, Join::Command(_)) {
-        station::start(seat.clone(), addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string());
+        station::start(seat.clone(), addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string(), None);
     }
     // The pictures from the team's drones: the 3D view of the game is on the server's machine.
     let host = addr.rsplit_once(':').map_or("127.0.0.1", |(h, _)| h).to_string();

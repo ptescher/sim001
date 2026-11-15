@@ -18,12 +18,25 @@ pub const PORT: u16 = 5955;
 /// What a seat is.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Join {
-    /// Commands a team (a seat the server was told to keep for a person).
+    /// Commands a team, as a person at the commander app does.
     Command(Team),
+    /// Commands a team, as a computer does: the same seat, with the same messages. It is a seat that
+    /// gives way: a person who joins the team takes it from the computer.
+    Compute(Team),
     /// Watches a team: its map, no orders.
     Watch(Team),
     /// Watches the whole game, with no fog.
     Spectate,
+}
+
+impl Join {
+    /// The team the seat commands, for a person or a computer.
+    pub fn commands(self) -> Option<Team> {
+        match self {
+            Join::Command(t) | Join::Compute(t) => Some(t),
+            Join::Watch(_) | Join::Spectate => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -102,6 +115,10 @@ pub enum ToSeat {
     Umpire(Umpire),
     /// What the team's towers and base report, to a seat that commands.
     Sites(Sites),
+    /// The orders the team's drones have now (by drone number in the team: the order, and whether it
+    /// is flown low), once, right after the welcome of a seat that commands: a commander that takes
+    /// over a game goes on from them.
+    Orders(Vec<(Option<Order>, bool)>),
     Truth(Truth),
     /// The advisor of the team speaks, to a seat that commands it, when something matters.
     Advice(Advice),

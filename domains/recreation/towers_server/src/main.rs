@@ -1,5 +1,6 @@
 //! The game server of Towers (see plans/towers.md): `cargo run --release -p
-//! recreation_towers_server -- [--speedup N] [--blue computer|person] [--red computer|person]`.
+//! recreation_towers_server -- [--speedup N] [--blue computer|person|nobody] [--red computer|person|nobody]
+//! [--on-leave computer|wait]`.
 //!
 //! Each drone has an ArduPlane SITL of its own, flying the plane of its class (`recreation_towers::Class`: standard T1-S VTOLs, a heavy T2 Cruza and a light Seeker 3) (MAVLink system ids 1 to 10), with
 //! the AGENT mode and `ardupilot/towers.parm`. The SITL instances are 30 to 39
@@ -8,8 +9,21 @@
 //! the drone's physics, and its radio takes the drone off at GO. Once a drone flies on the wing, the ground switches it to AGENT and flies its order by
 //! plan. The referee (`recreation_towers::Game`) steps with the physics.
 //!
-//! Each team has a seat on TCP (`--seat-port`, 5955): a computer commander, or a person at the
-//! commander app. A seat gets only its team's map. GO waits for the people, and for ArduPilot,
+//! Each team has a seat on TCP (`--seat-port`, 5955), and the same seat for a person at the
+//! commander app and for a computer commander: the team's ground station, which gets the umpire's
+//! word, what its towers and base report and the way to its drones (the air), and makes its own map
+//! from its drones' telemetry. The server decides and sends no plan for any team: for `computer` (the
+//! default) it starts a computer commander (`recreation_towers_ground::commander`, the same as the
+//! binary `towers_commander`) as a thread of its own that takes the seat over loopback TCP; for
+//! `nobody` one that gives no orders. What the server does itself is the flight of the light quads
+//! from the orders the seat gave, the take-off, the referee and the air.
+//!
+//! A seat changes hands during the game. A person who joins a team that a computer commands takes
+//! the seat (the computer is relieved; the person's seat starts with the orders the drones have). When
+//! a person leaves, the seat is free; a second later, with `--on-leave computer` (the default), a
+//! computer commander takes it, and with `--on-leave wait` the drones fly their last orders until a
+//! person comes back. `--blue person` still means that GO waits for a person. One person for each
+//! team may play. A seat gets only its team's map. GO waits for the people, and for ArduPilot,
 //! which needs about a minute of its own time before it arms (`--warmup`). Needs the AGENT build:
 //! `SIM001_BIN`, else `.ardupilot-agent/build/sitl/bin`.
 
@@ -21,8 +35,9 @@ mod world;
 
 use glam::Vec3;
 use recreation_games::Radio;
-use recreation_towers::{Advisor, Class, Commander, Outcome, Rules, Team};
-use recreation_towers_ground as ground;
+use recreation_towers::{Advisor, Class, Outcome, Rules, Team};
+use recreation_towers_ground::commander::{self, Brain};
+use recreation_towers_ground::station::Tally;
 use simulation_sitl::{Lockstep, launch, port_for, sensor_json};
 use std::net::{TcpListener, UdpSocket};
 use std::path::{Path, PathBuf};
@@ -33,8 +48,10 @@ use std::time::{Duration, Instant};
 use world::World;
 
 const BASE_PORT: u16 = 9002;
-/// The computer commanders decide once a second of game time.
+/// The advisors look once a second of game time.
 const DECIDE_EVERY: f32 = 1.0;
+/// A seat that a person left is free this long (s) before a computer takes it.
+const GRACE: Duration = Duration::from_secs(1);
 /// The server stops if no drone has sent a packet after this long.
 const NO_PACKETS_AFTER: Duration = Duration::from_secs(60);
 /// The seats get the game four times a second.
@@ -49,6 +66,8 @@ struct Args {
     people: [bool; 2],
     /// Teams nobody commands.
     nobody: [bool; 2],
+    /// A computer takes the seat that a person leaves.
+    on_leave_computer: bool,
     stop_with_stdin: bool,
 }
 
@@ -65,6 +84,7 @@ fn args() -> Args {
         first_instance: arg("--first-instance").and_then(|s| s.parse().ok()).unwrap_or(30),
         people: [person("--blue"), person("--red")],
         nobody: [nobody("--blue"), nobody("--red")],
+        on_leave_computer: arg("--on-leave").is_none_or(|v| v != "wait"),
         stop_with_stdin: args.iter().any(|a| a == "--stop-with-stdin"),
     }
 }
@@ -217,9 +237,32 @@ fn main() {
         .collect();
     let air_ports: Arc<Vec<u16>> = Arc::new(air.iter().map(|c| c.port).collect());
     // Clients find the seats at the port printed below (the next one up if this one is taken).
+    let port_cell = Arc::new(std::sync::atomic::AtomicU16::new(0));
+    // The computer commanders are seats of their own, in this process, over loopback TCP.
+    let tally = Arc::new(Tally::default());
+    let spawn_commander: Arc<dyn Fn(Team, Brain) + Send + Sync> = {
+        let (port_cell, tally) = (port_cell.clone(), tally.clone());
+        Arc::new(move |team, brain| {
+            let (addr, tally) = (format!("127.0.0.1:{}", port_cell.load(Ordering::SeqCst)), tally.clone());
+            std::thread::Builder::new()
+                .name(format!("commander-{team:?}"))
+                .spawn(move || commander::run(&addr, team, brain, Some(tally), &AtomicBool::new(false)))
+                .expect("a commander thread");
+        })
+    };
+    let take: Arc<dyn Fn(Team) + Send + Sync> = {
+        let (spawn, on_leave) = (spawn_commander.clone(), a.on_leave_computer);
+        Arc::new(move |team| {
+            if on_leave {
+                spawn(team, Brain::Play);
+            }
+        })
+    };
     let seats = (a.seat_port..=a.seat_port.saturating_add(20))
         .find_map(|port| {
-            let seats = seats::Seats::listen(port, world.clone(), a.people, air_ports.clone()).ok()?;
+            let free = seats::Free { grace: GRACE, take: take.clone() };
+            let seats = seats::Seats::listen(port, world.clone(), a.people, air_ports.clone(), free).ok()?;
+            port_cell.store(seats.port(), Ordering::SeqCst);
             a.seat_port = port;
             Some(seats)
         })
@@ -249,26 +292,12 @@ fn main() {
         a.seat_port,
         a.seat_port
     );
-    let names: Vec<String> = (0..n).map(|i| ground::drone_name(&rules, i)).collect();
-    // Light drones have no wing for AGENT to fly: they are flown by the radio, in QLOITER.
-    let modes: Vec<u32> = (0..n)
-        .map(|i| if rules.class(i % rules.drones) == Class::Light { ground::QLOITER_MODE } else { ground::AGENT_MODE })
-        .collect();
-    let home = ground::sitl_home();
-    // The server is the ground of a team that no person commands; a person's app is its own.
-    let flown: Vec<usize> = (0..n).filter(|&i| !a.people[usize::from(i >= rules.drones)]).collect();
-    let flown_modes: Vec<u32> = flown.iter().map(|&i| modes[i]).collect();
-    let transport =
-        ground::Transport::Tcp { host: "127.0.0.1".into(), ports: flown.iter().map(|&i| air_ports[i]).collect() };
-    let mut ground = ground::Ground::connect(&transport, &names, &flown, &flown_modes, home);
     // A person who commands a team has an advisor.
     let mut advisors: Vec<(Team, Advisor)> =
         Team::BOTH.into_iter().filter(|t| a.people[t.index()]).map(|t| (t, Advisor::new(rules))).collect();
-    let mut commanders: Vec<(Team, Commander)> = Team::BOTH
-        .into_iter()
-        .filter(|t| !a.people[t.index()] && !a.nobody[t.index()])
-        .map(|t| (t, Commander::new(rules)))
-        .collect();
+    for t in Team::BOTH.into_iter().filter(|t| !a.people[t.index()]) {
+        spawn_commander(t, if a.nobody[t.index()] { Brain::Idle } else { Brain::Play });
+    }
 
     let stop = Arc::new(AtomicBool::new(false));
     if a.stop_with_stdin {
@@ -309,18 +338,8 @@ fn main() {
                         seats.advise(*team, &said);
                     }
                 }
-                for (team, c) in &mut commanders {
-                    let view = w.game.view(*team);
-                    for (k, order) in c.decide(&view) {
-                        let i = w.game.drone(*team, k);
-                        let low = w.low_by_default(i);
-                        w.command(i, order, low);
-                    }
-                }
             }
         }
-        let sent = ground.decide(&world.lock().unwrap().situation());
-        ground.send(sent);
         if last_send.elapsed() >= SEND_EVERY {
             last_send = Instant::now();
             let mut w = world.lock().unwrap();
@@ -356,7 +375,7 @@ fn main() {
                 let d = &g.drones[i];
                 println!(
                     "        {} {:?} {:?}{} | at {:.0}, {:.0} {:.0} m, {:.0}, {:.0} m/s, heading {:.0}, roll {:.0}, airspeed {:.1}",
-                    ground.describe(i),
+                    tally.lines.lock().unwrap().get(i).cloned().unwrap_or_default(),
                     d.phase,
                     w.orders[i],
                     if w.lows[i] { " LOW" } else { "" },
@@ -374,8 +393,8 @@ fn main() {
         if let Some(outcome) = w.game.outcome {
             w.game.look();
             seats.send(&w);
-            let (in_agent, refused) = ground.results();
-            for line in ground.verdict() {
+            let (in_agent, refused) = (tally.in_agent(), tally.refused());
+            for line in tally.warnings() {
                 println!("{line}");
             }
             println!("game over: {outcome:?}, Blue {:.0} Red {:.0}", w.game.score[0], w.game.score[1]);
@@ -410,7 +429,7 @@ fn main() {
         }
         if start.elapsed().as_secs() > a.timeout {
             eprintln!("timed out after {} s", a.timeout);
-            for line in ground.verdict() {
+            for line in tally.warnings() {
                 eprintln!("{line}");
             }
             drop(w);

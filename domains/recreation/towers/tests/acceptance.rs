@@ -10,8 +10,8 @@ use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
 use recreation_towers::{
-    Advice, AdviceKind, Advisor, Belief, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase, Queued,
-    Rules, Standing, Team, When,
+    Advice, AdviceKind, Advisor, Belief, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase,
+    Proposal, Queued, Rules, Standing, Team, When,
 };
 use std::path::Path;
 
@@ -42,6 +42,8 @@ struct World {
     /// What Blue believes about where the Red drones are, and the time it was last updated.
     belief: Belief,
     belief_at: f32,
+    /// The proposal that a step put in the commander's hand, in the spec's words.
+    proposed: String,
 }
 
 impl World {
@@ -58,6 +60,7 @@ impl World {
             told: Instruction::default(),
             belief: Belief::new(rules, Team::Blue),
             belief_at: 0.0,
+            proposed: "none".into(),
         }
     }
 
@@ -119,6 +122,22 @@ impl World {
         let mut b = self.belief.clone();
         b.update(&self.game.view(Team::Blue));
         b
+    }
+
+    /// An advisor of Blue proposes that the first Blue drone takes the Red home tower, for `gain`
+    /// points: from the map of `ago` seconds before, and good for `good_for` seconds after it.
+    fn propose(&mut self, gain: f32, good_for: f32, ago: f32) {
+        let red_home = Order::Take(self.game.tower("Red home"));
+        let made = self.game.time - ago;
+        let p =
+            Proposal { drone: 0, order: red_home, queue: vec![], gain, made, until: made + good_for, why: "".into() };
+        self.blue.advise([p]);
+    }
+
+    /// The computer commander of Blue decides on the map now.
+    fn blue_decides(&mut self) {
+        let view = self.game.view(Team::Blue);
+        self.blue.decide(&view);
     }
 
     /// The advisor looks at the Blue map.
@@ -594,6 +613,31 @@ fn bindings() -> Bindings<World> {
             let view = w.game.view(Team::Blue);
             w.blue.decide(&view);
         })
+        // The advisors of the computer commander: proposals that it takes or not.
+        .observe("the proposal in the hand of the Blue commander", |w| w.proposed.clone())
+        .arrange("the proposal in the hand of the Blue commander", |w, v| {
+            w.proposed = v.as_str().unwrap_or("none").to_string();
+            match v.as_str() {
+                Some("the Red home tower for 5 points") => w.propose(5.0, 60.0, 0.0),
+                Some("the Red home tower for 1 point") => w.propose(1.0, 60.0, 0.0),
+                Some("the Red home tower for 5 points, good for 5 seconds") => w.propose(5.0, 5.0, 0.0),
+                Some("the Red home tower for 5 points, from the map of 3 seconds before") => w.propose(5.0, 60.0, 3.0),
+                _ => {}
+            }
+        })
+        .on("the computer commander of Blue weighs the proposal", |w| w.blue_decides())
+        .on("the computer commander of Blue weighs the proposal 10 seconds later", |w| {
+            w.run(10.0);
+            w.blue_decides();
+        })
+        .observe("the advisor of the computer commander of Blue", |w| {
+            if w.blue.advisors() == 0 { "none" } else { "the lookahead" }
+        })
+        .arrange("the advisor of the computer commander of Blue", |w, v| {
+            let on = v.as_str() != Some("none");
+            let blue = std::mem::replace(&mut w.blue, Commander::new(w.game.rules));
+            w.blue = blue.with_lookahead(on);
+        })
         // Blue's advisor.
         .observe("the advice of Blue", |w| w.advice_said())
         .on("the advisor of Blue looks", |w| w.look())
@@ -939,5 +983,80 @@ mod queue {
         w.told.queue = vec![w.parse_queued("go home when done")];
         w.run(10.0);
         assert_eq!(w.say(w.told.order), "take the east tower");
+    }
+}
+
+/// The advice expectations (`18-advice.expect`) played by hand: the suite's coverage reaches only some
+/// of them (the last two are only arranged and visited there), and all must hold.
+mod advice {
+    use super::*;
+
+    fn red_home(w: &World) -> Option<Order> {
+        Some(Order::Take(w.game.tower("Red home")))
+    }
+
+    #[test]
+    fn a_proposal_that_gains_enough_is_taken() {
+        let mut w = World::new();
+        w.propose(5.0, 60.0, 0.0);
+        w.blue_decides();
+        assert_eq!(w.blue.order(0), red_home(&w));
+    }
+
+    #[test]
+    fn a_proposal_that_gains_little_is_not_taken() {
+        let mut w = World::new();
+        w.propose(1.0, 60.0, 0.0);
+        w.blue_decides();
+        assert_eq!(w.say(w.blue.order(0)), "take the west tower");
+    }
+
+    #[test]
+    fn a_stale_proposal_is_not_taken() {
+        let mut w = World::new();
+        w.propose(5.0, 5.0, 0.0);
+        w.run(10.0);
+        w.blue_decides();
+        assert_ne!(w.blue.order(0), red_home(&w));
+        assert_eq!(w.say(w.blue.order(0)), "take the centre tower");
+    }
+
+    #[test]
+    fn a_proposal_for_a_tower_that_the_team_holds_now_is_not_taken() {
+        let mut w = World::new();
+        w.blue_holds(2);
+        w.hold("west", &Value::from("neutral"));
+        w.hold("Red home", &Value::from("held by Blue"));
+        w.propose(5.0, 60.0, 3.0);
+        w.blue_decides();
+        assert_eq!(w.say(w.blue.order(0)), "take the west tower");
+    }
+
+    #[test]
+    fn a_commander_with_no_advisor_does_not_think_ahead() {
+        assert_eq!(sits_at_west(false), Some(Order::Take(World::new().game.tower("west"))));
+        // The same fight, with the lookahead for an advisor, is not stayed in.
+        assert_ne!(sits_at_west(true), Some(Order::Take(World::new().game.tower("west"))));
+    }
+
+    fn sits_at_west(lookahead: bool) -> Option<Order> {
+        let mut w = World::new();
+        w.blue = Commander::new(w.game.rules).with_lookahead(lookahead);
+        let west = w.game.tower("west");
+        w.hold("west", &Value::from("held by Red"));
+        w.blue.assign(0, Some(Order::Take(west)));
+        for k in 0..2 {
+            let i = w.game.drone(Team::Red, k);
+            let at = w.game.towers[west].at;
+            w.put(i, at, Some(ALT));
+        }
+        w.place_blue(&Value::from("190 m from the centre tower"));
+        for _ in 0..15 {
+            w.blue_decides();
+            w.run(1.0);
+        }
+        w.blue_decides();
+        assert_eq!(w.blue.advisors(), usize::from(lookahead));
+        w.blue.order(0)
     }
 }

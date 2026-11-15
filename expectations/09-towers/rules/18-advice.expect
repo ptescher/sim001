@@ -1,0 +1,69 @@
+Feature: Advice for the commander
+  A commander can have an [[advisor]] that helps it. The advisor looks at the map of the team,
+  like the commander, and sends a [[proposal]] when it sees a better move: an order for a drone, the points that it expects
+  to gain by it, and the time after which it is stale. The advisor does not give orders. The
+  commander decides.
+
+  The computer commander takes a proposal when it gains more than 2 points, when it is not
+  stale, and when it still fits: the drone is free to take an order, and the tower is not one
+  that the team holds now. Of the proposals that it can take, it takes the one that gains most.
+  A proposal that does not fit is dropped.
+
+  The first advisor is the lookahead. Every 5 s it plays the game forward 45 s in a small model.
+  The enemy drones in the model are guesses from its [[belief]]. It tries to send each free
+  drone to each other tower, and proposes the change that gives most points. Its proposal is
+  good for 45 s. A commander with no advisor does not think ahead. A commander thinks ahead
+  with the lookahead by default.
+
+  An advisor can be slow. Its proposals then reach the commander some seconds after the map
+  that it looked at. A proposal that arrives after its time is stale, and the commander does
+  not take it.
+
+  Expectation: A proposal that gains enough is taken
+    The advisor proposes that the first Blue drone takes the Red home tower, for 5 points. At the
+    start the commander sends the first drone to the west tower.
+
+    Given the proposal in the hand of the Blue commander is the Red home tower for 5 points
+    When the computer commander of Blue weighs the proposal
+    Then the order of the first Blue drone is take the Red home tower
+
+  Expectation: A proposal that gains little is not taken
+    The commander takes a proposal only when it gains more than 2 points.
+
+    Given the proposal in the hand of the Blue commander is the Red home tower for 1 point
+    When the computer commander of Blue weighs the proposal
+    Then the order of the first Blue drone is take the west tower
+
+  Expectation: A stale proposal is not taken
+    The proposal is good for 5 s. The commander decides 10 s later, and does what it does with no
+    proposal: at that time it sends the first drone to the centre tower.
+
+    Given the proposal in the hand of the Blue commander is the Red home tower for 5 points, good for 5 seconds
+    When the computer commander of Blue weighs the proposal 10 seconds later
+    Then the order of the first Blue drone is take the centre tower
+
+  Expectation: A proposal for a tower that the team holds now is not taken
+    The advisor looked at the map when the Red home tower was Red's. When the commander decides,
+    Blue holds it.
+
+    Given the towers held by Blue are 2
+    And the west tower is neutral
+    And the Red home tower is held by Blue
+    And the proposal in the hand of the Blue commander is the Red home tower for 5 points, from the map of 3 seconds before
+    When the computer commander of Blue weighs the proposal
+    Then the order of the first Blue drone is take the west tower
+
+  Expectation: A commander with no advisor does not think ahead
+    Overrides: The commander does not keep a drone at a tower that the enemy holds with two drones
+    The west tower is Red's, and two Red drones circle it. A commander that thinks ahead sends
+    the first drone to a free tower, as in [[The computer commander]]. A commander with no
+    advisor does not.
+
+    Given the advisor of the computer commander of Blue is none
+    And the west tower is held by Red
+    And the control of the west tower is -100 %
+    And the Red drones in the west circle are 2
+    And the order of the first Blue drone is take the west tower
+    And the first Blue drone is 190 m from the centre tower
+    When the computer commander of Blue plays for 15 seconds
+    Then the order of the first Blue drone is take the west tower

@@ -148,12 +148,101 @@ server.
    reads. The lookahead moves out of `Commander` and is the first advisor. Then a Claude
    advisor, once every few seconds. The app gets "accept". Gate: a league contest, the commander
    with the advisor against the commander without, on paired seeds.
+
+   **Results (advisors in the rules and the arena; the seat side is not built).** `recreation_towers`
+   has `Advise` (`advise(&mut self, view: &TeamView, hand: &Hand) -> Vec<Proposal>`), `Proposal
+   { drone, order, queue, gain, made, until, why }` and `Lookahead`, the old lookahead moved out of
+   `Commander` (same model, cadence and numbers). `Hand` is what the commander has in hand and the
+   map does not show: its orders after its own rules, the drones it may still change and the towers
+   each must stay away from; a seat has it, for the seat is the commander. A `Commander` holds
+   advisors, each with a delay in game time (`with_advisor(advisor, delay)`), and takes the best
+   proposal each decision that is not stale (`until`), gains more than `ADVICE_MARGIN` (2 points, a
+   constant: `CommanderTuning` is the league's candidate format and stays as it is) and still fits
+   (the drone is free and the tower is not one it gave up, nor, for a proposal made on an earlier map,
+   one the team holds now). `Commander::advise` puts proposals in hand from outside, for a person's
+   click or a process, and `Roster::with_advisor(team, advisor, delay)` gives a roster's team an
+   advisor in the arena. With `with_lookahead(false)` a commander has no advisor and does not think
+   ahead; `Commander::new` has the lookahead at delay 0 unless `SIM001_LOOKAHEAD=0`, as before. The
+   text `Advisor` is unchanged: its warnings are for a person and carry no order or gain, so it is not
+   an `Advise`. Not done: the seat side (proposals over the wire, the app's accept), a queue in the
+   lookahead's proposals (it proposes none), the Claude advisor.
+
+   Gate, no drift: `denial`, `ruleset v2 200` and `judge --game captain --champion timid --challenger
+   default --seeds 24` are byte-identical before and after, with `SIM001_LOOKAHEAD` unset and with it
+   `0`. (`denial` and every policy of `ruleset` but the last line play with the lookahead off, so
+   only `judge` and the line "default against default" test it: Blue wins 50 % with it, 68 % without.)
+
+   Gate, what advice is worth (`cargo run --release -p cognition_towers --example advice 400`:
+   commander + lookahead advisor at the delay, against a commander with no advisor, 400 seeds, both
+   sides, 800 games each; the lookahead's proposals are good for its 45 s horizon):
+
+   | Delay | Margin | Won | Lost |
+   | --- | --- | --- | --- |
+   | 0 s | -0.47 ± 0.04 | 268 | 532 |
+   | 2 s | -0.46 ± 0.04 | 272 | 528 |
+   | 5 s | -0.44 ± 0.04 | 276 | 524 |
+   | 10 s | -0.28 ± 0.05 | 333 | 467 |
+   | 30 s | -0.81 ± 0.04 | 182 | 618 |
+
+   In the arena by the default rules the lookahead is worth less than nothing: the commander that
+   thinks ahead loses to the one that does not, at every delay. Lateness up to 5 s costs nothing
+   measurable; at 10 s the harm is smaller and at 30 s it is worst. Why was not measured (the
+   proposals taken, and how many are stale or no longer fit, are not counted). So the
+   lookahead is a plumbing test for advisors, not a gain: it is the model and its enemy guesses that
+   need work, before advice from a slower and better advisor can be told from lateness.
 5. **A person flies a unit.** A `Unit` seat. The server gives that drone's radio channels to the
    seat: the sim (or a TX15 on CRSF) joins a game as one drone, with the drone's camera and the
    mission on its HUD. The pilot sees only what the drone sees. Take-off is the pilot's.
 6. **The quad on the wire**, so that every unit is ArduPilot behind the same radio.
 7. **The field.** The open items of `plans/unified-link.md`: the bench, a serial radio per drone,
    the field umpire. Then real and simulated drones in one game.
+
+Results of step 3 (branch `actors-seats`):
+
+- `recreation_towers_ground` now holds the seat client (`seat`), the station (`station`: its own
+  `Ground` over the air ports, the map from telemetry) and the computer commander (`commander::run`,
+  binary `towers_commander --team blue|red [--host H] [--port P] [--idle]`). The commander app uses
+  the same `seat` and `station`.
+- The server no longer decides or sends a plan for any team: its in-process `commanders` and its
+  truth-based `Ground` are gone. For a computer (or `nobody`) team it starts `commander::run` in a
+  thread that connects over loopback as `Join::Compute`; it keeps the light quads' sticks, take-off,
+  the referee and the air.
+- Handover: a `Join::Command` (person) relieves a `Join::Compute` holder (`Refused("relieved...")`
+  and the connection is closed); the server sends `ToSeat::Orders` once after every welcome of a
+  seat that commands, and the new commander starts from them. When a person leaves, a computer takes
+  the seat after 1 s (`--on-leave computer`, default; `--on-leave wait` does not).
+- Gate A: tests in `towers_server/src/seats.rs` (same messages for both seats; a Red scout in the
+  open is in the spectator's truth and not on the map built from a seat's messages; takeover; the
+  computer takes a freed seat; two people) and `towers_ground/tests/commander.rs` (a commander
+  against a fake server gives orders from the umpire's word and sites alone, leaves when relieved).
+- Crashes on SITL (`towers_server --speedup 10 --timeout 200`, one game at a time; crashes per game,
+  4 games each, batches interleaved with plain `actors-plan`; the server now prints a second line
+  for each crash with the time, order, low or high, jammed, silent time and the nearest flying drone):
+
+  | Batch | Path | Crashes per game | Total |
+  | --- | --- | --- | --- |
+  | 1 | new, first version | 1, 2, 3, 3 | 9 |
+  | 1 | actors-plan | 0, 3, 0, 0 | 3 |
+  | 2 | new + AGENT only after the transition, clock cap in wall time | 3, 0, 2, 4 | 9 |
+  | 2 | actors-plan | 1, 1, 0, 5 | 7 |
+  | 3 | new + dead reckoning of the drones' reports | 1, 1, 0, 0 | 2 |
+  | 3 | actors-plan | 4, 7, 4, 2 | 17 |
+
+  Plain `actors-plan` also crashes 0 to 7 drones per game here (12 games: 27 crashes), more in a batch
+  that ran while the machine was busy, so the acceptance test's "No drone crashes" is not a gate
+  that either path passes reliably. What was a defect of the new path: (1) the station asked for
+  AGENT as soon as a drone was in FBWA, in the middle of the transition (the server waits for 15 m/s):
+  two games lost a drone at its base at t = 10 s, "Hard impact" at 22 m/s, the other drone 10 m
+  away; fixed, no such crash in the 8 games after. (2) The station's clock was held to one game
+  second past the last map, so at 10x (a map each 2.5 game seconds) plans went out about 0.8 a
+  second instead of 1; now the cap is a wall second. (3) Plans were made from the position of the
+  last report; the station now carries it on by its velocity. In all 24 games the only crashes with another
+  drone within 30 m were the two take-off ones above (10 to 11 m) and one in plain `actors-plan` (24 m), so the executors' loss of the enemy's true positions as traffic does not show in
+  the crashes; they are tree strikes while taking a tower (6 to 25 m), in the open or in a shadow,
+  in both paths.
+- Not done: the Orders echo is the server's `told` (what the drones last heard), not read from the
+  drones' telemetry; no GUI check of a takeover in the app; no full-SITL expectation for a takeover
+  (the arduplane driver only plays a computer-against-computer game).
 
 Steps 1 and 3 do not depend on each other. Step 2 needs 1; step 4 needs 3; step 5 needs 1 and 3.
 
