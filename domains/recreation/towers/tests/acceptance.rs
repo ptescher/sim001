@@ -618,10 +618,10 @@ fn bindings() -> Bindings<World> {
         .arrange("the proposal in the hand of the Blue commander", |w, v| {
             w.proposed = v.as_str().unwrap_or("none").to_string();
             match v.as_str() {
-                Some("the Red home tower for 5 points") => w.propose(5.0, 60.0, 0.0),
-                Some("the Red home tower for 1 point") => w.propose(1.0, 60.0, 0.0),
-                Some("the Red home tower for 5 points, good for 5 seconds") => w.propose(5.0, 5.0, 0.0),
-                Some("the Red home tower for 5 points, from the map of 3 seconds before") => w.propose(5.0, 60.0, 3.0),
+                Some("the Red home tower for 8 points") => w.propose(8.0, 60.0, 0.0),
+                Some("the Red home tower for 4 points") => w.propose(4.0, 60.0, 0.0),
+                Some("the Red home tower for 8 points, good for 5 seconds") => w.propose(8.0, 5.0, 0.0),
+                Some("the Red home tower for 8 points, from the map of 3 seconds before") => w.propose(8.0, 60.0, 3.0),
                 _ => {}
             }
         })
@@ -998,7 +998,7 @@ mod advice {
     #[test]
     fn a_proposal_that_gains_enough_is_taken() {
         let mut w = World::new();
-        w.propose(5.0, 60.0, 0.0);
+        w.propose(8.0, 60.0, 0.0);
         w.blue_decides();
         assert_eq!(w.blue.order(0), red_home(&w));
     }
@@ -1006,7 +1006,7 @@ mod advice {
     #[test]
     fn a_proposal_that_gains_little_is_not_taken() {
         let mut w = World::new();
-        w.propose(1.0, 60.0, 0.0);
+        w.propose(4.0, 60.0, 0.0);
         w.blue_decides();
         assert_eq!(w.say(w.blue.order(0)), "take the west tower");
     }
@@ -1014,7 +1014,7 @@ mod advice {
     #[test]
     fn a_stale_proposal_is_not_taken() {
         let mut w = World::new();
-        w.propose(5.0, 5.0, 0.0);
+        w.propose(8.0, 5.0, 0.0);
         w.run(10.0);
         w.blue_decides();
         assert_ne!(w.blue.order(0), red_home(&w));
@@ -1027,7 +1027,7 @@ mod advice {
         w.blue_holds(2);
         w.hold("west", &Value::from("neutral"));
         w.hold("Red home", &Value::from("held by Blue"));
-        w.propose(5.0, 60.0, 3.0);
+        w.propose(8.0, 60.0, 3.0);
         w.blue_decides();
         assert_eq!(w.say(w.blue.order(0)), "take the west tower");
     }

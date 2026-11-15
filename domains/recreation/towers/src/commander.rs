@@ -76,7 +76,8 @@ const CRUISE: f32 = 16.0;
 const REFUEL_MARGIN: f32 = 15.0;
 const BACK_TO_WORK: f32 = 0.9;
 /// A commander takes a proposal of an advisor only if it gains more than this many points.
-pub const ADVICE_MARGIN: f32 = 2.0;
+/// 5, not 2: on 800 fresh seeds it beat 2 head to head (plans/actors.md, step 4).
+pub const ADVICE_MARGIN: f32 = 5.0;
 
 /// A computer in a team's seat.
 #[derive(Clone, Debug)]
@@ -743,7 +744,7 @@ mod tests {
         let g = Game::new(Rules::default());
         let red_home = Order::Take(g.tower("Red home"));
         let mut c = bare(&g);
-        c.advise([proposal(0, red_home, 5.0)]);
+        c.advise([proposal(0, red_home, 8.0)]);
         c.decide(&g.view(Team::Blue));
         assert_eq!(c.order(0), Some(red_home));
     }
@@ -806,7 +807,7 @@ mod tests {
         let g = Game::new(Rules::default());
         let (a, b) = (Order::Take(g.tower("Red home")), Order::Take(g.tower("east")));
         let mut c = bare(&g);
-        c.advise([proposal(0, a, 4.0), proposal(0, b, 6.0), proposal(2, Order::Hold, 3.0)]);
+        c.advise([proposal(0, a, 7.0), proposal(0, b, 9.0), proposal(2, Order::Hold, 6.0)]);
         c.decide(&g.view(Team::Blue));
         assert_eq!((c.order(0), c.order(2) == Some(Order::Hold)), (Some(b), false));
         c.decide(&g.view(Team::Blue));
@@ -819,7 +820,7 @@ mod tests {
         let red_home = Order::Take(g.tower("Red home"));
         let mut c = bare(&g);
         let q = vec![Queued::done(Order::Home)];
-        c.advise([Proposal { queue: q.clone(), ..proposal(0, red_home, 5.0) }]);
+        c.advise([Proposal { queue: q.clone(), ..proposal(0, red_home, 8.0) }]);
         c.decide(&g.view(Team::Blue));
         assert_eq!(c.advised_queue(0), q);
         assert!(c.advised_queue(1).is_empty());
@@ -829,7 +830,7 @@ mod tests {
     fn an_advisor_that_is_late_is_taken_when_its_proposal_arrives() {
         let mut g = Game::new(Rules::default());
         let red_home = Order::Take(g.tower("Red home"));
-        let mut c = bare(&g).with_advisor(Fixed(proposal(0, red_home, 5.0)), 3.0);
+        let mut c = bare(&g).with_advisor(Fixed(proposal(0, red_home, 8.0)), 3.0);
         for _ in 0..3 {
             c.decide(&g.view(Team::Blue));
             assert_ne!(c.order(0), Some(red_home), "at {}", g.time);
@@ -843,11 +844,11 @@ mod tests {
     fn an_advisor_with_no_delay_is_taken_at_once_and_one_that_is_later_than_its_proposal_lasts_is_not() {
         let mut g = Game::new(Rules::default());
         let red_home = Order::Take(g.tower("Red home"));
-        let mut now = bare(&g).with_advisor(Fixed(proposal(0, red_home, 5.0)), 0.0);
+        let mut now = bare(&g).with_advisor(Fixed(proposal(0, red_home, 8.0)), 0.0);
         now.decide(&g.view(Team::Blue));
         assert_eq!(now.order(0), Some(red_home));
         // Good for 5 s, and 8 s late: stale when it arrives.
-        let mut late = bare(&g).with_advisor(Fixed(proposal(0, red_home, 5.0)), 8.0);
+        let mut late = bare(&g).with_advisor(Fixed(proposal(0, red_home, 8.0)), 8.0);
         for _ in 0..30 {
             late.decide(&g.view(Team::Blue));
             assert_ne!(late.order(0), Some(red_home), "at {}", g.time);
