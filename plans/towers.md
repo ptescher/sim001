@@ -79,11 +79,11 @@ games went from 16 to 9, and the games without one from 6 to 8; the numbers are 
 - A drone below 30 m in the clearing of the tower it takes stays down when it strays more than 60 m
   from the tower, and does not climb out (`flight::leg`).
 - The heavy drone's bank is held to 45 degrees (`ROLL_LIMIT_DEG` by `PARAM_SET`, as the floor is). It
-  did not stop the heavy drone's crashes (7 of the 9 left).
+  did not stop the heavy drone's crashes (8 of the 9 left).
 - A crashed drone is put back with a full pack (`World::radio`): right in itself, and not shown to
   be what made the respawned ones dive.
 
-What is left is the heavy drone (T2 Cruza): 7 of the 9 crashes, all with a bank of 72 to 83 degrees
+What is left is the heavy drone (T2 Cruza): 8 of the 9 crashes, all with a bank of 72 to 83 degrees
 at the end, most with another drone within 16 m in the 10 s before (the envelope's separation
 escape: a climb at pitch +25 degrees on a throttle of 0.27, in a bank of 45) on a lane, 350 to 735
 m from the tower, at the lane's edge. That is the escape in `cognition_executor`'s safety
