@@ -75,6 +75,10 @@ pub struct Tally {
     pub taken: [AtomicUsize; 2],
     /// A line about each drone of the game, by number in the game.
     pub lines: Mutex<Vec<String>>,
+    /// What each drone's executor last reported, by number in the game, at every look of its
+    /// station: `AG_PLAN`, `AG_ENV` (steps the envelope intervened) and `AG_FALL`; -1 for none.
+    /// The server's track dump of a crash reads it.
+    pub status: Mutex<Vec<[i32; 3]>>,
     /// Looks of a station at a drone that a person flies: how many had its telemetry (a report
     /// under 3 s old: it is on the team's map), and how many found it in AGENT mode more than 5 s
     /// (wall) after the pilot took it (it should never be). By team.
@@ -288,6 +292,13 @@ fn run(seat: &Seat, host: &str, tally: Option<&Tally>) {
             let ti = team.index();
             t.in_agent[ti].fetch_max(f.ground.agent_drones(), Ordering::SeqCst);
             t.refused[ti].fetch_max(f.ground.results().1 as usize, Ordering::SeqCst);
+            {
+                let mut status = t.status.lock().unwrap();
+                status.resize(2 * n, [-1; 3]);
+                for k in 0..n {
+                    status[f.first + k] = f.ground.status_of(f.first + k);
+                }
+            }
             if next_note.elapsed() >= Duration::from_secs(1) {
                 next_note = Instant::now();
                 let mut lines = t.lines.lock().unwrap();

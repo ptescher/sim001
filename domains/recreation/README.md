@@ -161,7 +161,7 @@ SIM001_BIN=.ardupilot-agent/build/sitl/bin cargo run --release -p recreation_tow
 ids 1 to 6, `ardupilot/towers.parm` for the field's fence and ceiling) and is their physics host,
 as the runner is. At GO each drone's radio takes it off (`recreation_games::Preflight`: arm,
 QHOVER to 15 m, FBWA); once it flies on the wing, the ground switches it to AGENT and sends the
-plan for its order about once a second (a tower: an orbit 40 m out, at a height of its own) and the
+plan for its order about once a second (a tower: an orbit 40 m out, Red's 50 m, at a height of its own) and the
 other drones as `ADSB_VEHICLE` traffic. A crashed drone is back at its base after 15 s.
 
 Each team has a seat on TCP port 5955 (`recreation_towers::seat`, a JSON message a line), and it is

@@ -28,8 +28,22 @@ use recreation_towers::{Game, Order, Phase, Standing};
 pub use simulation_sitl::launch::AGENT_MODE;
 use std::time::Duration;
 
-/// Each plan is good for this long (s); the ground sends a new one about once a second.
+/// A plan is good for this long at the least (s); the ground sends a new one about once a second.
 pub const PLAN_TTL: f32 = 3.0;
+
+/// How long a plan sent to a drone is good for (s): the rest of the game, and at least until its
+/// standing plan (after `after` s of silence) would take over. A drone that takes an enemy tower is
+/// in the tower's radio shadow (`Game::jammed`), where no plan reaches it, for as long as no friend
+/// relays it: a minute or more. A plan that ran out after [`PLAN_TTL`] (3 s), or after the standing
+/// time (45 s), made the executor fall back to a loiter round the point where it ran out: a circle
+/// of 50 m round a drone that was already 40 or 50 m out from the tower, far past the 80 m clearing
+/// and into the trees: 9 of the 33 crashes of 14 games, 12 to 17 s after the drone went out of
+/// contact, and the same again at 57 to 61 s with a plan good for the standing time. (Its standing
+/// plan did not take over before the plan ran out: the plan id in `AG_PLAN` stayed the same, and
+/// `AG_FALL` read 1: not found out.) The team's order stands while the drone is out of contact.
+pub fn plan_ttl(rules: &recreation_towers::Rules, after: f32) -> f32 {
+    after.max(rules.duration).max(PLAN_TTL)
+}
 
 /// How the ground reaches its drones.
 #[derive(Clone, Debug, PartialEq)]
@@ -96,6 +110,21 @@ const MAV_CMD_DO_SET_MODE: u16 = 176;
 /// others) for one that flies high.
 const LOW_FLOOR: f32 = 8.0;
 const HIGH_FLOOR: f32 = 35.0;
+/// How far a drone of `class` may bank (`ROLL_LIMIT_DEG`, degrees), if not as far as its parameter
+/// file says (50). The heavy drone (the T2 Cruza) cruises at 17 m/s and does not hold a bank of 50
+/// degrees: it stalls there (the stall speed grows with the root of 1 / cos(bank), and its
+/// airspeed minimum of 13 m/s is 15 m/s at 50 degrees), and a step in the roll it asks for
+/// overshoots to 70 or 80 degrees and ends in a spiral dive: 13 of the 33 crashes of 14 games, all
+/// but one of the drones that rolled past 60 degrees. 45 degrees is a bank with a margin of a tenth
+/// at 17 m/s, and the circle the executor flies at it (a turn radius and a tenth: 41 m) is still
+/// the ring of a standard drone.
+pub fn bank_limit(class: recreation_towers::Class) -> Option<f32> {
+    (class == recreation_towers::Class::Heavy).then_some(HEAVY_BANK)
+}
+
+/// The heavy drone's bank limit (degrees).
+pub const HEAVY_BANK: f32 = 45.0;
+
 /// A drone this high (m) that flies high is up over the trees.
 const UP_THERE: f32 = 42.0;
 
@@ -108,6 +137,8 @@ struct Drone {
     link: Option<Link>,
     /// The floor the drone's envelope has been told.
     floor: Option<f32>,
+    /// The bank limit it has been told (`ROLL_LIMIT_DEG`, degrees).
+    bank: Option<f32>,
     asked: Option<f64>,
     /// It was seen in AGENT.
     in_agent: bool,
@@ -149,6 +180,7 @@ struct Sends {
     plans: Vec<(usize, WirePlan)>,
     standings: Vec<(usize, WirePlan)>,
     floors: Vec<(usize, f32)>,
+    banks: Vec<(usize, f32)>,
     traffic: Vec<(usize, Traffic)>,
 }
 
@@ -184,6 +216,7 @@ impl Ground {
                     mode,
                     link,
                     floor: None,
+                    bank: None,
                     asked: None,
                     in_agent: false,
                     plan_id: 0,
@@ -245,6 +278,15 @@ impl Ground {
                 d.floor = Some(floor);
             }
         }
+        for (i, bank) in sends.banks {
+            let d = &mut self.drones[i];
+            if let Some(link) = &d.link {
+                if link.set_param("ROLL_LIMIT_DEG", bank).is_err() {
+                    d.send_errors += 1;
+                }
+                d.bank = Some(bank);
+            }
+        }
         for (i, plan) in sends.plans {
             let d = &mut self.drones[i];
             if let Some(link) = &d.link {
@@ -298,7 +340,7 @@ impl Ground {
                 let i = d.index;
                 let order = w.orders[i].unwrap_or(Order::Home);
                 d.plan_id = d.plan_id.wrapping_add(1).max(1);
-                let plan = plan_for(w.game, i, order, w.lows[i], (self.home.0, self.home.1), d.plan_id);
+                let mut plan = plan_for(w.game, i, order, w.lows[i], (self.home.0, self.home.1), d.plan_id);
                 // A plan under the treetops needs the low floor. One over them the high floor, once the
                 // drone is up there: a drone that is still climbing out has the low one, or its
                 // envelope would fly it straight ahead and up, wherever it points.
@@ -312,7 +354,11 @@ impl Ground {
                 if d.floor != Some(floor) {
                     sends.floors.push((k, floor));
                 }
-                sends.plans.push((k, plan));
+                if let Some(bank) = bank_limit(w.game.drones[i].class)
+                    && d.bank != Some(bank)
+                {
+                    sends.banks.push((k, bank));
+                }
                 // What the drone does on its own if the plans stop: the team's standing order after
                 // its time, or home when the link is lost. The drone flies it itself, so the ground
                 // does not have to be heard for it to happen.
@@ -320,8 +366,11 @@ impl Ground {
                     Some(s) => (s.then, s.after),
                     None => (Order::Home, w.game.rules.link_timeout),
                 };
+                plan.ttl = plan_ttl(&w.game.rules, after);
+                sends.plans.push((k, plan));
                 d.standing_id = d.standing_id.wrapping_add(1).max(1);
-                let mut standing = plan_for(w.game, i, then, false, (self.home.0, self.home.1), d.standing_id);
+                let mut standing =
+                    standing_for(w.game, i, order, then, &plan, (self.home.0, self.home.1), d.standing_id);
                 standing.ttl = after;
                 if !same_standing(d.standing.as_ref(), &standing) {
                     sends.standings.push((k, standing));
@@ -353,6 +402,16 @@ impl Ground {
             }
         }
         Sent(sends)
+    }
+
+    /// What the executor of drone `i` (its number in the game) last reported: `AG_PLAN`, `AG_ENV`
+    /// and `AG_FALL`, -1 for what it has not said.
+    pub fn status_of(&self, i: usize) -> [i32; 3] {
+        let Some(link) = self.drones.iter().find(|d| d.index == i).and_then(|d| d.link.as_ref()) else {
+            return [-1; 3];
+        };
+        let s = link.state().status;
+        [s.plan.unwrap_or(-1), s.interventions.unwrap_or(-1), s.fallback.unwrap_or(-1)]
     }
 
     /// A line about drone `i` (its number in the game) for the report.
@@ -438,6 +497,33 @@ pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
     }
 }
 
+/// The standing plan of drone `i`, which flies `plan` now: what it does by itself once the plans
+/// have stopped for the standing time (`then`, home unless the team said otherwise). A drone that
+/// flies under the treetops (a capture is flown low) cannot go anywhere in a straight line: the plan
+/// that would take a high drone home flies a low one into the forest 12 s later (9 of the 13
+/// crashes in a radio shadow, once the plan itself was good for as long as the standing time). It
+/// climbs where it is, round the circle of its plan, over the trees, and stays there.
+pub fn standing_for(
+    game: &Game,
+    i: usize,
+    order: Order,
+    then: Order,
+    plan: &WirePlan,
+    home: (f64, f64),
+    id: u16,
+) -> WirePlan {
+    // A drone that takes a tower comes down to circle it by its plan, with no word from the ground
+    // (and is in the shadow of the tower, if it is the enemy's): the standing plan that it was sent
+    // while it was still high would take it home from there, under the treetops.
+    let comes_down = matches!(order, Order::Take(_));
+    if plan.primitive == Primitive::Orbit && (plan.alt < game.rules.treetop || comes_down) {
+        let d = &game.drones[i];
+        let alt = flight::orbit_height(d.team, i % game.rules.drones);
+        return WirePlan { id, alt, ..*plan };
+    }
+    plan_for(game, i, then, false, home, id)
+}
+
 /// The plan for drone `i` (its index in the game) to carry out `order`, flown `low` or high, with
 /// home at (`lat`, `lon`).
 pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64), id: u16) -> WirePlan {
@@ -454,6 +540,70 @@ pub fn plan_for(game: &Game, i: usize, order: Order, low: bool, home: (f64, f64)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_plan_is_good_for_the_rest_of_the_game_so_a_drone_in_a_shadow_keeps_its_orbit() {
+        let rules = recreation_towers::Rules::default();
+        // The plans go out every second, and the drone is in an enemy tower's shadow for a minute
+        // or more: in between, the executor would loiter where the plan ran out, a circle that
+        // reaches 50 m past the drone, out of a tower's clearing.
+        assert!(rules.link_timeout > PLAN_TTL);
+        assert!(plan_ttl(&rules, rules.link_timeout) >= rules.duration);
+        assert!(plan_ttl(&rules, 1.0) >= rules.duration, "also for a standing plan that takes over sooner");
+        assert!(plan_ttl(&rules, 2.0 * rules.duration) >= 2.0 * rules.duration, "or later");
+    }
+
+    #[test]
+    fn the_heavy_drone_is_held_to_a_bank_it_does_not_stall_in_and_still_fits_its_ring() {
+        use recreation_towers::{Class, Team, flight};
+        assert_eq!(bank_limit(Class::Standard), None);
+        assert_eq!(bank_limit(Class::Heavy), Some(HEAVY_BANK));
+        // At its cruise speed of 17 m/s (`t2-cruza.parm`) the stall speed in the bank, from its
+        // airspeed minimum of 13 m/s, leaves a margin of about a tenth.
+        let stall = 13.0 / HEAVY_BANK.to_radians().cos().sqrt();
+        assert!(17.0 / stall >= 1.09, "{stall} m/s in a bank of {HEAVY_BANK} degrees");
+        // The executor flies at least a turn radius of the cruise speed at 85 % of the bank, and a
+        // tenth more: that is no wider than the ring that it is asked to fly.
+        let flown = 1.1 * 17.0 * 17.0 / (9.80665 * (0.85 * HEAVY_BANK).to_radians().tan());
+        assert!(flown <= flight::orbit_radius(Team::Blue) + 2.0, "{flown} m");
+    }
+
+    #[test]
+    fn a_drone_that_circles_low_climbs_where_it_circles_when_the_plans_stop_and_does_not_fly_home_low() {
+        use recreation_towers::{Rules, Team, flight};
+        let mut game = Game::new(Rules::default());
+        let home = sitl_home();
+        let tower = game.towers[1].at;
+        let i = 1;
+        game.drones[i].at = tower + glam::Vec2::new(40.0, 0.0);
+        game.drones[i].alt = 18.0;
+        game.drones[i].phase = Phase::Flying;
+        let plan = plan_for(&game, i, Order::Take(1), false, (home.0, home.1), 5);
+        assert!(plan.alt < game.rules.treetop, "it circles the tower low: {plan:?}");
+        let standing = standing_for(&game, i, Order::Take(1), Order::Home, &plan, (home.0, home.1), 6);
+        // The same circle, over the trees.
+        assert_eq!(
+            (standing.primitive, standing.lat, standing.lon, standing.radius),
+            (plan.primitive, plan.lat, plan.lon, plan.radius)
+        );
+        assert_eq!(standing.alt, flight::orbit_height(Team::Blue, i));
+        assert!(standing.alt >= game.rules.treetop + 30.0);
+        // A drone that flies high goes home by its plan, as before.
+        game.drones[i].alt = 70.0;
+        game.drones[i].at = tower + glam::Vec2::new(300.0, 0.0);
+        let high = plan_for(&game, i, Order::Take(1), false, (home.0, home.1), 7);
+        assert!(high.alt >= game.rules.treetop);
+        let standing = standing_for(&game, i, Order::Goto(tower), Order::Home, &high, (home.0, home.1), 8);
+        let at_home = plan_for(&game, i, Order::Home, false, (home.0, home.1), 8);
+        assert_eq!((standing.lat, standing.lon, standing.alt), (at_home.lat, at_home.lon, at_home.alt));
+        // But a drone that is still high and is sent to take a tower will come down to circle it:
+        // its standing plan is that circle, over the trees.
+        let take = plan_for(&game, i, Order::Take(1), false, (home.0, home.1), 9);
+        assert!(take.alt >= game.rules.treetop, "{take:?}");
+        let standing = standing_for(&game, i, Order::Take(1), Order::Home, &take, (home.0, home.1), 10);
+        assert_eq!((standing.primitive, standing.lat, standing.lon), (take.primitive, take.lat, take.lon));
+        assert!(standing.alt >= game.rules.treetop + 30.0);
+    }
 
     #[test]
     fn a_transport_names_the_connection_of_each_drone() {
