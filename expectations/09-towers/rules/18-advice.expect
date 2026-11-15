@@ -10,7 +10,9 @@ Feature: Advice for the commander
   A proposal that does not fit is dropped.
 
   The first advisor is the lookahead. Every 5 s it plays the game forward 45 s in a small model.
-  The enemy drones in the model are guesses from its [[belief]]. It tries to send each free
+  The enemy drones in the model are guesses from its [[belief]]. A drone in the model flies at its own height and comes
+  down below the treetops only near its tower, as a real drone does, so a drone that is sent to a
+  tower counts there only when it is low; a drone on its way to charge is at no tower. It tries to send each free
   drone to each other tower, and proposes the change that gives most points. Its proposal is
   good for 45 s. A commander with no advisor does not think ahead. A commander thinks ahead
   with the lookahead by default.
@@ -36,11 +38,13 @@ Feature: Advice for the commander
 
   Expectation: A stale proposal is not taken
     The proposal is good for 5 s. The commander decides 10 s later, and does what it does with no
-    proposal: at that time it sends the first drone to the centre tower.
+    proposal: at that time it sends the first drone to the west tower.
+    (The lookahead used to send it to the centre tower here; its model has the flight now, and
+    leaves the west tower to it.)
 
     Given the proposal in the hand of the Blue commander is the Red home tower for 5 points, good for 5 seconds
     When the computer commander of Blue weighs the proposal 10 seconds later
-    Then the order of the first Blue drone is take the centre tower
+    Then the order of the first Blue drone is take the west tower
 
   Expectation: A proposal for a tower that the team holds now is not taken
     The advisor looked at the map when the Red home tower was Red's. When the commander decides,

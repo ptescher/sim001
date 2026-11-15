@@ -190,6 +190,109 @@ server.
    proposals taken, and how many are stale or no longer fit, are not counted). So the
    lookahead is a plumbing test for advisors, not a gain: it is the model and its enemy guesses that
    need work, before advice from a slower and better advisor can be told from lateness.
+
+   **Why the lookahead lost (branch `actors-lookahead`; `cargo run --release -p cognition_towers
+   --example lookahead -- calibrate|variants SEEDS ...`).** The cause is a defect in the model: it had
+   no flight. A drone in the model counted in a tower's circle as soon as it was within 60 m; in the
+   arena it flies at its orbit height (55 to 87 m) and comes down at 3 m/s to 16 m only within 60 m of
+   the tower, and only a drone below the treetops (20 m) counts (`cognition_towers` `Flyer::step`,
+   `Game::in_circle`): 12 to 22 s of nothing at every arrival. A move that leaves a drone that is
+   already low and capturing, to a tower where it must come down again, was therefore always a
+   gain in the model and a loss in the game. Measured on the old model (40 seeds, both sides, the
+   real game replayed from the seed with and without each taken proposal, nothing else proposed for
+   45 s): 45 proposals made and 25.5 taken per game (a move every 8 s); promised +17.6 points on
+   average, realised -1.9 (points of margin after 45 s).
+
+   | Gain promised | Taken | Promised | Realised points |
+   | --- | --- | --- | --- |
+   | 2 to 5 | 359 | +3.3 | -3.0 ± 0.6 |
+   | 5 to 10 | 473 | +7.2 | -2.1 ± 0.5 |
+   | 10 to 20 | 533 | +14.5 | -2.4 ± 0.5 |
+   | 20 to 40 | 487 | +27.7 | -1.2 ± 0.4 |
+   | over 40 | 185 | +53.9 | +0.9 ± 0.3 |
+
+   By what the drone was doing: flying to a tower (1574 taken) promised +18.4, realised +0.1; capturing a
+   tower (204) promised +10.9, realised **-16.5 ± 1.3**; guarding a held tower (259) +17.9, -2.0. The
+   harm is the moves of drones that sit low in a circle. With the flight in the model (the
+   default now) the same table: 44.5 made and 21.5 taken per game, promised +9.9, realised -0.3 ± 0.2;
+   capturing -6.4 ± 1.5 (86 taken), flying +0.3 (1401), guarding -1.6 (229). Still too many moves,
+   and still a loss for the drones that are capturing: not understood to the end (see below).
+
+   Where the old model differs from the arena, rule by rule (old `lookahead.rs` lines):
+   - Flight, climb, descent (:104, :110-119; arena `lib.rs:229-257`, `Game::in_circle` `lib.rs:678`):
+     no height. 12 to 22 s per arrival. The biggest by far. **Fixed.**
+   - Take-off (arena `lib.rs:40-42, 230-239`): a drone on the ground at the start counted in a circle
+     as soon as it was near. 5 s plus 2 s a drone. **Fixed** (`grounded`).
+   - Charging (`commander.rs:370-371`: the hand's orders are those before the charge orders): a drone on
+     its way home counted at its tower. **Fixed**; worth +0.03 ± 0.04 (not measurable alone).
+   - Drift of an empty circle (`lib.rs:697-700`, 100 s a bar): the model kept every bar where it was, so
+     leaving a half-won tower cost nothing. Modelled (`Model::drift`), **but measured worse** (see below),
+     so it is off.
+   - What a drone does after it has won its tower (`commander.rs:288-361`, it goes on to the next):
+     the model left it there. Modelled (`Model::redeploy`), **measured worse**, so it is off.
+   - Not modelled, size unknown: the speed (16 m/s in the model; 0.95-1.05 of it plus a wind of up to
+     5 m/s in the arena, `lib.rs:45, 335, 349`) and the orbit of 40 m round the tower; the order delay
+     of 0.3 to 2 s (`lib.rs:51, 389`); radio shadows (`lib.rs:564`: a drone sent into the shadow of a
+     tower is out of contact, and its orders do not reach it, `lib.rs:395-403`); batteries and the
+     contest drain (`lib.rs:614`, only the `lasts` check); the give-up rule (`commander.rs:226-238`: the
+     commander takes a drone off a tower it is behind at after 10 s, and the model keeps it there); the
+     score cap at 600 (`lib.rs:725`); a tower the team has not seen for a while (its control is the
+     old one); an enemy that goes down, charges or fights.
+   - The enemy in the model flies straight to the tower of a guess and stays; its altitude is a guess
+     (low at the tower, high elsewhere). With the enemy where it really is (an oracle, below) the model
+     gains little: the belief is not what holds the lookahead back.
+
+   Each variant against a commander with no advisor, 400 seeds, both sides (800 games), delay 0, the
+   flight model (`variants 400 taking flight`; the rows with `first` are the model as it was):
+
+   | Variant | Margin | Won | Lost |
+   | --- | --- | --- | --- |
+   | the model as it was (`first`) | -0.47 ± 0.04 | 268 | 532 |
+   | flight | +0.02 ± 0.04 | 420 | 379 |
+   | flight + drift | -0.08 ± 0.04 | 389 | 411 |
+   | flight + charging (**the default now**) | +0.05 ± 0.04 | 430 | 370 |
+   | flight + redeploy | -0.10 ± 0.04 | 380 | 419 |
+   | flight + drift + charging | -0.04 ± 0.04 | 404 | 396 |
+   | flight + drift + charging + redeploy | -0.18 ± 0.04 | 355 | 444 |
+   | on the flight model: margin 5 | +0.18 ± 0.04 | 466 | 333 |
+   | margin 10 | +0.12 ± 0.05 | 445 | 355 |
+   | margin 20 | +0.12 ± 0.05 | 439 | 361 |
+   | margin 40 | +0.02 ± 0.05 | 404 | 396 |
+   | not a drone that is capturing | -0.03 ± 0.04 | 411 | 388 |
+   | not capturing, margin 10 | +0.13 ± 0.05 | 446 | 354 |
+   | a drone moved is left alone 10 s | +0.00 ± 0.04 | 416 | 383 |
+   | 20 s | -0.17 ± 0.04 | 357 | 442 |
+   | 40 s | -0.51 ± 0.04 | 265 | 534 |
+   | blind (belief never updated) | -0.03 ± 0.04 | 410 | 389 |
+   | oracle (enemy drones where they are) | +0.05 ± 0.04 | 433 | 366 |
+   | only drones with no order | +0.00 ± 0.05 | 400 | 400 |
+
+   ("Only drones with no order" is no advisor: every drone has an order.) On the old model the same rows
+   (100 seeds, ±0.09): margin 5 -0.48, 10 -0.54, 20 -0.13, 40 +0.07; not capturing -0.12; blind
+   -0.41; oracle -0.57. Horizon and futures on the model with all four rules on (100 seeds): 15 s
+   +0.04, 30 s +0.04, 60 s -0.27, 90 s -0.29; 2 futures -0.25, 32 futures -0.18 (8: -0.18).
+
+   What it comes to. The model's missing flight was the defect: with it the lookahead goes from -0.47
+   to +0.05 ± 0.04 (430 won, 370 lost), which is level with no advisor, not a gain. A larger margin
+   (5 points) wins by +0.18 ± 0.04; that is a number found by looking at the result, and is not in the
+   code (`ADVICE_MARGIN` is 2 as before). Not fixed, and for the owner: whether the default commander
+   keeps the lookahead. With the fix `judge --game captain --champion timid --challenger default
+   --seeds 24` gives the default commander +0.384 (lower bound +0.048, promoted) with the lookahead,
+   +0.268 (+0.031) with `SIM001_LOOKAHEAD=0`, and +0.175 (-0.132, kept out) with the lookahead as it was.
+   Late advice now costs, as it should for a plan that is exact in time (`advice 400`):
+
+   | Delay | Margin | Won | Lost |
+   | --- | --- | --- | --- |
+   | 0 s | +0.05 ± 0.04 | 430 | 370 |
+   | 2 s | -0.16 ± 0.04 | 362 | 438 |
+   | 5 s | -0.27 ± 0.04 | 331 | 469 |
+   | 10 s | -0.55 ± 0.04 | 248 | 552 |
+   | 30 s | -0.94 ± 0.04 | 143 | 657 |
+
+   The old table was flat because the proposals were noise. Unexplained: why the moves of capturing
+   drones still lose (-6.4 ± 1.5 a move with the flight model); why drift and redeploy, which are the
+   referee's and the commander's own rules, measure worse than leaving them out (about 2 sigma each, not
+   checked at more seeds); why 20 s and 40 s of cooldown per drone are so much worse than 10 s.
    **Results (the seat side: advisors beside the commander, a process advisor, a Claude advisor,
    and the app's accept).** Done in `recreation_towers_ground::{advisors, claude}`, the commander
    app and the server. An advisor at a seat runs on a thread of its own (`advisors::Runner`) behind

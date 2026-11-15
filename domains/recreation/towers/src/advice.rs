@@ -9,7 +9,7 @@
 //! (`Commander::advise`), and an advisor that is slow is only late: its proposals reach the
 //! commander some seconds after the map they were made from.
 
-use crate::lookahead::{self, HORIZON};
+use crate::lookahead::{self, Model};
 use crate::{Belief, Order, Queued, Rules, Team, TeamView};
 use serde::{Deserialize, Serialize};
 
@@ -66,7 +66,7 @@ pub const LOOK_EVERY: f32 = 5.0;
 pub const LOOK_AFTER: f32 = 10.0;
 
 /// The first advisor: the lookahead. Every [`LOOK_EVERY`] s it plays the game forward
-/// [`HORIZON`] s in a small model (`lookahead`), with the enemy drones guessed from its own
+/// 45 s in a small model (`lookahead`), with the enemy drones guessed from its own
 /// [`Belief`], and proposes the one change of orders that gains most. Its proposal is good for
 /// the horizon it looked over.
 #[derive(Clone, Debug)]
@@ -77,14 +77,39 @@ pub struct Lookahead {
     last: f32,
     /// For measuring: the belief is never updated, so the model knows nothing of the enemy.
     blind: bool,
+    /// The rules of the model it plays forward.
+    model: Model,
+    /// A drone it proposed a move for is left alone this long (s), and when it proposed it last.
+    cooldown: f32,
+    moved: Vec<f32>,
 }
 
 impl Lookahead {
     pub fn new(rules: Rules) -> Lookahead {
-        Lookahead { rules, belief: Belief::new(rules, Team::Blue), last: f32::NEG_INFINITY, blind: false }
+        Lookahead {
+            rules,
+            belief: Belief::new(rules, Team::Blue),
+            last: f32::NEG_INFINITY,
+            blind: false,
+            model: Model::default(),
+            cooldown: 0.0,
+            moved: vec![],
+        }
+    }
+
+    /// A lookahead whose model has these rules (for measuring what each is worth).
+    pub fn with_model(mut self, model: Model) -> Lookahead {
+        self.model = model;
+        self
     }
 
     /// A lookahead whose belief is never updated (for measuring what the belief is worth).
+    /// A lookahead that does not propose a move for a drone this long (s) after it proposed one.
+    pub fn with_cooldown(mut self, secs: f32) -> Lookahead {
+        self.cooldown = secs;
+        self
+    }
+
     pub fn blind(mut self, blind: bool) -> Lookahead {
         self.blind = blind;
         self
@@ -103,22 +128,33 @@ impl Advise for Lookahead {
             return vec![];
         }
         self.last = view.time;
-        let Some((drone, tower, gain)) =
-            lookahead::best_change(&self.rules, view, &hand.orders, &hand.free, &hand.away, &self.belief)
-        else {
+        self.moved.resize(hand.orders.len(), f32::NEG_INFINITY);
+        let hold: Vec<bool> = self.moved.iter().map(|&m| view.time - m < self.cooldown).collect();
+        let Some((drone, tower, gain)) = lookahead::best_change_with(
+            &self.rules,
+            view,
+            &hand.orders,
+            &hand.free,
+            &hold,
+            &hand.away,
+            &self.belief,
+            self.model,
+        ) else {
             return vec![];
         };
+        self.moved[drone] = view.time;
         vec![Proposal {
             drone,
             order: Order::Take(tower),
             queue: vec![],
             gain,
             made: view.time,
-            until: view.time + HORIZON,
+            until: view.time + self.model.horizon,
             why: format!(
-                "Send drone {} to the {} tower: about {gain:.0} points over the next {HORIZON:.0} s.",
+                "Send drone {} to the {} tower: about {gain:.0} points over the next {:.0} s.",
                 drone + 1,
-                view.towers[tower].name
+                view.towers[tower].name,
+                self.model.horizon
             ),
         }]
     }
