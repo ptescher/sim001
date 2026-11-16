@@ -8,7 +8,10 @@ Feature: Other aircraft and bad data
     The envelope looks 5 s ahead along the paths of the plane and of each track. If the plane
     will come inside the separation zone, the envelope flies an escape: a hard turn, a climb,
     a dive, or two of them. Of two planes in conflict, the upper one climbs and the lower one
-    dives.
+    dives. On an orbit, the envelope first looks for an escape that stays near the circle:
+    within 40 % of its radius outside it. It leaves the circle only if no such escape is clear,
+    because the ground does not tell the plane what stands round the circle. In a game of
+    Towers, trees do.
 
     Given the flight mode of the plane is AGENT
     And the other aircraft is across your path
