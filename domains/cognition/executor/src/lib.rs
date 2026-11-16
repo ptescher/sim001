@@ -106,6 +106,10 @@ pub mod safety {
     pub const SEP_HOLD: f32 = 1.5;
     /// Escaping down, the nose goes to this fraction of the pitch-down limit.
     pub const SEP_DIVE: f32 = 0.7;
+    /// Flying a circle (an orbit), an escape that stays within this fraction of the radius outside
+    /// the circle is taken before one that leaves it, when it is clear of every zone: what is round
+    /// the circle (trees round a clearing) is not on any track.
+    pub const SEP_STAY: f32 = 0.4;
     /// Stall: within this of the minimum airspeed, limit the climb; under it, nose down this much,
     /// wings within `STALL_BANK`, full throttle.
     pub const STALL_MARGIN: f32 = 2.0;
@@ -737,19 +741,38 @@ impl Executor {
                 // flown is kept unless another is clearer by `SEP_SWITCH`. While the fence is
                 // turning the plane back, only the escapes that turn the same way, or that can be
                 // flown for `SEP_HOLD` seconds and still turn back inside it.
+                // Flying a circle, the escapes that stay near it come first: one of them is flown if
+                // it is clear of every zone, and only if none is, one that leaves the circle.
+                let keep = self.keep(c, l);
                 let mut best = (ESCAPES.len() - 1, f32::MIN, f32::MAX);
-                for (i, &(turn, climb)) in ESCAPES.iter().enumerate() {
-                    if let Some(f) = fence
-                        && f != turn
-                        && self.turn_back_after(c, l, f, turn * l.bank, SEP_HOLD) + FENCE_BUFFER >= l.fence_radius
-                    {
+                for near in [true, false] {
+                    if near && keep.is_none() {
                         continue;
                     }
-                    let (later, penalty) = self.clearance(c, tracks, l, zone, turn * l.bank, climb);
-                    let later =
-                        later.min(SEP_ENOUGH) + if i + 1 == self.sep_option as usize { SEP_SWITCH } else { 0.0 };
-                    if later > best.1 + SEP_SWITCH || (later > best.1 - SEP_SWITCH && penalty < best.2) {
-                        best = (i, later, penalty);
+                    best = (ESCAPES.len() - 1, f32::MIN, f32::MAX);
+                    let mut clear = f32::MIN;
+                    for (i, &(turn, climb)) in ESCAPES.iter().enumerate() {
+                        if let Some(f) = fence
+                            && f != turn
+                            && self.turn_back_after(c, l, f, turn * l.bank, SEP_HOLD) + FENCE_BUFFER >= l.fence_radius
+                        {
+                            continue;
+                        }
+                        if let Some((centre, radius)) = keep.filter(|_| near)
+                            && self.strays(c, centre, turn * l.bank) > radius
+                        {
+                            continue;
+                        }
+                        let (later, penalty) = self.clearance(c, tracks, l, zone, turn * l.bank, climb);
+                        let kept =
+                            later.min(SEP_ENOUGH) + if i + 1 == self.sep_option as usize { SEP_SWITCH } else { 0.0 };
+                        if kept > best.1 + SEP_SWITCH || (kept > best.1 - SEP_SWITCH && penalty < best.2) {
+                            best = (i, kept, penalty);
+                            clear = later;
+                        }
+                    }
+                    if clear >= 1.0 {
+                        break;
                     }
                 }
                 self.sep_option = best.0 as u8 + 1;
@@ -920,6 +943,32 @@ impl Executor {
             }
         }
         (least, penalty)
+    }
+
+    /// Flying an orbit from inside the ring round its circle that escapes are kept in: the centre
+    /// and the radius of that ring (`SEP_STAY` of the circle's radius outside it).
+    fn keep(&self, c: &Ctx, l: &Lims) -> Option<([f32; 2], f32)> {
+        let p = self.plan.filter(|_| self.flown == Primitive::Orbit)?;
+        let (centre, radius) = l.fit_circle([p.point[0], p.point[1]], self.orbit_radius(&p, l));
+        let ring = radius * (1.0 + SEP_STAY);
+        (norm2(sub2(c.pos, centre)) <= ring).then_some((centre, ring))
+    }
+
+    /// How far from `centre` the plane gets over `SEP_HORIZON`, turning as it does now for
+    /// `SEP_REACT` seconds and then as `roll` turns it.
+    fn strays(&self, c: &Ctx, centre: [f32; 2], roll: f32) -> f32 {
+        let speed = c.v.max(5.0);
+        let turn = |roll: f32| rotate([1.0, 0.0], G * tan(roll.within(-1.4, 1.4)) / speed * SEP_STEP);
+        let (now, then) = (turn(c.roll), turn(roll));
+        let (mut p, mut v) = (c.pos, c.vel);
+        let mut far = norm2(sub2(p, centre));
+        for k in 0..SEP_STEPS {
+            let rot = if (k as f32) * SEP_STEP < SEP_REACT { now } else { then };
+            p = [p[0] + v[0] * SEP_STEP, p[1] + v[1] * SEP_STEP];
+            v = [v[0] * rot[0] - v[1] * rot[1], v[0] * rot[1] + v[1] * rot[0]];
+            far = far.max(norm2(sub2(p, centre)));
+        }
+        far
     }
 
     /// The fence: the direction of the turn back (+1 right), if one is needed now: if the turn

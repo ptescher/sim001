@@ -1025,3 +1025,31 @@ fn the_same_standing_plan_again_changes_nothing_and_a_new_one_replaces_it() {
     assert_eq!(e.plan().map(|p| (p.id, p.primitive)), Some((101, Primitive::Loiter as u8)));
     e.set_standing(None);
 }
+
+#[test]
+fn an_escape_from_a_plane_met_on_a_circle_stays_near_the_circle() {
+    // Two planes circle one point the opposite ways, on the same circle and half a metre apart in
+    // height (two teams at a tower), so they meet head on twice a turn. Trees stand round the
+    // clearing they circle in: neither escape may take its plane far outside its circle.
+    let l = Limits { separation: 4.0, floor: 5.0, ..Limits::default() };
+    let (mut xa, mut xb) = (Executor::new(), Executor::new());
+    let mut a = Plane::new(40.0, 0.0, 18.0, HALF_PI, 18.0);
+    let mut b = Plane::new(-40.0, 0.0, 17.5, HALF_PI, 18.0);
+    let pa = Plan { point: [0.0, 0.0, -18.0], radius: 40.0, ..plan(1, Primitive::Orbit) };
+    let pb = Plan { point: [0.0, 0.0, -17.5], radius: 40.0, ..plan(2, Primitive::Orbit) };
+    let (ra, rb) = (xa.orbit_radius(&pa, &Lims::new(&l, &Tuning::DEFAULT).unwrap()), 40.0f32);
+    let (mut far_a, mut far_b, mut escapes) = (0.0f32, 0.0f32, 0);
+    for _ in 0..(180.0 / DT) as usize {
+        let (ta, tb) = (a.as_track(1), b.as_track(2));
+        let da = xa.step(&a.state(), Some(&pa), &[tb], &l);
+        let db = xb.step(&b.state(), Some(&pb), &[ta], &l);
+        escapes += ((xa.rules() | xb.rules()) & rules::SEPARATION != 0) as usize;
+        a.fly_demand(&da);
+        b.fly_demand(&db);
+        far_a = far_a.max(a.dist2([0.0, 0.0]));
+        far_b = far_b.max(b.dist2([0.0, 0.0]));
+    }
+    assert!(escapes > 0, "they never met: {ra} {far_a} {far_b} {:?} {:?}", a.pos, b.pos);
+    assert!(far_a <= ra * (1.0 + SEP_STAY) + 3.0, "the inner plane got {far_a} m out, circling at {ra}");
+    assert!(far_b <= rb.max(ra) * (1.0 + SEP_STAY) + 3.0, "the outer plane got {far_b} m out, circling at {rb}");
+}
