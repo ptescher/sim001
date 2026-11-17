@@ -447,6 +447,9 @@ impl AppDriver {
         let end = Instant::now() + self.suite.cap(SEATED);
         loop {
             let (status, view) = self.call(|v, _, _| {
+                // The camera is placed when the view is drawn; a window that is not drawn yet (a
+                // fresh game, a window behind another) would still hold the last game's camera.
+                v.place_eye();
                 let s = v.seat.state();
                 (s.status.clone(), s.view.is_some())
             })?;
