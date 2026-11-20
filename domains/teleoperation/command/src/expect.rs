@@ -80,7 +80,7 @@ const EVENTS: &[&str] = &[
     "the commander holds the selected drone",
     "the commander sends the selected drone home",
     "the commander flies the selected drone low",
-    "the commander clicks the camera of the second Blue drone",
+    "the commander clicks the card of the second Blue drone",
     "the game runs for 2 minutes",
     "the game runs for 3 minutes",
     "the time of the proposal is over",
@@ -122,6 +122,7 @@ const OBSERVED: &[&str] = &[
     "the distance of the first Blue drone from the centre of its circle",
     "the points in the route of the first Blue drone",
     "the picture in the portrait",
+    "the icon on the card of the first Blue drone",
     "the battlefield picture in the app",
     "the point of the battlefield camera",
     "the distance from the Blue base to the battlefield camera's point",
@@ -811,7 +812,7 @@ impl Driver for AppDriver {
                 self.click_button("low")?;
                 self.until(ANSWER, "the server's answer to LOW", |v| v.drones.first().is_some_and(|d| d.low))
             }
-            "the commander clicks the camera of the second blue drone" => self.click_button("camera-1"),
+            "the commander clicks the card of the second blue drone" => self.click_button("drone-1"),
             // The panel's first line is the proposal that gains most.
             "the commander clicks the proposal" => self.click_button("proposal-0"),
             "the commander presses the accept key" => self.press_key("y"),
@@ -934,8 +935,13 @@ impl Driver for AppDriver {
             // The 3D view loads the valley first, which takes a while.
             let end = Instant::now() + self.suite.cap(FEEDS);
             loop {
+                // The app picks the cameras it watches as it draws.
+                self.with_window(|w, cx| w.draw(cx).clear())?;
                 let live = self.call(|v, _, _| v.cameras.live())?;
-                if live >= 3 || Instant::now() > end {
+                if live >= 1 || Instant::now() > end {
+                    // A feed that should not be live would be by now too.
+                    std::thread::sleep(Duration::from_secs(2));
+                    let live = self.call(|v, _, _| v.cameras.live())?;
                     return Ok(Value::from(live as f64));
                 }
                 std::thread::sleep(Duration::from_millis(250));
@@ -1007,6 +1013,15 @@ impl Driver for AppDriver {
             self.with_window(|w, cx| w.draw(cx).clear())?;
             let chips = self.call(|v, _, _| v.chips.borrow().clone())?;
             return Ok(Value::from(chips.iter().filter(|c| **c == Some(Team::Blue)).count() as f64));
+        }
+        if lower == "the icon on the card of the first blue drone" {
+            self.with_window(|w, cx| w.draw(cx).clear())?;
+            let icon = self.call(|v, _, _| v.card_icons.borrow().first().copied().flatten())?;
+            return Ok(Value::from(match icon {
+                Some(recreation_towers::Class::Light) => "a quadcopter",
+                Some(_) => "a plane",
+                None => "nothing",
+            }));
         }
         if lower == "the picture in the portrait" {
             // The pictures come when the 3D view has loaded the valley.
