@@ -1010,6 +1010,12 @@ impl Driver for SimDriver {
     /// The plane in the sim is the one it was started with: a test that starts with a flight
     /// controller can't be arranged on a plane without one.
     fn can_arrange(&self, var: &Variable, value: &Value) -> bool {
+        // Flown from the sticks (`--direct`), a plane with a flight controller starts in the hand,
+        // as the plain one does: it is never set down on the ground.
+        let in_hand_only = self.flight_controller && !self.ardupilot_flying;
+        if var.key == "plane" && value.as_str() == Some("on the ground") && in_hand_only {
+            return false;
+        }
         var.key != "flight controller"
             || value.as_str() == Some(if self.flight_controller { "fitted" } else { "missing" })
     }
@@ -1037,6 +1043,35 @@ mod tests {
     use super::*;
 
     /// The stand-in pilot's sticks give the surfaces it wants, through MANUAL's expo.
+    #[test]
+    fn a_plane_flown_from_the_sticks_is_never_on_the_ground() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("expectations");
+        let a = Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage();
+        let (tx, _rx) = channel();
+        let driver = |flight_controller, ardupilot_flying| SimDriver {
+            tx: tx.clone(),
+            flight_controller,
+            ardupilot_flying,
+            standin: Default::default(),
+            suite_time: None,
+            core: None,
+            deadline: Mutex::new(None),
+            needs: vec![],
+        };
+        let v = &a.suite.vocabulary;
+        let var = a
+            .plans
+            .iter()
+            .flat_map(|p| p.start.iter())
+            .map(|(x, _)| v.var(x))
+            .find(|var| var.key == "plane")
+            .expect("a test that starts with the plane somewhere");
+        let value = &Value::from("on the ground");
+        assert!(!driver(true, false).can_arrange(var, value), "--direct: it starts in the hand");
+        assert!(driver(true, true).can_arrange(var, value), "ArduPilot flying: it is set down");
+        assert!(driver(false, false).can_arrange(var, value), "the plain T1-S");
+    }
+
     #[test]
     fn unexpo_undoes_the_expo() {
         for y in [-1.0f32, -0.6, -0.1, 0.0, 0.25, 0.8, 1.0] {
