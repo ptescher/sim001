@@ -2,9 +2,10 @@
 //! picture is a few frames old.
 //!
 //! The app asks for a picture with a margin ([`margin`]), most of all below, where the near ground
-//! moves fastest on screen. It draws the picture as the camera now sees the ground ([`strips`]): the
-//! ground is flat at height 0, as the map on it is. A camera that only moved or zoomed sees the
-//! ground's rows as rows, so each band of the battlefield is the picture moved and scaled, which
+//! moves fastest on screen. It draws the picture as the camera now sees the ground ([`strips`]),
+//! taken as flat at a height the app gives: 0 in Towers, whose map is flat; in the ground station,
+//! whose map lies on the terrain, the height of the ground the camera looks at. A camera that only
+//! moved or zoomed sees the ground's rows as rows, so each band of the battlefield is the picture moved and scaled, which
 //! GPUI draws ([`paint`]). A turn cannot be drawn this way: the battlefield turns when its picture
 //! comes ([`shown`]).
 
@@ -21,7 +22,7 @@ const BELOW: f32 = 0.35;
 const SIDES: f32 = 0.10;
 
 /// The bands the battlefield is drawn in: each is off the flat ground by under a pixel.
-pub const STRIPS: usize = 64;
+pub const STRIPS: usize = 96;
 
 /// The picture to ask for, for the camera `eye` on a battlefield `w` by `h`: its eye and its size.
 /// It is as sharp as the battlefield in the middle, and sees the margin round it: the camera looks
@@ -58,9 +59,9 @@ pub struct Strip {
     pub at: (f32, f32, f32, f32),
 }
 
-/// The picture from `from` (`pw` by `ph`) as the battlefield `lens` sees the flat ground, in `n`
-/// bands; `None` if the camera turned since, or a band shows the sky.
-pub fn strips(from: Eye, pw: f32, ph: f32, lens: Lens, n: usize) -> Option<Vec<Strip>> {
+/// The picture from `from` (`pw` by `ph`) as the battlefield `lens` sees flat ground `ground` high,
+/// in `n` bands; `None` if the camera turned since, or a band shows the sky.
+pub fn strips(from: Eye, pw: f32, ph: f32, lens: Lens, ground: f32, n: usize) -> Option<Vec<Strip>> {
     if (lens.eye.heading - from.heading).rem_euclid(360.0).min((from.heading - lens.eye.heading).rem_euclid(360.0))
         > 1e-3
     {
@@ -68,7 +69,7 @@ pub fn strips(from: Eye, pw: f32, ph: f32, lens: Lens, n: usize) -> Option<Vec<S
     }
     let (x, y, w, h) = lens.rect();
     // Where the screen point (sx, sy) of the ground is in the picture.
-    let picture = |sx: f32, sy: f32| from.project(lens.to_field(sx, sy)?.extend(0.0), pw, ph);
+    let picture = |sx: f32, sy: f32| from.project(lens.to_plane(sx, sy, ground)?.extend(ground), pw, ph);
     (0..n)
         .map(|i| {
             let (top, bottom) = (y + h * i as f32 / n as f32, y + h * (i + 1) as f32 / n as f32);
@@ -85,14 +86,14 @@ pub fn strips(from: Eye, pw: f32, ph: f32, lens: Lens, n: usize) -> Option<Vec<S
         .collect()
 }
 
-/// Draws `image`, the picture from `from`, on the battlefield `lens` sees: moved band by band, or
-/// as it is if the camera turned since.
-pub fn paint(window: &mut Window, image: &Arc<RenderImage>, from: Eye, lens: Lens) {
+/// Draws `image`, the picture from `from`, on the battlefield `lens` sees: moved band by band as if
+/// the ground were flat and `ground` high, or as it is if the camera turned since.
+pub fn paint(window: &mut Window, image: &Arc<RenderImage>, from: Eye, lens: Lens, ground: f32) {
     let s = image.size(0);
     let (pw, ph) = (s.width.0 as f32, s.height.0 as f32);
     let (x, y, w, h) = lens.rect();
     let rect = |x: f32, y: f32, w: f32, h: f32| Bounds { origin: point(px(x), px(y)), size: size(px(w), px(h)) };
-    match strips(from, pw, ph, lens, STRIPS) {
+    match strips(from, pw, ph, lens, ground, STRIPS) {
         Some(strips) => {
             for s in strips {
                 let mask = ContentMask { bounds: rect(x, s.top, w, s.bottom - s.top) };
@@ -116,7 +117,7 @@ pub fn paint(window: &mut Window, image: &Arc<RenderImage>, from: Eye, lens: Len
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glam::Vec2;
+    use glam::{Vec2, Vec3};
     use gpui::{Bounds, point, px, size};
 
     const W: f32 = 1400.0;
@@ -132,8 +133,8 @@ mod tests {
 
     /// Where the strips draw the ground point `g` of the picture from `from` (`pw` by `ph`): by the
     /// band it falls in (at a seam between two bands, a point may fall a hair outside both).
-    fn drawn(strips: &[Strip], from: Eye, pw: f32, ph: f32, g: Vec2) -> Option<(f32, f32)> {
-        let (u, v) = from.project(g.extend(0.0), pw, ph)?;
+    fn drawn(strips: &[Strip], from: Eye, pw: f32, ph: f32, g: Vec3) -> Option<(f32, f32)> {
+        let (u, v) = from.project(g, pw, ph)?;
         let outside = |s: &Strip, y: f32| (s.top - y).max(y - s.bottom).max(0.0);
         strips
             .iter()
@@ -143,31 +144,36 @@ mod tests {
             .map(|(p, _)| p)
     }
 
-    /// Ground points all over the battlefield, from the camera `eye`.
-    fn grid(eye: Eye) -> Vec<Vec2> {
+    /// Points of flat ground `z` high all over the battlefield, from the camera `eye`.
+    fn grid(eye: Eye, z: f32) -> Vec<Vec3> {
         let l = lens(eye);
         let mut pts = vec![];
         for i in 0..=14 {
             for j in 0..=8 {
                 let (x, y) = (100.0 + W * (0.02 + 0.96 * i as f32 / 14.0), 40.0 + H * (0.02 + 0.96 * j as f32 / 8.0));
-                pts.push(l.to_field(x, y).unwrap());
+                pts.push(l.to_plane(x, y, z).unwrap().extend(z));
             }
         }
         pts
     }
 
-    /// The largest distance between where the strips draw the ground and where the map is on it.
-    fn worst(from: Eye, pw: f32, ph: f32, now: Eye) -> f32 {
+    /// The largest distance between where the strips draw flat ground `z` high and where the map is
+    /// on it.
+    fn worst_on(from: Eye, pw: f32, ph: f32, now: Eye, z: f32) -> f32 {
         let l = lens(now);
-        let strips = strips(from, pw, ph, l, STRIPS).expect("no turn");
-        grid(now)
+        let strips = strips(from, pw, ph, l, z, STRIPS).expect("no turn");
+        grid(now, z)
             .into_iter()
             .map(|g| {
                 let (dx, dy) = drawn(&strips, from, pw, ph, g).expect("drawn");
-                let (mx, my) = l.ground(g).unwrap();
+                let (mx, my) = l.at(g).unwrap();
                 (dx - mx).hypot(dy - my)
             })
             .fold(0.0, f32::max)
+    }
+
+    fn worst(from: Eye, pw: f32, ph: f32, now: Eye) -> f32 {
+        worst_on(from, pw, ph, now, 0.0)
     }
 
     #[test]
@@ -215,13 +221,26 @@ mod tests {
         assert!(worst(from, pw, ph, nearer) < 1.0);
     }
 
+    /// The ground station's map lies on the terrain, which is seldom at the height of home: the
+    /// picture is moved on flat ground at the height of the ground the camera looks at.
+    #[test]
+    fn on_ground_above_or_below_home_it_lies_on_the_map_within_a_pixel() {
+        let (from, pw, ph) = margin(eye(), W, H);
+        let h = eye().heading.to_radians();
+        let side = Vec2::new(-h.sin(), h.cos()) * eye().height() * 1.3 * 0.15;
+        let now = Eye { look: eye().look + side, ..eye() };
+        for z in [120.0, -60.0] {
+            assert!(worst_on(from, pw, ph, now, z) < 1.0, "{z} m: {}", worst_on(from, pw, ph, now, z));
+        }
+    }
+
     #[test]
     fn the_strips_cover_the_battlefield_after_a_pan() {
         let (from, pw, ph) = margin(eye(), W, H);
         let h = eye().heading.to_radians();
         let back = -glam::Vec2::new(h.cos(), h.sin()) * eye().height() * 1.3 * 0.15;
         let now = Eye { look: eye().look + back, ..eye() };
-        let strips = strips(from, pw, ph, lens(now), STRIPS).unwrap();
+        let strips = strips(from, pw, ph, lens(now), 0.0, STRIPS).unwrap();
         assert_eq!((strips[0].top, strips.last().unwrap().bottom), (40.0, 40.0 + H));
         for (a, b) in strips.iter().zip(&strips[1..]) {
             assert_eq!(a.bottom, b.top);
@@ -237,6 +256,6 @@ mod tests {
         let now = Eye { heading: 75.0, look: Vec2::new(-280.0, 40.0), ..eye() };
         let shown = shown(now, eye());
         assert_eq!((shown.heading, shown.look), (eye().heading, now.look));
-        assert!(strips(eye(), W, H, lens(now), STRIPS).is_none(), "a turn is not drawn moved");
+        assert!(strips(eye(), W, H, lens(now), 0.0, STRIPS).is_none(), "a turn is not drawn moved");
     }
 }

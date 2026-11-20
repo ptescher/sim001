@@ -11,7 +11,7 @@ use gpui::{App, Bounds, ContentMask, Corners, Hsla, Pixels, RenderImage, Window}
 use std::sync::Arc;
 use teleoperation_battlefield::draw::*;
 use teleoperation_battlefield::theme::{CONSOLE, c, ca};
-use teleoperation_battlefield::{Flat, Lens, paint};
+use teleoperation_battlefield::{Eye, Flat, Lens, paint, warp};
 
 use super::theme::{AMBER, CYAN, GREEN, GREY, MAGENTA, SPI, WHITE};
 
@@ -20,7 +20,8 @@ const RINGS: [f32; 3] = [250.0, 500.0, 1000.0];
 
 /// What the battlefield draws, besides the map's snapshot.
 pub struct Scene<'a> {
-    pub picture: Option<Arc<RenderImage>>,
+    /// The newest picture of the 3D view, and the camera it is from.
+    pub picture: Option<(Arc<RenderImage>, Eye)>,
     /// The aircraft's height above home (m), and its velocity (north, east; m/s).
     pub alt: f32,
     pub velocity: Vec2,
@@ -62,9 +63,8 @@ pub fn paint_battlefield(
     let on_ground = |at: Vec2| lens.at(at.extend(g(at)));
     window.with_content_mask(Some(ContentMask { bounds: b }), |window| {
         match &scene.picture {
-            Some(img) => {
-                let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
-            }
+            // Moved as if the ground were flat at the height of the ground the camera looks at.
+            Some((img, from)) => warp::paint(window, img, *from, lens, g(lens.eye.look)),
             None => {
                 // The plain ground: a grid of 100 m squares round home, in the same perspective.
                 fill_rect(window, x, y, w, h, c(CONSOLE));

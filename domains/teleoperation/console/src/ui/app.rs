@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use teleoperation_battlefield::orders::CircleTool;
-use teleoperation_battlefield::{Battlefield, Eye, Flat, Lens, Rig};
+use teleoperation_battlefield::{Battlefield, Eye, Flat, Lens, Rig, warp};
 use teleoperation_core::debug::{self, Level, Source};
 
 thread_local! {
@@ -184,6 +184,17 @@ impl Gcs {
             }
         })
         .detach();
+        // A picture of the battlefield that comes is drawn at once, not at the next tick.
+        if let Some(mut arrivals) = battlefield.arrivals() {
+            cx.spawn(async move |this, cx| {
+                while arrivals.next().await {
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
         Self {
             vehicle,
             tx,
@@ -1407,6 +1418,11 @@ impl Gcs {
     /// The battlefield view: the top bar, the battlefield, and the bottom bar with the minimap, the
     /// aircraft's camera, the flight display, the vehicle's commands and the map's tools.
     fn render_battlefield(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        // While the camera moves, it moves and the window draws at the screen's own rate.
+        if self.rig.moving(self.bf_bounds.get()) {
+            self.rig.tick(self.bf_bounds.get());
+            window.request_animation_frame();
+        }
         let vehicle = self.vehicle.clone();
         let v = vehicle.lock().unwrap();
         let agl = self.agl(&v);
@@ -1459,12 +1475,13 @@ impl Gcs {
             move |b, _, window, cx| {
                 bounds.set(b);
                 let (_, _, w, h) = super::draw::rect(b);
-                link.ask(eye, w.round() as u16, h.round() as u16);
-                // The picture's own eye, so that the map lies on it where it was rendered.
-                let (image, lens) = match &picture {
-                    Some((img, at)) => (Some(img.clone()), Lens::new(*at, b)),
-                    None => (None, Lens::new(eye, b)),
-                };
+                // A picture with a margin, which the battlefield moves to the camera until the next.
+                let (wide, pw, ph) = warp::margin(eye, w, h);
+                link.ask(wide, pw as u16, ph as u16);
+                // The camera now; after a turn, as the picture is turned until its own comes.
+                let shown = picture.as_ref().map_or(eye, |(_, from)| warp::shown(eye, *from));
+                let lens = Lens::new(shown, b);
+                let image = picture.clone();
                 let scene = bf::Scene {
                     picture: image,
                     alt,

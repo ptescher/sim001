@@ -42,6 +42,11 @@ impl Lens {
         self.eye.ground(sx - self.x, sy - self.y, self.w, self.h)
     }
 
+    /// The point of flat ground `z` high under the screen point (`sx`, `sy`), or `None` in the sky.
+    pub fn to_plane(self, sx: f32, sy: f32, z: f32) -> Option<Vec2> {
+        self.eye.plane(sx - self.x, sy - self.y, self.w, self.h, z)
+    }
+
     /// The ground under the screen point (`sx`, `sy`) on terrain of `height` (m above the origin,
     /// at a field point): where the line of sight first meets it, or `None` in the sky.
     pub fn to_terrain(self, sx: f32, sy: f32, height: impl Fn(Vec2) -> f32) -> Option<Vec2> {

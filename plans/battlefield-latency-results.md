@@ -277,7 +277,8 @@ younger.
   for a picture with a margin: 10 % each side, 8 % above and 35 % below, where the near ground
   moves fastest. It is as sharp as the battlefield in the middle, and about 1.7 times the pixels.
   The camera of the picture looks a little lower and wider from the same place. The app draws it
-  as the camera now sees the flat ground, in 64 bands. A pan or a zoom keeps the rows of the
+  as the camera now sees the flat ground, in 96 bands (64 at first; 96 keep ground 120 m above
+  home within a pixel). A pan or a zoom keeps the rows of the
   ground as rows, so each band is the picture moved and scaled; GPUI draws it with `paint_image`
   under a content mask. The map is drawn with the camera now. A turn cannot be drawn this way: the
   battlefield keeps the picture's heading until its picture comes.
@@ -299,5 +300,11 @@ younger.
 - **A fix in the measure:** a motion none of whose pictures was drawn read as 0 ms late; it now
   reads as long as the motion.
 
+**The ground station too.** The console asks for the same margin and moves the picture the same
+way, on flat ground at the height of the ground the camera looks at (its map lies on the terrain,
+not at the height of home). It draws on a picture's arrival and on animation frames while the
+camera moves. Unit test: on ground 120 m above or 60 m below home, within a pixel after a pan.
+Its expectations need Docker and were not run.
+
 Still to do: an on-screen game to see the warp and the hills, and the app's draw rate with
-animation frames.
+animation frames; the ground station on screen.
