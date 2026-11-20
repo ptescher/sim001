@@ -1,0 +1,61 @@
+Feature: Loud and quiet drones
+  In the [[v4 rules]], a drone is [[loud]] or [[quiet]]. A loud drone sends its telemetry and the
+  picture of its camera to its team. A quiet drone sends nothing: it still hears the orders of its
+  commander, but its team has only where it last heard from it, and its camera adds nothing to the
+  map of the team.
+
+  The radio of a loud drone can be found. A fort or the spire that a team holds takes a
+  [[bearing]] on each loud enemy drone within 400 m: the direction to it, not the place. Two
+  bearings on one drone cross where it is, and the team sees it there. A quiet drone gives no
+  bearing.
+
+  Expectation: A quiet drone hears its team but sends nothing
+    Given the emission of the first Blue drone is quiet
+    And the first Blue drone is low in the mid lane
+    When the first Blue drone flies to the west circle
+    Then the link of the first Blue drone is in contact
+    And the first Blue drone on the Blue map is last in contact
+
+  Expectation: Two bearings find a loud drone that nobody sees
+    Given the direction finding is on
+    And the centre tower is held by Blue
+    And the towers held by Blue are 2
+    And the Red scout is high between the Blue home tower and the centre tower
+    And the emission of the Red scout is loud
+    Then the bearings on the Red scout are 2
+    And the Red scout on the Blue map is seen
+
+  Expectation: One bearing gives the direction, not the place
+    Given the direction finding is on
+    And the centre tower is neutral
+    And the Red scout is high between the Blue home tower and the centre tower
+    And the emission of the Red scout is loud
+    Then the bearings on the Red scout are 1
+    And the Red scout on the Blue map is unknown
+
+  Expectation: A quiet drone gives no bearing
+    Given the direction finding is on
+    And the centre tower is held by Blue
+    And the towers held by Blue are 2
+    And the Red scout is high between the Blue home tower and the centre tower
+    And the emission of the Red scout is quiet
+    Then the bearings on the Red scout are 0
+    And the Red scout on the Blue map is unknown
+
+  Expectation: A quiet drone does not report its battery
+    Given the emission of the first Blue drone is quiet
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is low in the mid lane
+    When the first Blue drone flies quiet for 10 seconds
+    Then the battery of the first Blue drone is 90 s
+    And the battery of the first Blue drone on the Blue map is 100 s
+
+  Expectation: A quiet drone goes loud at its bingo battery
+    The failsafe of the drone sends its telemetry again when its battery gets down to 60 s, so
+    that its commander can bring it home.
+
+    Given the emission of the first Blue drone is quiet
+    And the battery of the first Blue drone is 65 s
+    And the first Blue drone is low in the mid lane
+    When the first Blue drone flies quiet for 10 seconds
+    Then the emission of the first Blue drone is loud

@@ -62,6 +62,7 @@ pub fn build(
                 order,
                 low,
                 linked: true,
+                heard: true,
                 silent: 0.0,
                 battery: 0.0,
             };
@@ -74,6 +75,7 @@ pub fn build(
                         vel: r.vel,
                         phase: if r.alt > FLYING_ABOVE { Phase::Flying } else { Phase::Ground },
                         linked,
+                        heard: linked,
                         silent: if linked { 0.0 } else { r.age },
                         ..d
                     }
@@ -91,6 +93,7 @@ pub fn build(
         towers: sites.towers.clone(),
         drones,
         enemies: sites.enemies.clone(),
+        bearings: vec![],
     };
     let n = rules.drones;
     for s in seen {

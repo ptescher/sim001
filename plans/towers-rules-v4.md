@@ -290,7 +290,9 @@ C2 or C3 is cut, not kept.
    cycles (results, step 2).
 3. **Height and radio**: the canopy range, towers as nodes, the relay payload. **Done**
    (`20-canopy.expect`); no cycles yet (results, step 3).
-4. **Emission and DF**, into the `Belief`.
+4. **Emission and DF**, into the `Belief`. **Done** (`21-emission.expect`), except the `Belief`:
+   bearings are in the `TeamView`, and two bearings put a drone on the map; a quiet drone sends no
+   battery either, and goes loud at bingo. First mixed equilibrium, on the chain (results, step 4).
 5. **The fight**: tagger, hunter, overwatch. The vignette bank starts here: this is where the pilot
    first has a decision.
 6. **Jammer and airtime**: scripts against orders (needs the instruction queue of `plans/actors.md`).

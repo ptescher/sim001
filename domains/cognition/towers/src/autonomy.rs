@@ -185,6 +185,10 @@ impl<C: Captain, A: Autonomy> Captain for Prepared<C, A> {
         self.captain.decide(view)
     }
 
+    fn posture(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, recreation_towers::Posture)> {
+        self.captain.posture(view, orders)
+    }
+
     fn standing(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
         orders.iter().filter_map(|&(k, o)| self.autonomy.standing(view, k, o).map(|s| (k, s))).collect()
     }

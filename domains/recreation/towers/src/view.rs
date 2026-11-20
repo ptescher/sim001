@@ -1,6 +1,6 @@
 //! What a seat gets: its team's map of the game ([`TeamView`]), and the orders it gives.
 
-use crate::{DroneSighting, Game, Kind, Outcome, Phase, Team};
+use crate::{Bearing, DroneSighting, Game, Kind, Outcome, Phase, Team};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +60,10 @@ pub struct OwnDrone {
     /// order, and it sends no picture.
     #[serde(default = "in_contact")]
     pub linked: bool,
+    /// The team hears its telemetry (v4: a quiet drone is linked, it hears its orders, and the team
+    /// has only where it last heard from it).
+    #[serde(default = "in_contact")]
+    pub heard: bool,
     /// How long the team has not heard from it (s); 0 while it does.
     #[serde(default)]
     pub silent: f32,
@@ -100,6 +104,9 @@ pub struct TeamView {
     pub drones: Vec<OwnDrone>,
     /// Only the enemy drones the team has seen.
     pub enemies: Vec<EnemyDrone>,
+    /// The bearings the team's towers take now on loud enemy drones (v4).
+    #[serde(default)]
+    pub bearings: Vec<Bearing>,
 }
 
 /// The umpire's word: the clock, the scores and the outcome. The same for every seat. (In the
@@ -170,10 +177,10 @@ impl Game {
             .map(|j| {
                 let i = self.drone(team, j);
                 let d = &self.drones[i];
-                let linked = !self.jammed[i];
-                // Out of contact, the team has only what the drone last sent.
+                let (linked, heard) = (!self.jammed[i], self.heard(i));
+                // Out of contact, or quiet, the team has only what the drone last sent.
                 let (at, alt, vel, phase) = match map.drones[i] {
-                    Some(s) if !linked => (s.at, s.alt, s.vel, s.phase),
+                    Some(s) if !heard => (s.at, s.alt, s.vel, s.phase),
                     _ => (d.at, d.alt, d.vel, d.phase),
                 };
                 OwnDrone {
@@ -185,6 +192,7 @@ impl Game {
                     order: None,
                     low: false,
                     linked,
+                    heard,
                     silent: self.silent[i],
                     battery: self.reported[i],
                 }
@@ -216,6 +224,7 @@ impl Game {
             towers,
             drones,
             enemies,
+            bearings: map.bearings.clone(),
         }
     }
 }
