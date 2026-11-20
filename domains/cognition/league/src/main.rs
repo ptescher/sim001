@@ -10,6 +10,7 @@
 //! start  --champion X [--dir DIR]   (a new league: what was in DIR goes)
 //! status [--dir DIR]
 //! captain-seat                     (a captain on stdin and stdout, for the league to play)
+//! nash   [--seeds N] [--set rule=number ...]   (the table of Towers' formations and its equilibrium)
 //! ```
 //!
 //! X and Y are `default`, a contest's own (`slow`, `timid`) or a JSON file of an entry. The
@@ -34,6 +35,25 @@ fn main() {
         if let Err(e) = cognition_towers::serve(stdin.lock(), std::io::stdout().lock()) {
             fail(e);
         }
+        return;
+    }
+    if args.first().map(String::as_str) == Some("nash") {
+        let mut rules = recreation_towers::Rules::default();
+        let mut rest = args[1..].iter();
+        while let Some(a) = rest.next() {
+            let value = rest.next().unwrap_or_else(|| fail(format!("{a} wants a value")));
+            match a.as_str() {
+                "--set" => cognition_towers::set_rule(&mut rules, value).unwrap_or_else(|e| fail(e)),
+                "--seeds" => {}
+                _ => fail(format!("nash: no option {a} (--seeds N, --set rule=number)")),
+            }
+        }
+        let n: u64 = arg("--seeds").and_then(|s| s.parse().ok()).unwrap_or(40);
+        let seeds: Vec<u64> = (0..n).collect();
+        let t = Instant::now();
+        let table = cognition_league::nash::Table::play(rules, &seeds).unwrap_or_else(|e| fail(e));
+        print!("{}", table.report());
+        println!("{} seeds, both sides, in {:.1} s", n, t.elapsed().as_secs_f32());
         return;
     }
     let game = arg("--game").unwrap_or("executor".into());
@@ -136,6 +156,8 @@ fn main() {
             let league = League::open(contest, &dir, &repo);
             println!("{}", league.status());
         }
-        _ => fail("usage: cognition_league play|judge|run|start|status|captain-seat (see the source's header)".into()),
+        _ => fail(
+            "usage: cognition_league play|judge|run|start|status|captain-seat|nash (see the source's header)".into(),
+        ),
     }
 }

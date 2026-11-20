@@ -388,6 +388,22 @@ Term: Captain
   The computer in the seat of a team in [[Towers]]: `recreation_towers::Commander`. It reads
   the map of its team and gives each drone an order. The [[league]] makes better captains.
 
+Term: Formation
+  In the [[table of a game]], one way to play [[Towers]]: a fixed post for each drone (all five at
+  the centre, two on each flank, a raid on the enemy home), or a [[captain]] that reacts.
+
+Term: Table of a game
+  Each [[formation]] against each other formation, on both sides of each seed: a cell is the mean
+  score of the row over the column. `cognition_league nash` makes it.
+
+Term: Equilibrium
+  The mix of [[formation]]s that no formation can beat on average: a Nash equilibrium of the
+  [[table of a game]]. A wide equilibrium, with many formations in it, means that no one plan wins.
+
+Term: Cycle share
+  How much of the [[table of a game]] is cycles (A beats B, B beats C, C beats A) and not a
+  ranking: 0 % is a pure ranking, 100 % is pure rock, paper, scissors.
+
 Term: Commander
   In [[Towers]], what gives the orders of a team: one for each team. It sees only the map of its
   team, and gives a drone an order and its [[queue]]. It is a computer ([[captain]]) or a person at

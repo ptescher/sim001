@@ -3,60 +3,20 @@
 //! The cell is the row's mean score over the column's (positive: the row wins). After the games,
 //! `spire_score=1 contest_drain=3 spire_jam_radius=120 tower_score=1 layout=1` set those rules
 //! (`layout=1` is the chain, with eleven towers and formations that name the outposts).
+//! `cognition_league nash` plays the same table and gives its equilibrium.
 
-use cognition_towers::{Captain, Formation, Persist, Post, Prepared, compare_captains};
-use recreation_towers::map::LayoutKind;
-use recreation_towers::{Commander, Rules};
-
-type Make = Box<dyn Fn() -> Box<dyn Captain>>;
-
-fn formation(rules: Rules, name: &'static str, posts: [Post; 5]) -> (&'static str, Make) {
-    (name, Box::new(move || Box::new(Prepared { captain: Formation::new(name, posts, rules), autonomy: Persist })))
-}
+use cognition_towers::{compare_captains, formations, set_rule};
+use recreation_towers::Rules;
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let n: u64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(40);
     let seeds: Vec<u64> = (1..=n).collect();
-    use Post::*;
     let mut rules = Rules::default();
     for a in args.iter().skip(1) {
-        let (k, v) = a.split_once('=').ok_or(format!("{a}: want name=number"))?;
-        let v: f32 = v.parse().map_err(|_| format!("{a}: not a number"))?;
-        match k {
-            "spire_score" => rules.spire_score = v,
-            "tower_score" => rules.tower_score = v,
-            "contest_drain" => rules.contest_drain = v,
-            "spire_jam_radius" => rules.spire_jam_radius = v,
-            "win_score" => rules.win_score = v,
-            "layout" => rules.layout = if v >= 1.0 { LayoutKind::Chain } else { LayoutKind::Valley },
-            _ => return Err(format!("no rule called {k}")),
-        }
+        set_rule(&mut rules, a)?;
     }
-    let entries: Vec<(&str, Make)> = if rules.layout == LayoutKind::Chain {
-        vec![
-            ("commander", Box::new(move || Box::new(Prepared { captain: Commander::new(rules), autonomy: Persist }))),
-            formation(rules, "mass centre", [Centre; 5]),
-            formation(rules, "balanced", [West, East, Centre, Centre, Centre]),
-            formation(rules, "own line", [OwnWest, OwnMid, OwnEast, Centre, Centre]),
-            formation(rules, "far line", [FarWest, FarMid, FarEast, Centre, Centre]),
-            formation(rules, "raid", [FarWest, FarEast, EnemyHome, Centre, EnemyHome]),
-            formation(rules, "spread", [OwnWest, OwnEast, FarMid, Centre, West]),
-            formation(rules, "snipe", [FarWest, FarMid, FarEast, FarMid, FarWest]),
-            formation(rules, "no centre", [OwnWest, OwnEast, West, East, FarMid]),
-        ]
-    } else {
-        vec![
-            ("commander", Box::new(move || Box::new(Prepared { captain: Commander::new(rules), autonomy: Persist }))),
-            formation(rules, "centre rush", [Centre; 5]),
-            formation(rules, "wings", [West, West, East, East, Centre]),
-            formation(rules, "balanced", [West, East, Centre, Centre, Centre]),
-            formation(rules, "no centre", [West, West, East, East, East]),
-            formation(rules, "raid", [West, East, EnemyHome, Centre, EnemyHome]),
-            formation(rules, "turtle", [OwnHome, West, East, OwnHome, West]),
-            formation(rules, "heavy centre", [West, East, West, Centre, East]),
-        ]
-    };
+    let entries = formations(rules);
     print!("{:<14}", "row vs column");
     for (name, _) in &entries {
         print!("{:>13.12}", name);

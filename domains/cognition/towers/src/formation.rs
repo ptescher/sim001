@@ -3,8 +3,9 @@
 //! strategies of it: playing them against each other shows which allocations beat which.
 //! A drone whose battery is low flies home to recharge and goes back to its post.
 
-use crate::Captain;
-use recreation_towers::{Order, Phase, Rules, Team, TeamView};
+use crate::{Captain, Persist, Prepared};
+use recreation_towers::map::LayoutKind;
+use recreation_towers::{Commander, Order, Phase, Rules, Team, TeamView};
 
 /// Where a drone goes. The towers are numbered Blue home, west, centre, east, Red home.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,6 +85,60 @@ impl Captain for Formation {
     }
 }
 
+/// Makes a new captain for each game.
+pub type Make = Box<dyn Fn() -> Box<dyn Captain> + Send + Sync>;
+
+/// The ways to play `rules`' layout that the arena compares: the computer commander, and fixed
+/// formations (v3 steps 1c and 2, `plans/towers-rules-v3-results.md`). Each presses on when it is
+/// out of contact.
+pub fn formations(rules: Rules) -> Vec<(&'static str, Make)> {
+    use Post::*;
+    let formation = |name: &'static str, posts: [Post; 5]| -> (&'static str, Make) {
+        (name, Box::new(move || Box::new(Prepared { captain: Formation::new(name, posts, rules), autonomy: Persist })))
+    };
+    let commander: (&'static str, Make) =
+        ("commander", Box::new(move || Box::new(Prepared { captain: Commander::new(rules), autonomy: Persist })));
+    match rules.layout {
+        LayoutKind::Chain => vec![
+            commander,
+            formation("mass centre", [Centre; 5]),
+            formation("balanced", [West, East, Centre, Centre, Centre]),
+            formation("own line", [OwnWest, OwnMid, OwnEast, Centre, Centre]),
+            formation("far line", [FarWest, FarMid, FarEast, Centre, Centre]),
+            formation("raid", [FarWest, FarEast, EnemyHome, Centre, EnemyHome]),
+            formation("spread", [OwnWest, OwnEast, FarMid, Centre, West]),
+            formation("snipe", [FarWest, FarMid, FarEast, FarMid, FarWest]),
+            formation("no centre", [OwnWest, OwnEast, West, East, FarMid]),
+        ],
+        LayoutKind::Valley => vec![
+            commander,
+            formation("centre rush", [Centre; 5]),
+            formation("wings", [West, West, East, East, Centre]),
+            formation("balanced", [West, East, Centre, Centre, Centre]),
+            formation("no centre", [West, West, East, East, East]),
+            formation("raid", [West, East, EnemyHome, Centre, EnemyHome]),
+            formation("turtle", [OwnHome, West, East, OwnHome, West]),
+            formation("heavy centre", [West, East, West, Centre, East]),
+        ],
+    }
+}
+
+/// Sets one rule from `name=number` (`layout=1` is the chain): the rules a table is played by.
+pub fn set_rule(rules: &mut Rules, setting: &str) -> Result<(), String> {
+    let (k, v) = setting.split_once('=').ok_or(format!("{setting}: want name=number"))?;
+    let v: f32 = v.parse().map_err(|_| format!("{setting}: not a number"))?;
+    match k {
+        "spire_score" => rules.spire_score = v,
+        "tower_score" => rules.tower_score = v,
+        "contest_drain" => rules.contest_drain = v,
+        "spire_jam_radius" => rules.spire_jam_radius = v,
+        "win_score" => rules.win_score = v,
+        "layout" => rules.layout = if v >= 1.0 { LayoutKind::Chain } else { LayoutKind::Valley },
+        _ => return Err(format!("no rule called {k}")),
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +148,32 @@ mod tests {
         let mut g = Game::new(Rules::default());
         g.look();
         g.view(team)
+    }
+
+    #[test]
+    fn the_valley_has_the_commander_and_seven_formations_and_the_chain_eight() {
+        let names = |rules| formations(rules).into_iter().map(|(n, _)| n).collect::<Vec<_>>();
+        let valley = names(Rules::default());
+        assert_eq!(valley.len(), 8);
+        assert_eq!(valley[0], "commander");
+        assert!(valley.contains(&"balanced"));
+        let chain = names(Rules { layout: recreation_towers::map::LayoutKind::Chain, ..Rules::default() });
+        assert_eq!(chain.len(), 9);
+        assert!(chain.contains(&"far line"));
+        let mut captain = formations(Rules::default())[1].1();
+        assert_eq!(captain.decide(&view(Team::Blue)).unwrap().len(), 5, "a formation orders each drone");
+    }
+
+    #[test]
+    fn a_rule_is_set_by_its_name() {
+        let mut r = Rules::default();
+        set_rule(&mut r, "spire_score=1").unwrap();
+        set_rule(&mut r, "layout=1").unwrap();
+        set_rule(&mut r, "contest_drain=3").unwrap();
+        assert_eq!((r.spire_score, r.layout, r.contest_drain), (1.0, LayoutKind::Chain, 3.0));
+        assert!(set_rule(&mut r, "no_such_rule=1").is_err());
+        assert!(set_rule(&mut r, "spire_score=lots").is_err());
+        assert!(set_rule(&mut r, "spire_score").is_err());
     }
 
     #[test]
