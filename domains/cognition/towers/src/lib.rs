@@ -331,8 +331,8 @@ pub struct Match<'u> {
     wind: Vec2,
     /// How long an order takes to reach its drone (s).
     delay: f32,
-    /// Orders on their way: (when the drone flies it, drone index, order, queue, posture).
-    pending: Vec<(f32, usize, Order, Vec<Queued>, Option<recreation_towers::Posture>)>,
+    /// Orders on their way: when the drone flies it, the drone's index in the game, and what it is told.
+    pending: Vec<(f32, usize, Directive)>,
     /// What each drone was told: its order and its queue.
     told: Vec<Instruction>,
     next_decision: f32,
@@ -436,20 +436,20 @@ impl<'u> Match<'u> {
             for team in Team::BOTH {
                 let commander: &mut dyn Command = if team == Team::Blue { &mut *blue } else { &mut *red };
                 for d in commander.decide(&game.view(team))?.into_iter().filter(|d| d.drone < drones) {
-                    self.pending.push((game.time + self.delay, game.drone(team, d.drone), d.order, d.queue, d.posture));
+                    self.pending.push((game.time + self.delay, game.drone(team, d.drone), d));
                 }
             }
         }
         // An order reaches a drone that is in contact when it arrives; one in a radio shadow
         // never hears it.
-        self.pending.retain(|(when, i, order, queue, posture)| {
+        self.pending.retain(|(when, i, d)| {
             if game.time < *when {
                 return true;
             }
             if !game.jammed[*i] {
-                self.told[*i].give_queue(*order, queue.clone());
-                if let Some(p) = posture {
-                    game.posture[*i] = *p;
+                self.told[*i].give_queue(d.order, d.queue.clone());
+                if let Some(p) = d.posture {
+                    game.posture[*i] = p;
                 }
             }
             false
