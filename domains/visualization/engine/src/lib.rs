@@ -168,6 +168,7 @@ impl Plugin for EnginePlugin {
                     field::update_windsock,
                     scenery::animate_scenery,
                     camera::update_camera,
+                    camera::park_main_camera,
                     grass::stream_grass.run_if(in_state(loading::AppState::Running)),
                 )
                     .chain()
