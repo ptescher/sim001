@@ -323,8 +323,9 @@ mod tests {
             row.push([0.02, -1.0, 1.0][i]);
         }
         c.push(vec![-0.02, -1.0, 1.0, 0.0]);
-        for i in 0..4 {
-            c[3][i] = -c[i][3];
+        let column: Vec<f64> = c.iter().map(|row| row[3]).collect();
+        for (cell, mirror) in c[3].iter_mut().zip(column) {
+            *cell = -mirror;
         }
         let mix = equilibrium(&c);
         assert_eq!(near_answers(&c, &mix, 0.05), 4, "all four are within 0.05 of the best: {mix:?}");
