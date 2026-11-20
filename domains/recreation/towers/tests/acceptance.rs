@@ -11,7 +11,7 @@ use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
 use recreation_towers::{
     Advice, AdviceKind, Advisor, Airframe, Belief, Class, Commander, Game, Instruction, Link, LinkFilter, Loadout,
-    Order, Outcome, Phase, Proposal, Queued, Rules, Standing, Team, When,
+    Order, Outcome, Payload, Phase, Proposal, Queued, Rules, Standing, Team, When,
 };
 use std::path::Path;
 
@@ -331,6 +331,11 @@ impl World {
     fn place_second(&mut self, v: &Value) {
         let i = self.game.drone(Team::Blue, 1);
         let words = v.as_str().unwrap_or_default();
+        if words == "high over the west tower" {
+            let at = self.game.map.towers[1] + Vec2::new(0.0, 40.0);
+            self.put(i, at, Some(ALT));
+            return;
+        }
         match away_from(&self.game.map, words) {
             Some((_, at)) => self.put(i, at, Some(ALT)),
             None => self.home(i),
@@ -710,6 +715,9 @@ fn bindings() -> Bindings<World> {
                 return "at its base".to_string();
             }
             let m = &w.game.map;
+            if d.at.distance(m.towers[1] + Vec2::new(0.0, 40.0)) < 1.0 && d.alt >= w.game.rules.treetop {
+                return "high over the west tower".to_string();
+            }
             let d_red = (d.at - m.towers[4]).length().round();
             format!("{d_red} m from the Red home tower")
         })
@@ -829,6 +837,22 @@ fn bindings() -> Bindings<World> {
             let i = w.game.drone(Team::Blue, 0);
             let base = w.game.map.bases[0];
             w.put(i, base, None);
+        })
+        .observe("the canopy", |w| if w.game.rules.canopy_range > 0.0 { "on" } else { "off" })
+        .arrange("the canopy", |w, v| {
+            let (v4, on) = (Rules::v4(), v.as_str() == Some("on"));
+            let r = &mut w.game.rules;
+            (r.canopy_range, r.relay_range) = if on { (v4.canopy_range, v4.relay_range) } else { (0.0, 0.0) };
+            w.game.look();
+        })
+        .observe("the payload of the second Blue drone", |w| match w.game.drones[w.game.drone(Team::Blue, 1)].payload {
+            Payload::Relay => "a relay",
+            _ => "a camera",
+        })
+        .arrange("the payload of the second Blue drone", |w, v| {
+            let i = w.game.drone(Team::Blue, 1);
+            w.game.drones[i].payload = if v.as_str() == Some("a relay") { Payload::Relay } else { Payload::Camera };
+            w.game.look();
         })
         .observe("the airframes", |w| if w.game.rules.finite_airframes { "finite" } else { "unlimited" })
         .arrange("the airframes", |w, v| {
@@ -980,7 +1004,7 @@ fn every_test_of_the_section_passes_with_no_window() {
 /// make a clean plan for, and a skipped rule would not show as a failure.
 #[test]
 fn every_expectation_of_the_v4_rules_is_tested_and_passes() {
-    const V4: &[&str] = &["19-logistics.expect"];
+    const V4: &[&str] = &["19-logistics.expect", "20-canopy.expect"];
     let a = suite();
     let report = a.run(&mut bindings(), &RunOptions::default());
     let by = expectation_story::coverage(&a.suite, &a.plans);

@@ -504,6 +504,10 @@ Term: v4 rules
   [[loadout]], the [[battery swap]], finite airframes, the canopy and the radio, loud and quiet
   drones, taggers, jammers and the weather. Today's game has them off.
 
+Term: Relay
+  In [[Towers]] with the [[v4 rules]], a payload of a standard or a heavy drone: it carries the
+  radio of its friends 300 m, in the forest and in a [[radio shadow]].
+
 Term: Battery swap
   In [[Towers]] with the [[v4 rules]], a drone that is on the ground at its base for 30 s gets a
   full [[battery]].

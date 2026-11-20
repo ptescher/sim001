@@ -104,3 +104,21 @@ second heavy drone (18 of the budget).
   captains recharge in time. Tags (step 5) are what makes an airframe a stake.
 - A second heavy drone is a large gain: weight 2 holds a tower alone. Tags should make the heavy
   drone the target it is meant to be (section 4.6).
+
+## Step 3: the canopy and the radio (2026-11-20)
+
+Built: a drone below the treetops is in contact on its own only within 250 m of its base or a
+tower its team holds; a friend above the trees in contact relays it 250 m; a relay (payload)
+relays any friend 300 m, into a radio shadow too; the mesh (70 m) is as before. Spec:
+`09-towers/rules/20-canopy.expect`. The v4 population adds "commander, relay" and "raid, relay"
+(a relay on the second standard drone and one light spare, 18).
+
+| Rules | Equilibrium | Formations with 5 % or more | Cycle share | Beats every other |
+| --- | --- | --- | --- | --- |
+| Valley, v4 step 3 | raid, two heavies 100 % | 1 of 15 | 11 % | raid, two heavies |
+| Chain, v4 step 3 | commander 100 % | 1 of 16 | 24 % | none |
+
+- The relay is worth nothing to these strategies (commander −0.03 and −0.05, raid 0.00 and
+  −0.06): a fixed formation never needs contact, and the commander sends the relay drone where it
+  sends any drone. Placing a relay is a decision for a commander that knows about the canopy.
+- Nothing punishes a drone yet: the counters come with emission and DF (step 4) and tags (step 5).

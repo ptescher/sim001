@@ -32,4 +32,5 @@ Feature: The mesh
     Given the Red home tower is held by Red
     And the first Blue drone is 150 m from the Red home tower
     And the second Blue drone is 230 m from the Red home tower
+    And the payload of the second Blue drone is a camera
     Then the link of the first Blue drone is cut

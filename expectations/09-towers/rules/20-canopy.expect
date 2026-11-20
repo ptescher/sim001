@@ -1,0 +1,56 @@
+Feature: The canopy and the radio
+  In the [[v4 rules]], the forest blocks the radio of a drone below the treetops. A low drone is in
+  contact only within 250 m of a friendly radio: its base, a tower that its team holds, or a
+  friend above the trees that is in contact. A drone above the trees is in contact anywhere outside
+  a [[radio shadow]]. Thus the towers that a team holds are its radio network, and a drone that
+  takes a tower far from them goes dark until the tower is its team's.
+
+  A drone with a [[relay]] carries the radio 300 m for its friends, in the forest or in a radio
+  shadow. It is the one way to keep a drone in a shadow in contact from far away.
+
+  Expectation: A low drone far from the radio of its team is out of contact
+    Given the canopy is on
+    And the west tower is neutral
+    And the first Blue drone is in the west circle
+    And the Blue drones in the west circle are 1
+    And the second Blue drone is at its base
+    Then the link of the first Blue drone is cut
+
+  Expectation: A tower that the team holds carries the radio of its low drones
+    Overrides: A low drone far from the radio of its team is out of contact
+
+    Given the canopy is on
+    And the west tower is held by Blue
+    And the towers held by Blue are 2
+    And the first Blue drone is in the west circle
+    And the Blue drones in the west circle are 1
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A low drone near its home tower is in contact
+    Given the canopy is on
+    And the first Blue drone is at the Blue home tower
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A friend above the trees carries the radio of a low drone near it
+    Given the canopy is on
+    And the west tower is neutral
+    And the first Blue drone is in the west circle
+    And the Blue drones in the west circle are 1
+    And the second Blue drone is high over the west tower
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A drone above the trees is in contact with no friend near
+    Given the canopy is on
+    And the west tower is neutral
+    And the first Blue drone is 130 m from the west tower
+    Then the link of the first Blue drone is in contact
+
+  Expectation: A relay carries the radio into a radio shadow
+    Without the relay, a friend 80 m away is too far (see [[The mesh]]).
+
+    Given the canopy is on
+    And the Red home tower is held by Red
+    And the first Blue drone is 150 m from the Red home tower
+    And the second Blue drone is 230 m from the Red home tower
+    And the payload of the second Blue drone is a relay
+    Then the link of the first Blue drone is in contact
