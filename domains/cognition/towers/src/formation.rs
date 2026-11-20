@@ -248,7 +248,7 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     let entry = |name: &'static str, posts: Option<[Post; 5]>, loadout: &Loadout, swap: bool| -> (&'static str, Make) {
         // A name that says "quiet" is a quiet formation.
         let quiet = name.contains("quiet");
-        let loadout = loadout.clone();
+        let loadout = loadout.clone().fitted(&rules);
         (
             name,
             Box::new(move || -> Box<dyn Captain> {
@@ -312,7 +312,7 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     out.push(entry("raid, jammer", find("raid"), &jammer, true));
     // Tacticians: the commander's towers, with the v4 tools (crate::tactics).
     let tactician = |name: &'static str, loadout: &Loadout, quiet: bool| -> (&'static str, Make) {
-        let loadout = loadout.clone();
+        let loadout = loadout.clone().fitted(&rules);
         (
             name,
             Box::new(move || {
@@ -349,6 +349,8 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
         &hunters,
         true,
     ));
+    // A way to play that the rules' prices make unaffordable is not one.
+    out.retain(|(_, make)| make().loadout(&rules).check(&rules).is_ok());
     out
 }
 
@@ -387,11 +389,11 @@ pub fn mixes(rules: Rules, n: usize, seed: u64) -> Vec<(&'static str, Make)> {
             airframes.push(a);
         }
         let mut loadout = Loadout { airframes };
-        if rules.budget > 0.0 && loadout.cost() > rules.budget {
+        if rules.budget > 0.0 && loadout.cost_in(&rules) > rules.budget {
             continue;
         }
         while loadout.airframes.len() < recreation_towers::MAX_AIRFRAMES
-            && (rules.budget <= 0.0 || loadout.cost() + Class::Light.cost() <= rules.budget)
+            && (rules.budget <= 0.0 || loadout.cost_in(&rules) + Class::Light.cost() <= rules.budget)
         {
             loadout.airframes.push(Airframe::plain(Class::Light));
         }
@@ -426,6 +428,13 @@ pub fn set_rule(rules: &mut Rules, setting: &str) -> Result<(), String> {
         "layout" => rules.layout = if v >= 1.0 { LayoutKind::Chain } else { LayoutKind::Valley },
         // The v4 rules as far as they are built, on the layout set so far.
         "v4" if v >= 1.0 => *rules = Rules { layout: rules.layout, ..Rules::v4() },
+        // The tag rules to try (results, step 9).
+        "tag_net" => rules.tag_net = v >= 1.0,
+        "chase_found" => rules.chase_found = v,
+        "tagger_cost" => rules.tagger_cost = v,
+        "tag_cone" => rules.tag_cone = v,
+        "budget" => rules.budget = v,
+        "jam_radius" => rules.jam_radius = v,
         _ => return Err(format!("no rule called {k}")),
     }
     Ok(())
@@ -561,6 +570,15 @@ mod tests {
             assert!(distinct.len() > 10, "they differ");
             let mut c = a[0].1();
             assert_eq!(c.decide(&view(Team::Blue)).unwrap().len(), 5);
+        }
+    }
+
+    #[test]
+    fn with_a_dearer_tagger_every_way_to_play_still_fits_the_budget() {
+        let rules = Rules { tagger_cost: 3.0, ..Rules::v4() };
+        for (name, make) in formations(rules).iter().chain(mixes(rules, 12, 3).iter()) {
+            let l = make().loadout(&rules);
+            assert!(l.check(&rules).is_ok(), "{name}: {:?}", l.check(&rules));
         }
     }
 

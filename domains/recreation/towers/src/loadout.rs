@@ -72,6 +72,14 @@ impl Airframe {
     pub fn cost(self) -> f32 {
         self.class.cost() + self.payload.cost()
     }
+
+    /// What it costs by `rules` (a tagger's price may differ).
+    pub fn cost_in(self, rules: &Rules) -> f32 {
+        match self.payload {
+            Payload::Tagger if rules.tagger_cost > 0.0 => self.class.cost() + rules.tagger_cost,
+            _ => self.cost(),
+        }
+    }
 }
 
 /// A team's airframes, in order: the first [`Rules::drones`] fly, the rest are spares.
@@ -93,6 +101,19 @@ impl Loadout {
         self.airframes.iter().map(|a| a.cost()).sum()
     }
 
+    /// What it costs by `rules`.
+    pub fn cost_in(&self, rules: &Rules) -> f32 {
+        self.airframes.iter().map(|a| a.cost_in(rules)).sum()
+    }
+
+    /// The same loadout, its last spares left out until it is within the budget of `rules`.
+    pub fn fitted(mut self, rules: &Rules) -> Loadout {
+        while rules.budget > 0.0 && self.cost_in(rules) > rules.budget && self.airframes.len() > rules.drones {
+            self.airframes.pop();
+        }
+        self
+    }
+
     /// Whether the rules allow it: enough airframes to fly, no more than [`MAX_AIRFRAMES`], each
     /// payload on an airframe that can carry it, and within the budget (if the rules have one).
     pub fn check(&self, rules: &Rules) -> Result<(), String> {
@@ -106,7 +127,7 @@ impl Loadout {
         if let Some(a) = self.airframes.iter().find(|a| !a.payload.fits(a.class)) {
             return Err(format!("a {} drone cannot carry a {}", a.class.name(), a.payload.name()));
         }
-        let cost = self.cost();
+        let cost = self.cost_in(rules);
         if rules.budget > 0.0 && cost > rules.budget {
             return Err(format!("the loadout costs {cost}, more than the budget of {}", rules.budget));
         }

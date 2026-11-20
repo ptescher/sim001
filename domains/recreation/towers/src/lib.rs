@@ -260,6 +260,19 @@ pub struct Rules {
     /// 0 for no such rule.
     #[serde(default)]
     pub chase_speed: f32,
+    /// To try (plans/towers-rules-v4-results.md, step 9): a tag downs the tagger too (a net).
+    #[serde(default)]
+    pub tag_net: bool,
+    /// A tagger that chases is found from this far (m) by one enemy fort or spire, as a jammer is;
+    /// 0 for not.
+    #[serde(default)]
+    pub chase_found: f32,
+    /// What a tagger costs from the budget; 0 for its default price (1).
+    #[serde(default)]
+    pub tagger_cost: f32,
+    /// A tagger tags only a drone it is behind: within this angle (degrees) of its tail; 0 for any.
+    #[serde(default)]
+    pub tag_cone: f32,
     /// A drone whose jammer is on cuts the radio of the enemy drones this near (m); 0 for no
     /// jammers. A fort or the spire of the enemy finds it this far ([`Rules::jam_found`], m), and it
     /// uses this much more battery each second ([`Rules::jam_drain`]).
@@ -337,6 +350,10 @@ impl Default for Rules {
             tag_range: 0.0,
             tags: 0,
             chase_speed: 0.0,
+            tag_net: false,
+            chase_found: 0.0,
+            tagger_cost: 0.0,
+            tag_cone: 0.0,
             jam_bubble: 0.0,
             jam_found: 0.0,
             jam_drain: 0.0,
@@ -916,6 +933,7 @@ impl Game {
                         && e.phase == Phase::Flying
                         && reach(e) <= r.tag_range
                         && (e.alt >= r.treetop || self.map.open(e.at))
+                        && behind(t.at, e, r.tag_cone)
                 })
                 .min_by(|&a, &b| reach(&self.drones[a]).total_cmp(&reach(&self.drones[b])));
             if let Some(j) = target {
@@ -929,6 +947,10 @@ impl Game {
                 self.down_for[j] = Some(0.0);
                 self.tags_left[i] -= 1;
                 self.revealed[i] = true;
+                if r.tag_net {
+                    self.drones[i].phase = Phase::Down;
+                    self.down_for[i] = Some(0.0);
+                }
             }
         }
     }
@@ -1125,7 +1147,8 @@ impl Game {
                 .enumerate()
                 .map(|(i, s)| {
                     let found = bearings.iter().filter(|b| b.drone == i).count();
-                    s || found >= 2 || (found >= 1 && self.jams(i))
+                    let loud = self.jams(i) || (self.rules.chase_found > 0.0 && self.chases(i));
+                    s || found >= 2 || (found >= 1 && loud)
                 })
                 .collect();
             // The sites alone (towers and base): what a ground station is told besides its drones' reports.
@@ -1172,6 +1195,15 @@ impl Game {
         !self.jammed[i] && self.posture[i] != Posture::Quiet
     }
 
+    /// Whether drone `i` is a tagger that chases (faster than [`Rules::chase_speed`]).
+    pub fn chases(&self, i: usize) -> bool {
+        let d = &self.drones[i];
+        self.rules.chase_speed > 0.0
+            && d.payload == Payload::Tagger
+            && d.phase == Phase::Flying
+            && d.vel.length() > self.rules.chase_speed
+    }
+
     /// Whether drone `i` has a jammer, flies, and has it on.
     pub fn jams(&self, i: usize) -> bool {
         let d = &self.drones[i];
@@ -1184,7 +1216,7 @@ impl Game {
     /// The bearings `team`'s towers take now: from each fort or spire it holds, on each loud enemy
     /// drone that flies within [`Rules::df_range`].
     pub fn bearings(&self, team: Team) -> Vec<Bearing> {
-        if self.rules.df_range <= 0.0 && self.rules.jam_found <= 0.0 {
+        if self.rules.df_range <= 0.0 && self.rules.jam_found <= 0.0 && self.rules.chase_found <= 0.0 {
             return vec![];
         }
         let mut out = vec![];
@@ -1195,7 +1227,13 @@ impl Game {
             for (i, d) in self.drones.iter().enumerate() {
                 let loud = self.posture[i] != Posture::Quiet && d.phase == Phase::Flying;
                 // A jammer that is on is found from much farther.
-                let range = if self.jams(i) { self.rules.jam_found } else { self.rules.df_range };
+                let range = if self.jams(i) {
+                    self.rules.jam_found
+                } else if self.chases(i) && self.rules.chase_found > 0.0 {
+                    self.rules.chase_found.max(self.rules.df_range)
+                } else {
+                    self.rules.df_range
+                };
                 if d.team != team && loud && d.at.distance(tower.at) <= range {
                     let to = d.at - tower.at;
                     out.push(Bearing { tower: t, from: tower.at, drone: i, angle: to.y.atan2(to.x) });
@@ -1214,6 +1252,16 @@ struct Eye {
     range: f32,
     /// It looks from above the trees (a tower, a drone above the treetops).
     high: bool,
+}
+
+/// Whether a drone at `at` is behind `e`: within `cone` degrees of its tail (any place if 0, or if
+/// `e` is not moving).
+fn behind(at: Vec2, e: &Drone, cone: f32) -> bool {
+    if cone <= 0.0 || e.vel.length() < 1.0 {
+        return true;
+    }
+    let (tail, to) = (-e.vel.normalize(), (at - e.at).normalize_or_zero());
+    tail.dot(to) >= cone.to_radians().cos()
 }
 
 /// How near (in control, or in seconds of the clock) counts as there: the referee sums in floats.
@@ -1766,6 +1814,58 @@ mod tests {
         g.look();
         assert!(g.maps[0].drones[j].is_none_or(|s| !s.seen), "Blue's eye is in the cloud");
         assert!(g.drone_senses(i).is_empty());
+    }
+
+    #[test]
+    fn with_a_net_the_tagger_goes_down_with_its_quarry() {
+        let (mut g, i, j) = duel(Vec2::new(-200.0, 0.0), Vec2::new(5.0, 0.0), 28.0);
+        g.rules.tag_net = true;
+        g.step(0.1);
+        assert_eq!((g.drones[i].phase, g.drones[j].phase), (Phase::Down, Phase::Down));
+    }
+
+    #[test]
+    fn a_chasing_tagger_is_found_by_one_tower_when_the_rule_says_so() {
+        let (mut g, i, _) = duel(Vec2::new(-200.0, 0.0), Vec2::new(300.0, 0.0), 50.0);
+        g.drones[i].vel = Vec2::new(22.0, 0.0);
+        g.rules.df_range = 0.0;
+        (g.towers[4].holder, g.towers[4].control) = (Some(Team::Red), -1.0);
+        g.drones[i].at = g.towers[4].at + Vec2::new(0.0, -700.0);
+        g.look();
+        assert!(g.maps[1].drones[i].is_none_or(|s| !s.seen), "not found without the rule");
+        g.rules.chase_found = 800.0;
+        g.look();
+        assert!(g.maps[1].drones[i].is_some_and(|s| s.seen), "found by one tower while it chases");
+        g.drones[i].vel = Vec2::new(16.0, 0.0);
+        g.maps[1].drones[i] = None;
+        g.look();
+        assert!(g.maps[1].drones[i].is_none(), "not while it cruises");
+    }
+
+    #[test]
+    fn a_tagger_can_cost_more() {
+        let r = Rules { tagger_cost: 3.0, ..Rules::v4() };
+        let a = Airframe::new(Class::Light, Payload::Tagger);
+        assert_eq!((a.cost(), a.cost_in(&r)), (3.0, 5.0));
+        let mut l = Loadout::squad(&r);
+        l.airframes[4] = a;
+        l.airframes.extend([Airframe::plain(Class::Light); 2]);
+        assert!(l.check(&Rules::v4()).is_ok() && l.check(&r).is_err(), "20 at the price of 1, 22 at 3");
+    }
+
+    #[test]
+    fn with_a_cone_a_tag_is_only_from_behind() {
+        // The quarry flies east; the tagger 5 m behind it (west), or 5 m ahead of it (east).
+        let tag = |off: Vec2| {
+            let (mut g, _, j) = duel(Vec2::new(-200.0, 0.0), off, 24.0);
+            g.rules.tag_cone = 60.0;
+            g.drones[j].vel = Vec2::new(0.0, 16.0);
+            g.step(0.1);
+            g.drones[j].phase == Phase::Down
+        };
+        assert!(tag(Vec2::new(0.0, 5.0)), "from behind");
+        assert!(!tag(Vec2::new(0.0, -5.0)), "head on");
+        assert!(!tag(Vec2::new(5.0, 0.0)), "from the side");
     }
 
     #[test]

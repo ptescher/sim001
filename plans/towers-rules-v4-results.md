@@ -297,3 +297,54 @@ many are nearly as good).
   loud: DF finds it, and the other team's hunters go for it), a higher price (3), or a tag only
   from behind (the executor game's rear cone). The target: the hunter variant of a formation level
   with the plain one on average, winning against some and losing to others.
+
+## Step 9: tuning the tag (2026-11-20)
+
+Four rules to try, each a field of `Rules` that is off by default (none is in `Rules::v4()`), with
+unit tests, and set by `nash --set`: `tag_net=1` (a tag downs the tagger too), `chase_found=800` (a
+tagger that chases is found by one enemy tower, as a jammer), `tagger_cost=3` (and `budget=N`), and
+`tag_cone=60` (a tag only from behind). A loadout the rules' prices make too dear is fitted (its
+last spares left out) or, if it still costs too much, left out of the population.
+
+`nash --seeds 40 --set v4=1 --set RULE --mixes 24`:
+
+| Rules (all v4, and) | Layout | Equilibrium | Within 0.05 | Cycle share |
+| --- | --- | --- | --- | --- |
+| nothing more (step 8) | valley | raid, hunter 100 % | 2 | 22 % |
+| `tag_net=1` | valley | tactician, heavies 63 %, raid, hunter 30 %, balanced, hunter 7 % | **4** | 21 % |
+| `chase_found=800` | valley | raid, hunter 100 % | 1 | 22 % |
+| `tagger_cost=3` | valley | raid, hunter 100 % | 1 | 28 % |
+| `tag_cone=60` | valley | raid, hunter 100 % | 1 | 22 % |
+| `tag_net=1` | chain | tactician, heavies 100 % | 1 | 21 % |
+| `tag_net=1 tagger_cost=3 budget=16` | valley | raid, two heavies 100 % | 1 | 22 % |
+| `tag_net=1 jam_radius=80` | valley | tactician, heavies 73 %, raid, quiet 16 %, raid, hunter 11 % | 3 | 20 % |
+
+What a hunter is worth, found out with a throwaway example (80 seeds, both sides): the raid with a
+light tagger at the hunt post over the raid **+1.30**; the same post with a camera only over the raid
++0.12; so the tagger is the gain (+1.24). With the net, both sides lose about as many drones (2.51
+and 2.63 a game) and the hunter still gains +1.29: a tagger counts for nothing in a circle, so
+trading it for a drone that takes towers costs its team nothing. And a price does not bite, because
+the budget buys only spares, and spares are worth almost nothing (step 2).
+
+- **The net is the only change that widens the equilibrium** (valley 1 to 3 formations, 4 within
+  0.05), and not on the chain.
+- **A dearer tagger hands the game back to the heavy drones**: balancing one tool against the other
+  moves the winner, not the width.
+- **"Raid" is not a snowball of the radio**: with the fort's shadow at 80 m (it no longer covers
+  the enemy base), raid still beats balanced by +1.29. It wins because nothing in the population
+  defends its home tower: the commander loses to it too (−0.60). That is a weakness of the
+  captains, which a better captain should find, and a test should show.
+
+**Reading of steps 1 to 9.** The rules now give each tool a counter, and no formation beats every
+other. A population of fixed formations, with or without a tactician, still finds a corner,
+because the corner is about the captains (nobody defends a home, nobody hunts hunters) more than
+about the rules. The equilibrium of fixed strategies is the wrong yardstick for the last step: the
+test of a model is whether it finds and punishes these corners. Next, then:
+
+1. **Exploiters** (section 8.2): the league's Claude strategies, or a search over the mixes'
+   parameters, trained against the equilibrium's formation; how far they get is the measure. A
+   game with a wide equilibrium is one where every exploiter gets a little, not one where one
+   formation wins.
+2. A defence for the commander (hold its home when the enemy is seen near it), so that a raid has
+   a counter in the population.
+3. Keep `tag_net` as a candidate for v4: decide with the exploiters, not the formations.
