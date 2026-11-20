@@ -1,0 +1,48 @@
+Feature: Jammers
+  In the [[v4 rules]], a drone with a [[jammer]] can switch it on. Then the enemy drones within
+  100 m of it are out of contact, as in a [[radio shadow]] that moves with it. A drone that flies
+  a plan it was given before, or its queue, does not need the radio; a drone that waits for orders
+  does.
+
+  A jammer that is on is the loudest radio on the field. A fort or the spire that the enemy holds
+  finds it from 800 m, and one tower is enough: the enemy sees it, and its hunters can fly at it.
+  A jammer that is on also uses the battery one and a half times as fast.
+
+  Expectation: A jammer that is on cuts the radio of the enemy drones near it
+    Overrides: A depot does not block the radio more than 120 m away
+    Overrides: A drone above the trees is in contact with no friend near
+
+    Given the jammers are on
+    And the payload of the Red scout is a jammer
+    And the emission of the Red scout is jamming
+    And the Red home tower is neutral
+    And the first Blue drone is near the Red home tower
+    And the Red scout is 50 m from the first Blue drone
+    Then the link of the first Blue drone is cut
+
+  Expectation: A jammer that is off cuts nothing
+    Given the jammers are on
+    And the payload of the Red scout is a jammer
+    And the emission of the Red scout is loud
+    And the Red home tower is neutral
+    And the first Blue drone is near the Red home tower
+    And the Red scout is 50 m from the first Blue drone
+    Then the link of the first Blue drone is in contact
+
+  Expectation: One tower finds a jammer that is on
+    Given the jammers are on
+    And the direction finding is on
+    And the centre tower is neutral
+    And the payload of the Red scout is a jammer
+    And the emission of the Red scout is jamming
+    And the Red scout is high between the Blue home tower and the centre tower
+    Then the Red scout on the Blue map is seen
+
+  Expectation: A jammer that is on uses the battery one and a half times as fast
+    Given the jammers are on
+    And the payload of the first Blue drone is a jammer
+    And the emission of the first Blue drone is jamming
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is 130 m from the west tower
+    When the first Blue drone jams for 10 seconds
+    Then the battery of the first Blue drone is 85 s

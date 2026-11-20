@@ -298,6 +298,9 @@ C2 or C3 is cut, not kept.
    the `Hunt` post); the vignettes are not built. No strategy beats every other on either layout now
    (results, step 5).
 6. **Jammer and airtime**: scripts against orders (needs the instruction queue of `plans/actors.md`).
+   **Done** for the jammer (`23-jammer.expect`, `Posture::Jam`); airtime (a short order burns
+   through a jammer's edge) is not built, and the population has no captain that scripts its
+   drones against one that orders them, so the cycle of section 4.7 is not measured yet.
 7. **Conditions and layouts per game**, with the forecast.
 8. **SITL**: measure each airframe first (v3 section 7: speed, turn, climb, endurance, the landing
    and re-launch), then the top rows of the matrix on SITL.

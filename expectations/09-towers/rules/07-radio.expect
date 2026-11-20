@@ -20,6 +20,7 @@ Feature: Radio shadows
   Expectation: A tower that nobody holds blocks no radio
     Given the Red home tower is neutral
     And the first Blue drone is near the Red home tower
+    And the jammers are off
     Then the link of the first Blue drone is in contact
 
   Expectation: A tower does not block the radio of its own team

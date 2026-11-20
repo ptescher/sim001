@@ -890,14 +890,28 @@ fn bindings() -> Bindings<World> {
             (r.tag_range, r.tags, r.chase_speed) =
                 if on { (v4.tag_range, v4.tags, v4.chase_speed) } else { (0.0, 0, 0.0) };
         })
-        .observe("the payload of the first Blue drone", |w| match w.game.drones[w.game.drone(Team::Blue, 0)].payload {
-            Payload::Tagger => "a tagger",
-            _ => "a camera",
+        .observe("the payload of the first Blue drone", |w| {
+            payload_name(w.game.drones[w.game.drone(Team::Blue, 0)].payload)
         })
         .arrange("the payload of the first Blue drone", |w, v| {
             let i = w.game.drone(Team::Blue, 0);
-            w.game.drones[i].payload = if v.as_str() == Some("a tagger") { Payload::Tagger } else { Payload::Camera };
+            w.game.drones[i].payload = payload(v);
         })
+        .observe("the payload of the Red scout", |w| payload_name(w.game.drones[w.scout()].payload))
+        .arrange("the payload of the Red scout", |w, v| {
+            let i = w.scout();
+            w.game.drones[i].payload = payload(v);
+            w.game.look();
+        })
+        .observe("the jammers", |w| if w.game.rules.jam_bubble > 0.0 { "on" } else { "off" })
+        .arrange("the jammers", |w, v| {
+            let (v4, on) = (Rules::v4(), v.as_str() == Some("on"));
+            let r = &mut w.game.rules;
+            (r.jam_bubble, r.jam_found, r.jam_drain) =
+                if on { (v4.jam_bubble, v4.jam_found, v4.jam_drain) } else { (0.0, 0.0, 0.0) };
+            w.game.look();
+        })
+        .on("the first Blue drone jams for 10 seconds", |w| w.run(10.0))
         .observe("the tags left of the first Blue drone", |w| w.game.tags_left[w.game.drone(Team::Blue, 0)] as f64)
         .arrange("the tags left of the first Blue drone", |w, v| {
             let i = w.game.drone(Team::Blue, 0);
@@ -1083,13 +1097,36 @@ fn bindings() -> Bindings<World> {
 }
 
 fn posture(v: &Value) -> Posture {
-    if v.as_str() == Some("quiet") { Posture::Quiet } else { Posture::Loud }
+    match v.as_str() {
+        Some("quiet") => Posture::Quiet,
+        Some("jamming") => Posture::Jam,
+        _ => Posture::Loud,
+    }
 }
 
 fn posture_name(p: Posture) -> &'static str {
     match p {
         Posture::Loud => "loud",
         Posture::Quiet => "quiet",
+        Posture::Jam => "jamming",
+    }
+}
+
+fn payload(v: &Value) -> Payload {
+    match v.as_str() {
+        Some("a tagger") => Payload::Tagger,
+        Some("a jammer") => Payload::Jammer,
+        Some("a relay") => Payload::Relay,
+        _ => Payload::Camera,
+    }
+}
+
+fn payload_name(p: Payload) -> &'static str {
+    match p {
+        Payload::Camera => "a camera",
+        Payload::Tagger => "a tagger",
+        Payload::Jammer => "a jammer",
+        Payload::Relay => "a relay",
     }
 }
 
@@ -1130,7 +1167,8 @@ fn every_test_of_the_section_passes_with_no_window() {
 /// make a clean plan for, and a skipped rule would not show as a failure.
 #[test]
 fn every_expectation_of_the_v4_rules_is_tested_and_passes() {
-    const V4: &[&str] = &["19-logistics.expect", "20-canopy.expect", "21-emission.expect", "22-fight.expect"];
+    const V4: &[&str] =
+        &["19-logistics.expect", "20-canopy.expect", "21-emission.expect", "22-fight.expect", "23-jammer.expect"];
     let a = suite();
     let report = a.run(&mut bindings(), &RunOptions::default());
     let by = expectation_story::coverage(&a.suite, &a.plans);

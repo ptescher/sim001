@@ -260,6 +260,15 @@ pub struct Rules {
     /// 0 for no such rule.
     #[serde(default)]
     pub chase_speed: f32,
+    /// A drone whose jammer is on cuts the radio of the enemy drones this near (m); 0 for no
+    /// jammers. A fort or the spire of the enemy finds it this far ([`Rules::jam_found`], m), and it
+    /// uses this much more battery each second ([`Rules::jam_drain`]).
+    #[serde(default)]
+    pub jam_bubble: f32,
+    #[serde(default)]
+    pub jam_found: f32,
+    #[serde(default)]
+    pub jam_drain: f32,
 }
 
 impl Default for Rules {
@@ -313,6 +322,9 @@ impl Default for Rules {
             tag_range: 0.0,
             tags: 0,
             chase_speed: 0.0,
+            jam_bubble: 0.0,
+            jam_found: 0.0,
+            jam_drain: 0.0,
         }
     }
 }
@@ -354,6 +366,9 @@ impl Rules {
             tag_range: 8.0,
             tags: 2,
             chase_speed: 20.0,
+            jam_bubble: 100.0,
+            jam_found: 800.0,
+            jam_drain: 0.5,
             ..Rules::default()
         }
     }
@@ -509,6 +524,8 @@ pub enum Posture {
     #[default]
     Loud,
     Quiet,
+    /// Loud, and a drone with a jammer has it on (another drone is only loud).
+    Jam,
 }
 
 /// A direction from a tower to a loud enemy drone: where it is along a line, not where on it.
@@ -702,15 +719,27 @@ impl Game {
     /// relayed drone relays for the next). A drone that is down is not.
     fn jam(&mut self, dt: f32) {
         let r = self.rules;
+        // A jammer that is on shows what it carries.
+        for i in 0..self.drones.len() {
+            if self.jams(i) {
+                self.revealed[i] = true;
+            }
+        }
         let shadow: Vec<bool> = self
             .drones
             .iter()
             .map(|d| {
                 d.phase != Phase::Down
-                    && self
+                    && (self
                         .towers
                         .iter()
                         .any(|t| t.holder == Some(d.team.other()) && t.at.distance(d.at) <= r.shadow(t.kind))
+                        || (0..self.drones.len()).any(|j| {
+                            // An enemy jammer that is on is a shadow that moves with it.
+                            self.jams(j)
+                                && self.drones[j].team != d.team
+                                && self.drones[j].at.distance(d.at) <= r.jam_bubble
+                        }))
             })
             .collect();
         // The canopy (v4): a drone below the treetops is in contact on its own only near a radio of
@@ -815,7 +844,8 @@ impl Game {
                 });
                 // A tagger that chases (faster than the chase speed) uses twice the battery.
                 let chase = r.chase_speed > 0.0 && d.payload == Payload::Tagger && d.vel.length() > r.chase_speed;
-                change -= if chase { 2.0 } else { 1.0 } + r.contest_drain * enemy;
+                let jam = if self.jams(i) { r.jam_drain } else { 0.0 };
+                change -= if chase { 2.0 } else { 1.0 } + jam + r.contest_drain * enemy;
             }
             let at_base = d.at.distance(r.base(d.team)) <= r.pad_radius;
             // The swap: on the ground at its base for the swap time, a drone gets a full battery.
@@ -1052,7 +1082,10 @@ impl Game {
             let seen: Vec<bool> = seen
                 .into_iter()
                 .enumerate()
-                .map(|(i, s)| s || bearings.iter().filter(|b| b.drone == i).count() >= 2)
+                .map(|(i, s)| {
+                    let found = bearings.iter().filter(|b| b.drone == i).count();
+                    s || found >= 2 || (found >= 1 && self.jams(i))
+                })
                 .collect();
             // The sites alone (towers and base): what a ground station is told besides its drones' reports.
             let site_eyes = self.eyes_of(team, false);
@@ -1095,13 +1128,22 @@ impl Game {
 impl Game {
     /// Whether drone `i`'s team hears its telemetry: it is in contact, and loud.
     pub fn heard(&self, i: usize) -> bool {
-        !self.jammed[i] && self.posture[i] == Posture::Loud
+        !self.jammed[i] && self.posture[i] != Posture::Quiet
+    }
+
+    /// Whether drone `i` has a jammer, flies, and has it on.
+    pub fn jams(&self, i: usize) -> bool {
+        let d = &self.drones[i];
+        self.rules.jam_bubble > 0.0
+            && d.payload == Payload::Jammer
+            && self.posture[i] == Posture::Jam
+            && d.phase == Phase::Flying
     }
 
     /// The bearings `team`'s towers take now: from each fort or spire it holds, on each loud enemy
     /// drone that flies within [`Rules::df_range`].
     pub fn bearings(&self, team: Team) -> Vec<Bearing> {
-        if self.rules.df_range <= 0.0 {
+        if self.rules.df_range <= 0.0 && self.rules.jam_found <= 0.0 {
             return vec![];
         }
         let mut out = vec![];
@@ -1110,8 +1152,10 @@ impl Game {
                 continue;
             }
             for (i, d) in self.drones.iter().enumerate() {
-                let loud = self.posture[i] == Posture::Loud && d.phase == Phase::Flying;
-                if d.team != team && loud && d.at.distance(tower.at) <= self.rules.df_range {
+                let loud = self.posture[i] != Posture::Quiet && d.phase == Phase::Flying;
+                // A jammer that is on is found from much farther.
+                let range = if self.jams(i) { self.rules.jam_found } else { self.rules.df_range };
+                if d.team != team && loud && d.at.distance(tower.at) <= range {
                     let to = d.at - tower.at;
                     out.push(Bearing { tower: t, from: tower.at, drone: i, angle: to.y.atan2(to.x) });
                 }
@@ -1600,6 +1644,54 @@ mod tests {
         g.drones[i].vel = Vec2::new(16.0, 0.0);
         run(&mut g, 10.0);
         assert!((g.battery[i] - 70.0).abs() < 0.01, "cruising: {}", g.battery[i]);
+    }
+
+    /// The Red scout with a jammer, `posture`, 50 m from Blue's first drone high at (-200, 0).
+    fn jamming(posture: Posture, payload: Payload) -> (Game, usize, usize) {
+        let mut g = Game::new(Rules::v4());
+        let (i, j) = (g.drone(Team::Blue, 0), g.drone(Team::Red, 0));
+        g.drones[i] = Drone { at: Vec2::new(-200.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        g.drones[j] = Drone { at: Vec2::new(-150.0, 0.0), alt: 50.0, phase: Phase::Flying, payload, ..g.drones[j] };
+        g.posture[j] = posture;
+        g.look();
+        (g, i, j)
+    }
+
+    #[test]
+    fn the_v4_rules_jam_100_m_are_found_from_800_m_and_use_half_again_the_battery() {
+        let r = Rules::v4();
+        assert_eq!((r.jam_bubble, r.jam_found, r.jam_drain), (100.0, 800.0, 0.5));
+    }
+
+    #[test]
+    fn a_jammer_that_is_on_cuts_the_enemy_near_it_and_is_heard_by_its_own_team() {
+        let (g, i, j) = jamming(Posture::Jam, Payload::Jammer);
+        assert!(g.jammed[i], "the Blue drone 50 m away is cut");
+        assert!(g.heard(j), "a jamming drone is loud");
+        let (g, i, _) = jamming(Posture::Loud, Payload::Jammer);
+        assert!(!g.jammed[i], "a jammer that is off");
+        let (g, i, _) = jamming(Posture::Jam, Payload::Camera);
+        assert!(!g.jammed[i], "no jammer to switch on");
+    }
+
+    #[test]
+    fn one_tower_finds_a_jammer_that_is_on_from_800_m_and_it_shows_what_it_carries() {
+        let (mut g, _, j) = jamming(Posture::Jam, Payload::Jammer);
+        g.rules.df_range = 0.0;
+        let home = g.towers[0].at;
+        g.drones[j].at = home + Vec2::new(0.0, 700.0);
+        g.look();
+        let s = g.maps[0].drones[j].expect("found by the Blue home tower alone");
+        assert!(s.seen);
+        assert_eq!(g.view(Team::Blue).enemies.iter().find(|e| e.k == 0).and_then(|e| e.payload), Some(Payload::Jammer));
+    }
+
+    #[test]
+    fn a_jammer_that_is_on_uses_half_again_the_battery() {
+        let (mut g, _, j) = jamming(Posture::Jam, Payload::Jammer);
+        g.battery[j] = 100.0;
+        run(&mut g, 10.0);
+        assert!((g.battery[j] - 85.0).abs() < 0.01, "{}", g.battery[j]);
     }
 
     #[test]
