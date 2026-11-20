@@ -348,3 +348,48 @@ test of a model is whether it finds and punishes these corners. Next, then:
 2. A defence for the commander (hold its home when the enemy is seen near it), so that a raid has
    a counter in the population.
 3. Keep `tag_net` as a candidate for v4: decide with the exploiters, not the formations.
+
+## Step 10: exploiters, a defending tactician, and the price of a heavy drone (2026-11-20)
+
+Built: `Genome` (a formation as genes: each drone's post and airframe with its payload, quiet or
+loud, landing or circling; light spares to the budget; `mixes` are its random samples), and
+`cognition_league exploit --targets "A;B" [--set ...] [--tries 120] [--seeds 12] [--judge 40]`: a
+search (random genomes, then mutations of the best four) for the best answer to each target on
+12 seeds, judged on 40 seeds it never saw. `Tactician::defending`: a held tower that an enemy drone
+the team sees comes within 250 m of gets the nearest drone that is not a tagger ("tactician,
+defends" in the v4 population).
+
+**What the exploiters gain** (120 tries; judged on 40 new seeds; a clear win is about +1 to +1.6):
+
+| Target | Valley v4 | Valley v4, net | Chain v4 | Chain v4, net | Valley, heavy 6 | Chain, heavy 6 |
+| --- | --- | --- | --- | --- | --- | --- |
+| raid, hunter | +1.21 | +1.32 | +1.22 | +1.27 | **+0.29** | +0.99 |
+| raid, two heavies | +0.88 | +1.03 | +1.39 | +1.10 | **+0.48** | +0.83 |
+| raid, quiet | +1.34 | +1.34 | +1.18 | +1.17 | +1.06 | +1.13 |
+| balanced, hunter | +1.46 | +1.33 | +1.18 | +1.11 | +0.84 | +1.12 |
+| commander | +1.56 | +1.43 | +0.93 | +0.64 | +1.53 | +0.43 |
+| tactician | +1.56 | +1.56 | +0.70 | +0.42 | +1.33 | **−0.38** |
+| tactician, heavies | +0.80 | +1.52 | +1.02 | −0.19 | (too dear) | (too dear) |
+| tactician, defends | +1.10 | +1.45 | +1.07 | +1.10 | +1.33 | +0.69 |
+
+- **Every way to play was wide open, and the exploiters said why**: nearly every best answer was
+  three or four heavy drones. A heavy drone cost 4 for a weight of 2 in a circle (0.5 a point,
+  against 0.33 for a standard drone and 0.25 for a light one), and has the longest battery: weight
+  was for sale. No formation in the population had found that.
+- **At 6 for a heavy drone** (the same weight a point as a standard one): the valley's table
+  (`nash --seeds 40 --set v4=1 --set heavy_cost=6 --mixes 24`) has an equilibrium of three (two
+  hunters 51 %, raid, hunter 41 %, mix 10 9 %), four within 0.05 of the best, and a **cycle share
+  of 31 %** (C3 met on the valley); the raids' exploiters gain much less (+0.29, +0.48); on the
+  chain the tactician is the first way to play that 120 tries cannot beat (−0.38).
+- **Adopted**: `Rules::v4()` prices a heavy drone at 6 (`heavy_cost`; today's game keeps 4). Spec:
+  «A team of heavy drones is over the budget» in `19-logistics.expect`; today's squad is 17, and a
+  light spare makes 19.
+- **The commander and the tacticians are still wide open on the valley** (+1.33 to +1.53). Their
+  exploiters spread standard drones over every tower with one heavy drone at the centre: the
+  commander's allocation leaves towers to be taken. The defender does not close it: it sends a
+  drone when an enemy is seen, and the exploiter's drones are quiet.
+- The net does not lower exploitability in a way that holds on both layouts; it stays a candidate,
+  off.
+
+Next: the commander's allocation against a spread (the exploiters' answer to it), the league's
+Claude strategies as exploiters, and the pilot's vignettes.

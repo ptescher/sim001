@@ -13,6 +13,7 @@
 
 pub mod contest;
 pub mod entry;
+pub mod exploit;
 pub mod judge;
 pub mod league;
 pub mod nash;

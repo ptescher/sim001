@@ -290,7 +290,7 @@ Vocabulary:
     Shows: finite: a drone that goes down is lost. A spare takes its place after 30 s
   State: the spares of Blue are 0..10
     Shows: the Blue panel shows SPARES {value}
-  State: the loadout of Blue is today's squad | today's squad and two light spares | seven standard drones
+  State: the loadout of Blue is today's squad | today's squad and a light spare | seven standard drones | five heavy drones
     Set: choose {value} before the game
     Shows: today's squad: three standard drones, a heavy drone and a light drone
   State: the cost of the Blue loadout is within the budget | over the budget

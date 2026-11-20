@@ -66,7 +66,7 @@ airframe; its payload shows only when it is used (it jams, tags or relays).
 | --- | --- | --- | --- | --- |
 | Light (Seeker 3 quad) | 2 | 0.5 | 150 s | Fast to accelerate, hovers, short battery, hurt most by wind |
 | Standard (T1-S VTOL) | 3 | 1 | 240 s | The workhorse |
-| Heavy (T2 Cruza) | 4 | 2 | 300 s | Holds a tower alone; slow, wide turns, the easiest to tag |
+| Heavy (T2 Cruza) | 6 (was 4: step 10) | 2 | 300 s | Holds a tower alone; slow, wide turns, the easiest to tag |
 
 | Payload | Extra cost | On | Does |
 | --- | --- | --- | --- |

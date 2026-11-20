@@ -14,22 +14,59 @@ pub struct Tactician {
     rules: Rules,
     /// Attackers go quiet; if not, they stay loud.
     pub quiet_attacks: bool,
+    /// A held tower that an enemy drone comes near gets a defender.
+    pub defend: bool,
 }
+
+/// An enemy drone this near a held tower (m) calls a defender.
+pub const DEFEND_NEAR: f32 = 250.0;
 
 impl Tactician {
     pub fn new(rules: Rules) -> Tactician {
-        Tactician { commander: Commander::new(rules), rules, quiet_attacks: true }
+        Tactician { commander: Commander::new(rules), rules, quiet_attacks: true, defend: false }
     }
 
     pub fn loud(self) -> Tactician {
         Tactician { quiet_attacks: false, ..self }
+    }
+
+    /// The same, sending a drone to a held tower that an enemy drone comes near.
+    pub fn defending(self) -> Tactician {
+        Tactician { defend: true, ..self }
+    }
+
+    /// Sends a defender to each held tower that an enemy drone the team sees is near, if none of
+    /// its drones is on it: the nearest drone that is not a tagger, and not going home.
+    fn defend(&self, view: &TeamView, orders: &mut [(usize, Order)]) {
+        for (t, tower) in view.towers.iter().enumerate() {
+            let threatened = tower.holder == Some(view.team)
+                && view.enemies.iter().any(|e| e.seen && e.at.distance(tower.at) <= DEFEND_NEAR);
+            if !threatened || orders.iter().any(|&(_, o)| o == Order::Take(t)) {
+                continue;
+            }
+            let free =
+                |k: usize| view.drones.iter().find(|d| d.k == k).filter(|d| d.payload != Payload::Tagger && d.linked);
+            let nearest = orders
+                .iter_mut()
+                .filter(|(k, o)| !matches!(o, Order::Home | Order::Land) && free(*k).is_some())
+                .min_by(|a, b| {
+                    let dist = |k| free(k).map_or(f32::MAX, |d| d.at.distance(tower.at));
+                    dist(a.0).total_cmp(&dist(b.0))
+                });
+            if let Some(o) = nearest {
+                o.1 = Order::Take(t);
+            }
+        }
     }
 }
 
 impl Captain for Tactician {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         let swap = self.rules.swap_time > 0.0;
-        let orders = self.commander.decide(view);
+        let mut orders = self.commander.decide(view);
+        if self.defend {
+            self.defend(view, &mut orders);
+        }
         Ok(orders
             .into_iter()
             .map(|(k, o)| {
@@ -124,6 +161,37 @@ mod tests {
         v.drones[2].at = home;
         assert_eq!(t.posture(&v, &orders).iter().find(|(j, _)| *j == 2).unwrap().1, Posture::Quiet, "far from it");
         assert!(t.loud().posture(&v, &orders).iter().all(|&(_, p)| p != Posture::Quiet));
+    }
+
+    #[test]
+    fn a_defender_sends_its_nearest_drone_to_a_held_tower_with_an_enemy_near_it() {
+        let mut t = Tactician::new(Rules::v4()).defending();
+        let mut v = view();
+        let home = v.towers[0].at;
+        v.drones[4].payload = Payload::Tagger;
+        v.drones[4].at = home;
+        v.drones[1].at = home + Vec2::new(30.0, 0.0);
+        let near = |k| EnemyDrone {
+            k,
+            class: None,
+            payload: None,
+            at: home + Vec2::new(150.0, 0.0),
+            alt: 17.0,
+            vel: Vec2::ZERO,
+            seen: true,
+            age: 0.0,
+        };
+        v.enemies = vec![near(0)];
+        let o = t.decide(&v).unwrap();
+        let of = |k| o.iter().find(|(j, _)| *j == k).unwrap().1;
+        assert_eq!(of(1), Order::Take(0), "the nearest drone that is not a tagger: {o:?}");
+        assert_ne!(of(4), Order::Take(0), "a tagger hunts, it does not hold");
+        let mut quiet = Tactician::new(Rules::v4());
+        assert_ne!(
+            quiet.decide(&v).unwrap().iter().find(|(j, _)| *j == 1).unwrap().1,
+            Order::Take(0),
+            "one that does not defend"
+        );
     }
 
     #[test]

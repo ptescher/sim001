@@ -273,6 +273,9 @@ pub struct Rules {
     /// A tagger tags only a drone it is behind: within this angle (degrees) of its tail; 0 for any.
     #[serde(default)]
     pub tag_cone: f32,
+    /// What a heavy drone costs from the budget; 0 for its default price (4).
+    #[serde(default)]
+    pub heavy_cost: f32,
     /// A drone whose jammer is on cuts the radio of the enemy drones this near (m); 0 for no
     /// jammers. A fort or the spire of the enemy finds it this far ([`Rules::jam_found`], m), and it
     /// uses this much more battery each second ([`Rules::jam_drain`]).
@@ -354,6 +357,7 @@ impl Default for Rules {
             chase_found: 0.0,
             tagger_cost: 0.0,
             tag_cone: 0.0,
+            heavy_cost: 0.0,
             jam_bubble: 0.0,
             jam_found: 0.0,
             jam_drain: 0.0,
@@ -403,6 +407,7 @@ impl Rules {
             jam_found: 800.0,
             jam_drain: 0.5,
             weather: true,
+            heavy_cost: 6.0,
             ..Rules::default()
         }
     }
@@ -1843,13 +1848,22 @@ mod tests {
     }
 
     #[test]
+    fn a_heavy_drone_can_cost_more() {
+        let r = Rules::v4();
+        assert_eq!(r.heavy_cost, 6.0, "the v4 price: a weight of 2 for twice a standard drone");
+        assert_eq!(Airframe::plain(Class::Heavy).cost_in(&r), 6.0);
+        assert_eq!(Airframe::new(Class::Heavy, Payload::Jammer).cost_in(&r), 8.0);
+        assert_eq!(Airframe::plain(Class::Heavy).cost_in(&Rules::default()), 4.0, "today's price");
+    }
+
+    #[test]
     fn a_tagger_can_cost_more() {
         let r = Rules { tagger_cost: 3.0, ..Rules::v4() };
         let a = Airframe::new(Class::Light, Payload::Tagger);
         assert_eq!((a.cost(), a.cost_in(&r)), (3.0, 5.0));
         let mut l = Loadout::squad(&r);
         l.airframes[4] = a;
-        l.airframes.extend([Airframe::plain(Class::Light); 2]);
+        l.airframes.push(Airframe::plain(Class::Light));
         assert!(l.check(&Rules::v4()).is_ok() && l.check(&r).is_err(), "20 at the price of 1, 22 at 3");
     }
 
