@@ -154,3 +154,41 @@ The v4 population adds "raid, quiet" and "balanced, quiet".
 - **Not found out**: why a quiet raid still beats a loud raid between two fixed formations (+0.47,
   +1.12), where neither side uses what it finds. The raid's drones are in the enemy's radio shadow
   for much of the game, so their reports are stale either way; the difference is elsewhere.
+
+## Step 5: tags (2026-11-20)
+
+Built: a drone with a tagger tags the nearest enemy drone within 8 m (in the air) that is above
+the treetops or over open ground; the tagged drone is down and its airframe lost. A tagger has two
+tags, two more at a swap or as a new airframe, counts for nothing in a circle, and uses twice the
+battery when it flies faster than 20 m/s (it chases). A team sees an enemy drone's airframe, and
+its payload once it has tagged; a tagged drone's last picture shows its team the tagger.
+`Order::Intercept(k)`: the arena's hunter flies at its quarry at 22 m/s, to its height, by its own
+camera or where its team last saw it; with no track it circles. Spec:
+`09-towers/rules/22-fight.expect`. Population: the `Hunt` post (circle high over the centre, go
+for the nearest enemy seen now) in "balanced, hunter", "raid, hunter" (a light tagger, two light
+spares, 20) and "two hunters" (a standard and a light tagger, one spare, 19).
+
+Today's game is unchanged: `nash --seeds 100` without v4 gives the step 1 table to the last digit.
+
+| Rules | Equilibrium | Formations with 5 % or more | Cycle share | Beats every other |
+| --- | --- | --- | --- | --- |
+| Valley, v4 step 5 | balanced, hunter 87 %, raid, hunter 8 %, raid, quiet 4 % | 2 of 20 | 19 % | **none** |
+| Chain, v4 step 5 | raid, quiet 50 %, two hunters 29 %, commander 21 % | 3 of 21 | **32 %** | none |
+
+| Cell | Valley | Chain |
+| --- | --- | --- |
+| balanced, hunter over balanced | +0.66 | +0.66 |
+| raid, hunter over raid | +1.75 | +1.28 |
+| balanced, hunter over raid, two heavies | +0.74 | +0.19 |
+| two hunters over raid, two heavies | +0.23 | +1.00 |
+| balanced, hunter over raid, quiet | −0.16 | −0.08 |
+
+- **No strategy beats every other on either layout**, for the first time on the valley: the two
+  heavy drones that won steps 2 to 4 are what hunters tag (big, slow, and in the open at their
+  tower), and the chain reaches the cycle share target (C3, 30 to 70 %).
+- The cycle the plan wanted shows: heavy holders lose to hunters, hunters cannot find quiet
+  raiders (a hunter needs a track, and a quiet drone is found only by eye), and the commander's
+  DF beats loud raiders (step 4).
+- The equilibrium is still narrow (C2 wants 8 or more): the population is small, and hunters
+  are worth a lot to any formation (+0.66 to +1.75), so most rows are dominated by their hunter
+  variant.

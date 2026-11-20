@@ -1,6 +1,6 @@
 //! What a seat gets: its team's map of the game ([`TeamView`]), and the orders it gives.
 
-use crate::{Bearing, DroneSighting, Game, Kind, Outcome, Phase, Team};
+use crate::{Bearing, Class, DroneSighting, Game, Kind, Outcome, Payload, Phase, Team};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +20,9 @@ pub enum Order {
     /// Land at its base and stay on the ground: with the battery swap (v4), a full battery after
     /// [`crate::Rules::swap_time`]. A new order takes it up again.
     Land,
+    /// Fly at the enemy drone (its number in its team) to tag it (v4): to where the team last saw
+    /// it, and at it once its own camera has it.
+    Intercept(usize),
 }
 
 /// A tower as the team knows it.
@@ -81,6 +84,12 @@ fn in_contact() -> bool {
 pub struct EnemyDrone {
     /// Its number in its team.
     pub k: usize,
+    /// What kind of drone it is (v4: a team that sees a drone sees its airframe).
+    #[serde(default)]
+    pub class: Option<Class>,
+    /// What it carries, once it has used it (v4: a tagger that has tagged).
+    #[serde(default)]
+    pub payload: Option<Payload>,
     pub at: Vec2,
     pub alt: f32,
     pub vel: Vec2,
@@ -207,6 +216,8 @@ impl Game {
             .filter_map(|(i, (_, s))| {
                 s.map(|s| EnemyDrone {
                     k: k(i),
+                    class: Some(self.drones[i].class),
+                    payload: self.revealed[i].then_some(self.drones[i].payload),
                     at: s.at,
                     alt: s.alt,
                     vel: s.vel,

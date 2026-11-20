@@ -43,6 +43,8 @@ const TAKEOFF_APART: f32 = 2.0;
 /// A T1-S in AGENT mode: about this airspeed (m/s), a bank of at most 50°, and a climb or sink of
 /// at most this (m/s).
 const CRUISE: f32 = 16.0;
+/// A hunter's speed when it intercepts (m/s): faster than any drone cruises.
+const SPRINT: f32 = 22.0;
 const BANK: f32 = 50.0 * std::f32::consts::PI / 180.0;
 const VERTICAL: f32 = 3.0;
 const G: f32 = 9.81;
@@ -226,6 +228,8 @@ pub struct Flyer {
     /// Radians from north, clockwise.
     pub heading: f32,
     pub speed: f32,
+    /// Its airspeed now (m/s): its cruise, or a sprint when it intercepts.
+    pub pace: f32,
     pub flying: bool,
     pub order: Option<Order>,
     /// Where it circles on Hold: where it was when it got the order.
@@ -233,6 +237,20 @@ pub struct Flyer {
 }
 
 impl Flyer {
+    /// Where the enemy drone `k` (by its number in its team) will be in a moment, and how high: by
+    /// its own camera if it sees it, else where its team last saw it. `None` if it is down or never seen.
+    fn quarry(&self, game: &Game, k: usize) -> Option<(Vec2, f32)> {
+        let (me, j) = (game.drone(self.team, self.k), game.drone(self.team.other(), k));
+        let e = &game.drones[j];
+        if e.phase == Phase::Down {
+            return None;
+        }
+        if game.drone_senses(me).contains(&j) {
+            return Some((e.at + e.vel * 0.5, e.alt));
+        }
+        game.maps[self.team.index()].drones[j].map(|s| (s.at, s.alt))
+    }
+
     /// The point it circles for its order, and the radius.
     fn circle(&self, game: &Game) -> (Vec2, f32) {
         match self.order {
@@ -241,6 +259,8 @@ impl Flyer {
             Some(Order::Circle(p, r)) => (p, r),
             Some(Order::Home | Order::Land) => (game.rules.base(self.team), ORBIT_RADIUS),
             Some(Order::Hold) => (self.hold, ORBIT_RADIUS),
+            // With no track of its quarry, a hunter circles where it is.
+            Some(Order::Intercept(_)) => (self.hold, ORBIT_RADIUS),
             // As the server: a drone its seat has not ordered yet circles over its base.
             None => (game.rules.base(self.team), ORBIT_RADIUS),
         }
@@ -260,6 +280,22 @@ impl Flyer {
                 self.flying = true;
                 self.hold = self.at;
             }
+            return;
+        }
+        self.pace = self.speed;
+        if let Some(Order::Intercept(k)) = self.order
+            && let Some((at, alt)) = self.quarry(game, k)
+        {
+            // Straight at where the quarry will be a moment from now, as fast as it can, and to its height.
+            let to = at - self.at;
+            let want = to.y.atan2(to.x);
+            let err =
+                (want - self.heading + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
+            self.pace = SPRINT;
+            let max_rate = G * BANK.tan() / self.pace;
+            self.heading += (2.0 * err).clamp(-max_rate, max_rate) * dt;
+            self.at += (Vec2::new(self.heading.cos(), self.heading.sin()) * self.pace + wind) * dt;
+            self.alt += (alt - self.alt).clamp(-2.0 * VERTICAL * dt, 2.0 * VERTICAL * dt);
             return;
         }
         let (centre, radius) = self.circle(game);
@@ -384,10 +420,12 @@ impl<'u> Match<'u> {
                 alt: 0.0,
                 heading: if d.team == Team::Blue { 0.0 } else { std::f32::consts::PI },
                 speed: CRUISE * (0.95 + 0.1 * rng.f32()),
+                pace: 0.0,
                 flying: false,
                 order: None,
                 hold: d.at,
             })
+            .map(|f| Flyer { pace: f.speed, ..f })
             .collect();
         game.look();
         Match {
@@ -488,7 +526,7 @@ impl<'u> Match<'u> {
             let d = &mut game.drones[i];
             d.at = f.at;
             d.alt = f.alt;
-            d.vel = Vec2::new(f.heading.cos(), f.heading.sin()) * f.speed + self.wind;
+            d.vel = Vec2::new(f.heading.cos(), f.heading.sin()) * f.pace + self.wind;
             d.phase = if f.flying { Phase::Flying } else { Phase::Ground };
         }
         game.step(DT);
@@ -715,6 +753,7 @@ mod tests {
             alt: 0.0,
             heading: 0.0,
             speed: CRUISE,
+            pace: CRUISE,
             flying: false,
             order: Some(Order::Take(game.tower("west"))),
             hold: Vec2::ZERO,
@@ -1038,6 +1077,34 @@ mod tests {
         let i = put_blue(&mut m, true);
         run(&mut m, 4.0, &mut HushedHold);
         assert_eq!(m.game.posture[i], Posture::Loud, "in the shadow it hears nothing");
+    }
+
+    #[test]
+    fn a_hunter_sent_to_intercept_an_enemy_drone_sprints_after_it_and_tags_it() {
+        use recreation_towers::{Airframe, Class, Loadout, Payload};
+        let rules = Rules::v4();
+        let mut blue = Loadout::squad(&rules);
+        blue.airframes[0] = Airframe::new(Class::Standard, Payload::Tagger);
+        let mut m = Match::of_loadouts(rules, 1, [&mut Brings(blue), &mut Silent]).unwrap();
+        let (hunter, red) = (m.game.drone(Team::Blue, 0), m.game.drone(Team::Red, 0));
+        let west = m.game.tower("west");
+        m.told[red].give(Order::Take(west), None);
+        run(&mut m, 40.0, &mut Silent);
+        // The hunter high, 60 m from the tower: its own camera has the quarry.
+        let at = m.game.towers[west].at + Vec2::new(0.0, 60.0);
+        let f = &mut m.flyers[hunter];
+        (f.at, f.alt, f.flying, f.hold) = (at, 50.0, true, at);
+        m.told[hunter].give(Order::Intercept(0), None);
+        let mut sprinted = false;
+        for _ in 0..1200 {
+            m.step(&mut Silent, &mut Silent).unwrap();
+            sprinted |= m.game.drones[hunter].vel.length() > rules.chase_speed;
+            if m.game.drones[red].phase == Phase::Down {
+                break;
+            }
+        }
+        assert!(sprinted, "it chases faster than it cruises");
+        assert_eq!(m.game.drones[red].phase, Phase::Down, "tagged within 2 minutes");
     }
 
     #[test]

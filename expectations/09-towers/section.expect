@@ -98,7 +98,7 @@ Vocabulary:
   State: the Blue drones in the Blue west outpost circle are 0..1
     Set: send a Blue drone to the Blue west outpost until it circles it
   # What Blue knows: the map of the Blue team.
-  State: the Red scout is at its base | near a Blue drone | far from anything Blue | near the Blue home tower | low in the east lane, near the first Blue drone | high over the east lane, near the first Blue drone | low in the mid lane, ahead of the first Blue drone | low over the lake | 50 m from the first Blue drone | high between the Blue home tower and the centre tower
+  State: the Red scout is at its base | near a Blue drone | far from anything Blue | near the Blue home tower | low in the east lane, near the first Blue drone | high over the east lane, near the first Blue drone | low in the mid lane, ahead of the first Blue drone | low over the lake | 50 m from the first Blue drone | high between the Blue home tower and the centre tower | 5 m from the first Blue drone | low under the trees, 7 m below the first Blue drone
     Shows: 50 m from the first Blue drone: the Red scout flies 50 m high, 50 m east of the place where the first Blue drone is near the Red home tower
     Shows: at its base: the Red scout is on the ground at the Red base
     Shows: near a Blue drone: the Red scout flies 100 m from a Blue drone, over the middle of the field
@@ -239,6 +239,27 @@ Vocabulary:
     Say: wait 10 seconds while B1 flies quiet
   Event: the first Blue drone flies to the west circle
     Say: send B1 to the west tower, and wait until it circles the tower low
+  # The v4 rules: tags.
+  State: the tags are off | on
+    Set: {value}
+    Shows: on: a drone with a tagger takes out an enemy drone within 8 m of it
+  State: the payload of the first Blue drone is a camera | a tagger
+    Set: give the first Blue drone {value} in the loadout
+    Shows: a tagger: the card of B1 shows TAGGER and the tags it has left
+  State: the tags left of the first Blue drone are 0..2
+    Shows: the card of B1 shows TAGS {value}
+  State: the condition of the Red scout is flying | down | on the ground
+    Shows: down: the Red scout is out of the game
+  State: the payload of the first Blue drone on the Red map is unknown | a tagger
+    Shows: a tagger: the Red map marks B1 as a tagger
+  Event: the first Blue drone chases for 10 seconds
+    Say: select B1, press INTERCEPT, click an enemy drone and wait 10 seconds
+  Event: the first Blue drone closes on the Red scout
+    Say: send B1 at the Red scout
+  Event: the first Blue drone waits on the ground for its swap
+    Say: wait 30 seconds while the ground crew swaps the battery of B1
+  Event: the first Blue drone circles the west tower for 20 seconds
+    Say: wait 20 seconds while B1 circles the west tower low
   # The v4 rules: the battery swap, airframes and the loadout.
   Event: the first Blue drone circles over its base for 25 seconds
     Say: select B1 and press HOME. Wait 25 seconds while B1 circles over its base
@@ -519,3 +540,6 @@ Vocabulary:
     And the direction finding is off
     And the emission of the first Blue drone is loud
     And the emission of the Red scout is loud
+    And the tags are off
+    And the payload of the first Blue drone is a camera
+    And the payload of the first Blue drone on the Red map is unknown
