@@ -75,7 +75,8 @@ pub fn paint_battlefield(
     let (x, y, w, h) = rect(b);
     window.with_content_mask(Some(ContentMask { bounds: b }), |window| {
         match &scene.picture {
-            Some((img, from)) => warp::paint(window, img, *from, lens),
+            // The valley's map is flat at height 0.
+            Some((img, from)) => warp::paint(window, img, *from, lens, 0.0),
             None => {
                 fill_rect(window, x, y, w, h, c(FOG));
                 paint_plain_valley(window, lens, rules, valley);

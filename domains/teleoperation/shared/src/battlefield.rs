@@ -70,6 +70,12 @@ impl Eye {
     /// The point of the ground (height 0) at pixel (`x`, `y`) of a picture `w` by `h`, or `None`
     /// where the picture shows the sky.
     pub fn ground(&self, x: f32, y: f32, w: f32, h: f32) -> Option<Vec2> {
+        self.plane(x, y, w, h, 0.0)
+    }
+
+    /// The point of flat ground `z` high at pixel (`x`, `y`) of a picture `w` by `h`, or `None`
+    /// where the picture shows the sky above it.
+    pub fn plane(&self, x: f32, y: f32, w: f32, h: f32, z: f32) -> Option<Vec2> {
         let (forward, right, up) = self.axes();
         let f = self.focal(h);
         let ray = forward + right * ((x - w * 0.5) / f) - up * ((y - h * 0.5) / f);
@@ -77,7 +83,7 @@ impl Eye {
         if ray.z > -1e-4 {
             return None;
         }
-        let t = -from.z / ray.z;
+        let t = (z - from.z) / ray.z;
         Some((from + ray * t).truncate())
     }
 }
