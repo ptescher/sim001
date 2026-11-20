@@ -362,7 +362,7 @@ impl CommanderView {
     // The camera.
 
     /// Puts the camera over the team's base, looking towards the enemy, once the rules arrive.
-    fn place_eye(&mut self) {
+    pub fn place_eye(&mut self) {
         let Some(rules) = self.seat.state().rules else { return };
         let team = match self.seat.join() {
             Join::Command(t) | Join::Compute(t) | Join::Watch(t) | Join::Unit { team: t, .. } => t,

@@ -37,8 +37,9 @@ pub const LEAGUE_SECS: u64 = 900;
 pub const SIM_SECS: u64 = 240;
 /// What the Towers commander app gets: each test of it is on a game server of its own, and the
 /// 3D view of a game takes about 2.5 minutes to load the valley, which the test of the cameras
-/// waits for. The suite takes ~305 s; 420 s leaves room for a slower box.
-pub const COMMAND_SECS: u64 = 420;
+/// waits for. The suite takes ~460 s (22 tests, the advisor's among them); 750 s leaves room for a
+/// slower box.
+pub const COMMAND_SECS: u64 = 750;
 /// What the console's suite gets (`tasks console`, which is a task of its own): its tests fly a
 /// plane against a real ArduPilot, and a fresh plane takes a minute. The tutorials that fly take 5
 /// to 10 minutes each, twice when they fail (the runner tries a failed test once more), and the
