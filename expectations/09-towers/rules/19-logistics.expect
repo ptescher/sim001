@@ -1,0 +1,81 @@
+Feature: Batteries, airframes and the loadout
+  In the [[v4 rules]], a team has a fixed number of airframes, and it chooses them before the game.
+  A drone that lands at its base for a [[battery swap]] gets a full battery in 30 s. A drone that
+  only circles over its base recharges, but slowly. A drone that goes down is lost, and a spare
+  takes its place. A team with no spare flies with fewer drones.
+
+  Before the game, each commander chooses the [[loadout]] of the team: the airframes and their
+  payloads. The first five fly at the start, and the rest are spares. The loadout costs points
+  from a budget of 20. A light drone costs 2, a standard drone 3 and a heavy drone 4.
+
+  Expectation: A drone that lands is on the ground at its base
+    LAND sends a drone to its base. It lands there, and it stays on the ground until the commander
+    gives it a new order.
+
+    Given the battery swap is on
+    And the first Blue drone is over its base
+    When the first Blue drone lands at its base
+    Then the condition of the first Blue drone is on the ground
+    And the first Blue drone is at its base
+
+  Expectation: A drone that lands at its base gets a full battery after 30 s
+    Given the battery swap is on
+    And the first Blue drone is at its base
+    When the game runs for 30 seconds
+    Then the battery of the first Blue drone is 240 s
+
+  Expectation: A swap is not done before 30 s on the ground
+    Overrides: A drone that lands at its base gets a full battery after 30 s
+    The ground crew changes the whole battery, or none of it.
+
+    Given the battery swap is on
+    And the battery of the first Blue drone is 50 s
+    And the first Blue drone is at its base
+    When the game runs for 20 seconds
+    Then the battery of the first Blue drone is 50 s
+
+  Expectation: A drone that circles over its base recharges 4 s each second
+    Overrides: A drone over its base recharges 10 s each second
+    The swap is the better trade, but a drone does not have to land. The drone still uses 1 s each
+    second to fly, so it gains 3 s each second.
+
+    Given the batteries are on
+    And the battery swap is on
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is over its base
+    When the first Blue drone circles over its base for 25 seconds
+    Then the battery of the first Blue drone is 175 s
+
+  Expectation: A spare takes the place of a drone that is lost
+    Given the airframes are finite
+    And the spares of Blue are 1
+    And the battery of the first Blue drone is 5 s
+    And the first Blue drone is low in the mid lane
+    When the game runs for 40 seconds
+    Then the condition of the first Blue drone is on the ground
+    And the spares of Blue are 0
+
+  Expectation: A team with no spare flies with fewer drones
+    Overrides: A spare takes the place of a drone that is lost
+    Overrides: A drone with an empty battery is down
+
+    Given the airframes are finite
+    And the spares of Blue are 0
+    And the battery of the first Blue drone is 5 s
+    And the first Blue drone is low in the mid lane
+    When the game runs for 90 seconds
+    Then the condition of the first Blue drone is down
+
+  Expectation: A loadout costs no more than the budget
+    Today's squad (three standard drones, a heavy and a light drone) costs 15. Two light spares
+    make it 19.
+
+    Given the loadout of Blue is today's squad and two light spares
+    Then the cost of the Blue loadout is within the budget
+
+  Expectation: A loadout over the budget is refused
+    Overrides: A loadout costs no more than the budget
+    The cost of seven standard drones is 21.
+
+    Given the loadout of Blue is seven standard drones
+    Then the cost of the Blue loadout is over the budget

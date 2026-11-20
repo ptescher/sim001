@@ -142,6 +142,7 @@ pub fn target_text(m: &Mission) -> Option<String> {
         Order::Circle(p, _) => ("circle a point".to_string(), p),
         Order::Hold => return Some("hold".into()),
         Order::Home => return Some("go home".into()),
+        Order::Land => return Some("land at the base".into()),
     };
     let to = at - m.obs.at;
     // The bearing clockwise from north: the field is north, east.

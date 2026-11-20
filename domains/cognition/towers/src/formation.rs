@@ -5,7 +5,9 @@
 
 use crate::{Captain, Persist, Prepared};
 use recreation_towers::map::LayoutKind;
-use recreation_towers::{Commander, Order, Phase, Rules, Team, TeamView};
+use recreation_towers::{
+    Advise, Airframe, Class, Commander, Loadout, Order, Phase, Queued, Rules, Standing, Team, TeamView, Unit,
+};
 
 /// Where a drone goes. The towers are numbered Blue home, west, centre, east, Red home.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,11 +56,50 @@ pub struct Formation {
     pub posts: [Post; 5],
     rules: Rules,
     recharging: [bool; 5],
+    /// A drone with a low battery lands for a swap; if not, it circles over its base.
+    swap: bool,
 }
 
 impl Formation {
     pub fn new(name: &'static str, posts: [Post; 5], rules: Rules) -> Formation {
-        Formation { name, posts, rules, recharging: [false; 5] }
+        Formation { name, posts, rules, recharging: [false; 5], swap: false }
+    }
+
+    /// The same, landing for a battery swap (or not).
+    pub fn swapping(self, swap: bool) -> Formation {
+        Formation { swap, ..self }
+    }
+}
+
+/// A captain that brings its own loadout to the game.
+pub struct Loaded<C> {
+    pub captain: C,
+    pub loadout: Loadout,
+}
+
+impl<C: Captain> Captain for Loaded<C> {
+    fn loadout(&mut self, _rules: &Rules) -> Loadout {
+        self.loadout.clone()
+    }
+
+    fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
+        self.captain.decide(view)
+    }
+
+    fn standing(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
+        self.captain.standing(view, orders)
+    }
+
+    fn queue(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Vec<Queued>)> {
+        self.captain.queue(view, orders)
+    }
+
+    fn unit(&self, team: Team, k: usize) -> Box<dyn Unit> {
+        self.captain.unit(team, k)
+    }
+
+    fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
+        self.captain.advised_by(advisor, delay)
     }
 }
 
@@ -78,7 +119,11 @@ impl Captain for Formation {
             }
             orders.push((
                 d.k,
-                if self.recharging[d.k] { Order::Home } else { Order::Take(self.posts[d.k].tower(view.team)) },
+                match (self.recharging[d.k], self.swap) {
+                    (true, true) => Order::Land,
+                    (true, false) => Order::Home,
+                    (false, _) => Order::Take(self.posts[d.k].tower(view.team)),
+                },
             ));
         }
         Ok(orders)
@@ -98,6 +143,9 @@ pub fn formations(rules: Rules) -> Vec<(&'static str, Make)> {
     };
     let commander: (&'static str, Make) =
         ("commander", Box::new(move || Box::new(Prepared { captain: Commander::new(rules), autonomy: Persist })));
+    if rules.finite_airframes {
+        return v4_formations(rules);
+    }
     match rules.layout {
         LayoutKind::Chain => vec![
             commander,
@@ -123,6 +171,72 @@ pub fn formations(rules: Rules) -> Vec<(&'static str, Make)> {
     }
 }
 
+/// The ways to play by the v4 rules: today's formations, each with two light spares and landing for
+/// a swap; and, against them, the same with no spares, circling instead of swapping, or with a
+/// second heavy drone. The squad is three standard drones, a heavy one and a light one (15 of the
+/// budget of 20), and a formation's posts are by the place in it.
+fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
+    use Post::*;
+    let squad = Loadout::squad(&rules).airframes;
+    let spares = Loadout { airframes: [squad.clone(), vec![Airframe::plain(Class::Light); 2]].concat() };
+    let bare = Loadout { airframes: squad.clone() };
+    // Two heavy drones (the third standard one is a heavy one) and one light spare: 18.
+    let heavies = {
+        let mut a = squad.clone();
+        a[2] = Airframe::plain(Class::Heavy);
+        Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
+    };
+    let entry = |name: &'static str, posts: Option<[Post; 5]>, loadout: &Loadout, swap: bool| -> (&'static str, Make) {
+        let loadout = loadout.clone();
+        (
+            name,
+            Box::new(move || -> Box<dyn Captain> {
+                match posts {
+                    Some(posts) => Box::new(Loaded {
+                        captain: Prepared {
+                            captain: Formation::new(name, posts, rules).swapping(swap),
+                            autonomy: Persist,
+                        },
+                        loadout: loadout.clone(),
+                    }),
+                    None => Box::new(Loaded {
+                        captain: Prepared { captain: Commander::new(rules), autonomy: Persist },
+                        loadout: loadout.clone(),
+                    }),
+                }
+            }),
+        )
+    };
+    let mut out = vec![entry("commander", None, &spares, false), entry("commander, no spares", None, &bare, false)];
+    let posts: Vec<(&'static str, [Post; 5])> = match rules.layout {
+        LayoutKind::Chain => vec![
+            ("mass centre", [Centre; 5]),
+            ("balanced", [West, East, Centre, Centre, Centre]),
+            ("own line", [OwnWest, OwnMid, OwnEast, Centre, Centre]),
+            ("far line", [FarWest, FarMid, FarEast, Centre, Centre]),
+            ("raid", [FarWest, FarEast, EnemyHome, Centre, EnemyHome]),
+            ("spread", [OwnWest, OwnEast, FarMid, Centre, West]),
+            ("no centre", [OwnWest, OwnEast, West, East, FarMid]),
+        ],
+        LayoutKind::Valley => vec![
+            ("centre rush", [Centre; 5]),
+            ("wings", [West, West, East, East, Centre]),
+            ("balanced", [West, East, Centre, Centre, Centre]),
+            ("no centre", [West, West, East, East, East]),
+            ("raid", [West, East, EnemyHome, Centre, EnemyHome]),
+            ("heavy centre", [West, East, West, Centre, East]),
+        ],
+    };
+    let find = |n: &str| posts.iter().find(|(m, _)| *m == n).map(|(_, p)| *p);
+    out.extend(posts.iter().map(|&(name, p)| entry(name, Some(p), &spares, true)));
+    out.push(entry("balanced, no spares", find("balanced"), &bare, true));
+    out.push(entry("balanced, circles", find("balanced"), &spares, false));
+    out.push(entry("raid, circles", find("raid"), &spares, false));
+    out.push(entry("raid, two heavies", find("raid"), &heavies, true));
+    out.push(entry("balanced, two heavies", find("balanced"), &heavies, true));
+    out
+}
+
 /// Sets one rule from `name=number` (`layout=1` is the chain): the rules a table is played by.
 pub fn set_rule(rules: &mut Rules, setting: &str) -> Result<(), String> {
     let (k, v) = setting.split_once('=').ok_or(format!("{setting}: want name=number"))?;
@@ -134,6 +248,8 @@ pub fn set_rule(rules: &mut Rules, setting: &str) -> Result<(), String> {
         "spire_jam_radius" => rules.spire_jam_radius = v,
         "win_score" => rules.win_score = v,
         "layout" => rules.layout = if v >= 1.0 { LayoutKind::Chain } else { LayoutKind::Valley },
+        // The v4 rules as far as they are built, on the layout set so far.
+        "v4" if v >= 1.0 => *rules = Rules { layout: rules.layout, ..Rules::v4() },
         _ => return Err(format!("no rule called {k}")),
     }
     Ok(())
@@ -162,6 +278,51 @@ mod tests {
         assert!(chain.contains(&"far line"));
         let mut captain = formations(Rules::default())[1].1();
         assert_eq!(captain.decide(&view(Team::Blue)).unwrap().len(), 5, "a formation orders each drone");
+    }
+
+    #[test]
+    fn the_v4_rules_set_by_name_keep_the_layout() {
+        let mut r = Rules::default();
+        set_rule(&mut r, "layout=1").unwrap();
+        set_rule(&mut r, "v4=1").unwrap();
+        assert_eq!(r, Rules { layout: LayoutKind::Chain, ..Rules::v4() });
+    }
+
+    #[test]
+    fn with_the_v4_rules_every_way_to_play_brings_a_loadout_the_rules_allow() {
+        for layout in [LayoutKind::Valley, LayoutKind::Chain] {
+            let rules = Rules { layout, ..Rules::v4() };
+            let all = formations(rules);
+            assert!(all.len() > formations(Rules { layout, ..Rules::default() }).len(), "more ways to play");
+            for (name, make) in &all {
+                let loadout = make().loadout(&rules);
+                assert!(loadout.check(&rules).is_ok(), "{name}: {:?}", loadout.check(&rules));
+            }
+            let spares = |n: &str| all.iter().find(|(m, _)| *m == n).map(|(_, f)| f().loadout(&rules).airframes.len());
+            assert_eq!(spares("balanced"), Some(7), "two light spares");
+            assert_eq!(spares("balanced, no spares"), Some(5));
+        }
+    }
+
+    #[test]
+    fn a_formation_that_swaps_lands_to_recharge_and_one_that_does_not_circles_over_its_base() {
+        let rules = Rules::v4();
+        let mut v = view(Team::Blue);
+        v.drones[0].phase = Phase::Flying;
+        v.drones[0].battery = 70.0;
+        let mut swaps = Formation::new("test", [Post::Centre; 5], rules).swapping(true);
+        assert_eq!(swaps.decide(&v).unwrap()[0].1, Order::Land);
+        let mut circles = Formation::new("test", [Post::Centre; 5], rules);
+        assert_eq!(circles.decide(&v).unwrap()[0].1, Order::Home);
+    }
+
+    #[test]
+    fn a_captain_with_a_loadout_brings_it() {
+        let rules = Rules::v4();
+        let mut loadout = recreation_towers::Loadout::squad(&rules);
+        loadout.airframes.push(recreation_towers::Airframe::plain(recreation_towers::Class::Light));
+        let mut c = Loaded { captain: Formation::new("test", [Post::Centre; 5], rules), loadout: loadout.clone() };
+        assert_eq!(c.loadout(&rules), loadout);
     }
 
     #[test]

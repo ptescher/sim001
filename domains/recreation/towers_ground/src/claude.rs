@@ -180,6 +180,7 @@ fn order(o: Option<Order>, view: &TeamView) -> String {
         Some(Order::Circle(p, r)) => format!("circle {:.0},{:.0} at {r:.0} m", p.x, p.y),
         Some(Order::Hold) => "hold".into(),
         Some(Order::Home) => "home".into(),
+        Some(Order::Land) => "land for a battery swap".into(),
     }
 }
 

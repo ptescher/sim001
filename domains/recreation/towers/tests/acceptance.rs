@@ -10,8 +10,8 @@ use glam::Vec2;
 use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
 use recreation_towers::{
-    Advice, AdviceKind, Advisor, Belief, Commander, Game, Instruction, Link, LinkFilter, Order, Outcome, Phase,
-    Proposal, Queued, Rules, Standing, Team, When,
+    Advice, AdviceKind, Advisor, Airframe, Belief, Class, Commander, Game, Instruction, Link, LinkFilter, Loadout,
+    Order, Outcome, Phase, Proposal, Queued, Rules, Standing, Team, When,
 };
 use std::path::Path;
 
@@ -44,6 +44,8 @@ struct World {
     belief_at: f32,
     /// The proposal that a step put in the commander's hand, in the spec's words.
     proposed: String,
+    /// The loadout that Blue chose, in the spec's words.
+    loadout: (String, Loadout),
 }
 
 impl World {
@@ -61,6 +63,7 @@ impl World {
             belief: Belief::new(rules, Team::Blue),
             belief_at: 0.0,
             proposed: "none".into(),
+            loadout: ("today's squad".into(), Loadout::squad(&rules)),
         }
     }
 
@@ -76,6 +79,7 @@ impl World {
             Some(Order::Take(t)) => format!("take the {} tower", self.game.towers[t].name),
             Some(Order::Hold) => "hold".into(),
             Some(Order::Home) => "go home".into(),
+            Some(Order::Land) => "land".into(),
             Some(Order::Goto(_)) => "go to a point".into(),
             Some(Order::Circle(..)) => "circle a point".into(),
         }
@@ -197,8 +201,12 @@ impl World {
     /// above the trees (`Some(false)`), or on the ground (`None`); and sends home the others that
     /// were there so.
     fn in_circle(&mut self, team: Team, tower: &str, n: usize, low: Option<bool>) {
+        self.in_circle_by(World::order(team), team, tower, n, low)
+    }
+
+    /// The same, with the drones going in this order.
+    fn in_circle_by(&mut self, order: [usize; 3], team: Team, tower: &str, n: usize, low: Option<bool>) {
         let centre = self.tower(tower).at;
-        let order = World::order(team);
         let ks: Vec<usize> = match low {
             Some(true) => order.to_vec(),
             Some(false) => order.iter().skip(1).chain(order.iter().take(1)).copied().collect(),
@@ -306,7 +314,13 @@ impl World {
             "in the west circle" => ("in the west circle", m.towers[1] + Vec2::new(40.0, 0.0), Some(LOW)),
             other => match away_from(m, other) {
                 Some((name, at)) => (name, at, Some(ALT)),
-                None => ("at its base", m.bases[0], None),
+                None => {
+                    // On the ground where it starts the game.
+                    self.home(i);
+                    self.game.look();
+                    self.blue_place = Some(("at its base", self.game.drones[i].at));
+                    return;
+                }
             },
         };
         self.put(i, at, alt);
@@ -566,6 +580,9 @@ fn bindings() -> Bindings<World> {
         .on("the game runs for 15 seconds", |w| w.run(15.0))
         .on("the game runs for 20 seconds", |w| w.run(20.0))
         .on("the game runs for 45 seconds", |w| w.run(45.0))
+        .on("the game runs for 30 seconds", |w| w.run(30.0))
+        .on("the game runs for 40 seconds", |w| w.run(40.0))
+        .on("the game runs for 90 seconds", |w| w.run(90.0))
         .on("the game runs for 25 seconds", |w| w.run(25.0))
         .on("the game runs for 1 minute", |w| w.run(60.0))
         .on("the Red scout flies into the fog for 10 seconds", |w| {
@@ -744,20 +761,24 @@ fn bindings() -> Bindings<World> {
             } else {
                 recreation_towers::map::LayoutKind::Valley
             };
-            let rules = Rules { layout, ..w.game.rules };
-            w.game = Game::new(rules);
-            w.game.look();
+            // A new game only for a new layout: what other Givens arranged stays.
+            if layout != w.game.rules.layout {
+                w.game = Game::new(Rules { layout, ..w.game.rules });
+                w.game.look();
+            }
         })
         .observe("the towers in the game", |w| w.game.towers.len() as f64)
         .observe("the Blue west outpost", |w| holder_name(w.tower("Blue west outpost").holder))
         .observe("the Blue drones in the Blue west outpost circle", |w| {
             w.count(Team::Blue, "Blue west outpost", Some(true))
         })
+        // The outpost's drones leave the first Blue drone for last: no step about an outpost puts
+        // it there, and a Given may put it somewhere else.
         .set("the Blue drones in the Blue west outpost circle", move |w, v| {
-            w.in_circle(Team::Blue, "Blue west outpost", count(v), Some(true))
+            w.in_circle_by([1, 2, 0], Team::Blue, "Blue west outpost", count(v), Some(true))
         })
         .arrange("the Blue drones in the Blue west outpost circle", move |w, v| {
-            w.in_circle(Team::Blue, "Blue west outpost", count(v), Some(true))
+            w.in_circle_by([1, 2, 0], Team::Blue, "Blue west outpost", count(v), Some(true))
         })
         .observe("the spread of the Blue belief of the Red scout", |w| w.believed().spread(SCOUT).round() as f64)
         .observe("the chance on the Blue belief of the Red scout near the first Blue drone", |w| {
@@ -787,6 +808,58 @@ fn bindings() -> Bindings<World> {
             Phase::Flying => "flying",
             Phase::Ground => "on the ground",
             Phase::Down => "down",
+        })
+        // The v4 rules: the battery swap, airframes and the loadout.
+        .observe("the battery swap", |w| if w.game.rules.swap_time > 0.0 { "on" } else { "off" })
+        .arrange("the battery swap", |w, v| {
+            let v4 = Rules::v4();
+            let on = v.as_str() == Some("on");
+            let before = w.game.rules;
+            let r = &mut w.game.rules;
+            (r.swap_time, r.base_recharge) =
+                if on { (v4.swap_time, v4.base_recharge) } else { (0.0, Rules::default().base_recharge) };
+            // The commander plays by the same rules: a new one only if they changed, so that what
+            // other Givens put in its hand stays.
+            if w.game.rules != before {
+                w.blue = Commander::new(w.game.rules);
+            }
+        })
+        .on("the first Blue drone circles over its base for 25 seconds", |w| w.run(25.0))
+        .on("the first Blue drone lands at its base", |w| {
+            let i = w.game.drone(Team::Blue, 0);
+            let base = w.game.map.bases[0];
+            w.put(i, base, None);
+        })
+        .observe("the airframes", |w| if w.game.rules.finite_airframes { "finite" } else { "unlimited" })
+        .arrange("the airframes", |w, v| {
+            let v4 = Rules::v4();
+            let finite = v.as_str() == Some("finite");
+            let before = w.game.rules;
+            let r = &mut w.game.rules;
+            (r.finite_airframes, r.spare_time) = if finite { (true, v4.spare_time) } else { (false, 0.0) };
+            if w.game.rules != before {
+                w.blue = Commander::new(w.game.rules);
+            }
+        })
+        .observe("the spares of Blue", |w| w.game.spares[Team::Blue.index()].len() as f64)
+        .arrange("the spares of Blue", move |w, v| {
+            w.game.spares[Team::Blue.index()] = vec![Airframe::plain(Class::Standard); count(v)];
+        })
+        .observe("the loadout of Blue", |w| w.loadout.0.clone())
+        .arrange("the loadout of Blue", |w, v| {
+            let squad = Loadout::squad(&w.game.rules);
+            let words = v.as_str().unwrap_or_default().to_string();
+            let airframes = match words.as_str() {
+                "today's squad and two light spares" => {
+                    [squad.airframes.clone(), vec![Airframe::plain(Class::Light); 2]].concat()
+                }
+                "seven standard drones" => vec![Airframe::plain(Class::Standard); 7],
+                _ => squad.airframes,
+            };
+            w.loadout = (words, Loadout { airframes });
+        })
+        .observe("the cost of the Blue loadout", |w| {
+            if w.loadout.1.check(&Rules::v4()).is_ok() { "within the budget" } else { "over the budget" }
         })
         // Standing orders.
         .observe("the order that the first Blue drone flies", |w| w.say(w.told.order))
@@ -901,6 +974,27 @@ fn every_test_of_the_section_passes_with_no_window() {
         .map(|(p, r)| format!("{:?} {}", r.status, p.title))
         .collect();
     assert!(not_passed.is_empty(), "{passed} passed; these did not:\n{}", not_passed.join("\n"));
+}
+
+/// Every expectation of the v4 rules is tested: the coverage planner skips one that it cannot
+/// make a clean plan for, and a skipped rule would not show as a failure.
+#[test]
+fn every_expectation_of_the_v4_rules_is_tested_and_passes() {
+    const V4: &[&str] = &["19-logistics.expect"];
+    let a = suite();
+    let report = a.run(&mut bindings(), &RunOptions::default());
+    let by = expectation_story::coverage(&a.suite, &a.plans);
+    let mut untested = vec![];
+    for e in a.suite.expectations.iter().filter(|e| V4.iter().any(|f| e.span.file.ends_with(f))) {
+        let passed = by[e.id.0 as usize].iter().any(|&(p, _)| report.results[p].status == Status::Passed);
+        if !passed {
+            let tried: Vec<_> =
+                by[e.id.0 as usize].iter().map(|&(p, _)| format!("{:?}", report.results[p].status)).collect();
+            untested.push(format!("{} (plans: {})", e.name, tried.join(", ")));
+        }
+    }
+    println!("{}", report.failures(&a.suite, &a.plans));
+    assert!(untested.is_empty(), "not tested, or not passed:\n{}", untested.join("\n"));
 }
 
 /// The same, with pictures of Blue's map. With SIM001_DOCS=DIR the results and pictures go into

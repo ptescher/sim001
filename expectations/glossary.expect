@@ -499,6 +499,19 @@ Term: Outpost
   In [[Towers]], a small tower on a lane of the chain, between a home tower and the centre or a
   flank tower. It gives one point each second. It blocks the radio of the enemy 50 m round it.
 
+Term: v4 rules
+  In [[Towers]], the rules that make the game a test of many decisions (`Rules::v4()`): a
+  [[loadout]], the [[battery swap]], finite airframes, the canopy and the radio, loud and quiet
+  drones, taggers, jammers and the weather. Today's game has them off.
+
+Term: Battery swap
+  In [[Towers]] with the [[v4 rules]], a drone that is on the ground at its base for 30 s gets a
+  full [[battery]].
+
+Term: Loadout
+  In [[Towers]] with the [[v4 rules]], the airframes and payloads that a team chooses before the
+  game, from a budget. The first five fly, and the rest are spares. The enemy does not see it.
+
 Term: Battery
   In [[Towers]], the seconds that a drone can still fly. A flying drone uses 1 s each second, and
   more when enemy drones share its tower circle. A drone recharges over its base and in the

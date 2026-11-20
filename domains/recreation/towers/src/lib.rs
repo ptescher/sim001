@@ -22,6 +22,7 @@ mod edge;
 mod filter;
 pub mod flight;
 mod instruction;
+mod loadout;
 mod lookahead;
 pub mod map;
 pub mod seat;
@@ -36,6 +37,7 @@ pub use commander::{ADVICE_MARGIN, Commander, CommanderTuning};
 pub use edge::{EdgeObs, EnemySeen, TowerSeen};
 pub use filter::LinkFilter;
 pub use instruction::{Instruction, MAX_QUEUE, Queued, Standing, When, queue_of};
+pub use loadout::{Airframe, Loadout, MAX_AIRFRAMES, Payload};
 pub use lookahead::Model;
 pub use map::Map;
 pub use view::{EnemyDrone, Order, OwnDrone, Sites, TeamView, TowerView, Umpire};
@@ -128,6 +130,15 @@ impl Class {
         }
     }
 
+    /// What an airframe of this class costs from a [`Loadout`]'s budget.
+    pub fn cost(self) -> f32 {
+        match self {
+            Class::Light => 2.0,
+            Class::Standard => 3.0,
+            Class::Heavy => 4.0,
+        }
+    }
+
     /// A word for the commander's map.
     pub fn name(self) -> &'static str {
         match self {
@@ -213,6 +224,20 @@ pub struct Rules {
     /// Where the towers stand.
     #[serde(default)]
     pub layout: map::LayoutKind,
+    // The v4 rules (plans/towers-rules-v4.md): each is off at 0 or false, as in today's game.
+    /// A drone on the ground at its base this long (s) gets a full battery; 0 for no swap (a drone
+    /// on the ground there recharges at [`Rules::base_recharge`] as one over it does).
+    #[serde(default)]
+    pub swap_time: f32,
+    /// A drone that goes down is lost: the next spare of its team's [`Loadout`] takes its place
+    /// after [`Rules::spare_time`], and with no spare its place stays empty.
+    #[serde(default)]
+    pub finite_airframes: bool,
+    #[serde(default)]
+    pub spare_time: f32,
+    /// What a team's [`Loadout`] may cost; 0 for no limit.
+    #[serde(default)]
+    pub budget: f32,
 }
 
 impl Default for Rules {
@@ -256,6 +281,10 @@ impl Default for Rules {
             drone_vision: 150.0,
             base_vision: 150.0,
             layout: map::LayoutKind::Valley,
+            swap_time: 0.0,
+            finite_airframes: false,
+            spare_time: 0.0,
+            budget: 0.0,
         }
     }
 }
@@ -279,6 +308,19 @@ impl Rules {
             mesh_range: 0.0,
             mesh_hops: 1,
             ..d.without_batteries()
+        }
+    }
+
+    /// The v4 rules (plans/towers-rules-v4.md), as far as they are built: the battery swap (and a
+    /// slow recharge over the base), finite airframes and a budget for the loadout.
+    pub fn v4() -> Rules {
+        Rules {
+            swap_time: 30.0,
+            base_recharge: 4.0,
+            finite_airframes: true,
+            spare_time: 30.0,
+            budget: 20.0,
+            ..Rules::default()
         }
     }
 
@@ -355,6 +397,9 @@ pub struct Drone {
     /// North, east (m/s).
     pub vel: Vec2,
     pub phase: Phase,
+    /// What it carries besides its camera.
+    #[serde(default)]
+    pub payload: Payload,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -449,6 +494,10 @@ pub struct Game {
     pub reported: Vec<f32>,
     /// How long each drone with an empty battery has been down (s); `None` while it is not.
     pub down_for: Vec<Option<f32>>,
+    /// Each team's spare airframes, in the order they take a lost drone's place.
+    pub spares: [Vec<Airframe>; 2],
+    /// How long each drone has been on the ground at its base (s).
+    pub ground_for: Vec<f32>,
 }
 
 impl Game {
@@ -475,6 +524,7 @@ impl Game {
                     alt: 0.0,
                     vel: Vec2::ZERO,
                     phase: Phase::Ground,
+                    payload: Payload::Camera,
                 })
             })
             .collect();
@@ -502,7 +552,27 @@ impl Game {
             reported: battery.clone(),
             battery,
             down_for: vec![None; n],
+            spares: [vec![], vec![]],
+            ground_for: vec![0.0; n],
         }
+    }
+
+    /// The start with each team's loadout (Blue's, Red's): its first airframes fly, the rest are
+    /// its spares. A loadout that the rules do not allow is refused.
+    pub fn with_loadouts(rules: Rules, loadouts: [&Loadout; 2]) -> Result<Game, String> {
+        let mut g = Game::new(rules);
+        for team in Team::BOTH {
+            let loadout = loadouts[team.index()];
+            loadout.check(&rules).map_err(|e| format!("{team:?}'s loadout: {e}"))?;
+            for (k, a) in loadout.airframes.iter().take(rules.drones).enumerate() {
+                let i = g.drone(team, k);
+                (g.drones[i].class, g.drones[i].payload) = (a.class, a.payload);
+                g.battery[i] = rules.battery(a.class);
+                g.reported[i] = g.battery[i];
+            }
+            g.spares[team.index()] = loadout.airframes[rules.drones..].to_vec();
+        }
+        Ok(g)
     }
 
     /// What is left of drone `i`'s battery (s); `None` if the drones have none.
@@ -620,8 +690,16 @@ impl Game {
                 continue;
             }
             if let Some(down) = self.down_for[i] {
-                if down + dt >= r.respawn_time {
+                if !r.finite_airframes && down + dt >= r.respawn_time {
                     self.respawn(i);
+                } else if r.finite_airframes && down + dt >= r.spare_time {
+                    // The next spare takes its place; with none, its place stays empty.
+                    let spares = &mut self.spares[d.team.index()];
+                    if !spares.is_empty() {
+                        let a = spares.remove(0);
+                        (self.drones[i].class, self.drones[i].payload) = (a.class, a.payload);
+                        self.respawn(i);
+                    }
                 } else {
                     self.down_for[i] = Some(down + dt);
                 }
@@ -643,7 +721,17 @@ impl Game {
                 });
                 change -= 1.0 + r.contest_drain * enemy;
             }
-            if d.at.distance(r.base(d.team)) <= r.pad_radius {
+            let at_base = d.at.distance(r.base(d.team)) <= r.pad_radius;
+            // The swap: on the ground at its base for the swap time, a drone gets a full battery.
+            let swapping = r.swap_time > 0.0 && at_base && d.phase == Phase::Ground;
+            self.ground_for[i] = if swapping { self.ground_for[i] + dt } else { 0.0 };
+            if swapping {
+                if reached(self.ground_for[i], r.swap_time) {
+                    self.battery[i] = full;
+                }
+                continue;
+            }
+            if at_base {
                 change += r.base_recharge;
             } else if let Some(t) = circle
                 && t.kind == Kind::Depot
@@ -871,7 +959,12 @@ const ENDS: f32 = 1e-4;
 /// A drone that has been out of contact for `silent` s has lost its link at `timeout` s. The time is
 /// summed in floats, many small steps: a hair under the timeout counts.
 pub(crate) fn link_lost(silent: f32, timeout: f32) -> bool {
-    silent >= timeout * (1.0 - 1e-4)
+    reached(silent, timeout)
+}
+
+/// Whether a time summed in many small float steps has reached `limit`: a hair under counts.
+pub(crate) fn reached(elapsed: f32, limit: f32) -> bool {
+    elapsed >= limit * (1.0 - 1e-4)
 }
 
 #[cfg(test)]
@@ -1086,6 +1179,98 @@ mod tests {
         assert_eq!(d.alt, 0.0);
         assert!(d.at.distance(g.rules.base(Team::Blue)) < 30.0, "{:?}", d.at);
         assert_eq!(g.battery[i], 240.0);
+    }
+
+    /// A game by the v4 rules, with Blue's first drone at `at` (on the ground if `alt` is None).
+    fn v4_with(at: Vec2, alt: Option<f32>, battery: f32) -> (Game, usize) {
+        let mut g = Game::new(Rules::v4());
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i] = Drone {
+            at,
+            alt: alt.unwrap_or(0.0),
+            phase: if alt.is_some() { Phase::Flying } else { Phase::Ground },
+            ..g.drones[i]
+        };
+        g.battery[i] = battery;
+        (g, i)
+    }
+
+    #[test]
+    fn the_v4_rules_swap_in_30_s_recharge_at_4_over_the_base_and_lose_airframes_from_a_budget_of_20() {
+        let r = Rules::v4();
+        assert_eq!(
+            (r.swap_time, r.base_recharge, r.finite_airframes, r.spare_time, r.budget),
+            (30.0, 4.0, true, 30.0, 20.0)
+        );
+        let d = Rules::default();
+        assert_eq!((d.swap_time, d.finite_airframes, d.budget), (0.0, false, 0.0), "today's game has none of it");
+    }
+
+    #[test]
+    fn a_drone_on_the_ground_at_its_base_for_the_swap_time_gets_a_full_battery_and_not_before() {
+        let base = Rules::v4().base(Team::Blue);
+        let (mut g, i) = v4_with(base, None, 50.0);
+        run(&mut g, 20.0);
+        assert_eq!(g.battery[i], 50.0, "no swap yet, and no slow recharge on the ground");
+        run(&mut g, 10.0);
+        assert_eq!(g.battery[i], 240.0);
+    }
+
+    #[test]
+    fn the_swap_starts_again_when_the_drone_leaves_the_ground() {
+        let base = Rules::v4().base(Team::Blue);
+        let (mut g, i) = v4_with(base, None, 50.0);
+        run(&mut g, 20.0);
+        g.drones[i].phase = Phase::Flying;
+        g.drones[i].alt = 20.0;
+        run(&mut g, 1.0);
+        g.drones[i].phase = Phase::Ground;
+        g.drones[i].alt = 0.0;
+        run(&mut g, 20.0);
+        assert!(g.battery[i] < 240.0, "20 s and 20 s are not one swap: {}", g.battery[i]);
+    }
+
+    #[test]
+    fn a_drone_circling_over_its_base_recharges_slowly_with_the_swap_on() {
+        let base = Rules::v4().base(Team::Blue);
+        let (mut g, i) = v4_with(base, Some(50.0), 100.0);
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 130.0).abs() < 0.01, "4 a second less 1 a second of flight: {}", g.battery[i]);
+    }
+
+    #[test]
+    fn a_lost_drone_is_replaced_by_the_next_spare_after_the_spare_time() {
+        let mid = Vec2::new(0.0, 100.0);
+        let (mut g, i) = v4_with(mid, Some(17.0), 1.0);
+        g.spares[0] = vec![Airframe::new(Class::Light, Payload::Tagger), Airframe::plain(Class::Heavy)];
+        run(&mut g, 2.0);
+        assert_eq!(g.drones[i].phase, Phase::Down);
+        run(&mut g, 30.0);
+        assert_eq!(g.drones[i].phase, Phase::Ground);
+        assert_eq!((g.drones[i].class, g.drones[i].payload), (Class::Light, Payload::Tagger));
+        assert_eq!(g.battery[i], 150.0, "a light drone's full battery");
+        assert_eq!(g.spares[0], vec![Airframe::plain(Class::Heavy)]);
+    }
+
+    #[test]
+    fn a_lost_drone_with_no_spare_stays_down() {
+        let (mut g, i) = v4_with(Vec2::new(0.0, 100.0), Some(17.0), 1.0);
+        run(&mut g, 300.0);
+        assert_eq!(g.drones[i].phase, Phase::Down);
+    }
+
+    #[test]
+    fn a_game_starts_with_each_teams_loadout_and_refuses_one_the_rules_do_not_allow() {
+        let r = Rules::v4();
+        let mut blue = Loadout::squad(&r);
+        blue.airframes[4] = Airframe::new(Class::Light, Payload::Tagger);
+        blue.airframes.push(Airframe::plain(Class::Light));
+        let red = Loadout::squad(&r);
+        let g = Game::with_loadouts(r, [&blue, &red]).unwrap();
+        assert_eq!(g.drones[4].payload, Payload::Tagger);
+        assert_eq!(g.spares, [vec![Airframe::plain(Class::Light)], vec![]]);
+        let over = Loadout { airframes: vec![Airframe::plain(Class::Heavy); 6] };
+        assert!(Game::with_loadouts(r, [&over, &red]).is_err(), "24 is over 20");
     }
 
     #[test]

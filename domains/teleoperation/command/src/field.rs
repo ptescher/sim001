@@ -271,7 +271,7 @@ fn paint_orders(window: &mut Window, lens: Lens, v: &TeamView, rules: &Rules, se
                 paint::ground_ring(window, lens, p, r, &|_| 0.0, 1.5, true, ca(colour, alpha));
                 Some(p)
             }
-            Some(Order::Home) => Some(rules.base(v.team)),
+            Some(Order::Home | Order::Land) => Some(rules.base(v.team)),
             _ => None,
         };
         let Some(to) = to else { continue };

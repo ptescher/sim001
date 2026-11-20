@@ -162,6 +162,7 @@ fn order_name(order: Option<Order>, view: &TeamView) -> String {
         Some(Order::Take(t)) => format!("take the {} tower", view.towers[t].name),
         Some(Order::Hold) => "hold".into(),
         Some(Order::Home) => "go home".into(),
+        Some(Order::Land) => "land".into(),
         Some(Order::Goto(_)) => "go to a point".into(),
         Some(Order::Circle(..)) => "circle a point".into(),
     }

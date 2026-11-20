@@ -53,7 +53,7 @@ pub fn order_done(obs: &EdgeObs, team: Team, order: Order) -> bool {
     match order {
         Order::Take(t) => obs.towers.iter().any(|s| s.index == t && s.holder == Some(team)),
         Order::Goto(p) => obs.at.distance(p) <= THERE,
-        Order::Hold | Order::Circle(..) | Order::Home => false,
+        Order::Hold | Order::Circle(..) | Order::Home | Order::Land => false,
     }
 }
 
