@@ -60,13 +60,22 @@ Feature: The battlefield
     When the commander centres the battlefield on the selected drone
     Then the point of the battlefield camera is the west tower
 
-  Expectation: The picture keeps up with the camera
-    Status: pending
-    While you move the camera, the picture of the valley moves with it. The app draws your map
-    on the picture, so a picture that is late puts the whole battlefield late. The limits here
-    are the least that feels right in a strategy game.
+  Expectation: The valley moves with the camera
+    While you pan or zoom, the app moves the last picture of the valley to where the camera is
+    now, and draws your map on it, so the whole battlefield moves at once. A turn with Q or E
+    shows when its picture comes.
 
     Given the battlefield picture in the app is live
     When the commander pans the battlefield for 3 seconds
+    Then the lag of the battlefield's motion is at most 20 ms
+
+  Expectation: The picture keeps up with the camera
+    Status: pending
+    The picture of the valley itself is a few frames old. The app moves it with the camera, but
+    until the next picture comes the hills on it slide a little against the map, and a turn
+    waits for it. The limits here are the least that feels right in a strategy game.
+
+    Given the battlefield picture in the app is live
+    When the commander pans the battlefield for 5 seconds
     Then the lag of the battlefield picture is at most 80 ms
     And the new pictures of the battlefield each second are at least 45

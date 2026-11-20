@@ -22,6 +22,11 @@ impl Lens {
         Lens { eye, x, y, w: w.max(1.0), h: h.max(1.0) }
     }
 
+    /// The battlefield on screen: (x, y, w, h).
+    pub fn rect(self) -> (f32, f32, f32, f32) {
+        (self.x, self.y, self.w, self.h)
+    }
+
     /// The screen point of `p` (north, east, up), or `None` behind the camera.
     pub fn at(self, p: Vec3) -> Option<(f32, f32)> {
         self.eye.project(p, self.w, self.h).map(|(sx, sy)| (self.x + sx, self.y + sy))

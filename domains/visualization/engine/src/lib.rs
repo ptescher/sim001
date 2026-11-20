@@ -167,6 +167,7 @@ impl Plugin for EnginePlugin {
                     model::sync_plane,
                     field::update_windsock,
                     scenery::animate_scenery,
+                    camera::unpark_main_camera,
                     camera::update_camera,
                     camera::park_main_camera,
                     grass::stream_grass.run_if(in_state(loading::AppState::Running)),

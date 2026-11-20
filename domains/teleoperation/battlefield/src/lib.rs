@@ -7,6 +7,7 @@
 //! - [`lens`]: where the field is on screen, through the camera and on the minimap;
 //! - [`paint`]: what both apps draw on the battlefield and the minimap;
 //! - [`widgets`]: the panels, cards and command card of the bars;
+//! - [`warp`]: the last picture moved to the camera now, until the next comes;
 //! - [`draw`] and [`theme`]: the drawing primitives and the look.
 
 pub mod camera;
@@ -17,6 +18,7 @@ pub mod link;
 pub mod orders;
 pub mod paint;
 pub mod theme;
+pub mod warp;
 pub mod widgets;
 
 pub use camera::Rig;

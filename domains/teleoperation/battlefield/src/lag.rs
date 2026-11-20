@@ -53,7 +53,9 @@ impl Run {
         let secs = (to - from).as_secs_f32().max(1.0 / 60.0);
         let mut lags = self.lags.clone();
         lags.sort_by(f32::total_cmp);
-        let at = |q: f32| lags.get(((lags.len() as f32 - 1.0) * q).round() as usize).copied().unwrap_or(0.0);
+        // None of the motion's pictures on screen: it was as late as the motion was long, at least.
+        let none = secs * 1000.0;
+        let at = |q: f32| lags.get(((lags.len() as f32 - 1.0) * q).round() as usize).copied().unwrap_or(none);
         Some(Motion {
             secs,
             pictures: self.pictures,
@@ -196,6 +198,23 @@ mod tests {
         let m = lag.motion(t0 + ms(1300)).unwrap();
         assert_eq!(m.lag_ms, 300.0, "only the pan's own picture counts");
         assert_eq!(m.first_ms, Some(300.0));
+    }
+
+    #[test]
+    fn a_motion_that_shows_none_of_its_pictures_is_as_late_as_it_is_long() {
+        let t0 = Instant::now();
+        let mut lag = Lag::default();
+        lag.asked(1, t0);
+        lag.painted(1, t0 + ms(10));
+        // A pan of 0.5 s; the picture on screen stays the one from before it.
+        for k in 0..=15u32 {
+            let now = t0 + ms(1000 + 33 * k as u64);
+            lag.asked(2 + k, now);
+            lag.painted(1, now);
+        }
+        let m = lag.motion(t0 + ms(1500)).unwrap();
+        assert_eq!(m.first_ms, None);
+        assert!(m.lag_ms >= 495.0 && m.lag_p90_ms >= 495.0, "not 0: {} ms", m.lag_ms);
     }
 
     #[test]

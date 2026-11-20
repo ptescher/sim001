@@ -10,7 +10,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use teleoperation_battlefield::draw::*;
 use teleoperation_battlefield::theme::*;
-use teleoperation_battlefield::{Flat, Lens, paint};
+use teleoperation_battlefield::{Flat, Lens, paint, warp};
+use teleoperation_shared::battlefield::Eye;
 
 /// A box being dragged: where the button went down, where the mouse is now (screen pixels), and
 /// whether Shift was held.
@@ -46,7 +47,8 @@ fn tint(t: Team) -> u32 {
 
 /// What the battlefield shows besides the team's map.
 pub struct Scene<'a> {
-    pub picture: Option<Arc<RenderImage>>,
+    /// The newest picture of the 3D view, and the camera it is from.
+    pub picture: Option<(Arc<RenderImage>, Eye)>,
     pub selected: &'a [usize],
     pub drag: Option<Drag>,
     /// Where the last right-click ordered the drones to, and when.
@@ -73,9 +75,7 @@ pub fn paint_battlefield(
     let (x, y, w, h) = rect(b);
     window.with_content_mask(Some(ContentMask { bounds: b }), |window| {
         match &scene.picture {
-            Some(img) => {
-                let _ = window.paint_image(b, Corners::default(), img.clone(), 0, false);
-            }
+            Some((img, from)) => warp::paint(window, img, *from, lens),
             None => {
                 fill_rect(window, x, y, w, h, c(FOG));
                 paint_plain_valley(window, lens, rules, valley);

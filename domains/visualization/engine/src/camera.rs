@@ -261,6 +261,7 @@ pub struct PinnedView(pub Option<View>);
 
 pub fn camera_plugin(app: &mut App) {
     app.init_resource::<PinnedView>()
+        .init_resource::<ParkedFrom>()
         .insert_resource(CamState {
             mode: CamMode::LineOfSight,
             auto_zoom: true,
@@ -365,18 +366,44 @@ fn scene_size(suspended: bool, parked: bool, upscale: bool, scale: f32, phys: UV
     }
 }
 
-/// Points a parked camera at the sky: nothing to draw, nor to cast a shadow into its view. It
-/// stays where it is, so the grass near it is the same.
-fn park(t: &mut Transform) {
-    let at = t.translation;
-    t.look_at(at + Vec3::Y, Vec3::Z);
+/// How far above where it stood a parked camera is (m): no tree is near enough to fall in its
+/// shadow cascades.
+const PARKED_ABOVE: f32 = 10_000.0;
+
+/// Where the parked main camera stood before it was parked, if it is.
+#[derive(Resource, Default)]
+pub struct ParkedFrom(pub Option<Vec3>);
+
+/// Takes a camera far up into the sky, looking up: nothing to draw, nor to cast a shadow into its
+/// view. Returns where it stood.
+fn park(t: &mut Transform) -> Vec3 {
+    let from = t.translation;
+    t.translation = from + Vec3::Y * PARKED_ABOVE;
+    t.look_at(t.translation + Vec3::Y, Vec3::Z);
+    from
 }
 
-/// After [`update_camera`]: a parked main camera looks up.
-pub fn park_main_camera(rs: Res<RenderScale>, mut cam: Query<&mut Transform, With<MainCamera>>) {
+/// Before [`update_camera`]: a parked main camera is back where it stood, for the camera to move
+/// on from there.
+pub fn unpark_main_camera(from: Res<ParkedFrom>, mut cam: Query<&mut Transform, With<MainCamera>>) {
+    if let Some(at) = from.0 {
+        for mut t in &mut cam {
+            t.translation = at;
+        }
+    }
+}
+
+/// After [`update_camera`]: a parked main camera is far up, looking up; [`ParkedFrom`] says where
+/// it stood.
+pub fn park_main_camera(
+    rs: Res<RenderScale>,
+    mut from: ResMut<ParkedFrom>,
+    mut cam: Query<&mut Transform, With<MainCamera>>,
+) {
+    from.0 = None;
     if rs.parked {
         for mut t in &mut cam {
-            park(&mut t);
+            from.0 = Some(park(&mut t));
         }
     }
 }
@@ -598,11 +625,14 @@ mod tests {
     }
 
     #[test]
-    fn a_parked_camera_looks_straight_up_from_where_it_was() {
+    fn a_parked_camera_looks_straight_up_from_far_above_where_it_was() {
         let mut t = Transform::from_xyz(10.0, 1.7, -5.0).looking_at(Vec3::new(0.0, 5.0, -60.0), Vec3::Y);
-        park(&mut t);
+        let from = park(&mut t);
         assert!(t.forward().y > 0.999, "{:?}", t.forward());
-        assert_eq!(t.translation, Vec3::new(10.0, 1.7, -5.0), "it stays put, so the grass near it does too");
+        assert_eq!(from, Vec3::new(10.0, 1.7, -5.0), "where it was, for the grass");
+        // So high that no tree falls in its shadow cascades.
+        assert!(t.translation.y > from.y + 5000.0, "{}", t.translation);
+        assert_eq!(t.translation.xz(), from.xz());
     }
 
     /// The ray tracer's samples are few, and without ReSTIR (which shares them between pixels and
