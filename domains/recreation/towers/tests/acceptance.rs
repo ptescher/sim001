@@ -886,7 +886,9 @@ fn bindings() -> Bindings<World> {
         .observe("the tags", |w| if w.game.rules.tag_range > 0.0 { "on" } else { "off" })
         .arrange("the tags", |w, v| {
             let (v4, on) = (Rules::v4(), v.as_str() == Some("on"));
-            (w.game.rules.tag_range, w.game.rules.tags) = if on { (v4.tag_range, v4.tags) } else { (0.0, 0) };
+            let r = &mut w.game.rules;
+            (r.tag_range, r.tags, r.chase_speed) =
+                if on { (v4.tag_range, v4.tags, v4.chase_speed) } else { (0.0, 0, 0.0) };
         })
         .observe("the payload of the first Blue drone", |w| match w.game.drones[w.game.drone(Team::Blue, 0)].payload {
             Payload::Tagger => "a tagger",
