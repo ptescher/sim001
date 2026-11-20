@@ -163,9 +163,10 @@ script of steps does not, and a script upload needs contact for a time that grow
 
 ### 4.8 Tempo (logistics): changed
 
-- **Land and swap.** No recharging in flight over the base. A drone lands at its base (or on the
-  pad of a depot its team holds), is on the ground 30 s, and takes off with a full battery. On the
-  pad of a depot it can be tagged.
+- **Land and swap, or recharge slowly.** A drone that lands at its base (or on the pad of a depot
+  its team holds) is on the ground 30 s and takes off with a full battery. A drone that circles
+  over its base instead recharges 4 s each second (60 s to fill a standard drone), so the swap is
+  the better trade but not a requirement (section 10). On the pad of a depot it can be tagged.
 - **Airframes are finite.** A drone that is down (battery empty, tagged, crashed) is lost. The next
   spare takes off from the base after 30 s. With no spares left, the team flies fewer drones.
 - **Battery empty is down**, as now, but now it costs an airframe, so stretching a battery is a bet.
@@ -220,7 +221,7 @@ On a flight controller this stays small: the pilot policy is the `Edge` interfac
 | --- | --- |
 | Guns, hit points, dogfighting | A captain never flies a dogfight; a tag at 8 m is the real counter-drone (an interceptor) and the executor already has it |
 | v3's "EW escort beats the interceptor" | A jammer is loud: a hunter homes on it. The jammer's job is against links, not against hunters |
-| Recharging while flying over the base | Not real. Batteries are swapped on the ground |
+| Recharging at 10 s a second while flying over the base | Too good: kept at 4 s a second, so the real thing (a swap on the ground) pays more |
 | Points for kills | A kill is worth the airframe it costs the enemy; points for it would snowball |
 
 ## 7. Real on SITL and in the field
@@ -279,7 +280,9 @@ Each step starts with its expectations (`tdd`, `writing-specs`), then the arena,
 and ends with its numbers in `plans/towers-rules-v4-results.md`. A mechanic that does not improve
 C2 or C3 is cut, not kept.
 
-1. **The measuring stick** (8.1) on today's game: the baseline.
+1. **The measuring stick** (8.1) on today's game: the baseline. **Done** (`cognition_league nash`):
+   one formation is the whole equilibrium on each layout, and the cycle share is 15 to 20 %
+   (`plans/towers-rules-v4-results.md`, step 1).
 2. **Logistics and loadout**, airframes only: land and swap, spares, the budget. Rules only.
 3. **Height and radio**: the canopy range, towers as nodes, the relay payload.
 4. **Emission and DF**, into the `Belief`.
@@ -290,12 +293,12 @@ C2 or C3 is cut, not kept.
 8. **SITL**: measure each airframe first (v3 section 7: speed, turn, climb, endurance, the landing
    and re-launch), then the top rows of the matrix on SITL.
 
-## 10. Open questions for the owner
+## 10. The owner's decisions (2026-11-19)
 
-- **Hidden loadout?** Hidden makes the draft a guessing game (good for testing reading the
-  opponent); shown makes it a counter-pick. The plan says hidden until seen.
-- **Land and swap on SITL**: 9 of 33 crashes in the 14 games of 2026-11-14 were re-launches. Swapping
-  needs the take-off to be reliable first, or the arena and SITL will disagree.
-- **Tags among real drones**: 8 m with the envelope's 4 m separation, as in the executor game. Is
-  that close enough to fly in the field?
-- **Towers as nodes**: the most likely to snowball. If C7 fails, the first to go.
+- **The loadout is hidden** until a drone is seen (and its payload until it is used).
+- **A battery swap is rewarding, not required.** A drone still recharges in flight over its base,
+  but slowly (4 s each second: a standard drone from empty to full in 60 s). Landing for a swap
+  fills it in 30 s on the ground. So the swap is the better trade, and a team whose re-launches
+  fail (9 of 33 crashes on 2026-11-14 were re-launches) is not stuck.
+- **Tags at 8 m with the envelope's 4 m separation** are fine for real drones.
+- **Towers as nodes stay**, and are the first to go if C7 (no snowball) fails.
