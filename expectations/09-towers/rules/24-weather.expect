@@ -1,0 +1,29 @@
+Feature: The weather
+  In the [[v4 rules]], the weather changes from game to game, and both commanders get it before
+  they choose their [[loadout]]s. Low cloud hides what flies in it: a drone at or above the cloud
+  base sees nothing and nobody sees it, so a low cloud makes the high way blind. Poor visibility
+  shortens what every eye sees. The radio does not care: [[bearing]]s and the radio of the drones
+  are the same in any weather. The wind is stronger too, and a light drone feels it most.
+
+  Expectation: A drone in the cloud is hidden from the ground
+    Given the cloud base is 40 m
+    And the Red scout is near the Blue home tower
+    When the Red scout circles near the Blue home tower for 10 seconds
+    Then the Red scout on the Blue map is unknown
+
+  Expectation: Poor visibility shortens what a tower sees
+    The Red scout is 100 m from the Blue home tower.
+
+    Given the visibility is 80 m
+    And the Red scout is near the Blue home tower
+    When the Red scout circles near the Blue home tower for 10 seconds
+    Then the Red scout on the Blue map is unknown
+
+  Expectation: The weather does not stop a bearing
+    Given the direction finding is on
+    And the cloud base is 40 m
+    And the centre tower is held by Blue
+    And the towers held by Blue are 2
+    And the Red scout is high between the Blue home tower and the centre tower
+    And the emission of the Red scout is loud
+    Then the bearings on the Red scout are 2

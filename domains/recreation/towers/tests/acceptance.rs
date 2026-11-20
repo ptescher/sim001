@@ -296,6 +296,14 @@ impl World {
             .unwrap()
     }
 
+    /// Arranged, the weather has been so all along: Blue forgets the scout it saw a moment ago,
+    /// and looks again.
+    fn weather_all_along(&mut self) {
+        let i = self.scout();
+        self.game.maps[Team::Blue.index()].drones[i] = None;
+        self.game.look();
+    }
+
     /// The nearest point of the forest to `p` (not a lane, a clearing or the lake).
     fn forest_near(&self, p: Vec2) -> Vec2 {
         let m = &self.game.map;
@@ -903,6 +911,23 @@ fn bindings() -> Bindings<World> {
             w.game.drones[i].payload = payload(v);
             w.game.look();
         })
+        .on("the Red scout circles near the Blue home tower for 10 seconds", |w| w.run(10.0))
+        .observe("the cloud base", |w| match w.game.weather.cloud_base {
+            0.0 => "none".to_string(),
+            c => format!("{c:.0} m"),
+        })
+        .arrange("the cloud base", |w, v| {
+            w.game.weather.cloud_base = if v.as_str() == Some("40 m") { 40.0 } else { 0.0 };
+            w.weather_all_along();
+        })
+        .observe("the visibility", |w| match w.game.weather.visibility {
+            0.0 => "unlimited".to_string(),
+            m => format!("{m:.0} m"),
+        })
+        .arrange("the visibility", |w, v| {
+            w.game.weather.visibility = if v.as_str() == Some("80 m") { 80.0 } else { 0.0 };
+            w.weather_all_along();
+        })
         .observe("the jammers", |w| if w.game.rules.jam_bubble > 0.0 { "on" } else { "off" })
         .arrange("the jammers", |w, v| {
             let (v4, on) = (Rules::v4(), v.as_str() == Some("on"));
@@ -1167,8 +1192,14 @@ fn every_test_of_the_section_passes_with_no_window() {
 /// make a clean plan for, and a skipped rule would not show as a failure.
 #[test]
 fn every_expectation_of_the_v4_rules_is_tested_and_passes() {
-    const V4: &[&str] =
-        &["19-logistics.expect", "20-canopy.expect", "21-emission.expect", "22-fight.expect", "23-jammer.expect"];
+    const V4: &[&str] = &[
+        "19-logistics.expect",
+        "20-canopy.expect",
+        "21-emission.expect",
+        "22-fight.expect",
+        "23-jammer.expect",
+        "24-weather.expect",
+    ];
     let a = suite();
     let report = a.run(&mut bindings(), &RunOptions::default());
     let by = expectation_story::coverage(&a.suite, &a.plans);

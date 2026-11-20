@@ -218,3 +218,49 @@ that nobody holds blocks no radio» now says the jammers are off). Population: "
 - The cycle it is for (jammer beats orders, scripts beat the jammer, orders beat scripts) needs a
   captain that scripts its drones and one that orders them second by second. Neither is in the
   population yet: that is the next population work, not a rule.
+
+## Step 7: the weather (2026-11-20)
+
+Built: each game's weather is drawn from its seed (`Rules::weather`): wind up to 10 m/s, low cloud
+(a base of 40 to 90 m) in half the games, poor visibility (100 to 250 m) in half. A drone at or
+above the cloud base sees nothing and nothing sees it; no eye sees past the visibility; bearings
+and the radio are not touched. Both teams get the weather in the `TeamView`. Spec:
+`09-towers/rules/24-weather.expect`. Today's game is unchanged (the step 1 table again).
+
+| Rules | Equilibrium | Formations with 5 % or more | Cycle share | Beats every other |
+| --- | --- | --- | --- | --- |
+| Valley, all v4 rules | raid, hunter 100 % | 1 of 22 | 16 % | none |
+| Chain, all v4 rules | raid, quiet 54 %, balanced, two heavies 32 %, commander 14 % | 3 of 23 | 22 % | none |
+
+| Cell | Valley, step 6 | Valley, step 7 | Chain, step 6 | Chain, step 7 |
+| --- | --- | --- | --- | --- |
+| raid, two heavies over balanced, hunter | −0.78 | **+0.19** | −0.19 | +0.04 |
+| balanced, hunter over raid, quiet | −0.16 | −0.75 | −0.08 | −0.12 |
+
+- In cloud and poor visibility a hunter often has no track, so the heavy drones come back against
+  hunters: the weather moves the answer, which is what it is for.
+
+## Where the v4 rules stand
+
+| Criterion | Target | Today's game | All v4 rules |
+| --- | --- | --- | --- |
+| C1 no dominance | none at 3 errors | raid (valley), commander (chain) | **none** on either layout |
+| C2 equilibrium support | 8 or more with 5 % | 1 | 1 (valley), 3 (chain) |
+| C3 cycle share | 30 to 70 % | 15 to 20 % | 16 to 22 % (32 % at step 5, chain) |
+| C7 no snowball | P(win given first tower) under 0.75 | not measured | not measured |
+
+The counters the plan wanted are there, each seen in a cell of the table: hunters beat heavy
+holders, quiet raiders beat hunters and the commander's direction finding, the commander's
+direction finding beats loud raiders, the weather takes hunters' tracks away. What is narrow is
+the **population**: fixed formations with one change each. A fixed formation cannot react, so most
+rows are dominated by the variant that adds the best tool (a hunter, quiet drones), and the
+equilibrium is a corner. Next, in this order:
+
+1. **A wider population**: parametrised strategies (each drone's post, height, emission, payload
+   and rotation chosen independently, sampled), and reactive captains that use the new tools (a
+   commander that hunts what its towers find, goes quiet on a raid, places a relay, switches a
+   jammer on before an attack). Then C2 and C3 again.
+2. **The scripting captain and the ordering one**, for the jammer's cycle (step 6).
+3. **The pilot's vignettes** (section 8.3): the rules now give the pilot decisions (evade or keep
+   capturing when a hunter is seen, chase or let go, break silence, land or stretch).
+4. C7 (snowball) and the game's length, then SITL for the top rows.

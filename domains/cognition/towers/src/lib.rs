@@ -427,6 +427,16 @@ impl<'u> Match<'u> {
             })
             .map(|f| Flyer { pace: f.speed, ..f })
             .collect();
+        // The weather (v4), drawn after everything today's game draws, so that today's games stay
+        // as they were: wind up to twice today's, low cloud in half the games, poor visibility in half.
+        let mut wind = wind;
+        if rules.weather {
+            let (speed, dir) = (rng.f32() * 2.0 * WIND_MAX, rng.f32() * std::f32::consts::TAU);
+            wind = Vec2::new(dir.cos(), dir.sin()) * speed;
+            game.weather.cloud_base = if rng.bool() { 40.0 + 50.0 * rng.f32() } else { 0.0 };
+            game.weather.visibility = if rng.bool() { 100.0 + 150.0 * rng.f32() } else { 0.0 };
+        }
+        game.weather.wind = wind;
         game.look();
         Match {
             game,
@@ -1105,6 +1115,20 @@ mod tests {
         }
         assert!(sprinted, "it chases faster than it cruises");
         assert_eq!(m.game.drones[red].phase, Phase::Down, "tagged within 2 minutes");
+    }
+
+    #[test]
+    fn with_the_weather_on_each_seed_draws_its_weather_and_today_has_none() {
+        let draws: Vec<_> =
+            (0..40).map(|s| Match::with_rules(Rules { weather: true, ..Rules::v4() }, s).game.weather).collect();
+        assert!(draws.iter().any(|w| w.cloud_base > 0.0) && draws.iter().any(|w| w.cloud_base == 0.0));
+        assert!(draws.iter().any(|w| w.visibility > 0.0) && draws.iter().any(|w| w.visibility == 0.0));
+        assert!(draws.iter().all(|w| w.wind.length() <= 10.0) && draws.iter().any(|w| w.wind.length() > 5.0));
+        let m = Match::with_rules(Rules { weather: true, ..Rules::v4() }, 3);
+        assert_eq!(m.game.weather.wind, m.wind, "the drones fly in the wind of the forecast");
+        assert_eq!(m.game.view(Team::Blue).weather, m.game.weather, "and both teams are told it");
+        let today = Match::new(3);
+        assert_eq!((today.game.weather.cloud_base, today.game.weather.visibility), (0.0, 0.0));
     }
 
     #[test]

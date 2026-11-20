@@ -95,6 +95,7 @@ pub fn build(
         drones,
         enemies: sites.enemies.clone(),
         bearings: vec![],
+        weather: Default::default(),
     };
     let n = rules.drones;
     for s in seen {
