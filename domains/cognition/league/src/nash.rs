@@ -17,7 +17,15 @@ impl Table {
     /// The formations of `rules`' layout, each against each other on both sides of `seeds`.
     /// Each pair is played in a thread of its own.
     pub fn play(rules: Rules, seeds: &[u64]) -> Result<Table, String> {
-        let all = cognition_towers::formations(rules);
+        Table::play_entries(rules, seeds, cognition_towers::formations(rules))
+    }
+
+    /// The same, for these ways to play.
+    pub fn play_entries(
+        rules: Rules,
+        seeds: &[u64],
+        all: Vec<(&'static str, cognition_towers::Make)>,
+    ) -> Result<Table, String> {
         let n = all.len();
         let pairs: Vec<(usize, usize)> = (0..n).flat_map(|i| (i + 1..n).map(move |j| (i, j))).collect();
         let results: Vec<Result<cognition_towers::Comparison, String>> = std::thread::scope(|s| {
@@ -70,6 +78,10 @@ impl Table {
             .collect();
         out += &format!("equilibrium: {}\n", shares.join(", "));
         out += &format!("formations with 5 % or more: {} of {n}\n", mix.iter().filter(|&&p| p >= 0.05).count());
+        out += &format!(
+            "formations within 0.05 of the best against the equilibrium: {}\n",
+            near_answers(&self.cells, &mix, 0.05)
+        );
         out += &format!("cycle share: {:.0} %\n", 100.0 * cycle_share(&self.cells));
         let top: Vec<&str> = dominant(self, 3.0).iter().map(|&i| self.names[i].as_str()).collect();
         let top = if top.is_empty() { "none".to_string() } else { top.join(", ") };
@@ -145,6 +157,14 @@ pub fn equilibrium(cells: &[Vec<f64>]) -> Vec<f64> {
 /// What the best row scores against `mix`.
 pub fn best_answer(cells: &[Vec<f64>], mix: &[f64]) -> f64 {
     cells.iter().map(|row| row.iter().zip(mix).map(|(c, p)| c * p).sum::<f64>()).fold(f64::NEG_INFINITY, f64::max)
+}
+
+/// How many rows score within `margin` of the best row against `mix`: the strategies that are
+/// nearly as good as the equilibrium's, whether or not the linear program put weight on them.
+pub fn near_answers(cells: &[Vec<f64>], mix: &[f64], margin: f64) -> usize {
+    let against: Vec<f64> = cells.iter().map(|row| row.iter().zip(mix).map(|(c, p)| c * p).sum()).collect();
+    let best = against.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    against.iter().filter(|&&a| a >= best - margin).count()
 }
 
 /// Whether each row against itself is 0 and each cell the opposite of its mirror.
@@ -284,6 +304,31 @@ mod tests {
         assert!(r.contains("cycle share: 100 %"), "{r}");
         assert!(r.contains("beat every other at 3 standard errors: none"), "{r}");
         assert!(r.contains("the best answer to the equilibrium gains +0.000"), "{r}");
+    }
+
+    #[test]
+    fn a_table_of_the_population_and_mixes_has_a_row_for_each() {
+        let rules = Rules::v4();
+        let entries = cognition_towers::mixes(rules, 2, 1);
+        let t = Table::play_entries(rules, &[0], entries).unwrap();
+        assert_eq!(t.names, vec!["mix 01", "mix 02"]);
+        assert!(mirrored(&t.cells));
+    }
+
+    #[test]
+    fn near_answers_are_the_rows_within_a_margin_of_the_best_against_the_mix() {
+        // Rock, paper, scissors and a fourth that is rock less a little.
+        let mut c = rps();
+        for (i, row) in c.iter_mut().enumerate() {
+            row.push([0.02, -1.0, 1.0][i]);
+        }
+        c.push(vec![-0.02, -1.0, 1.0, 0.0]);
+        for i in 0..4 {
+            c[3][i] = -c[i][3];
+        }
+        let mix = equilibrium(&c);
+        assert_eq!(near_answers(&c, &mix, 0.05), 4, "all four are within 0.05 of the best: {mix:?}");
+        assert_eq!(near_answers(&ranking(&[1.0, 0.0, -1.0]), &[1.0, 0.0, 0.0], 0.05), 1);
     }
 
     #[test]
