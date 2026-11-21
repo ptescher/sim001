@@ -393,3 +393,38 @@ defends" in the v4 population).
 
 Next: the commander's allocation against a spread (the exploiters' answer to it), the league's
 Claude strategies as exploiters, and the pilot's vignettes.
+
+## Step 11: why a spread beats the commander (2026-11-20)
+
+The exploiter's answer to the commander on the valley (v4): a heavy drone at the centre, two
+standard drones at the east tower, one at the west and one at the enemy home, all quiet, landing to
+swap (+1.52 over the commander on 40 seeds; loud, +1.19; circling instead of landing, the same).
+Traced, one game (seed 3):
+
+- Red (the commander) sends three standard drones to the centre at 50 s against Blue's quiet
+  heavy drone, and **wins it** (the control at Red's end at 75 s).
+- From 75 s its drones leave the centre to recharge with 110 to 150 s of battery left: the margin
+  of the recharge (15 s) is counted at the contest's drain, and a heavy enemy in the circle makes
+  that 4 s a second, so a winner on a contested tower turns for home early. Blue's heavy drone, with
+  the bigger battery and quiet (it reports no battery, so nothing calls it home before its bingo),
+  stays and takes the centre back at 105 s.
+- The leaving drones go to the nearest depot that Red holds (the west tower), all at once, and stay
+  until they are 90 % full; for a minute the whole team is on one depot while Blue takes the east
+  tower and the Red home.
+
+What did **not** change the margin (40 seeds): defending a held tower only with the weight it
+needs (+1.52; kept: it is sound, it has a unit test, and the commander's row in today's game is
+unchanged, +0.28 against +0.27), a staggered rotation (+1.59 to +1.66, worse), a later give-up
+(+1.50), back to work at 60 % (+1.52). Counting the margin at the plain drain helped a little
+(+1.34), not enough to keep.
+
+**Reading.** The commander loses by a chain of reasonable rules that the exploiter found a path
+through (the heavy drone's battery in a contest, quiet drones that never go home early, depot
+recharges that synchronise). That is the game doing what a test game should: a fixed policy that
+looks sensible has a hole, and only a captain that reasons about the opponent's battery, weight
+and silence closes it. Patching the default commander rule by rule is the wrong work: it is the
+baseline, not the model under test.
+
+Next: the models themselves against the exploiters (a Claude captain in the league, and a learned
+one), and the pilot's vignettes (a cut-off drone deciding whether to stay in a contest it is
+winning is one).
