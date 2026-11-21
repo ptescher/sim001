@@ -504,6 +504,11 @@ Term: v4 rules
   [[loadout]], the [[battery swap]], finite airframes, the canopy and the radio, loud and quiet
   drones, taggers, jammers and the weather. Today's game has them off.
 
+Term: Tagger
+  In [[Towers]] with the [[v4 rules]], a payload of a light or a standard drone: it tags an enemy
+  drone within 8 m, and the tagged drone is down. It has two tags, and two more at each
+  [[battery swap]].
+
 Term: Loud
   In [[Towers]] with the [[v4 rules]], a drone that sends its telemetry and its picture to its
   team. The enemy can take a [[bearing]] on it.

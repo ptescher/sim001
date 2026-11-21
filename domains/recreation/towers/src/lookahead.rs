@@ -547,7 +547,16 @@ mod tests {
         let mut belief = Belief::new(rules, Team::Blue);
         view.time = 5.0;
         view.enemies = (0..3)
-            .map(|k| crate::EnemyDrone { k, at: west_at, alt: 50.0, vel: Vec2::ZERO, seen: true, age: 0.0 })
+            .map(|k| crate::EnemyDrone {
+                class: None,
+                payload: None,
+                k,
+                at: west_at,
+                alt: 50.0,
+                vel: Vec2::ZERO,
+                seen: true,
+                age: 0.0,
+            })
             .collect();
         belief.update(&view);
         let orders = vec![Some(Order::Take(west)), Some(Order::Take(0)), Some(Order::Take(0))];

@@ -57,6 +57,7 @@ fn main() -> Result<(), String> {
                         Some(Order::Hold) => "hold".into(),
                         Some(Order::Home) => "home".into(),
                         Some(Order::Land) => "land".into(),
+                        Some(Order::Intercept(k)) => format!("intercept {k}"),
                     };
                     json!({
                         "x": d.at.y, "y": d.at.x, "alt": d.alt,

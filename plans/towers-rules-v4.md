@@ -294,7 +294,9 @@ C2 or C3 is cut, not kept.
    bearings are in the `TeamView`, and two bearings put a drone on the map; a quiet drone sends no
    battery either, and goes loud at bingo. First mixed equilibrium, on the chain (results, step 4).
 5. **The fight**: tagger, hunter, overwatch. The vignette bank starts here: this is where the pilot
-   first has a decision.
+   first has a decision. **Done** for the rules and the arena (`22-fight.expect`, `Order::Intercept`,
+   the `Hunt` post); the vignettes are not built. No strategy beats every other on either layout now
+   (results, step 5).
 6. **Jammer and airtime**: scripts against orders (needs the instruction queue of `plans/actors.md`).
 7. **Conditions and layouts per game**, with the forecast.
 8. **SITL**: measure each airframe first (v3 section 7: speed, turn, climb, endurance, the landing

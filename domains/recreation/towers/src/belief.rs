@@ -302,7 +302,7 @@ mod tests {
     }
 
     fn sighting(k: usize, at: Vec2, vel: Vec2, seen: bool, age: f32) -> EnemyDrone {
-        EnemyDrone { k, at, alt: 60.0, vel, seen, age }
+        EnemyDrone { class: None, payload: None, k, at, alt: 60.0, vel, seen, age }
     }
 
     #[test]

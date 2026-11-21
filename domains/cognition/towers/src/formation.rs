@@ -26,6 +26,9 @@ pub enum Post {
     FarWest,
     FarMid,
     FarEast,
+    /// A hunter (v4, a drone with a tagger): it circles high over the centre, and goes for the
+    /// nearest enemy drone its team sees now.
+    Hunt,
 }
 
 impl Post {
@@ -46,6 +49,8 @@ impl Post {
             (Post::OwnWest | Post::FarWest, _) => Post::outpost(self, team, 0),
             (Post::OwnMid | Post::FarMid, _) => Post::outpost(self, team, 1),
             (Post::OwnEast | Post::FarEast, _) => Post::outpost(self, team, 2),
+            // A hunter's tower is the one it guards.
+            (Post::Hunt, _) => 2,
         }
     }
 }
@@ -75,6 +80,16 @@ impl Formation {
     /// The same, with every drone quiet (or loud).
     pub fn hushed(self, quiet: bool) -> Formation {
         Formation { quiet, ..self }
+    }
+}
+
+/// What a hunter at `at` does: go for the nearest enemy drone its team sees now, or circle high over
+/// the centre tower.
+fn hunt(view: &TeamView, at: glam::Vec2) -> Order {
+    let quarry = view.enemies.iter().filter(|e| e.seen).min_by(|a, b| a.at.distance(at).total_cmp(&b.at.distance(at)));
+    match quarry {
+        Some(e) => Order::Intercept(e.k),
+        None => Order::Circle(view.towers[Post::Hunt.tower(view.team)].at, 60.0),
     }
 }
 
@@ -138,6 +153,7 @@ impl Captain for Formation {
                 match (self.recharging[d.k], self.swap) {
                     (true, true) => Order::Land,
                     (true, false) => Order::Home,
+                    (false, _) if self.posts[d.k] == Post::Hunt => hunt(view, d.at),
                     (false, _) => Order::Take(self.posts[d.k].tower(view.team)),
                 },
             ));
@@ -208,6 +224,19 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
         a[1] = Airframe::new(Class::Standard, recreation_towers::Payload::Relay);
         Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
     };
+    // A tagger on the light drone, and two light spares: 20.
+    let hunter = {
+        let mut a = squad.clone();
+        a[4] = Airframe::new(Class::Light, recreation_towers::Payload::Tagger);
+        Loadout { airframes: [a, vec![Airframe::plain(Class::Light); 2]].concat() }
+    };
+    // Taggers on the first standard drone and the light one, and one light spare: 19.
+    let hunters = {
+        let mut a = squad.clone();
+        a[0] = Airframe::new(Class::Standard, recreation_towers::Payload::Tagger);
+        a[4] = Airframe::new(Class::Light, recreation_towers::Payload::Tagger);
+        Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
+    };
     let entry = |name: &'static str, posts: Option<[Post; 5]>, loadout: &Loadout, swap: bool| -> (&'static str, Make) {
         // A name that says "quiet" is a quiet formation.
         let quiet = name.contains("quiet");
@@ -265,6 +294,23 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     out.push(entry("raid, relay", find("raid"), &relay, true));
     out.push(entry("raid, quiet", find("raid"), &spares, true));
     out.push(entry("balanced, quiet", find("balanced"), &spares, true));
+    let with_hunter = |p: Option<[Post; 5]>| {
+        p.map(|mut p| {
+            p[4] = Hunt;
+            p
+        })
+    };
+    out.push(entry("balanced, hunter", with_hunter(find("balanced")), &hunter, true));
+    out.push(entry("raid, hunter", with_hunter(find("raid")), &hunter, true));
+    out.push(entry(
+        "two hunters",
+        find("balanced").map(|mut p| {
+            (p[0], p[4]) = (Hunt, Hunt);
+            p
+        }),
+        &hunters,
+        true,
+    ));
     out
 }
 
@@ -289,6 +335,7 @@ pub fn set_rule(rules: &mut Rules, setting: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glam::Vec2;
     use recreation_towers::Game;
 
     fn view(team: Team) -> TeamView {
@@ -359,6 +406,42 @@ mod tests {
         let (_, loud) = all.iter().find(|(n, _)| *n == "raid").unwrap();
         let mut c = loud();
         assert!(c.posture(&v, &orders).iter().all(|&(_, p)| p == Posture::Loud));
+    }
+
+    #[test]
+    fn a_hunter_guards_over_the_centre_and_goes_for_the_nearest_enemy_its_team_sees() {
+        let rules = Rules::v4();
+        let mut f = Formation::new("test", [Post::Hunt, Post::Centre, Post::Centre, Post::Centre, Post::West], rules);
+        let mut v = view(Team::Blue);
+        let centre = v.towers[2].at;
+        assert!(matches!(f.decide(&v).unwrap()[0].1, Order::Circle(p, _) if p == centre), "it guards the centre");
+        let enemy = |k, at: Vec2, seen| recreation_towers::EnemyDrone {
+            k,
+            class: None,
+            payload: None,
+            at,
+            alt: 17.0,
+            vel: Vec2::ZERO,
+            seen,
+            age: if seen { 0.0 } else { 30.0 },
+        };
+        v.enemies = vec![
+            enemy(1, centre + Vec2::new(300.0, 0.0), true),
+            enemy(2, centre, true),
+            enemy(3, v.drones[0].at, false),
+        ];
+        assert_eq!(f.decide(&v).unwrap()[0].1, Order::Intercept(2), "the nearest it sees now");
+    }
+
+    #[test]
+    fn the_v4_population_has_hunters_with_taggers() {
+        let rules = Rules::v4();
+        let all = formations(rules);
+        for name in ["balanced, hunter", "raid, hunter", "two hunters"] {
+            let (_, make) = all.iter().find(|(n, _)| *n == name).unwrap_or_else(|| panic!("{name}"));
+            let l = make().loadout(&rules);
+            assert!(l.airframes.iter().take(5).any(|a| a.payload == recreation_towers::Payload::Tagger), "{name}");
+        }
     }
 
     #[test]

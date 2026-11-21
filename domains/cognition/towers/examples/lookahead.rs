@@ -358,6 +358,8 @@ fn publish(m: &Match<'_>, truth: &Truth) {
             .filter(|(_, d)| d.phase != Phase::Down)
             .map(|(k, d)| EnemyDrone {
                 k,
+                class: Some(d.class),
+                payload: None,
                 at: d.at,
                 alt: d.alt,
                 vel: Vec2::new(d.vel.x, d.vel.y),

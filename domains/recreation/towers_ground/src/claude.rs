@@ -181,6 +181,7 @@ fn order(o: Option<Order>, view: &TeamView) -> String {
         Some(Order::Hold) => "hold".into(),
         Some(Order::Home) => "home".into(),
         Some(Order::Land) => "land for a battery swap".into(),
+        Some(Order::Intercept(k)) => format!("intercept enemy drone {k}"),
     }
 }
 

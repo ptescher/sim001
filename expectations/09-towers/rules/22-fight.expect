@@ -1,0 +1,70 @@
+Feature: Tags
+  In the [[v4 rules]], a drone with a [[tagger]] takes enemy drones out of the game. It tags an
+  enemy drone that is within 8 m of it, above the trees or over open ground (a lane, a clearing or
+  the lake). The tagged drone is down, and its team loses the airframe. Under the trees in the
+  forest, a drone cannot be tagged, but nothing can fly there: a low drone is safe only while
+  nobody sees it.
+
+  A tagger has two tags. It gets two more at a [[battery swap]]. It counts for nothing in the circle
+  of a tower. The enemy sees what kind of drone it is, but not that it carries a tagger until it
+  tags.
+
+  Expectation: A tagger tags an enemy drone within 8 m
+    Given the tags are on
+    And the payload of the first Blue drone is a tagger
+    And the tags left of the first Blue drone are 2
+    And the first Blue drone is 130 m from the west tower
+    And the Red scout is 5 m from the first Blue drone
+    When the first Blue drone closes on the Red scout
+    Then the condition of the Red scout is down
+    And the tags left of the first Blue drone are 1
+    And the payload of the first Blue drone on the Red map is a tagger
+
+  Expectation: A drone under the trees cannot be tagged
+    Given the tags are on
+    And the payload of the first Blue drone is a tagger
+    And the tags left of the first Blue drone are 2
+    And the first Blue drone is 130 m from the west tower
+    And the Red scout is low under the trees, 7 m below the first Blue drone
+    When the first Blue drone closes on the Red scout
+    Then the condition of the Red scout is flying
+    And the tags left of the first Blue drone are 2
+
+  Expectation: A tagger with no tags left tags nothing
+    Given the tags are on
+    And the payload of the first Blue drone is a tagger
+    And the tags left of the first Blue drone are 0
+    And the first Blue drone is 130 m from the west tower
+    And the Red scout is 5 m from the first Blue drone
+    When the first Blue drone closes on the Red scout
+    Then the condition of the Red scout is flying
+    And the payload of the first Blue drone on the Red map is unknown
+
+  Expectation: A swap gives a tagger two tags
+    Given the tags are on
+    And the battery swap is on
+    And the payload of the first Blue drone is a tagger
+    And the tags left of the first Blue drone are 0
+    And the first Blue drone is at its base
+    When the first Blue drone waits on the ground for its swap
+    Then the tags left of the first Blue drone are 2
+
+  Expectation: A tagger counts for nothing in a circle
+    Given the tags are on
+    And the payload of the first Blue drone is a tagger
+    And the west tower is neutral
+    And the control of the west tower is 0 %
+    And the first Blue drone is in the west circle
+    And the Blue drones in the west circle are 1
+    When the first Blue drone circles the west tower for 20 seconds
+    Then the control of the west tower is 0 %
+
+  Expectation: A tagger that chases uses its battery twice as fast
+    A chase is faster than a cruise: more than 20 m/s.
+
+    Given the tags are on
+    And the payload of the first Blue drone is a tagger
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is 130 m from the west tower
+    When the first Blue drone chases for 10 seconds
+    Then the battery of the first Blue drone is 80 s

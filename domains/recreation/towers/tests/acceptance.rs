@@ -80,6 +80,7 @@ impl World {
             Some(Order::Hold) => "hold".into(),
             Some(Order::Home) => "go home".into(),
             Some(Order::Land) => "land".into(),
+            Some(Order::Intercept(_)) => "intercept".into(),
             Some(Order::Goto(_)) => "go to a point".into(),
             Some(Order::Circle(..)) => "circle a point".into(),
         }
@@ -295,6 +296,16 @@ impl World {
             .unwrap()
     }
 
+    /// The nearest point of the forest to `p` (not a lane, a clearing or the lake).
+    fn forest_near(&self, p: Vec2) -> Vec2 {
+        let m = &self.game.map;
+        (0..40)
+            .flat_map(|r| (0..16).map(move |a| (r as f32 * 5.0, a as f32 * std::f32::consts::TAU / 16.0)))
+            .map(|(r, a)| p + r * Vec2::new(a.cos(), a.sin()))
+            .find(|&q| !m.open(q))
+            .expect("forest within 200 m")
+    }
+
     /// A point 100 m from the Red home tower, towards the middle of the field.
     fn shadow(&self) -> Vec2 {
         self.game.map.towers[4] - Vec2::new(100.0, 0.0)
@@ -359,6 +370,17 @@ impl World {
                 Some(LOW),
             ),
             "low over the lake" => (new("low over the lake"), self.game.map.lake.at, Some(LOW)),
+            "5 m from the first Blue drone" => {
+                let b = self.game.drones[blue];
+                (new("5 m from the first Blue drone"), b.at + Vec2::new(5.0, 0.0), Some(b.alt))
+            }
+            // The two drones over the nearest forest: the scout low under the trees, the Blue drone
+            // just above them.
+            "low under the trees, 7 m below the first Blue drone" => {
+                let at = self.forest_near(self.game.drones[blue].at);
+                self.put(blue, at, Some(LOW + 7.0));
+                (new("low under the trees, 7 m below the first Blue drone"), at, Some(LOW))
+            }
             // 268 m from the Blue home tower and from the centre tower: past what either sees, within
             // what both find.
             "high between the Blue home tower and the centre tower" => (
@@ -861,6 +883,61 @@ fn bindings() -> Bindings<World> {
             w.game.drones[i].payload = if v.as_str() == Some("a relay") { Payload::Relay } else { Payload::Camera };
             w.game.look();
         })
+        .observe("the tags", |w| if w.game.rules.tag_range > 0.0 { "on" } else { "off" })
+        .arrange("the tags", |w, v| {
+            let (v4, on) = (Rules::v4(), v.as_str() == Some("on"));
+            let r = &mut w.game.rules;
+            (r.tag_range, r.tags, r.chase_speed) =
+                if on { (v4.tag_range, v4.tags, v4.chase_speed) } else { (0.0, 0, 0.0) };
+        })
+        .observe("the payload of the first Blue drone", |w| match w.game.drones[w.game.drone(Team::Blue, 0)].payload {
+            Payload::Tagger => "a tagger",
+            _ => "a camera",
+        })
+        .arrange("the payload of the first Blue drone", |w, v| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.drones[i].payload = if v.as_str() == Some("a tagger") { Payload::Tagger } else { Payload::Camera };
+        })
+        .observe("the tags left of the first Blue drone", |w| w.game.tags_left[w.game.drone(Team::Blue, 0)] as f64)
+        .arrange("the tags left of the first Blue drone", |w, v| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.tags_left[i] = v.as_f64().unwrap_or(0.0) as u32;
+        })
+        .observe("the condition of the Red scout", |w| match w.game.drones[w.scout()].phase {
+            Phase::Flying => "flying",
+            Phase::Ground => "on the ground",
+            Phase::Down => "down",
+        })
+        .observe("the payload of the first Blue drone on the Red map", |w| {
+            let k = 0;
+            let v = w.game.view(Team::Red);
+            match v.enemies.iter().find(|e| e.k == k).and_then(|e| e.payload) {
+                Some(Payload::Tagger) => "a tagger",
+                _ => "unknown",
+            }
+        })
+        .arrange("the payload of the first Blue drone on the Red map", |w, v| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.revealed[i] = v.as_str() == Some("a tagger");
+        })
+        // The two meet where the Givens put the first Blue drone: 5 m apart, or the Blue drone 7 m
+        // above a scout under the trees (already placed so).
+        .on("the first Blue drone closes on the Red scout", |w| {
+            let (blue, scout) = (w.game.drones[w.game.drone(Team::Blue, 0)], w.scout());
+            let under = w.scout_place.is_some_and(|(n, _)| n.starts_with("low under the trees"));
+            if !under {
+                w.put(scout, blue.at + Vec2::new(5.0, 0.0), Some(blue.alt));
+            }
+            w.run(1.0);
+        })
+        .on("the first Blue drone waits on the ground for its swap", |w| w.run(30.0))
+        // At 22 m/s, faster than a cruise: the referee knows only the drone's speed.
+        .on("the first Blue drone chases for 10 seconds", |w| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.drones[i].vel = Vec2::new(22.0, 0.0);
+            w.run(10.0);
+        })
+        .on("the first Blue drone circles the west tower for 20 seconds", |w| w.run(20.0))
         .observe("the direction finding", |w| if w.game.rules.df_range > 0.0 { "on" } else { "off" })
         .arrange("the direction finding", |w, v| {
             w.game.rules.df_range = if v.as_str() == Some("on") { Rules::v4().df_range } else { 0.0 };
@@ -1053,7 +1130,7 @@ fn every_test_of_the_section_passes_with_no_window() {
 /// make a clean plan for, and a skipped rule would not show as a failure.
 #[test]
 fn every_expectation_of_the_v4_rules_is_tested_and_passes() {
-    const V4: &[&str] = &["19-logistics.expect", "20-canopy.expect", "21-emission.expect"];
+    const V4: &[&str] = &["19-logistics.expect", "20-canopy.expect", "21-emission.expect", "22-fight.expect"];
     let a = suite();
     let report = a.run(&mut bindings(), &RunOptions::default());
     let by = expectation_story::coverage(&a.suite, &a.plans);

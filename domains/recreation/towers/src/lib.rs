@@ -250,6 +250,16 @@ pub struct Rules {
     /// (m); 0 for no direction finding.
     #[serde(default)]
     pub df_range: f32,
+    /// A drone with a tagger tags an enemy drone this near (m, in the air); 0 for no tags. It has
+    /// [`Rules::tags`] of them, and as many again at each battery swap.
+    #[serde(default)]
+    pub tag_range: f32,
+    #[serde(default)]
+    pub tags: u32,
+    /// A drone with a tagger that flies faster than this (m/s) chases, and uses twice the battery;
+    /// 0 for no such rule.
+    #[serde(default)]
+    pub chase_speed: f32,
 }
 
 impl Default for Rules {
@@ -300,6 +310,9 @@ impl Default for Rules {
             canopy_range: 0.0,
             relay_range: 0.0,
             df_range: 0.0,
+            tag_range: 0.0,
+            tags: 0,
+            chase_speed: 0.0,
         }
     }
 }
@@ -338,6 +351,9 @@ impl Rules {
             canopy_range: 250.0,
             relay_range: 300.0,
             df_range: 400.0,
+            tag_range: 8.0,
+            tags: 2,
+            chase_speed: 20.0,
             ..Rules::default()
         }
     }
@@ -541,6 +557,10 @@ pub struct Game {
     pub ground_for: Vec<f32>,
     /// Whether each drone sends (v4).
     pub posture: Vec<Posture>,
+    /// The tags each drone with a tagger has left (v4).
+    pub tags_left: Vec<u32>,
+    /// Each drone has shown its payload to the enemy, by using it.
+    pub revealed: Vec<bool>,
 }
 
 impl Game {
@@ -599,6 +619,8 @@ impl Game {
             spares: [vec![], vec![]],
             ground_for: vec![0.0; n],
             posture: vec![Posture::Loud; n],
+            tags_left: vec![rules.tags; n],
+            revealed: vec![false; n],
         }
     }
 
@@ -657,6 +679,7 @@ impl Game {
         self.time += dt;
         self.capture(dt);
         self.power(dt);
+        self.fight();
         self.jam(dt);
         self.score(dt);
         self.look();
@@ -790,7 +813,9 @@ impl Game {
                         .map(|e| e.class.weight())
                         .sum()
                 });
-                change -= 1.0 + r.contest_drain * enemy;
+                // A tagger that chases (faster than the chase speed) uses twice the battery.
+                let chase = r.chase_speed > 0.0 && d.payload == Payload::Tagger && d.vel.length() > r.chase_speed;
+                change -= if chase { 2.0 } else { 1.0 } + r.contest_drain * enemy;
             }
             let at_base = d.at.distance(r.base(d.team)) <= r.pad_radius;
             // The swap: on the ground at its base for the swap time, a drone gets a full battery.
@@ -799,6 +824,7 @@ impl Game {
             if swapping {
                 if reached(self.ground_for[i], r.swap_time) {
                     self.battery[i] = full;
+                    self.tags_left[i] = r.tags;
                 }
                 continue;
             }
@@ -819,6 +845,44 @@ impl Game {
         }
     }
 
+    /// Tags (v4): each drone with a tagger and a tag left takes out the nearest enemy drone within
+    /// [`Rules::tag_range`] that it can reach: above the treetops, or over open ground. The tagged
+    /// drone is down; the tagger has shown what it carries.
+    fn fight(&mut self) {
+        let r = self.rules;
+        if r.tag_range <= 0.0 {
+            return;
+        }
+        for i in 0..self.drones.len() {
+            let t = self.drones[i];
+            if t.payload != Payload::Tagger || t.phase != Phase::Flying || self.tags_left[i] == 0 {
+                continue;
+            }
+            let reach = |e: &Drone| (e.at.distance_squared(t.at) + (e.alt - t.alt).powi(2)).sqrt();
+            let target = (0..self.drones.len())
+                .filter(|&j| {
+                    let e = &self.drones[j];
+                    e.team != t.team
+                        && e.phase == Phase::Flying
+                        && reach(e) <= r.tag_range
+                        && (e.alt >= r.treetop || self.map.open(e.at))
+                })
+                .min_by(|&a, &b| reach(&self.drones[a]).total_cmp(&reach(&self.drones[b])));
+            if let Some(j) = target {
+                // The tagged drone's last picture shows its team the tagger, if its team hears it.
+                if self.heard(j) {
+                    let s =
+                        DroneSighting { at: t.at, alt: t.alt, vel: t.vel, phase: t.phase, time: self.time, seen: true };
+                    self.maps[self.drones[j].team.index()].drones[i] = Some(s);
+                }
+                self.drones[j].phase = Phase::Down;
+                self.down_for[j] = Some(0.0);
+                self.tags_left[i] -= 1;
+                self.revealed[i] = true;
+            }
+        }
+    }
+
     /// Drone `i` is on the ground at its base again, with a full battery.
     fn respawn(&mut self, i: usize) {
         let team = self.drones[i].team;
@@ -832,11 +896,15 @@ impl Game {
         };
         self.battery[i] = self.rules.battery(self.drones[i].class);
         self.down_for[i] = None;
+        self.tags_left[i] = self.rules.tags;
     }
 
-    /// Is drone `d` in the circle of the tower at `at`?
+    /// Is drone `d` in the circle of the tower at `at`? A tagger counts for nothing in a circle.
     fn in_circle(&self, d: &Drone, at: Vec2) -> bool {
-        d.phase == Phase::Flying && d.at.distance(at) <= self.rules.circle_radius && d.alt < self.rules.circle_ceiling
+        d.phase == Phase::Flying
+            && d.payload != Payload::Tagger
+            && d.at.distance(at) <= self.rules.circle_radius
+            && d.alt < self.rules.circle_ceiling
     }
 
     fn capture(&mut self, dt: f32) {
@@ -1450,6 +1518,96 @@ mod tests {
         run(&mut g, 31.0);
         assert_eq!(g.posture[i], Posture::Loud, "at {} s it goes loud", g.battery[i]);
         assert!((g.reported[i] - g.battery[i]).abs() < 1e-3, "and reports again");
+    }
+
+    /// Blue's first drone, a tagger, high at `at`; the Red scout at `at + off`, `alt` high.
+    fn duel(at: Vec2, off: Vec2, alt: f32) -> (Game, usize, usize) {
+        let mut g = Game::new(Rules::v4());
+        let (i, j) = (g.drone(Team::Blue, 0), g.drone(Team::Red, 0));
+        g.drones[i] = Drone { at, alt: 24.0, phase: Phase::Flying, payload: Payload::Tagger, ..g.drones[i] };
+        g.drones[j] = Drone { at: at + off, alt, phase: Phase::Flying, ..g.drones[j] };
+        (g, i, j)
+    }
+
+    #[test]
+    fn the_v4_rules_tag_at_8_m_with_two_tags() {
+        assert_eq!((Rules::v4().tag_range, Rules::v4().tags), (8.0, 2));
+        assert_eq!(Rules::default().tag_range, 0.0);
+    }
+
+    #[test]
+    fn a_tagger_takes_out_an_enemy_within_range_above_the_trees_and_shows_what_it_is() {
+        let (mut g, i, j) = duel(Vec2::new(-200.0, 0.0), Vec2::new(5.0, 0.0), 28.0);
+        g.step(0.1);
+        assert_eq!(g.drones[j].phase, Phase::Down);
+        assert_eq!(g.tags_left[i], 1);
+        let v = g.view(Team::Red);
+        let me = v.enemies.iter().find(|e| e.k == 0).expect("Red saw it");
+        assert_eq!((me.class, me.payload), (Some(Class::Standard), Some(Payload::Tagger)));
+        let (mut far, _, j) = duel(Vec2::new(-200.0, 0.0), Vec2::new(9.0, 0.0), 24.0);
+        far.step(0.1);
+        assert_eq!(far.drones[j].phase, Phase::Flying, "9 m is too far");
+        let (mut empty, i, j) = duel(Vec2::new(-200.0, 0.0), Vec2::new(5.0, 0.0), 24.0);
+        empty.tags_left[i] = 0;
+        empty.step(0.1);
+        assert_eq!(empty.drones[j].phase, Phase::Flying, "no tags left");
+        assert!(empty.view(Team::Red).enemies.iter().all(|e| e.payload.is_none()), "it has not shown it");
+    }
+
+    #[test]
+    fn a_low_drone_is_safe_from_tags_under_the_trees_but_not_over_open_ground() {
+        let g = Game::new(Rules::v4());
+        let forest = (0..400).map(|k| Vec2::new(-300.0, -200.0 + k as f32)).find(|&p| !g.map.open(p)).unwrap();
+        let (mut under, _, j) = duel(forest, Vec2::ZERO, 17.0);
+        under.step(0.1);
+        assert_eq!(under.drones[j].phase, Phase::Flying, "under the trees");
+        let lane = g.map.lanes[0].at(150.0);
+        assert!(g.map.open(lane));
+        let (mut open, _, j) = duel(lane, Vec2::ZERO, 17.0);
+        open.step(0.1);
+        assert_eq!(open.drones[j].phase, Phase::Down, "low over a lane");
+    }
+
+    #[test]
+    fn a_tagger_counts_for_nothing_in_a_circle_and_a_swap_rearms_it() {
+        let mut g = Game::new(Rules::v4());
+        let i = g.drone(Team::Blue, 0);
+        let west = g.towers[1].at;
+        g.drones[i] = Drone {
+            at: west + Vec2::new(30.0, 0.0),
+            alt: 17.0,
+            phase: Phase::Flying,
+            payload: Payload::Tagger,
+            ..g.drones[i]
+        };
+        run(&mut g, 10.0);
+        assert_eq!((g.towers[1].control, g.towers[1].contested), (0.0, false));
+        let base = g.rules.base(Team::Blue);
+        g.drones[i] = Drone { at: base, alt: 0.0, phase: Phase::Ground, ..g.drones[i] };
+        g.tags_left[i] = 0;
+        run(&mut g, 30.0);
+        assert_eq!(g.tags_left[i], 2);
+    }
+
+    #[test]
+    fn a_tagger_faster_than_the_chase_speed_uses_twice_the_battery() {
+        assert_eq!(Rules::v4().chase_speed, 20.0);
+        let (mut g, i, _) = duel(Vec2::new(-200.0, 0.0), Vec2::new(300.0, 0.0), 50.0);
+        g.battery[i] = 100.0;
+        g.drones[i].vel = Vec2::new(22.0, 0.0);
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 80.0).abs() < 0.01, "{}", g.battery[i]);
+        g.drones[i].vel = Vec2::new(16.0, 0.0);
+        run(&mut g, 10.0);
+        assert!((g.battery[i] - 70.0).abs() < 0.01, "cruising: {}", g.battery[i]);
+    }
+
+    #[test]
+    fn a_tagged_drone_is_a_lost_airframe() {
+        let (mut g, _, j) = duel(Vec2::new(-200.0, 0.0), Vec2::new(5.0, 0.0), 28.0);
+        g.spares[1] = vec![Airframe::plain(Class::Heavy)];
+        run(&mut g, 31.0);
+        assert_eq!((g.drones[j].phase, g.drones[j].class), (Phase::Ground, Class::Heavy), "the spare");
     }
 
     /// The Red scout high at `at`, Blue holding the centre if `centre`.

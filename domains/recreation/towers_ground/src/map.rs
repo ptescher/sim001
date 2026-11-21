@@ -102,7 +102,16 @@ pub fn build(
         if (s.enemy / n == team.index()) || s.enemy >= 2 * n {
             continue;
         }
-        let mine = EnemyDrone { k, at: s.at, alt: s.alt, vel: s.vel, seen: s.age <= SEEN_WITHIN, age: s.age };
+        let mine = EnemyDrone {
+            class: None,
+            payload: None,
+            k,
+            at: s.at,
+            alt: s.alt,
+            vel: s.vel,
+            seen: s.age <= SEEN_WITHIN,
+            age: s.age,
+        };
         match view.enemies.iter_mut().find(|e| e.k == k) {
             // The fresher report wins: the sites' picture of it, or the drone's.
             Some(e) if e.seen && !mine.seen || e.age <= mine.age && (e.seen || !mine.seen) => {}
@@ -193,6 +202,8 @@ mod tests {
         let n = rules.drones;
         s.enemies.push(EnemyDrone {
             k: 0,
+            class: None,
+            payload: None,
             at: Vec2::new(1.0, 1.0),
             alt: 10.0,
             vel: Vec2::ZERO,

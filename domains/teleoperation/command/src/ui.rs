@@ -522,6 +522,7 @@ pub fn order_text(order: Option<Order>, view: &TeamView) -> String {
         Some(Order::Hold) => "HOLD".into(),
         Some(Order::Home) => "HOME".into(),
         Some(Order::Land) => "LAND".into(),
+        Some(Order::Intercept(k)) => format!("INTERCEPT {k}"),
     }
 }
 
