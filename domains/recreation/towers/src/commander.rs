@@ -296,6 +296,28 @@ impl Commander {
                 *o = None;
             }
         }
+        // A held tower under threat keeps the weight that wins it, the enemy's seen near it and one
+        // drone's more, nearest first; the rest go to towers the team does not hold.
+        for t in (0..view.towers.len()).filter(|&t| threatened(t)) {
+            let at = view.towers[t].at;
+            let enemy: f32 = view
+                .enemies
+                .iter()
+                .filter(|e| e.seen && e.at.distance(at) <= near)
+                .map(|e| self.rules.class(e.k).weight())
+                .sum();
+            let mut on_it: Vec<usize> =
+                (0..self.orders.len()).filter(|&k| linked[k] && self.orders[k] == Some(Order::Take(t))).collect();
+            on_it.sort_by(|&a, &b| view.drones[a].at.distance(at).total_cmp(&view.drones[b].at.distance(at)));
+            let mut weight = 0.0;
+            for k in on_it {
+                if weight >= enemy + 1.0 {
+                    self.orders[k] = None;
+                } else {
+                    weight += self.rules.class(k).weight();
+                }
+            }
+        }
         let on = |orders: &[Option<Order>], t: usize| orders.contains(&Some(Order::Take(t)));
         let nearest = |orders: &[Option<Order>], t: usize, any: bool| {
             view.drones
@@ -506,6 +528,43 @@ mod tests {
         assert_eq!(g.rules.class(3), crate::Class::Heavy);
         c.decide(&g.view(Team::Blue));
         assert_eq!(c.order(3), Some(Order::Take(centre)));
+    }
+
+    #[test]
+    fn a_held_tower_under_threat_keeps_enough_weight_to_win_and_lets_the_rest_go() {
+        // Blue holds the west tower with its three standard drones on it; one Red light drone is
+        // seen near it (a weight of 0.5). Two standard drones outweigh it by more than one drone's
+        // weight; the third goes for a tower Blue does not hold.
+        let mut g = Game::new(Rules { drones: 3, ..Rules::default() });
+        let west = g.tower("west");
+        (g.towers[west].holder, g.towers[west].control) = (Some(Team::Blue), 1.0);
+        let at = g.towers[west].at;
+        for k in 0..3 {
+            let i = g.drone(Team::Blue, k);
+            g.drones[i] = crate::Drone {
+                at: at + Vec2::new(10.0 * k as f32, 0.0),
+                alt: 17.0,
+                phase: Phase::Flying,
+                ..g.drones[i]
+            };
+        }
+        let red = g.drone(Team::Red, 0);
+        g.drones[red] = crate::Drone {
+            at: at + Vec2::new(0.0, 90.0),
+            alt: 50.0,
+            phase: Phase::Flying,
+            class: crate::Class::Light,
+            ..g.drones[red]
+        };
+        g.look();
+        let mut c = Commander::new(g.rules).with_lookahead(false);
+        for k in 0..3 {
+            c.assign(k, Some(Order::Take(west)));
+        }
+        let orders = decide(&mut c, &g);
+        let on = orders.iter().filter(|o| **o == Some(Order::Take(west))).count();
+        assert_eq!(on, 2, "{orders:?}");
+        assert!(orders.iter().all(|o| matches!(o, Some(Order::Take(_)))), "the third has a tower to take: {orders:?}");
     }
 
     /// Drone 0 flies over the west tower with `battery` s left; the others wait at the base.
