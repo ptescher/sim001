@@ -130,9 +130,11 @@ impl<C: Captain> Captain for Loaded<C> {
 }
 
 impl Captain for Formation {
-    fn posture(&mut self, _view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Posture)> {
+    /// A drone with a jammer has it on; the rest are quiet or loud, as the formation is.
+    fn posture(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Posture)> {
         let p = if self.quiet { Posture::Quiet } else { Posture::Loud };
-        orders.iter().map(|&(k, _)| (k, p)).collect()
+        let jams = |k: usize| view.drones.iter().any(|d| d.k == k && d.payload == recreation_towers::Payload::Jammer);
+        orders.iter().map(|&(k, _)| (k, if jams(k) { Posture::Jam } else { p })).collect()
     }
 
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
@@ -237,6 +239,12 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
         a[4] = Airframe::new(Class::Light, recreation_towers::Payload::Tagger);
         Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
     };
+    // A jammer on the third standard drone, and one light spare: 19.
+    let jammer = {
+        let mut a = squad.clone();
+        a[2] = Airframe::new(Class::Standard, recreation_towers::Payload::Jammer);
+        Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
+    };
     let entry = |name: &'static str, posts: Option<[Post; 5]>, loadout: &Loadout, swap: bool| -> (&'static str, Make) {
         // A name that says "quiet" is a quiet formation.
         let quiet = name.contains("quiet");
@@ -301,6 +309,8 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
         })
     };
     out.push(entry("balanced, hunter", with_hunter(find("balanced")), &hunter, true));
+    out.push(entry("raid, jammer", find("raid"), &jammer, true));
+    out.push(entry("balanced, jammer", find("balanced"), &jammer, true));
     out.push(entry("raid, hunter", with_hunter(find("raid")), &hunter, true));
     out.push(entry(
         "two hunters",
@@ -431,6 +441,19 @@ mod tests {
             enemy(3, v.drones[0].at, false),
         ];
         assert_eq!(f.decide(&v).unwrap()[0].1, Order::Intercept(2), "the nearest it sees now");
+    }
+
+    #[test]
+    fn a_formation_switches_on_the_jammers_it_has() {
+        let rules = Rules::v4();
+        let mut f = Formation::new("test", [Post::Centre; 5], rules).hushed(true);
+        let mut v = view(Team::Blue);
+        v.drones[2].payload = recreation_towers::Payload::Jammer;
+        let orders = f.decide(&v).unwrap();
+        let p = f.posture(&v, &orders);
+        assert_eq!(p[2].1, Posture::Jam);
+        assert_eq!(p[0].1, Posture::Quiet);
+        assert!(formations(rules).iter().any(|(n, _)| *n == "raid, jammer"));
     }
 
     #[test]

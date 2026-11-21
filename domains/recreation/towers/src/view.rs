@@ -73,6 +73,9 @@ pub struct OwnDrone {
     /// What is left of its battery (s), as the drone last said (0 if the drones have none).
     #[serde(default)]
     pub battery: f32,
+    /// What it carries (v4).
+    #[serde(default)]
+    pub payload: Payload,
 }
 
 fn in_contact() -> bool {
@@ -204,6 +207,7 @@ impl Game {
                     heard,
                     silent: self.silent[i],
                     battery: self.reported[i],
+                    payload: d.payload,
                 }
             })
             .collect();

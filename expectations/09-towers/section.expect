@@ -228,10 +228,10 @@ Vocabulary:
   State: the direction finding is off | on
     Set: {value}
     Shows: on: a fort or the spire that a team holds takes a bearing on each loud enemy drone within 400 m
-  State: the emission of the first Blue drone is loud | quiet
+  State: the emission of the first Blue drone is loud | quiet | jamming
     Set: select B1 and press {value}
     Shows: quiet: the card of B1 shows QUIET. B1 hears orders, and sends no telemetry and no picture
-  State: the emission of the Red scout is loud | quiet
+  State: the emission of the Red scout is loud | quiet | jamming
     Shows: quiet: Red's scout sends nothing
   State: the bearings on the Red scout are 0..5
     Shows: the Blue map shows {value} lines from Blue's towers towards the Red scout
@@ -239,11 +239,19 @@ Vocabulary:
     Say: wait 10 seconds while B1 flies quiet
   Event: the first Blue drone flies to the west circle
     Say: send B1 to the west tower, and wait until it circles the tower low
+  # The v4 rules: jammers.
+  State: the jammers are off | on
+    Set: {value}
+    Shows: on: a drone with a jammer that is on cuts the radio of the enemy drones within 100 m
+  State: the payload of the Red scout is a camera | a jammer
+    Shows: a jammer: the Red scout carries a jammer
+  Event: the first Blue drone jams for 10 seconds
+    Say: select B1, press JAM, and wait 10 seconds
   # The v4 rules: tags.
   State: the tags are off | on
     Set: {value}
     Shows: on: a drone with a tagger takes out an enemy drone within 8 m of it
-  State: the payload of the first Blue drone is a camera | a tagger
+  State: the payload of the first Blue drone is a camera | a tagger | a jammer
     Set: give the first Blue drone {value} in the loadout
     Shows: a tagger: the card of B1 shows TAGGER and the tags it has left
   State: the tags left of the first Blue drone are 0..2
@@ -545,5 +553,7 @@ Vocabulary:
     And the emission of the first Blue drone is loud
     And the emission of the Red scout is loud
     And the tags are off
+    And the jammers are off
+    And the payload of the Red scout is a camera
     And the payload of the first Blue drone is a camera
     And the payload of the first Blue drone on the Red map is unknown

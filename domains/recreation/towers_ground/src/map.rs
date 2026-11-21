@@ -65,6 +65,7 @@ pub fn build(
                 heard: true,
                 silent: 0.0,
                 battery: 0.0,
+                payload: Default::default(),
             };
             match own.get(k).copied().flatten() {
                 Some(r) => {

@@ -192,3 +192,29 @@ Today's game is unchanged: `nash --seeds 100` without v4 gives the step 1 table 
 - The equilibrium is still narrow (C2 wants 8 or more): the population is small, and hunters
   are worth a lot to any formation (+0.66 to +1.75), so most rows are dominated by their hunter
   variant.
+
+## Step 6: jammers (2026-11-20)
+
+Built: a drone with a jammer and `Posture::Jam` cuts the radio of the enemy drones within 100 m
+(a shadow that moves with it), is found from 800 m by one enemy fort or spire (a fix, not a
+bearing), shows what it carries, and uses 1.5 s of battery a second. `OwnDrone::payload` tells a
+captain what each of its drones carries. Spec: `09-towers/rules/23-jammer.expect` (and «A tower
+that nobody holds blocks no radio» now says the jammers are off). Population: "raid, jammer" and
+"balanced, jammer" (a jammer on the third standard drone, one light spare, 19).
+
+| Rules | Equilibrium | Formations with 5 % or more | Cycle share | Beats every other |
+| --- | --- | --- | --- | --- |
+| Valley, v4 step 6 | balanced, hunter 87 %, raid, hunter 8 %, raid, quiet 4 % | 2 of 22 | 19 % | none |
+| Chain, v4 step 6 | raid, quiet 50 %, two hunters 29 %, commander 21 % | 3 of 23 | 31 % | none |
+
+| Cell | Valley | Chain |
+| --- | --- | --- |
+| raid, jammer over raid | −0.04 | −0.43 |
+| commander over raid, jammer | −0.43 | +1.07 |
+| raid, jammer over raid, quiet | −0.47 | −1.39 |
+
+- The jammer changes nothing between fixed formations: they never need the radio. Against the
+  commander it costs more than it gives on the chain, where one tower finds it from 800 m.
+- The cycle it is for (jammer beats orders, scripts beat the jammer, orders beat scripts) needs a
+  captain that scripts its drones and one that orders them second by second. Neither is in the
+  population yet: that is the next population work, not a rule.
