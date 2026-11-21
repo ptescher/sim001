@@ -1028,10 +1028,11 @@ fn bindings() -> Bindings<World> {
             let squad = Loadout::squad(&w.game.rules);
             let words = v.as_str().unwrap_or_default().to_string();
             let airframes = match words.as_str() {
-                "today's squad and two light spares" => {
-                    [squad.airframes.clone(), vec![Airframe::plain(Class::Light); 2]].concat()
+                "today's squad and a light spare" => {
+                    [squad.airframes.clone(), vec![Airframe::plain(Class::Light)]].concat()
                 }
                 "seven standard drones" => vec![Airframe::plain(Class::Standard); 7],
+                "five heavy drones" => vec![Airframe::plain(Class::Heavy); 5],
                 _ => squad.airframes,
             };
             w.loadout = (words, Loadout { airframes });

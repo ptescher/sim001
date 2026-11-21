@@ -338,6 +338,13 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     out.push(tactician("tactician, loud", &hunter, false));
     out.push(tactician("tactician, jammer", &jam_hunt, true));
     out.push(tactician("tactician, heavies", &heavy_hunt, true));
+    let defender = hunter.clone().fitted(&rules);
+    out.push((
+        "tactician, defends",
+        Box::new(move || {
+            Box::new(Loaded { captain: crate::Tactician::new(rules).defending(), loadout: defender.clone() })
+        }),
+    ));
     out.push(entry("balanced, jammer", find("balanced"), &jammer, true));
     out.push(entry("raid, hunter", with_hunter(find("raid")), &hunter, true));
     out.push(entry(
@@ -354,65 +361,145 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     out
 }
 
-/// `n` ways to play drawn from `seed` (v4): for each drone an airframe, a payload and a post of the
-/// layout (a hunter carries a tagger), quiet or loud, landing or circling, and light spares to the
-/// budget.
-pub fn mixes(rules: Rules, n: usize, seed: u64) -> Vec<(&'static str, Make)> {
-    use Post::*;
-    use recreation_towers::Payload;
-    let mut rng = fastrand::Rng::with_seed(seed);
-    let mut posts = vec![Centre, West, East, OwnHome, EnemyHome, Hunt];
-    if rules.layout == LayoutKind::Chain {
-        posts.extend([OwnWest, OwnMid, OwnEast, FarWest, FarMid, FarEast]);
+/// A way to play as genes (v4): each drone's post and airframe (with its payload: a hunter carries a
+/// tagger), the whole team quiet or loud, landing or circling; spares are light drones to the budget.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Genome {
+    pub posts: [Post; 5],
+    pub airframes: [Airframe; 5],
+    pub quiet: bool,
+    pub swap: bool,
+}
+
+impl Genome {
+    /// The posts of `rules`' layout.
+    fn posts(rules: &Rules) -> Vec<Post> {
+        use Post::*;
+        let mut posts = vec![Centre, West, East, OwnHome, EnemyHome, Hunt];
+        if rules.layout == LayoutKind::Chain {
+            posts.extend([OwnWest, OwnMid, OwnEast, FarWest, FarMid, FarEast]);
+        }
+        posts
     }
-    let mut out: Vec<(&'static str, Make)> = vec![];
-    while out.len() < n {
-        let mut slots = [Centre; 5];
-        let mut airframes = vec![];
-        for slot in &mut slots {
-            *slot = posts[rng.usize(..posts.len())];
-            let class = match rng.u8(..4) {
-                0 => Class::Light,
-                3 => Class::Heavy,
-                _ => Class::Standard,
-            };
-            let a = if *slot == Hunt {
-                Airframe::new(if class == Class::Heavy { Class::Light } else { class }, Payload::Tagger)
-            } else {
-                let payload = match rng.u8(..10) {
-                    0 => Payload::Relay,
-                    1 | 2 => Payload::Jammer,
-                    _ => Payload::Camera,
-                };
-                Airframe::new(class, if payload.fits(class) { payload } else { Payload::Camera })
-            };
-            airframes.push(a);
+
+    /// A drone's airframe for `post`: a hunter carries a tagger (a light one if it was to be heavy),
+    /// another drone a relay or a jammer now and then, where its airframe can carry it.
+    fn airframe(rng: &mut fastrand::Rng, post: Post) -> Airframe {
+        use recreation_towers::Payload;
+        let class = match rng.u8(..4) {
+            0 => Class::Light,
+            3 => Class::Heavy,
+            _ => Class::Standard,
+        };
+        if post == Post::Hunt {
+            return Airframe::new(if class == Class::Heavy { Class::Light } else { class }, Payload::Tagger);
         }
-        let mut loadout = Loadout { airframes };
-        if rules.budget > 0.0 && loadout.cost_in(&rules) > rules.budget {
-            continue;
+        let payload = match rng.u8(..10) {
+            0 => Payload::Relay,
+            1 | 2 => Payload::Jammer,
+            _ => Payload::Camera,
+        };
+        Airframe::new(class, if payload.fits(class) { payload } else { Payload::Camera })
+    }
+
+    fn affordable(airframes: &[Airframe], rules: &Rules) -> bool {
+        rules.budget <= 0.0 || airframes.iter().map(|a| a.cost_in(rules)).sum::<f32>() <= rules.budget
+    }
+
+    pub fn sample(rng: &mut fastrand::Rng, rules: &Rules) -> Genome {
+        let posts = Genome::posts(rules);
+        loop {
+            let mut slots = [Post::Centre; 5];
+            let mut airframes = [Airframe::plain(Class::Standard); 5];
+            for (slot, a) in slots.iter_mut().zip(airframes.iter_mut()) {
+                *slot = posts[rng.usize(..posts.len())];
+                *a = Genome::airframe(rng, *slot);
+            }
+            if Genome::affordable(&airframes, rules) {
+                let (quiet, swap) = (rng.bool(), rng.bool());
+                return Genome { posts: slots, airframes, quiet, swap };
+            }
         }
+    }
+
+    /// The same, with one gene changed, within the budget.
+    pub fn mutate(&self, rng: &mut fastrand::Rng, rules: &Rules) -> Genome {
+        let posts = Genome::posts(rules);
+        loop {
+            let mut g = self.clone();
+            let k = rng.usize(..5);
+            match rng.u8(..4) {
+                0 => {
+                    g.posts[k] = posts[rng.usize(..posts.len())];
+                    // A hunter needs its tagger, and only a hunter has one.
+                    let tagger = g.airframes[k].payload == recreation_towers::Payload::Tagger;
+                    if (g.posts[k] == Post::Hunt) != tagger {
+                        g.airframes[k] = Genome::airframe(rng, g.posts[k]);
+                    }
+                }
+                1 => g.airframes[k] = Genome::airframe(rng, g.posts[k]),
+                2 => g.quiet = !g.quiet,
+                _ => g.swap = !g.swap,
+            }
+            if g != *self && Genome::affordable(&g.airframes, rules) {
+                return g;
+            }
+        }
+    }
+
+    /// The airframes, and light spares to the budget.
+    pub fn loadout(&self, rules: &Rules) -> Loadout {
+        let mut loadout = Loadout { airframes: self.airframes.to_vec() };
         while loadout.airframes.len() < recreation_towers::MAX_AIRFRAMES
-            && (rules.budget <= 0.0 || loadout.cost_in(&rules) + Class::Light.cost() <= rules.budget)
+            && (rules.budget <= 0.0 || loadout.cost_in(rules) + Class::Light.cost() <= rules.budget)
         {
             loadout.airframes.push(Airframe::plain(Class::Light));
         }
-        let (quiet, swap) = (rng.bool(), rng.bool());
-        let name: &'static str = Box::leak(format!("mix {:02}", out.len() + 1).into_boxed_str());
-        out.push((
-            name,
-            Box::new(move || {
-                Box::new(Loaded {
-                    captain: Prepared {
-                        captain: Formation::new(name, slots, rules).swapping(swap).hushed(quiet),
-                        autonomy: Persist,
-                    },
-                    loadout: loadout.clone(),
-                })
-            }),
-        ));
+        loadout
     }
-    out
+
+    /// A captain that plays it.
+    pub fn make(&self, name: &'static str, rules: Rules) -> Make {
+        let (posts, quiet, swap, loadout) = (self.posts, self.quiet, self.swap, self.loadout(&rules));
+        Box::new(move || {
+            Box::new(Loaded {
+                captain: Prepared {
+                    captain: Formation::new(name, posts, rules).swapping(swap).hushed(quiet),
+                    autonomy: Persist,
+                },
+                loadout: loadout.clone(),
+            })
+        })
+    }
+
+    /// One line: each drone's post and airframe, and the team's ways.
+    pub fn describe(&self) -> String {
+        let drones: Vec<String> = self
+            .posts
+            .iter()
+            .zip(&self.airframes)
+            .map(|(p, a)| format!("{p:?} {} {}", a.class.name(), a.payload.name()))
+            .collect();
+        format!(
+            "{}; {}, {}",
+            drones.join(", "),
+            if self.quiet { "quiet" } else { "loud" },
+            if self.swap { "lands to swap" } else { "circles to recharge" }
+        )
+    }
+}
+
+/// `n` ways to play drawn from `seed` (v4): for each drone an airframe, a payload and a post of the
+/// layout (a hunter carries a tagger), quiet or loud, landing or circling, and light spares to the
+/// budget ([`Genome::sample`]).
+pub fn mixes(rules: Rules, n: usize, seed: u64) -> Vec<(&'static str, Make)> {
+    let mut rng = fastrand::Rng::with_seed(seed);
+    (1..=n)
+        .map(|i| {
+            let name: &'static str = Box::leak(format!("mix {i:02}").into_boxed_str());
+            (name, Genome::sample(&mut rng, &rules).make(name, rules))
+        })
+        .collect()
 }
 
 /// Sets one rule from `name=number` (`layout=1` is the chain): the rules a table is played by.
@@ -435,6 +522,7 @@ pub fn set_rule(rules: &mut Rules, setting: &str) -> Result<(), String> {
         "tag_cone" => rules.tag_cone = v,
         "budget" => rules.budget = v,
         "jam_radius" => rules.jam_radius = v,
+        "heavy_cost" => rules.heavy_cost = v,
         _ => return Err(format!("no rule called {k}")),
     }
     Ok(())
@@ -485,7 +573,7 @@ mod tests {
                 assert!(loadout.check(&rules).is_ok(), "{name}: {:?}", loadout.check(&rules));
             }
             let spares = |n: &str| all.iter().find(|(m, _)| *m == n).map(|(_, f)| f().loadout(&rules).airframes.len());
-            assert_eq!(spares("balanced"), Some(7), "two light spares");
+            assert_eq!(spares("balanced"), Some(6), "a light spare: a heavy drone costs 6");
             assert_eq!(spares("balanced, no spares"), Some(5));
         }
     }
@@ -583,9 +671,30 @@ mod tests {
     }
 
     #[test]
+    fn a_genome_is_drawn_within_the_budget_and_a_mutation_changes_one_thing_and_stays_within_it() {
+        let rules = Rules::v4();
+        let mut rng = fastrand::Rng::with_seed(5);
+        for _ in 0..50 {
+            let g = Genome::sample(&mut rng, &rules);
+            assert!(g.loadout(&rules).check(&rules).is_ok(), "{g:?}");
+            let m = g.mutate(&mut rng, &rules);
+            assert!(m.loadout(&rules).check(&rules).is_ok(), "{m:?}");
+            assert_ne!(m, g, "a mutation changes something");
+        }
+        let g = Genome::sample(&mut fastrand::Rng::with_seed(9), &rules);
+        assert_eq!(g, Genome::sample(&mut fastrand::Rng::with_seed(9), &rules), "the same seed, the same genome");
+        let mut c = g.make("g", rules)();
+        assert_eq!(c.decide(&view(Team::Blue)).unwrap().len(), 5);
+        assert!(!g.describe().is_empty());
+    }
+
+    #[test]
     fn the_v4_population_has_tacticians() {
         let all = formations(Rules::v4());
-        for name in ["tactician", "tactician, loud", "tactician, jammer", "tactician, heavies"] {
+        // Two heavy drones and a tagger cost 21: too dear by the v4 prices.
+        assert!(!all.iter().any(|(n, _)| *n == "tactician, heavies"));
+        assert!(formations(Rules { heavy_cost: 4.0, ..Rules::v4() }).iter().any(|(n, _)| *n == "tactician, heavies"));
+        for name in ["tactician", "tactician, loud", "tactician, jammer", "tactician, defends"] {
             assert!(all.iter().any(|(n, _)| *n == name), "{name}");
         }
     }

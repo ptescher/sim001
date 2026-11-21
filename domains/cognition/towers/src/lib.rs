@@ -19,7 +19,7 @@ pub use autonomy::{
     compare_with,
 };
 pub use edge::{Edge, EdgeUnit, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
-pub use formation::{Formation, Loaded, Make, Post, formations, mixes, set_rule};
+pub use formation::{Formation, Genome, Loaded, Make, Post, formations, mixes, set_rule};
 pub use tactics::Tactician;
 
 use glam::Vec2;

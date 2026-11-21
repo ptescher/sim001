@@ -12,6 +12,8 @@
 //! captain-seat                     (a captain on stdin and stdout, for the league to play)
 //! nash   [--seeds N] [--set rule=number ...] [--mixes N] [--mix-seed S]
 //!        (the table of Towers' formations, and N more drawn from S, and its equilibrium)
+//! exploit --targets "A;B" [--set rule=number ...] [--tries N] [--seeds N] [--judge N] [--seed S]
+//!        (for each target, the best answer a search finds on N seeds, judged on others)
 //! ```
 //!
 //! X and Y are `default`, a contest's own (`slow`, `timid`) or a JSON file of an entry. The
@@ -59,6 +61,44 @@ fn main() {
         let table = cognition_league::nash::Table::play_entries(rules, &seeds, entries).unwrap_or_else(|e| fail(e));
         print!("{}", table.report());
         println!("{} seeds, both sides, in {:.1} s", n, t.elapsed().as_secs_f32());
+        return;
+    }
+    if args.first().map(String::as_str) == Some("exploit") {
+        let mut rules = recreation_towers::Rules::default();
+        for (i, a) in args.iter().enumerate() {
+            if a == "--set" {
+                let setting = args.get(i + 1).unwrap_or_else(|| fail("--set wants rule=number".into()));
+                cognition_towers::set_rule(&mut rules, setting).unwrap_or_else(|e| fail(e));
+            }
+        }
+        let num = |name: &str, default: u64| arg(name).and_then(|s| s.parse().ok()).unwrap_or(default);
+        let (tries, train, judge, seed) =
+            (num("--tries", 120), num("--seeds", 12), num("--judge", 40), num("--seed", 1));
+        let train: Vec<u64> = (0..train).collect();
+        let judge: Vec<u64> = (1_000_000..1_000_000 + judge).collect();
+        let all = cognition_towers::formations(rules);
+        let targets = arg("--targets").unwrap_or_else(|| fail("exploit: --targets \"A;B\"".into()));
+        for name in targets.split(';').map(str::trim) {
+            // A way to play that these rules make unaffordable is left out of the population.
+            let Some((_, target)) = all.iter().find(|(n, _)| *n == name) else {
+                println!("{name}: no such way to play by these rules (too dear, or misspelt)");
+                continue;
+            };
+            let t = Instant::now();
+            let e = cognition_league::exploit::exploit(rules, target, tries as usize, &train, &judge, seed)
+                .unwrap_or_else(|e| fail(e));
+            println!(
+                "{name}: the exploiter gains {:+.2} ± {:.2} on {} new seeds ({:+.2} on its own {}), {} tried in {:.0} s\n    {}",
+                e.margin,
+                e.error,
+                judge.len(),
+                e.train,
+                train.len(),
+                e.tried,
+                t.elapsed().as_secs_f32(),
+                e.genome.describe()
+            );
+        }
         return;
     }
     let game = arg("--game").unwrap_or("executor".into());

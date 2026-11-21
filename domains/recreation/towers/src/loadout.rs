@@ -75,10 +75,15 @@ impl Airframe {
 
     /// What it costs by `rules` (a tagger's price may differ).
     pub fn cost_in(self, rules: &Rules) -> f32 {
-        match self.payload {
-            Payload::Tagger if rules.tagger_cost > 0.0 => self.class.cost() + rules.tagger_cost,
-            _ => self.cost(),
-        }
+        let class = match self.class {
+            Class::Heavy if rules.heavy_cost > 0.0 => rules.heavy_cost,
+            c => c.cost(),
+        };
+        let payload = match self.payload {
+            Payload::Tagger if rules.tagger_cost > 0.0 => rules.tagger_cost,
+            p => p.cost(),
+        };
+        class + payload
     }
 }
 
@@ -174,8 +179,8 @@ mod tests {
         let rules = Rules::v4();
         let mut squad = Loadout::squad(&rules);
         assert!(squad.check(&rules).is_ok());
-        squad.airframes.extend([Airframe::plain(Light); 2]);
-        assert!(squad.check(&rules).is_ok(), "19 of 20");
+        squad.airframes.push(Airframe::plain(Light));
+        assert!(squad.check(&rules).is_ok(), "17 and a light spare: 19 of 20");
     }
 
     #[test]

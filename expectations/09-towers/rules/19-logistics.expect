@@ -6,7 +6,8 @@ Feature: Batteries, airframes and the loadout
 
   Before the game, each commander chooses the [[loadout]] of the team: the airframes and their
   payloads. The first five fly at the start, and the rest are spares. The loadout costs points
-  from a budget of 20. A light drone costs 2, a standard drone 3 and a heavy drone 4.
+  from a budget of 20. A light drone costs 2, a standard drone 3 and a heavy drone 6: each
+  costs the same for its weight in a circle, except the light drone, which is cheap and weak.
 
   Expectation: A drone that lands is on the ground at its base
     LAND sends a drone to its base. It lands there, and it stays on the ground until the commander
@@ -67,10 +68,10 @@ Feature: Batteries, airframes and the loadout
     Then the condition of the first Blue drone is down
 
   Expectation: A loadout costs no more than the budget
-    Today's squad (three standard drones, a heavy and a light drone) costs 15. Two light spares
-    make it 19.
+    Today's squad (three standard drones, a heavy and a light drone) costs 17. A light spare
+    makes it 19.
 
-    Given the loadout of Blue is today's squad and two light spares
+    Given the loadout of Blue is today's squad and a light spare
     Then the cost of the Blue loadout is within the budget
 
   Expectation: A loadout over the budget is refused
@@ -78,4 +79,11 @@ Feature: Batteries, airframes and the loadout
     The cost of seven standard drones is 21.
 
     Given the loadout of Blue is seven standard drones
+    Then the cost of the Blue loadout is over the budget
+
+  Expectation: A team of heavy drones is over the budget
+    Overrides: A loadout costs no more than the budget
+    A heavy drone holds a tower alone, so it costs twice a standard drone: five cost 30.
+
+    Given the loadout of Blue is five heavy drones
     Then the cost of the Blue loadout is over the budget
