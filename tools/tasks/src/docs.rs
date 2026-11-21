@@ -32,14 +32,16 @@ pub const SUITE_SECS: u64 = 120;
 /// for a slower box.
 /// Revisit this when the games get cheaper, or the plan can use fewer of them.
 pub const LEAGUE_SECS: u64 = 900;
-/// What each run of the sim gets (`SIM001_SUITE_BUDGET`): it plays 24 tests in a window, ~135 s
-/// alone, and the hover tutorial of the VTOL and the Seeker 3 takes ~70 s of that on its own.
-pub const SIM_SECS: u64 = 240;
+/// What each run of the sim gets (`SIM001_SUITE_BUDGET`): it plays 28 tests in a window, ~140 s
+/// alone, and the hover tutorial of the VTOL and the Seeker 3 takes ~70 s of that on its own. In
+/// a docs run on a busy machine (2026-11-21) the plain sim's tests ran slower and one failed and
+/// was tried again, and 240 s ran out with seven tests left. 450 s leaves room for that.
+pub const SIM_SECS: u64 = 450;
 /// What the Towers commander app gets: each test of it is on a game server of its own, and the
 /// 3D view of a game takes about 2.5 minutes to load the valley, which the test of the cameras
-/// waits for. The suite takes ~460 s (22 tests, the advisor's among them); 750 s leaves room for a
-/// slower box.
-pub const COMMAND_SECS: u64 = 750;
+/// waits for, as do the portrait's and the moving valley's (~115 s each). The suite took ~700 s
+/// in a docs run (2026-11-21, 24 tests); 1000 s leaves room for a slower box.
+pub const COMMAND_SECS: u64 = 1000;
 /// What the console's suite gets (`tasks console`, which is a task of its own): its tests fly a
 /// plane against a real ArduPilot, and a fresh plane takes a minute. The tutorials that fly take 5
 /// to 10 minutes each, twice when they fail (the runner tries a failed test once more), and the
