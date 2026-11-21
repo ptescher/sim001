@@ -72,7 +72,7 @@ airframe; its payload shows only when it is used (it jams, tags or relays).
 | --- | --- | --- | --- |
 | Camera (every drone) | 0 | any | Sees 150 m (as now) |
 | Tagger | 1 | light, standard | Can tag (4.6); counts 0 in a circle |
-| Relay | 1 | standard, heavy | Relays 200 m and for up to 3 drones (4.4) |
+| Relay | 1 | standard, heavy | Relays 300 m, in the forest and into a radio shadow (4.4) |
 | Jammer | 2 | standard, heavy | A shadow that moves with it, when switched on (4.7) |
 
 Today's squad (three standard, a heavy, a light) costs 15, so a budget of 20 is today's squad and
@@ -95,7 +95,8 @@ High and low exist (only a low drone takes a tower). v4 makes height a trade in 
 ### 4.4 Towers are radio towers: new
 
 A tower its team holds is a **node**: it relays its holder's low drones within 250 m. A relay
-payload makes its drone a node of 200 m for up to three drones. So holding towers builds a network,
+payload makes its drone a node of 300 m (more than a high friend's 250 m through the canopy, so
+that a relay is worth its cost), also into an enemy's radio shadow. So holding towers builds a network,
 and a strike deep in enemy ground needs a relay overhead (visible, and a target) or must go dark
 on a script. Snowball check (C7): a held tower's node does not reach into an enemy shadow, so the
 network stops where the other team's towers start.
@@ -287,7 +288,8 @@ C2 or C3 is cut, not kept.
 2. **Logistics and loadout**, airframes only: land and swap, spares, the budget. Rules only.
    **Done**: `Rules::v4()`, `Loadout`, `Order::Land`, `19-logistics.expect`; alone it makes no
    cycles (results, step 2).
-3. **Height and radio**: the canopy range, towers as nodes, the relay payload.
+3. **Height and radio**: the canopy range, towers as nodes, the relay payload. **Done**
+   (`20-canopy.expect`); no cycles yet (results, step 3).
 4. **Emission and DF**, into the `Belief`.
 5. **The fight**: tagger, hunter, overwatch. The vignette bank starts here: this is where the pilot
    first has a decision.

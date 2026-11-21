@@ -238,6 +238,14 @@ pub struct Rules {
     /// What a team's [`Loadout`] may cost; 0 for no limit.
     #[serde(default)]
     pub budget: f32,
+    /// A drone below the treetops is in contact on its own only this near (m) a radio of its team:
+    /// its base or a tower it holds; a friend above the trees in contact relays it this far. 0 for
+    /// no canopy (a low drone is in contact as a high one is).
+    #[serde(default)]
+    pub canopy_range: f32,
+    /// A friend with a relay carries the radio this far (m), in the forest and into a radio shadow.
+    #[serde(default)]
+    pub relay_range: f32,
 }
 
 impl Default for Rules {
@@ -285,6 +293,8 @@ impl Default for Rules {
             finite_airframes: false,
             spare_time: 0.0,
             budget: 0.0,
+            canopy_range: 0.0,
+            relay_range: 0.0,
         }
     }
 }
@@ -320,6 +330,8 @@ impl Rules {
             finite_airframes: true,
             spare_time: 30.0,
             budget: 20.0,
+            canopy_range: 250.0,
+            relay_range: 300.0,
             ..Rules::default()
         }
     }
@@ -633,38 +645,58 @@ impl Game {
     /// [`Rules::mesh_range`] of it, or of a chain of such friends at most [`Rules::mesh_hops`] long (a
     /// relayed drone relays for the next). A drone that is down is not.
     fn jam(&mut self, dt: f32) {
-        let shadow: Vec<bool> =
-            self.drones
-                .iter()
-                .map(|d| {
-                    d.phase != Phase::Down
-                        && self.towers.iter().any(|t| {
-                            t.holder == Some(d.team.other()) && t.at.distance(d.at) <= self.rules.shadow(t.kind)
-                        })
-                })
-                .collect();
+        let r = self.rules;
+        let shadow: Vec<bool> = self
+            .drones
+            .iter()
+            .map(|d| {
+                d.phase != Phase::Down
+                    && self
+                        .towers
+                        .iter()
+                        .any(|t| t.holder == Some(d.team.other()) && t.at.distance(d.at) <= r.shadow(t.kind))
+            })
+            .collect();
+        // The canopy (v4): a drone below the treetops is in contact on its own only near a radio of
+        // its team, its base or a tower it holds.
+        let low = |d: &Drone| d.phase != Phase::Flying || d.alt < r.treetop;
+        let near_radio = |d: &Drone| {
+            d.at.distance(r.base(d.team)) <= r.canopy_range
+                || self.towers.iter().any(|t| t.holder == Some(d.team) && t.at.distance(d.at) <= r.canopy_range)
+        };
+        let canopy: Vec<bool> = self
+            .drones
+            .iter()
+            .map(|d| r.canopy_range > 0.0 && d.phase != Phase::Down && low(d) && !near_radio(d))
+            .collect();
+        // How far friend `f` relays drone `i`: a relay its own range; a friend above the trees, a
+        // drone that only the canopy cuts, as far as the canopy lets; the mesh otherwise.
+        let reach = |f: &Drone, i: usize| {
+            let mesh = r.mesh_range;
+            let over_trees = if canopy[i] && !shadow[i] && !low(f) { r.canopy_range } else { 0.0 };
+            let relay = if f.payload == Payload::Relay { r.relay_range } else { 0.0 };
+            mesh.max(over_trees).max(relay)
+        };
         // Hop by hop: a drone out of any shadow is in contact on its own (0 hops); each pass lets a
         // drone in a shadow join if a flying friend that joined the pass before is in range.
-        let mut hops: Vec<Option<u32>> = shadow.iter().map(|&s| (!s).then_some(0)).collect();
-        if self.rules.mesh_range > 0.0 {
-            for hop in 1..=self.rules.mesh_hops {
-                let joined: Vec<usize> = (0..self.drones.len())
-                    .filter(|&i| hops[i].is_none())
-                    .filter(|&i| {
-                        self.drones.iter().enumerate().any(|(j, f)| {
-                            f.team == self.drones[i].team
-                                && hops[j] == Some(hop - 1)
-                                && f.phase == Phase::Flying
-                                && f.at.distance(self.drones[i].at) <= self.rules.mesh_range
-                        })
+        let mut hops: Vec<Option<u32>> = shadow.iter().zip(&canopy).map(|(&s, &c)| (!s && !c).then_some(0)).collect();
+        for hop in 1..=r.mesh_hops.max(1) {
+            let joined: Vec<usize> = (0..self.drones.len())
+                .filter(|&i| hops[i].is_none())
+                .filter(|&i| {
+                    self.drones.iter().enumerate().any(|(j, f)| {
+                        f.team == self.drones[i].team
+                            && hops[j] == Some(hop - 1)
+                            && f.phase == Phase::Flying
+                            && f.at.distance(self.drones[i].at) <= reach(f, i)
                     })
-                    .collect();
-                if joined.is_empty() {
-                    break;
-                }
-                for i in joined {
-                    hops[i] = Some(hop);
-                }
+                })
+                .collect();
+            if joined.is_empty() {
+                break;
+            }
+            for i in joined {
+                hops[i] = Some(hop);
             }
         }
         for (i, hop) in hops.iter().enumerate() {
@@ -1236,6 +1268,77 @@ mod tests {
         let (mut g, i) = v4_with(base, Some(50.0), 100.0);
         run(&mut g, 10.0);
         assert!((g.battery[i] - 130.0).abs() < 0.01, "4 a second less 1 a second of flight: {}", g.battery[i]);
+    }
+
+    /// A game by the v4 rules with Blue's first drone at `at`, `alt` high, and the rest at their bases.
+    fn canopy(at: Vec2, alt: f32) -> (Game, usize) {
+        let mut g = Game::new(Rules::v4());
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i] = Drone { at, alt, phase: Phase::Flying, ..g.drones[i] };
+        g.look();
+        (g, i)
+    }
+
+    #[test]
+    fn the_v4_rules_have_a_canopy_of_250_m_and_a_relay_of_300_m() {
+        assert_eq!((Rules::v4().canopy_range, Rules::v4().relay_range), (250.0, 300.0));
+        assert_eq!((Rules::default().canopy_range, Rules::default().relay_range), (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_low_drone_far_from_any_radio_of_its_team_is_cut_and_a_high_one_is_not() {
+        let west = Game::new(Rules::v4()).towers[1].at;
+        let (g, i) = canopy(west, 17.0);
+        assert!(g.jammed[i], "low, {} m from the base", west.distance(g.rules.base(Team::Blue)));
+        let (g, i) = canopy(west, 50.0);
+        assert!(!g.jammed[i], "high");
+        let (mut g, i) = canopy(west, 17.0);
+        g.rules.canopy_range = 0.0;
+        g.look();
+        assert!(!g.jammed[i], "with no canopy");
+    }
+
+    #[test]
+    fn a_held_tower_and_the_base_are_radios_for_a_low_drone_within_the_canopy_range() {
+        let (mut g, i) = canopy(Game::new(Rules::v4()).towers[1].at + Vec2::new(0.0, 240.0), 17.0);
+        assert!(g.jammed[i]);
+        g.towers[1].holder = Some(Team::Blue);
+        g.look();
+        assert!(!g.jammed[i], "240 m from a tower Blue holds");
+        g.towers[1].holder = Some(Team::Red);
+        g.look();
+        assert!(g.jammed[i], "a tower Red holds is no radio of Blue's");
+        let base = g.rules.base(Team::Blue);
+        let (g, i) = canopy(base + Vec2::new(240.0, 0.0), 17.0);
+        assert!(!g.jammed[i], "240 m from its base");
+    }
+
+    #[test]
+    fn a_high_friend_in_contact_relays_a_low_drone_within_the_canopy_range_and_a_low_one_only_the_mesh() {
+        let west = Game::new(Rules::v4()).towers[1].at;
+        let (mut g, i) = canopy(west, 17.0);
+        let j = g.drone(Team::Blue, 1);
+        g.drones[j] = Drone { at: west + Vec2::new(0.0, 200.0), alt: 50.0, phase: Phase::Flying, ..g.drones[j] };
+        g.look();
+        assert!(!g.jammed[i], "a high friend 200 m away");
+        g.drones[j].alt = 17.0;
+        g.drones[j].at = west + Vec2::new(0.0, 60.0);
+        g.look();
+        assert!(g.jammed[i] && g.jammed[j], "a low friend that is cut itself relays nothing");
+    }
+
+    #[test]
+    fn a_relay_carries_the_radio_300_m_into_a_shadow() {
+        let mut g = Game::new(Rules::v4());
+        let red = g.towers[4].at;
+        let (i, j) = (g.drone(Team::Blue, 0), g.drone(Team::Blue, 1));
+        g.drones[i] = Drone { at: red + Vec2::new(-100.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        g.drones[j] = Drone { at: red + Vec2::new(-380.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[j] };
+        g.look();
+        assert!(g.jammed[i], "a friend 280 m away is no relay");
+        g.drones[j].payload = Payload::Relay;
+        g.look();
+        assert!(!g.jammed[i], "a relay 280 m away is");
     }
 
     #[test]

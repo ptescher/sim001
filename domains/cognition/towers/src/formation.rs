@@ -186,6 +186,12 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
         a[2] = Airframe::plain(Class::Heavy);
         Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
     };
+    // A relay on the second standard drone and one light spare: 18.
+    let relay = {
+        let mut a = squad.clone();
+        a[1] = Airframe::new(Class::Standard, recreation_towers::Payload::Relay);
+        Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
+    };
     let entry = |name: &'static str, posts: Option<[Post; 5]>, loadout: &Loadout, swap: bool| -> (&'static str, Make) {
         let loadout = loadout.clone();
         (
@@ -207,7 +213,11 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
             }),
         )
     };
-    let mut out = vec![entry("commander", None, &spares, false), entry("commander, no spares", None, &bare, false)];
+    let mut out = vec![
+        entry("commander", None, &spares, false),
+        entry("commander, no spares", None, &bare, false),
+        entry("commander, relay", None, &relay, false),
+    ];
     let posts: Vec<(&'static str, [Post; 5])> = match rules.layout {
         LayoutKind::Chain => vec![
             ("mass centre", [Centre; 5]),
@@ -234,6 +244,7 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     out.push(entry("raid, circles", find("raid"), &spares, false));
     out.push(entry("raid, two heavies", find("raid"), &heavies, true));
     out.push(entry("balanced, two heavies", find("balanced"), &heavies, true));
+    out.push(entry("raid, relay", find("raid"), &relay, true));
     out
 }
 

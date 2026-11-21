@@ -197,7 +197,7 @@ Vocabulary:
   Event: the first Blue drone flies into the radio shadow for 10 seconds
     Say: order the first Blue drone to fly to a point 100 m from the Red home tower, and wait 10 seconds
   # The mesh: a second Blue drone that relays the radio.
-  State: the second Blue drone is at its base | 130 m from the Red home tower | 210 m from the Red home tower | 230 m from the Red home tower
+  State: the second Blue drone is at its base | 130 m from the Red home tower | 210 m from the Red home tower | 230 m from the Red home tower | high over the west tower
     Shows: 130 m from the Red home tower: the second Blue drone flies 50 m high, 130 m east of the Red home tower
     Shows: 210 m from the Red home tower: the second Blue drone flies 50 m high, 210 m east of the Red home tower, outside the radio shadow
     Shows: 230 m from the Red home tower: the second Blue drone flies 50 m high, 230 m east of the Red home tower
@@ -217,6 +217,13 @@ Vocabulary:
     Shows: the Blue map shows the battery that B1 last reported, {value} s, with its age
   State: the condition of the first Blue drone is flying | down | on the ground
     Shows: down: B1 is out of the game, and the card of B1 shows DOWN
+  # The v4 rules: the canopy and the radio.
+  State: the canopy is off | on
+    Set: {value}
+    Shows: on: a drone below the treetops is in contact only within 250 m of its base, a tower of its team, or a friend above the trees
+  State: the payload of the second Blue drone is a camera | a relay
+    Set: give the second Blue drone {value} in the loadout
+    Shows: a relay: the card of B2 shows RELAY
   # The v4 rules: the battery swap, airframes and the loadout.
   Event: the first Blue drone circles over its base for 25 seconds
     Say: select B1 and press HOME. Wait 25 seconds while B1 circles over its base
@@ -496,3 +503,5 @@ Vocabulary:
     And the points in the route of the first Blue drone are 0
     And the battery swap is off
     And the airframes are unlimited
+    And the canopy is off
+    And the payload of the second Blue drone is a camera
