@@ -56,6 +56,7 @@ fn main() -> Result<(), String> {
                         Some(Order::Circle(_, r)) => format!("circle a point {r:.0} m out"),
                         Some(Order::Hold) => "hold".into(),
                         Some(Order::Home) => "home".into(),
+                        Some(Order::Land) => "land".into(),
                     };
                     json!({
                         "x": d.at.y, "y": d.at.x, "alt": d.alt,

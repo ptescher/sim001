@@ -475,7 +475,8 @@ pub fn leg_for(game: &Game, i: usize, order: Order, low: bool) -> flight::Leg {
         Order::Take(t) => game.towers[t].at,
         Order::Goto(p) | Order::Circle(p, _) => p,
         Order::Hold => d.at,
-        Order::Home => game.rules.base(team),
+        // Landing for a battery swap is not flown on ArduPlane yet: the drone circles over its base.
+        Order::Home | Order::Land => game.rules.base(team),
     };
     if order == Order::Hold {
         // Circle where it is: low only if it is over open ground.

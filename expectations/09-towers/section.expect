@@ -148,10 +148,16 @@ Vocabulary:
     Say: wait 3 seconds
   Event: the game runs for 10 seconds
     Say: wait 10 seconds
+  Event: the game runs for 90 seconds
+    Say: wait 90 seconds
   Event: the game runs for 110 seconds
     Say: wait 110 seconds
   Event: the game runs for 15 seconds
     Say: wait 15 seconds
+  Event: the game runs for 30 seconds
+    Say: wait 30 seconds
+  Event: the game runs for 40 seconds
+    Say: wait 40 seconds
   Event: the game runs for 45 seconds
     Say: wait 45 seconds
   Event: the game runs for 20 seconds
@@ -211,6 +217,24 @@ Vocabulary:
     Shows: the Blue map shows the battery that B1 last reported, {value} s, with its age
   State: the condition of the first Blue drone is flying | down | on the ground
     Shows: down: B1 is out of the game, and the card of B1 shows DOWN
+  # The v4 rules: the battery swap, airframes and the loadout.
+  Event: the first Blue drone circles over its base for 25 seconds
+    Say: select B1 and press HOME. Wait 25 seconds while B1 circles over its base
+  Event: the first Blue drone lands at its base
+    Say: select B1 and press LAND. B1 flies to its base and lands
+  State: the battery swap is off | on
+    Set: {value}
+    Shows: on: a drone on the ground at its base gets a full battery after 30 s. Over its base, it recharges 4 s each second
+  State: the airframes are unlimited | finite
+    Set: {value}
+    Shows: finite: a drone that goes down is lost. A spare takes its place after 30 s
+  State: the spares of Blue are 0..10
+    Shows: the Blue panel shows SPARES {value}
+  State: the loadout of Blue is today's squad | today's squad and two light spares | seven standard drones
+    Set: choose {value} before the game
+    Shows: today's squad: three standard drones, a heavy drone and a light drone
+  State: the cost of the Blue loadout is within the budget | over the budget
+    Shows: over the budget: the game refuses the loadout and says what it costs
   # Standing orders: what a drone out of contact does.
   State: the order that the first Blue drone flies is none | take the west tower | take the east tower | take the centre tower | hold | go home
     Shows: the order {value} is the order that B1 flies now. In the app, the card of B1 shows it
@@ -470,3 +494,5 @@ Vocabulary:
     And the east tower on the Blue map is neutral
     And the Red scout is at its base
     And the points in the route of the first Blue drone are 0
+    And the battery swap is off
+    And the airframes are unlimited

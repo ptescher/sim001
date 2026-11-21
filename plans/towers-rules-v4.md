@@ -163,8 +163,9 @@ script of steps does not, and a script upload needs contact for a time that grow
 
 ### 4.8 Tempo (logistics): changed
 
-- **Land and swap, or recharge slowly.** A drone that lands at its base (or on the pad of a depot
-  its team holds) is on the ground 30 s and takes off with a full battery. A drone that circles
+- **Land and swap, or recharge slowly.** A drone that lands at its base (`Order::Land`) is on the
+  ground 30 s and takes off with a full battery. (Built at the base only: a depot still recharges
+  a drone in its circle, in flight.) A drone that circles
   over its base instead recharges 4 s each second (60 s to fill a standard drone), so the swap is
   the better trade but not a requirement (section 10). On the pad of a depot it can be tagged.
 - **Airframes are finite.** A drone that is down (battery empty, tagged, crashed) is lost. The next
@@ -284,6 +285,8 @@ C2 or C3 is cut, not kept.
    one formation is the whole equilibrium on each layout, and the cycle share is 15 to 20 %
    (`plans/towers-rules-v4-results.md`, step 1).
 2. **Logistics and loadout**, airframes only: land and swap, spares, the budget. Rules only.
+   **Done**: `Rules::v4()`, `Loadout`, `Order::Land`, `19-logistics.expect`; alone it makes no
+   cycles (results, step 2).
 3. **Height and radio**: the canopy range, towers as nodes, the relay payload.
 4. **Emission and DF**, into the `Belief`.
 5. **The fight**: tagger, hunter, overwatch. The vignette bank starts here: this is where the pilot

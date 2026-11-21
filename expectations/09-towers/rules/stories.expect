@@ -1,0 +1,20 @@
+Story: Keep a drone in the air
+  As a commander of a team
+  I want to recharge a drone at its base
+  So that it flies for the whole game
+
+  In the [[v4 rules]], a drone recharges slowly while it circles over its base. A drone that lands
+  gets a new battery from the ground crew in 30 s. Circle when you cannot spare the drone for long,
+  and land when you can.
+
+  Scenario: Recharge over the base, then land for a swap
+    Given the batteries are on
+    And the battery swap is on
+    And the battery of the first Blue drone is 100 s
+    And the first Blue drone is over its base
+    When the first Blue drone circles over its base for 25 seconds
+    Then the battery of the first Blue drone is 175 s
+    When the first Blue drone lands at its base
+    Then the condition of the first Blue drone is on the ground
+    When the game runs for 30 seconds
+    Then the battery of the first Blue drone is 240 s

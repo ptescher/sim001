@@ -30,9 +30,11 @@ Feature: Advice for the commander
     Then the order of the first Blue drone is take the Red home tower
 
   Expectation: A proposal that gains little is not taken
-    The commander takes a proposal only when it gains more than 5 points.
+    The commander takes a proposal only when it gains more than 5 points. The first drone is on the
+    ground at its base, where the commander's own choice for it is the west tower.
 
     Given the proposal in the hand of the Blue commander is the Red home tower for 4 points
+    And the first Blue drone is at its base
     When the computer commander of Blue weighs the proposal
     Then the order of the first Blue drone is take the west tower
 
@@ -43,6 +45,7 @@ Feature: Advice for the commander
     leaves the west tower to it.)
 
     Given the proposal in the hand of the Blue commander is the Red home tower for 8 points, good for 5 seconds
+    And the first Blue drone is at its base
     When the computer commander of Blue weighs the proposal 10 seconds later
     Then the order of the first Blue drone is take the west tower
 

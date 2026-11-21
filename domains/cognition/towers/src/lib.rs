@@ -18,7 +18,7 @@ pub use autonomy::{
     compare_with,
 };
 pub use edge::{Edge, EdgeUnit, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
-pub use formation::{Formation, Make, Post, formations, set_rule};
+pub use formation::{Formation, Loaded, Make, Post, formations, set_rule};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
@@ -57,6 +57,12 @@ pub trait Captain {
     /// The orders for the team's drones: `(drone, order)` for each.
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String>;
 
+    /// The team's loadout for a game by `rules`, chosen before it starts: the rules' squad unless
+    /// the captain says otherwise.
+    fn loadout(&mut self, rules: &Rules) -> recreation_towers::Loadout {
+        recreation_towers::Loadout::squad(rules)
+    }
+
     /// The standing orders that go with `orders`, given just now: `(drone, standing order)`.
     fn standing(&mut self, _view: &TeamView, _orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
         vec![]
@@ -82,6 +88,10 @@ pub trait Captain {
 }
 
 impl<C: Captain + ?Sized> Captain for &mut C {
+    fn loadout(&mut self, rules: &Rules) -> recreation_towers::Loadout {
+        (**self).loadout(rules)
+    }
+
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         (**self).decide(view)
     }
@@ -217,7 +227,7 @@ impl Flyer {
             Some(Order::Take(t)) => (game.towers[t].at, ORBIT_RADIUS),
             Some(Order::Goto(p)) => (p, ORBIT_RADIUS),
             Some(Order::Circle(p, r)) => (p, r),
-            Some(Order::Home) => (game.rules.base(self.team), ORBIT_RADIUS),
+            Some(Order::Home | Order::Land) => (game.rules.base(self.team), ORBIT_RADIUS),
             Some(Order::Hold) => (self.hold, ORBIT_RADIUS),
             // As the server: a drone its seat has not ordered yet circles over its base.
             None => (game.rules.base(self.team), ORBIT_RADIUS),
@@ -227,8 +237,10 @@ impl Flyer {
     /// One step: climbs out, then flies round its circle (a vector field, as the executor's
     /// orbit), its turn limited by the bank, carried by the wind.
     pub fn step(&mut self, game: &Game, wind: Vec2, takeoff_at: f32, dt: f32) {
+        let landing = self.order == Some(Order::Land);
         if !self.flying {
-            if game.time < takeoff_at {
+            // A drone told to land stays on the ground until it gets another order.
+            if game.time < takeoff_at || landing {
                 return;
             }
             self.alt += CLIMB_RATE * dt;
@@ -241,6 +253,14 @@ impl Flyer {
         let (centre, radius) = self.circle(game);
         let r = self.at - centre;
         let d = r.length();
+        // On its base's circle, a drone told to land comes straight down (a VTOL in QLAND).
+        if landing && d <= radius + 10.0 {
+            self.alt = (self.alt - VERTICAL * dt).max(0.0);
+            if self.alt == 0.0 {
+                self.flying = false;
+            }
+            return;
+        }
         let phi = if d > 1.0 { r.y.atan2(r.x) } else { self.heading - std::f32::consts::FRAC_PI_2 };
         // Clockwise round the circle, bending towards it from outside or inside.
         let want = phi + std::f32::consts::FRAC_PI_2 + (2.0 * (d - radius) / radius).atan();
@@ -328,9 +348,14 @@ impl<'u> Match<'u> {
 
     /// The same, with a unit for each drone, the drones of Blue first.
     pub fn with_units(rules: Rules, seed: u64, units: Vec<Box<dyn Unit + 'u>>) -> Match<'u> {
+        Match::of_game(Game::new(rules), seed, units)
+    }
+
+    /// The same, from a game at its start (with the teams' loadouts).
+    fn of_game(mut game: Game, seed: u64, units: Vec<Box<dyn Unit + 'u>>) -> Match<'u> {
+        let rules = game.rules;
         assert_eq!(units.len(), 2 * rules.drones, "a unit for each drone");
         let mut rng = fastrand::Rng::with_seed(seed);
-        let mut game = Game::new(rules);
         let wind = {
             let (speed, dir) = (rng.f32() * WIND_MAX, rng.f32() * std::f32::consts::TAU);
             Vec2::new(dir.cos(), dir.sin()) * speed
@@ -368,6 +393,19 @@ impl<'u> Match<'u> {
             took_off: vec![false; 2 * rules.drones],
             units,
         }
+    }
+
+    /// The start of a game between two captains (Blue's, Red's), each with its loadout and its
+    /// units. A loadout the rules do not allow is refused.
+    pub fn of_loadouts(rules: Rules, seed: u64, captains: [&mut dyn Captain; 2]) -> Result<Match<'u>, String> {
+        let [blue, red] = captains;
+        let game = Game::with_loadouts(rules, [&blue.loadout(&rules), &red.loadout(&rules)])?;
+        let units = Team::BOTH
+            .into_iter()
+            .flat_map(|t| (0..rules.drones).map(move |k| (t, k)))
+            .map(|(t, k)| if t == Team::Blue { blue.unit(t, k) } else { red.unit(t, k) })
+            .collect();
+        Ok(Match::of_game(game, seed, units))
     }
 
     /// One step with captains: see [`Match::step_with`]. Each team's commander is its captain's
@@ -484,12 +522,7 @@ pub fn play_with(
     red: &mut dyn Captain,
     seed: u64,
 ) -> Result<TowersResult, String> {
-    let units = Team::BOTH
-        .into_iter()
-        .flat_map(|t| (0..rules.drones).map(move |k| (t, k)))
-        .map(|(t, k)| if t == Team::Blue { blue.unit(t, k) } else { red.unit(t, k) })
-        .collect();
-    let mut m = Match::with_units(rules, seed, units);
+    let mut m = Match::of_loadouts(rules, seed, [&mut *blue, &mut *red])?;
     loop {
         if let Some(result) = m.result() {
             return Ok(result);
@@ -886,6 +919,84 @@ mod tests {
         run(&mut m, 10.0, &mut Silent);
         assert!(m.flyers[i].flying, "it takes off again");
         assert_eq!(m.flyers[i].order, None, "and has to be told what to do");
+    }
+
+    #[test]
+    fn a_drone_told_to_land_lands_at_its_base_and_stays_until_a_new_order() {
+        let mut m = Match::new(1);
+        let i = put_blue(&mut m, false);
+        m.told[i].give(Order::Land, None);
+        run(&mut m, 60.0, &mut Silent);
+        let base = m.game.rules.base(Team::Blue);
+        assert_eq!(m.game.drones[i].phase, Phase::Ground, "{:?}", m.flyers[i]);
+        assert!(m.game.drones[i].at.distance(base) < m.game.rules.pad_radius, "on its base's pad");
+        run(&mut m, 30.0, &mut Silent);
+        assert_eq!(m.game.drones[i].phase, Phase::Ground, "it stays down");
+        let west = m.game.tower("west");
+        m.told[i].give(Order::Take(west), None);
+        run(&mut m, 10.0, &mut Silent);
+        assert!(m.flyers[i].flying, "a new order takes it up again");
+    }
+
+    #[test]
+    fn with_the_v4_rules_a_drone_that_lands_gets_a_full_battery() {
+        // Over its base: circling there for 50 s would add 3 s a second, from 30 s to 180 s.
+        let over = |order| {
+            let mut m = Match::with_rules(Rules::v4(), 1);
+            let i = put_blue(&mut m, false);
+            let at = m.game.rules.base(Team::Blue) + Vec2::new(0.0, 40.0);
+            (m.flyers[i].at, m.flyers[i].hold, m.game.drones[i].at) = (at, at, at);
+            m.game.battery[i] = 30.0;
+            m.told[i].give(order, None);
+            run(&mut m, 50.0, &mut Silent);
+            m.game.battery[i]
+        };
+        assert!(over(Order::Home) < 200.0, "circling: {}", over(Order::Home));
+        assert_eq!(over(Order::Land), 240.0);
+    }
+
+    /// A captain that brings a loadout of its own and sends nobody anywhere.
+    struct Brings(recreation_towers::Loadout);
+
+    impl Captain for Brings {
+        fn decide(&mut self, _: &TeamView) -> Result<Vec<(usize, Order)>, String> {
+            Ok(vec![])
+        }
+
+        fn loadout(&mut self, _: &Rules) -> recreation_towers::Loadout {
+            self.0.clone()
+        }
+    }
+
+    #[test]
+    fn each_captain_brings_its_loadout_and_one_over_the_budget_is_refused() {
+        use recreation_towers::{Airframe, Class, Loadout, Payload};
+        let rules = Rules { duration: 5.0, ..Rules::v4() };
+        let mut squad = Loadout::squad(&rules);
+        squad.airframes[4] = Airframe::new(Class::Light, Payload::Tagger);
+        let mut m = Match::of_loadouts(rules, 1, [&mut Brings(squad.clone()), &mut Silent]).unwrap();
+        assert_eq!(m.game.drones[4].payload, Payload::Tagger);
+        assert!(m.step(&mut Silent, &mut Silent).is_ok());
+        let over = Loadout { airframes: vec![Airframe::plain(Class::Heavy); 6] };
+        assert!(play_with(rules, &mut Brings(over), &mut Silent, 1).is_err());
+        assert!(play_with(rules, &mut Brings(squad), &mut Silent, 1).is_ok());
+    }
+
+    #[test]
+    fn a_spare_takes_off_in_place_of_a_lost_drone() {
+        use recreation_towers::{Airframe, Class};
+        let mut m = Match::with_rules(Rules::v4(), 1);
+        let i = put_blue(&mut m, false);
+        m.game.spares[0] = vec![Airframe::plain(Class::Light)];
+        m.game.battery[i] = 2.0;
+        m.told[i].give(Order::Hold, None);
+        run(&mut m, 3.0, &mut Silent);
+        assert_eq!(m.game.drones[i].phase, Phase::Down);
+        run(&mut m, 31.0, &mut Silent);
+        assert_eq!(m.game.drones[i].class, Class::Light);
+        assert!(m.game.drones[i].at.distance(m.game.rules.base(Team::Blue)) < 60.0, "at its base");
+        run(&mut m, 10.0, &mut Silent);
+        assert!(m.flyers[i].flying, "the spare takes off");
     }
 
     #[test]

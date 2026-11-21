@@ -67,3 +67,40 @@ Reading it:
 - The equilibrium is one vertex of the linear program. With a formation that beats every other it
   is unique; when the tables get wider, a maximum-entropy equilibrium (Nash averaging) may be
   needed so that the support is not understated.
+
+## Step 2: the battery swap, finite airframes and the loadout (2026-11-20)
+
+`Rules::v4()` turns on what is built of the v4 rules; `Rules::default()` is today's game, so the
+specs, the commander's tuning and SITL do not move. Built: a drone on the ground at its base for
+30 s gets a full battery (`Order::Land`; the server flies it as `Home` until landing is flown on
+ArduPlane), one that circles over its base recharges 4 s a second, a drone that goes down is lost
+and the next spare takes its place after 30 s, and a team's `Loadout` (airframes and payloads,
+first five fly, the rest spares) costs at most 20 (light 2, standard 3, heavy 4; tagger and relay
+1, jammer 2). Specs: `09-towers/rules/19-logistics.expect` and the story «Keep a drone in the air».
+A test in the rules' driver checks that every v4 expectation is covered by a plan that passes: the
+coverage planner silently left some out when a new rule shared a step with old ones.
+
+`nash --seeds 60 --set v4=1` (and `--set layout=1` first for the chain). The population is
+today's formations, each with two light spares and landing for a swap, the commander (which
+circles over its base to recharge), and variants: no spares, circling instead of swapping, and a
+second heavy drone (18 of the budget).
+
+| Rules | Equilibrium | Formations with 5 % or more | Cycle share | Beats every other |
+| --- | --- | --- | --- | --- |
+| Valley, v4 step 2 | raid, two heavies 100 % | 1 of 13 | 21 % | raid, two heavies |
+| Chain, v4 step 2 | commander 100 % | 1 of 14 | 16 % | none |
+
+| Variant against its plain formation | Valley | Chain |
+| --- | --- | --- |
+| balanced (swaps) over balanced, circles | +0.66 | +0.66 |
+| raid (swaps) over raid, circles | +1.12 | +0.36 |
+| raid, two heavies over raid | +1.37 | +0.78 |
+| commander (two spares) over commander, no spares | −0.01 | +0.00 |
+
+- Logistics alone makes no cycles, as expected: it adds choices but no counters.
+- **The swap pays a lot** in the arena, where a landing never fails. On ArduPlane a landing and a
+  re-launch are the risk that makes circling worth having (9 of 33 crashes on 2026-11-14).
+- **Spares are worth nothing yet**: nothing takes a drone out but an empty battery, and the
+  captains recharge in time. Tags (step 5) are what makes an airframe a stake.
+- A second heavy drone is a large gain: weight 2 holds a tower alone. Tags should make the heavy
+  drone the target it is meant to be (section 4.6).

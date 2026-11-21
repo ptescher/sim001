@@ -17,6 +17,9 @@ pub enum Order {
     Hold,
     /// Circle over its base.
     Home,
+    /// Land at its base and stay on the ground: with the battery swap (v4), a full battery after
+    /// [`crate::Rules::swap_time`]. A new order takes it up again.
+    Land,
 }
 
 /// A tower as the team knows it.
