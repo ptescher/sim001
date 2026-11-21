@@ -246,6 +246,10 @@ pub struct Rules {
     /// A friend with a relay carries the radio this far (m), in the forest and into a radio shadow.
     #[serde(default)]
     pub relay_range: f32,
+    /// A fort or the spire that a team holds takes a bearing on each loud enemy drone this near
+    /// (m); 0 for no direction finding.
+    #[serde(default)]
+    pub df_range: f32,
 }
 
 impl Default for Rules {
@@ -295,6 +299,7 @@ impl Default for Rules {
             budget: 0.0,
             canopy_range: 0.0,
             relay_range: 0.0,
+            df_range: 0.0,
         }
     }
 }
@@ -332,6 +337,7 @@ impl Rules {
             budget: 20.0,
             canopy_range: 250.0,
             relay_range: 300.0,
+            df_range: 400.0,
             ..Rules::default()
         }
     }
@@ -476,6 +482,29 @@ pub enum Link {
 pub struct TeamMap {
     pub towers: Vec<TowerSighting>,
     pub drones: Vec<Option<DroneSighting>>,
+    /// The bearings its towers take now (v4).
+    pub bearings: Vec<Bearing>,
+}
+
+/// Whether a drone sends (v4): a loud drone sends its telemetry and picture, and can be found by
+/// direction finding; a quiet one sends nothing, and still hears its orders.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Posture {
+    #[default]
+    Loud,
+    Quiet,
+}
+
+/// A direction from a tower to a loud enemy drone: where it is along a line, not where on it.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Bearing {
+    /// The tower that takes it (its index in the game), and where it stands.
+    pub tower: usize,
+    pub from: Vec2,
+    /// The enemy drone (its index in the game).
+    pub drone: usize,
+    /// Radians from north, clockwise.
+    pub angle: f32,
 }
 
 /// A game of Towers.
@@ -510,6 +539,8 @@ pub struct Game {
     pub spares: [Vec<Airframe>; 2],
     /// How long each drone has been on the ground at its base (s).
     pub ground_for: Vec<f32>,
+    /// Whether each drone sends (v4).
+    pub posture: Vec<Posture>,
 }
 
 impl Game {
@@ -541,6 +572,7 @@ impl Game {
             })
             .collect();
         let team_map = TeamMap {
+            bearings: vec![],
             towers: towers
                 .iter()
                 .map(|t| TowerSighting { control: t.control, holder: t.holder, time: 0.0, seen: false })
@@ -566,6 +598,7 @@ impl Game {
             down_for: vec![None; n],
             spares: [vec![], vec![]],
             ground_for: vec![0.0; n],
+            posture: vec![Posture::Loud; n],
         }
     }
 
@@ -704,9 +737,15 @@ impl Game {
             self.jammed[i] = jammed;
             self.silent[i] = if jammed { self.silent[i] + dt } else { 0.0 };
         }
-        // A drone in contact tells its team how much battery it has.
-        for i in (0..self.drones.len()).filter(|&i| !self.jammed[i]) {
-            self.reported[i] = self.battery[i];
+        // A drone that is quiet goes loud at its bingo battery: its failsafe sends again, so that its
+        // commander can bring it home. One that its team hears tells it how much battery it has.
+        for i in 0..self.drones.len() {
+            if self.posture[i] == Posture::Quiet && self.charge(i).is_some_and(|b| b <= self.rules.bingo) {
+                self.posture[i] = Posture::Loud;
+            }
+            if self.heard(i) {
+                self.reported[i] = self.battery[i];
+            }
         }
     }
 
@@ -867,12 +906,12 @@ impl Game {
     /// The same, with or without the team's drones: its sites alone are its towers and its base.
     fn eyes_of(&self, team: Team, with_drones: bool) -> Vec<Eye> {
         let r = &self.rules;
-        // A drone out of contact sends no picture: it sees nothing for its team.
+        // A drone out of contact, or quiet, sends no picture: it sees nothing for its team.
         let drones = self
             .drones
             .iter()
             .enumerate()
-            .filter(|(i, d)| with_drones && d.team == team && d.phase != Phase::Down && !self.jammed[*i])
+            .filter(|(i, d)| with_drones && d.team == team && d.phase != Phase::Down && self.heard(*i))
             .map(|(_, d)| Eye {
                 at: d.at,
                 range: r.drone_vision,
@@ -933,12 +972,19 @@ impl Game {
                 .enumerate()
                 .map(|(i, d)| {
                     if d.team == team {
-                        // A team hears from its own drones while they are in contact.
-                        !self.jammed[i]
+                        // A team hears from its own drones while they are in contact and loud.
+                        self.heard(i)
                     } else {
                         d.phase != Phase::Down && self.sees_drone(&eyes, d.at, d.alt, d.phase == Phase::Flying)
                     }
                 })
+                .collect();
+            // Direction finding (v4): a bearing on each loud enemy drone, and two find it.
+            let bearings = self.bearings(team);
+            let seen: Vec<bool> = seen
+                .into_iter()
+                .enumerate()
+                .map(|(i, s)| s || bearings.iter().filter(|b| b.drone == i).count() >= 2)
                 .collect();
             // The sites alone (towers and base): what a ground station is told besides its drones' reports.
             let site_eyes = self.eyes_of(team, false);
@@ -959,6 +1005,7 @@ impl Game {
                 }
             }
             let map = &mut self.maps[team.index()];
+            map.bearings = bearings;
             for ((d, s), seen) in self.drones.iter().zip(map.drones.iter_mut()).zip(seen) {
                 if seen {
                     *s = Some(DroneSighting { at: d.at, alt: d.alt, vel: d.vel, phase: d.phase, time, seen: true });
@@ -974,6 +1021,35 @@ impl Game {
                 }
             }
         }
+    }
+}
+
+impl Game {
+    /// Whether drone `i`'s team hears its telemetry: it is in contact, and loud.
+    pub fn heard(&self, i: usize) -> bool {
+        !self.jammed[i] && self.posture[i] == Posture::Loud
+    }
+
+    /// The bearings `team`'s towers take now: from each fort or spire it holds, on each loud enemy
+    /// drone that flies within [`Rules::df_range`].
+    pub fn bearings(&self, team: Team) -> Vec<Bearing> {
+        if self.rules.df_range <= 0.0 {
+            return vec![];
+        }
+        let mut out = vec![];
+        for (t, tower) in self.towers.iter().enumerate() {
+            if tower.holder != Some(team) || !matches!(tower.kind, Kind::Fort | Kind::Spire) {
+                continue;
+            }
+            for (i, d) in self.drones.iter().enumerate() {
+                let loud = self.posture[i] == Posture::Loud && d.phase == Phase::Flying;
+                if d.team != team && loud && d.at.distance(tower.at) <= self.rules.df_range {
+                    let to = d.at - tower.at;
+                    out.push(Bearing { tower: t, from: tower.at, drone: i, angle: to.y.atan2(to.x) });
+                }
+            }
+        }
+        out
     }
 }
 
@@ -1339,6 +1415,93 @@ mod tests {
         g.drones[j].payload = Payload::Relay;
         g.look();
         assert!(!g.jammed[i], "a relay 280 m away is");
+    }
+
+    #[test]
+    fn a_quiet_drone_is_in_contact_but_its_team_neither_hears_it_nor_sees_through_it() {
+        let mut g = Game::new(Rules::v4());
+        let (i, scout) = (g.drone(Team::Blue, 0), g.drone(Team::Red, 0));
+        g.drones[i] = Drone { at: Vec2::new(-100.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        g.step(0.1);
+        g.posture[i] = Posture::Quiet;
+        g.step(0.1);
+        g.drones[i].at = Vec2::new(0.0, 0.0);
+        g.drones[scout] = Drone { at: Vec2::new(50.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[scout] };
+        g.step(0.1);
+        assert!(!g.jammed[i], "it hears its orders");
+        let own = g.maps[0].drones[i].unwrap();
+        assert!(!own.seen && own.at != Vec2::ZERO, "its team has where it last heard from it: {own:?}");
+        assert!(g.maps[0].drones[scout].is_none_or(|s| !s.seen), "its camera adds nothing to the map");
+        let v = g.view(Team::Blue);
+        assert!(v.drones[0].linked && !v.drones[0].heard && v.drones[0].at != Vec2::ZERO);
+        g.posture[i] = Posture::Loud;
+        g.step(0.1);
+        assert!(g.maps[0].drones[i].unwrap().seen && g.maps[0].drones[scout].unwrap().seen);
+    }
+
+    #[test]
+    fn a_quiet_drone_reports_no_battery_and_goes_loud_at_its_bingo() {
+        let (mut g, i) = canopy(Vec2::new(-200.0, 0.0), 50.0);
+        g.battery[i] = 100.0;
+        g.reported[i] = 100.0;
+        g.posture[i] = Posture::Quiet;
+        run(&mut g, 10.0);
+        assert_eq!(g.reported[i], 100.0, "it sent nothing");
+        run(&mut g, 31.0);
+        assert_eq!(g.posture[i], Posture::Loud, "at {} s it goes loud", g.battery[i]);
+        assert!((g.reported[i] - g.battery[i]).abs() < 1e-3, "and reports again");
+    }
+
+    /// The Red scout high at `at`, Blue holding the centre if `centre`.
+    fn found(at: Vec2, centre: bool, posture: Posture) -> Game {
+        let mut g = Game::new(Rules::v4());
+        let scout = g.drone(Team::Red, 0);
+        g.drones[scout] = Drone { at, alt: 50.0, phase: Phase::Flying, ..g.drones[scout] };
+        g.posture[scout] = posture;
+        if centre {
+            (g.towers[2].holder, g.towers[2].control) = (Some(Team::Blue), 1.0);
+        }
+        g.look();
+        g
+    }
+
+    #[test]
+    fn a_held_fort_or_spire_takes_a_bearing_on_a_loud_enemy_within_400_m() {
+        assert_eq!(Rules::v4().df_range, 400.0);
+        let home = Game::new(Rules::v4()).towers[0].at;
+        let at = home + Vec2::new(0.0, 300.0);
+        let g = found(at, false, Posture::Loud);
+        let b: Vec<_> = g.maps[0].bearings.iter().filter(|b| b.drone == g.drone(Team::Red, 0)).collect();
+        assert_eq!(b.len(), 1, "the Blue home tower alone: {b:?}");
+        assert_eq!(b[0].tower, 0);
+        assert!((b[0].angle - std::f32::consts::FRAC_PI_2).abs() < 1e-3, "due east: {}", b[0].angle);
+        assert!(g.maps[0].drones[g.drone(Team::Red, 0)].is_none(), "one bearing is no place");
+        let far = found(home + Vec2::new(0.0, 450.0), false, Posture::Loud);
+        assert!(far.maps[0].bearings.is_empty(), "too far");
+        let quiet = found(at, false, Posture::Quiet);
+        assert!(quiet.maps[0].bearings.is_empty(), "quiet");
+        let mut none = found(at, false, Posture::Loud);
+        none.rules.df_range = 0.0;
+        none.look();
+        assert!(none.maps[0].bearings.is_empty(), "no direction finding in today's game");
+    }
+
+    #[test]
+    fn two_bearings_on_a_drone_put_it_on_the_map_and_a_depot_takes_none() {
+        let t = Game::new(Rules::v4()).towers;
+        let at = (t[0].at + t[2].at) / 2.0 + Vec2::new(0.0, 160.0);
+        let g = found(at, true, Posture::Loud);
+        let scout = g.drone(Team::Red, 0);
+        assert_eq!(g.maps[0].bearings.iter().filter(|b| b.drone == scout).count(), 2);
+        let s = g.maps[0].drones[scout].expect("found");
+        assert!(s.seen && s.at == at);
+        let mut depot = Game::new(Rules::v4());
+        (depot.towers[1].holder, depot.towers[1].control) = (Some(Team::Blue), 1.0);
+        let i = depot.drone(Team::Red, 0);
+        depot.drones[i] =
+            Drone { at: t[1].at + Vec2::new(300.0, 0.0), alt: 50.0, phase: Phase::Flying, ..depot.drones[i] };
+        depot.look();
+        assert!(depot.maps[0].bearings.iter().all(|b| b.tower != 1), "a depot takes no bearing");
     }
 
     #[test]

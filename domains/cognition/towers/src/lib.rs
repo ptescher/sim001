@@ -63,6 +63,12 @@ pub trait Captain {
         recreation_towers::Loadout::squad(rules)
     }
 
+    /// Which of the drones given `orders` just now go loud or quiet with them (v4): `(drone, posture)`.
+    /// None, unless the captain says so.
+    fn posture(&mut self, _view: &TeamView, _orders: &[(usize, Order)]) -> Vec<(usize, recreation_towers::Posture)> {
+        vec![]
+    }
+
     /// The standing orders that go with `orders`, given just now: `(drone, standing order)`.
     fn standing(&mut self, _view: &TeamView, _orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
         vec![]
@@ -90,6 +96,10 @@ pub trait Captain {
 impl<C: Captain + ?Sized> Captain for &mut C {
     fn loadout(&mut self, rules: &Rules) -> recreation_towers::Loadout {
         (**self).loadout(rules)
+    }
+
+    fn posture(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, recreation_towers::Posture)> {
+        (**self).posture(view, orders)
     }
 
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
@@ -136,11 +146,13 @@ impl<C: Captain> Command for Directing<C> {
     fn decide(&mut self, view: &TeamView) -> Result<Vec<Directive>, String> {
         let orders = self.0.decide(view)?;
         let queues = self.0.queue(view, &orders);
+        let postures = self.0.posture(view, &orders);
         Ok(orders
             .into_iter()
             .map(|(k, order)| {
                 let queue = queues.iter().find(|(j, _)| *j == k).map(|(_, q)| q.clone()).unwrap_or_default();
-                Directive { drone: k, order, queue }
+                let posture = postures.iter().find(|(j, _)| *j == k).map(|&(_, p)| p);
+                Directive { drone: k, order, queue, posture }
             })
             .collect())
     }
@@ -319,8 +331,8 @@ pub struct Match<'u> {
     wind: Vec2,
     /// How long an order takes to reach its drone (s).
     delay: f32,
-    /// Orders on their way: (when the drone flies it, drone index, order).
-    pending: Vec<(f32, usize, Order, Vec<Queued>)>,
+    /// Orders on their way: when the drone flies it, the drone's index in the game, and what it is told.
+    pending: Vec<(f32, usize, Directive)>,
     /// What each drone was told: its order and its queue.
     told: Vec<Instruction>,
     next_decision: f32,
@@ -424,18 +436,21 @@ impl<'u> Match<'u> {
             for team in Team::BOTH {
                 let commander: &mut dyn Command = if team == Team::Blue { &mut *blue } else { &mut *red };
                 for d in commander.decide(&game.view(team))?.into_iter().filter(|d| d.drone < drones) {
-                    self.pending.push((game.time + self.delay, game.drone(team, d.drone), d.order, d.queue));
+                    self.pending.push((game.time + self.delay, game.drone(team, d.drone), d));
                 }
             }
         }
         // An order reaches a drone that is in contact when it arrives; one in a radio shadow
         // never hears it.
-        self.pending.retain(|(when, i, order, queue)| {
+        self.pending.retain(|(when, i, d)| {
             if game.time < *when {
                 return true;
             }
             if !game.jammed[*i] {
-                self.told[*i].give_queue(*order, queue.clone());
+                self.told[*i].give_queue(d.order, d.queue.clone());
+                if let Some(p) = d.posture {
+                    game.posture[*i] = p;
+                }
             }
             false
         });
@@ -997,6 +1012,32 @@ mod tests {
         assert!(m.game.drones[i].at.distance(m.game.rules.base(Team::Blue)) < 60.0, "at its base");
         run(&mut m, 10.0, &mut Silent);
         assert!(m.flyers[i].flying, "the spare takes off");
+    }
+
+    /// A captain that orders every drone to hold, quiet.
+    struct HushedHold;
+
+    impl Captain for HushedHold {
+        fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
+            Ok(view.drones.iter().map(|d| (d.k, Order::Hold)).collect())
+        }
+
+        fn posture(&mut self, _: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, recreation_towers::Posture)> {
+            orders.iter().map(|&(k, _)| (k, recreation_towers::Posture::Quiet)).collect()
+        }
+    }
+
+    #[test]
+    fn a_drone_goes_quiet_when_its_order_says_so_and_one_in_a_shadow_does_not_hear_it() {
+        use recreation_towers::Posture;
+        let mut m = Match::with_rules(Rules::v4(), 1);
+        let (i, j) = (put_blue(&mut m, false), m.game.drone(Team::Blue, 1));
+        run(&mut m, 4.0, &mut HushedHold);
+        assert_eq!((m.game.posture[i], m.game.posture[j]), (Posture::Quiet, Posture::Quiet));
+        let mut m = Match::with_rules(Rules::v4(), 1);
+        let i = put_blue(&mut m, true);
+        run(&mut m, 4.0, &mut HushedHold);
+        assert_eq!(m.game.posture[i], Posture::Loud, "in the shadow it hears nothing");
     }
 
     #[test]

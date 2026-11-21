@@ -10,7 +10,7 @@
 //! loop, in contact or not. What it returns is the order the drone flies. A unit can read
 //! nothing else: [`OnBoard`] has no way to another drone, or to the team's map.
 
-use crate::{EdgeObs, Game, Instruction, Order, Phase, Queued, Team, TeamView, edge};
+use crate::{EdgeObs, Game, Instruction, Order, Phase, Posture, Queued, Team, TeamView, edge};
 use std::cell::OnceCell;
 
 /// What a command gives a drone: the order, and the queue for when it is out of contact.
@@ -19,16 +19,18 @@ pub struct Directive {
     pub drone: usize,
     pub order: Order,
     pub queue: Vec<Queued>,
+    /// Loud or quiet from now on (v4); `None` leaves it as it is.
+    pub posture: Option<Posture>,
 }
 
 impl Directive {
     /// An order with no queue: out of contact, the drone flies home when its link is lost.
     pub fn new(drone: usize, order: Order) -> Directive {
-        Directive { drone, order, queue: vec![] }
+        Directive { drone, order, queue: vec![], posture: None }
     }
 
     pub fn with_queue(drone: usize, order: Order, queue: Vec<Queued>) -> Directive {
-        Directive { drone, order, queue }
+        Directive { drone, order, queue, posture: None }
     }
 }
 

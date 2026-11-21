@@ -122,3 +122,35 @@ relays any friend 300 m, into a radio shadow too; the mesh (70 m) is as before. 
   −0.06): a fixed formation never needs contact, and the commander sends the relay drone where it
   sends any drone. Placing a relay is a decision for a commander that knows about the canopy.
 - Nothing punishes a drone yet: the counters come with emission and DF (step 4) and tags (step 5).
+
+## Step 4: loud and quiet drones, and direction finding (2026-11-20)
+
+Built: a drone is loud or quiet (`Posture`, sent with an order as `Directive::posture`). A quiet
+drone hears its orders and sends nothing: no telemetry, no picture, no battery; its team keeps it
+where it last heard from it; it goes loud at its bingo battery (its failsafe). A fort or the spire
+that a team holds takes a bearing on each loud enemy drone within 400 m (`TeamView::bearings`);
+two bearings on one drone put it on the team's map. Spec: `09-towers/rules/21-emission.expect`.
+The v4 population adds "raid, quiet" and "balanced, quiet".
+
+| Rules | Equilibrium | Formations with 5 % or more | Cycle share | Beats every other |
+| --- | --- | --- | --- | --- |
+| Valley, v4 step 4 | raid, two heavies 100 % | 1 of 17 | 11 % | raid, two heavies |
+| Chain, v4 step 4 | raid, quiet 50 %, balanced, two heavies 32 %, commander 18 % | **3 of 18** | 26 % | none |
+
+| Cell | Valley | Chain |
+| --- | --- | --- |
+| commander over raid | −1.14 | **+0.70** |
+| commander over raid, quiet | −1.43 | **−0.77** |
+| balanced, quiet over balanced | +0.07 | +0.07 |
+| raid, quiet over raid | +0.47 | +1.12 |
+
+- **The first counter.** On the chain the commander beats the loud raid and loses to the quiet
+  one: it reacts to the raiders that its towers find, and it cannot find quiet ones. The chain's
+  equilibrium is a mix of three for the first time.
+- The first version let a quiet drone report its battery, and kept its position at the base: a
+  formation then thought its quiet drones were near home and left them at their posts longer
+  (balanced, quiet +1.20 over balanced). With no battery report and the failsafe at bingo, the
+  quiet balanced formation is level with the loud one (+0.07).
+- **Not found out**: why a quiet raid still beats a loud raid between two fixed formations (+0.47,
+  +1.12), where neither side uses what it finds. The raid's drones are in the enemy's radio shadow
+  for much of the game, so their reports are stale either way; the difference is elsewhere.

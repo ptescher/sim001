@@ -11,7 +11,7 @@ use recreation_towers::flight::{self, Plan};
 use recreation_towers::map::LaneName;
 use recreation_towers::{
     Advice, AdviceKind, Advisor, Airframe, Belief, Class, Commander, Game, Instruction, Link, LinkFilter, Loadout,
-    Order, Outcome, Payload, Phase, Proposal, Queued, Rules, Standing, Team, When,
+    Order, Outcome, Payload, Phase, Posture, Proposal, Queued, Rules, Standing, Team, When,
 };
 use std::path::Path;
 
@@ -359,6 +359,13 @@ impl World {
                 Some(LOW),
             ),
             "low over the lake" => (new("low over the lake"), self.game.map.lake.at, Some(LOW)),
+            // 268 m from the Blue home tower and from the centre tower: past what either sees, within
+            // what both find.
+            "high between the Blue home tower and the centre tower" => (
+                new("high between the Blue home tower and the centre tower"),
+                (self.game.map.towers[0] + self.game.map.towers[2]) / 2.0 + Vec2::new(0.0, 160.0),
+                Some(ALT),
+            ),
             "50 m from the first Blue drone" => {
                 (new("50 m from the first Blue drone"), self.shadow() + Vec2::new(0.0, 50.0), Some(ALT))
             }
@@ -854,6 +861,37 @@ fn bindings() -> Bindings<World> {
             w.game.drones[i].payload = if v.as_str() == Some("a relay") { Payload::Relay } else { Payload::Camera };
             w.game.look();
         })
+        .observe("the direction finding", |w| if w.game.rules.df_range > 0.0 { "on" } else { "off" })
+        .arrange("the direction finding", |w, v| {
+            w.game.rules.df_range = if v.as_str() == Some("on") { Rules::v4().df_range } else { 0.0 };
+            w.game.look();
+        })
+        .observe("the emission of the first Blue drone", |w| posture_name(w.game.posture[w.game.drone(Team::Blue, 0)]))
+        .arrange("the emission of the first Blue drone", |w, v| {
+            let i = w.game.drone(Team::Blue, 0);
+            w.game.posture[i] = posture(v);
+            w.game.look();
+        })
+        .observe("the emission of the Red scout", |w| posture_name(w.game.posture[w.scout()]))
+        .arrange("the emission of the Red scout", |w, v| {
+            let i = w.scout();
+            w.game.posture[i] = posture(v);
+            // Arranged, it has been so all along: Blue has no record of a quiet scout that it never saw.
+            if w.game.posture[i] == Posture::Quiet {
+                w.game.maps[Team::Blue.index()].drones[i] = None;
+            }
+            w.game.look();
+        })
+        .observe("the bearings on the Red scout", |w| {
+            w.game.maps[Team::Blue.index()].bearings.iter().filter(|b| b.drone == w.scout()).count() as f64
+        })
+        .on("the first Blue drone flies quiet for 10 seconds", |w| w.run(10.0))
+        .on("the first Blue drone flies to the west circle", |w| {
+            let i = w.game.drone(Team::Blue, 0);
+            let at = w.game.map.towers[1] + Vec2::new(40.0, 0.0);
+            w.put(i, at, Some(LOW));
+            w.run(10.0);
+        })
         .observe("the airframes", |w| if w.game.rules.finite_airframes { "finite" } else { "unlimited" })
         .arrange("the airframes", |w, v| {
             let v4 = Rules::v4();
@@ -967,6 +1005,17 @@ fn bindings() -> Bindings<World> {
         })
 }
 
+fn posture(v: &Value) -> Posture {
+    if v.as_str() == Some("quiet") { Posture::Quiet } else { Posture::Loud }
+}
+
+fn posture_name(p: Posture) -> &'static str {
+    match p {
+        Posture::Loud => "loud",
+        Posture::Quiet => "quiet",
+    }
+}
+
 fn suite() -> Acceptance {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../expectations");
     Acceptance::load(&dir).unwrap_or_else(|e| panic!("{e}")).with_coverage()
@@ -1004,7 +1053,7 @@ fn every_test_of_the_section_passes_with_no_window() {
 /// make a clean plan for, and a skipped rule would not show as a failure.
 #[test]
 fn every_expectation_of_the_v4_rules_is_tested_and_passes() {
-    const V4: &[&str] = &["19-logistics.expect", "20-canopy.expect"];
+    const V4: &[&str] = &["19-logistics.expect", "20-canopy.expect", "21-emission.expect"];
     let a = suite();
     let report = a.run(&mut bindings(), &RunOptions::default());
     let by = expectation_story::coverage(&a.suite, &a.plans);

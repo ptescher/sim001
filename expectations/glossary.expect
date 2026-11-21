@@ -504,6 +504,17 @@ Term: v4 rules
   [[loadout]], the [[battery swap]], finite airframes, the canopy and the radio, loud and quiet
   drones, taggers, jammers and the weather. Today's game has them off.
 
+Term: Loud
+  In [[Towers]] with the [[v4 rules]], a drone that sends its telemetry and its picture to its
+  team. The enemy can take a [[bearing]] on it.
+
+Term: Quiet
+  In [[Towers]] with the [[v4 rules]], a drone that sends nothing. It still hears its orders.
+
+Term: Bearing
+  In [[Towers]] with the [[v4 rules]], the direction from a tower to a [[loud]] enemy drone. Two
+  bearings on one drone show where it is.
+
 Term: Relay
   In [[Towers]] with the [[v4 rules]], a payload of a standard or a heavy drone: it carries the
   radio of its friends 300 m, in the forest and in a [[radio shadow]].

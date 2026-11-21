@@ -6,7 +6,7 @@
 use crate::{Captain, Persist, Prepared};
 use recreation_towers::map::LayoutKind;
 use recreation_towers::{
-    Advise, Airframe, Class, Commander, Loadout, Order, Phase, Queued, Rules, Standing, Team, TeamView, Unit,
+    Advise, Airframe, Class, Commander, Loadout, Order, Phase, Posture, Queued, Rules, Standing, Team, TeamView, Unit,
 };
 
 /// Where a drone goes. The towers are numbered Blue home, west, centre, east, Red home.
@@ -58,16 +58,23 @@ pub struct Formation {
     recharging: [bool; 5],
     /// A drone with a low battery lands for a swap; if not, it circles over its base.
     swap: bool,
+    /// Every drone is quiet: it needs no picture and no telemetry to fly to its post.
+    quiet: bool,
 }
 
 impl Formation {
     pub fn new(name: &'static str, posts: [Post; 5], rules: Rules) -> Formation {
-        Formation { name, posts, rules, recharging: [false; 5], swap: false }
+        Formation { name, posts, rules, recharging: [false; 5], swap: false, quiet: false }
     }
 
     /// The same, landing for a battery swap (or not).
     pub fn swapping(self, swap: bool) -> Formation {
         Formation { swap, ..self }
+    }
+
+    /// The same, with every drone quiet (or loud).
+    pub fn hushed(self, quiet: bool) -> Formation {
+        Formation { quiet, ..self }
     }
 }
 
@@ -84,6 +91,10 @@ impl<C: Captain> Captain for Loaded<C> {
 
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         self.captain.decide(view)
+    }
+
+    fn posture(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Posture)> {
+        self.captain.posture(view, orders)
     }
 
     fn standing(&mut self, view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Standing)> {
@@ -104,6 +115,11 @@ impl<C: Captain> Captain for Loaded<C> {
 }
 
 impl Captain for Formation {
+    fn posture(&mut self, _view: &TeamView, orders: &[(usize, Order)]) -> Vec<(usize, Posture)> {
+        let p = if self.quiet { Posture::Quiet } else { Posture::Loud };
+        orders.iter().map(|&(k, _)| (k, p)).collect()
+    }
+
     fn decide(&mut self, view: &TeamView) -> Result<Vec<(usize, Order)>, String> {
         let base = self.rules.base(view.team);
         let mut orders = vec![];
@@ -193,6 +209,8 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
         Loadout { airframes: [a, vec![Airframe::plain(Class::Light)]].concat() }
     };
     let entry = |name: &'static str, posts: Option<[Post; 5]>, loadout: &Loadout, swap: bool| -> (&'static str, Make) {
+        // A name that says "quiet" is a quiet formation.
+        let quiet = name.contains("quiet");
         let loadout = loadout.clone();
         (
             name,
@@ -200,7 +218,7 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
                 match posts {
                     Some(posts) => Box::new(Loaded {
                         captain: Prepared {
-                            captain: Formation::new(name, posts, rules).swapping(swap),
+                            captain: Formation::new(name, posts, rules).swapping(swap).hushed(quiet),
                             autonomy: Persist,
                         },
                         loadout: loadout.clone(),
@@ -245,6 +263,8 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     out.push(entry("raid, two heavies", find("raid"), &heavies, true));
     out.push(entry("balanced, two heavies", find("balanced"), &heavies, true));
     out.push(entry("raid, relay", find("raid"), &relay, true));
+    out.push(entry("raid, quiet", find("raid"), &spares, true));
+    out.push(entry("balanced, quiet", find("balanced"), &spares, true));
     out
 }
 
@@ -325,6 +345,20 @@ mod tests {
         assert_eq!(swaps.decide(&v).unwrap()[0].1, Order::Land);
         let mut circles = Formation::new("test", [Post::Centre; 5], rules);
         assert_eq!(circles.decide(&v).unwrap()[0].1, Order::Home);
+    }
+
+    #[test]
+    fn a_quiet_formation_sends_each_order_quiet_through_its_wrappers() {
+        let rules = Rules::v4();
+        let all = formations(rules);
+        let (_, make) = all.iter().find(|(n, _)| *n == "raid, quiet").expect("a quiet raid");
+        let mut c = make();
+        let v = view(Team::Blue);
+        let orders = c.decide(&v).unwrap();
+        assert!(c.posture(&v, &orders).iter().all(|&(_, p)| p == Posture::Quiet));
+        let (_, loud) = all.iter().find(|(n, _)| *n == "raid").unwrap();
+        let mut c = loud();
+        assert!(c.posture(&v, &orders).iter().all(|&(_, p)| p == Posture::Loud));
     }
 
     #[test]
