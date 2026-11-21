@@ -239,6 +239,15 @@ Vocabulary:
     Say: wait 10 seconds while B1 flies quiet
   Event: the first Blue drone flies to the west circle
     Say: send B1 to the west tower, and wait until it circles the tower low
+  # The v4 rules: the weather.
+  Event: the Red scout circles near the Blue home tower for 10 seconds
+    Say: wait 10 seconds while the Red scout circles 100 m from the Blue home tower
+  State: the cloud base is none | 40 m
+    Set: {value}
+    Shows: 40 m: the forecast in the Blue panel says CLOUD 40 M
+  State: the visibility is unlimited | 80 m
+    Set: {value}
+    Shows: 80 m: the forecast in the Blue panel says VIS 80 M
   # The v4 rules: jammers.
   State: the jammers are off | on
     Set: {value}
@@ -554,6 +563,8 @@ Vocabulary:
     And the emission of the Red scout is loud
     And the tags are off
     And the jammers are off
+    And the cloud base is none
+    And the visibility is unlimited
     And the payload of the Red scout is a camera
     And the payload of the first Blue drone is a camera
     And the payload of the first Blue drone on the Red map is unknown

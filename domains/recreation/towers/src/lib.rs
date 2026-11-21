@@ -269,6 +269,21 @@ pub struct Rules {
     pub jam_found: f32,
     #[serde(default)]
     pub jam_drain: f32,
+    /// The weather changes from game to game (v4): a host draws a [`Weather`] for each.
+    #[serde(default)]
+    pub weather: bool,
+}
+
+/// The weather of a game (v4), as both commanders are told it before the game.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Weather {
+    /// A drone at or above this height (m) is in the cloud: it sees nothing and nothing sees it.
+    /// 0 for no low cloud.
+    pub cloud_base: f32,
+    /// No eye sees farther than this (m); 0 for no limit.
+    pub visibility: f32,
+    /// North, east (m/s).
+    pub wind: Vec2,
 }
 
 impl Default for Rules {
@@ -325,6 +340,7 @@ impl Default for Rules {
             jam_bubble: 0.0,
             jam_found: 0.0,
             jam_drain: 0.0,
+            weather: false,
         }
     }
 }
@@ -369,6 +385,7 @@ impl Rules {
             jam_bubble: 100.0,
             jam_found: 800.0,
             jam_drain: 0.5,
+            weather: true,
             ..Rules::default()
         }
     }
@@ -578,6 +595,8 @@ pub struct Game {
     pub tags_left: Vec<u32>,
     /// Each drone has shown its payload to the enemy, by using it.
     pub revealed: Vec<bool>,
+    /// The weather (v4); the default is clear, as today's game.
+    pub weather: Weather,
 }
 
 impl Game {
@@ -638,6 +657,7 @@ impl Game {
             posture: vec![Posture::Loud; n],
             tags_left: vec![rules.tags; n],
             revealed: vec![false; n],
+            weather: Weather::default(),
         }
     }
 
@@ -1012,15 +1032,17 @@ impl Game {
             .filter(|(i, d)| with_drones && d.team == team && d.phase != Phase::Down && self.heard(*i))
             .map(|(_, d)| Eye {
                 at: d.at,
+                alt: d.alt,
                 range: r.drone_vision,
                 high: d.phase == Phase::Flying && d.alt >= r.treetop,
             });
         let towers = self.towers.iter().filter(|t| t.holder == Some(team)).map(|t| Eye {
             at: t.at,
+            alt: r.treetop,
             range: r.vision(t.kind),
             high: true,
         });
-        let base = Eye { at: r.base(team), range: r.base_vision, high: false };
+        let base = Eye { at: r.base(team), alt: 0.0, range: r.base_vision, high: false };
         drones.chain(towers).chain([base]).collect()
     }
 
@@ -1028,10 +1050,27 @@ impl Game {
     /// trees from an eye that does not look from above: it is seen only along open ground.
     fn sees_drone(&self, eyes: &[Eye], at: Vec2, alt: f32, flying: bool) -> bool {
         let above = flying && alt >= self.rules.treetop;
+        // The weather (v4): nothing sees into or out of the cloud, and no eye sees past the visibility.
+        let cloud = self.weather.cloud_base;
+        if cloud > 0.0 && alt >= cloud {
+            return false;
+        }
         eyes.iter().any(|e| {
             let d = e.at.distance(at);
-            d <= e.range && (above || (e.high && d <= self.rules.look_down) || self.map.line_open(e.at, at))
+            d <= self.seen_within(e) && (above || (e.high && d <= self.rules.look_down) || self.map.line_open(e.at, at))
         })
+    }
+
+    /// How far an eye sees in the weather: nothing from in the cloud, and no farther than the visibility.
+    fn seen_within(&self, e: &Eye) -> f32 {
+        let w = self.weather;
+        if w.cloud_base > 0.0 && e.alt >= w.cloud_base {
+            0.0
+        } else if w.visibility > 0.0 {
+            e.range.min(w.visibility)
+        } else {
+            e.range
+        }
     }
 
     /// The enemy drones (their numbers in the game) that drone `i` sees with its sensor alone: in
@@ -1044,6 +1083,7 @@ impl Game {
         }
         let eye = [Eye {
             at: d.at,
+            alt: d.alt,
             range: self.rules.drone_vision,
             high: d.phase == Phase::Flying && d.alt >= self.rules.treetop,
         }];
@@ -1062,7 +1102,8 @@ impl Game {
         self.jam(0.0);
         for team in Team::BOTH {
             let eyes = self.eyes(team);
-            let sees_tower = |at: Vec2| eyes.iter().any(|e| e.at.distance(at) <= e.range);
+            let reach: Vec<(Vec2, f32)> = eyes.iter().map(|e| (e.at, self.seen_within(e))).collect();
+            let sees_tower = |at: Vec2| reach.iter().any(|&(p, r)| p.distance(at) <= r);
             let time = self.time;
             let seen: Vec<bool> = self
                 .drones
@@ -1168,6 +1209,8 @@ impl Game {
 /// Something a team sees from.
 struct Eye {
     at: Vec2,
+    /// How high it looks from (m): a tower's top is at the treetops, a base on the ground.
+    alt: f32,
     range: f32,
     /// It looks from above the trees (a tower, a drone above the treetops).
     high: bool,
@@ -1692,6 +1735,37 @@ mod tests {
         g.battery[j] = 100.0;
         run(&mut g, 10.0);
         assert!((g.battery[j] - 85.0).abs() < 0.01, "{}", g.battery[j]);
+    }
+
+    /// Blue sees the Red scout high, 100 m from the Blue home tower, in `weather`?
+    fn sees_scout(weather: Weather, alt: f32) -> bool {
+        let mut g = Game::new(Rules::v4());
+        g.weather = weather;
+        let j = g.drone(Team::Red, 0);
+        g.drones[j] = Drone { at: g.towers[0].at + Vec2::new(0.0, 100.0), alt, phase: Phase::Flying, ..g.drones[j] };
+        g.look();
+        g.maps[0].drones[j].is_some_and(|s| s.seen)
+    }
+
+    #[test]
+    fn a_drone_in_the_cloud_is_unseen_and_poor_visibility_shortens_every_eye() {
+        assert!(sees_scout(Weather::default(), 50.0), "a clear day");
+        assert!(!sees_scout(Weather { cloud_base: 40.0, ..Weather::default() }, 50.0), "in the cloud");
+        assert!(sees_scout(Weather { cloud_base: 60.0, ..Weather::default() }, 50.0), "under the cloud");
+        assert!(!sees_scout(Weather { visibility: 80.0, ..Weather::default() }, 50.0), "100 m in 80 m of visibility");
+        assert!(sees_scout(Weather { visibility: 120.0, ..Weather::default() }, 50.0));
+    }
+
+    #[test]
+    fn a_drone_in_the_cloud_sees_nothing() {
+        let mut g = Game::new(Rules::v4());
+        g.weather.cloud_base = 40.0;
+        let (i, j) = (g.drone(Team::Blue, 0), g.drone(Team::Red, 0));
+        g.drones[i] = Drone { at: Vec2::new(0.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        g.drones[j] = Drone { at: Vec2::new(60.0, 0.0), alt: 30.0, phase: Phase::Flying, ..g.drones[j] };
+        g.look();
+        assert!(g.maps[0].drones[j].is_none_or(|s| !s.seen), "Blue's eye is in the cloud");
+        assert!(g.drone_senses(i).is_empty());
     }
 
     #[test]

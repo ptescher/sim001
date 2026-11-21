@@ -1,6 +1,6 @@
 //! What a seat gets: its team's map of the game ([`TeamView`]), and the orders it gives.
 
-use crate::{Bearing, Class, DroneSighting, Game, Kind, Outcome, Payload, Phase, Team};
+use crate::{Bearing, Class, DroneSighting, Game, Kind, Outcome, Payload, Phase, Team, Weather};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -119,6 +119,9 @@ pub struct TeamView {
     /// The bearings the team's towers take now on loud enemy drones (v4).
     #[serde(default)]
     pub bearings: Vec<Bearing>,
+    /// The weather of the game, as both teams are told it (v4).
+    #[serde(default)]
+    pub weather: Weather,
 }
 
 /// The umpire's word: the clock, the scores and the outcome. The same for every seat. (In the
@@ -240,6 +243,7 @@ impl Game {
             drones,
             enemies,
             bearings: map.bearings.clone(),
+            weather: self.weather,
         }
     }
 }

@@ -301,7 +301,13 @@ C2 or C3 is cut, not kept.
    **Done** for the jammer (`23-jammer.expect`, `Posture::Jam`); airtime (a short order burns
    through a jammer's edge) is not built, and the population has no captain that scripts its
    drones against one that orders them, so the cycle of section 4.7 is not measured yet.
-7. **Conditions and layouts per game**, with the forecast.
+7. **Conditions and layouts per game**, with the forecast. **Done** for the weather
+   (`24-weather.expect`: cloud base, visibility, stronger wind, drawn per seed and in the
+   `TeamView`); the layout is not drawn per game (the chain's formations name its outposts), the
+   forecast has no error, and a light drone does not feel the wind more than the others yet.
+
+All the rules are built (2026-11-20). What they give, and what is next, is at the end of
+`plans/towers-rules-v4-results.md`.
 8. **SITL**: measure each airframe first (v3 section 7: speed, turn, climb, endurance, the landing
    and re-launch), then the top rows of the matrix on SITL.
 
