@@ -85,7 +85,7 @@ impl Formation {
 
 /// What a hunter at `at` does: go for the nearest enemy drone its team sees now, or circle high over
 /// the centre tower.
-fn hunt(view: &TeamView, at: glam::Vec2) -> Order {
+pub(crate) fn hunt(view: &TeamView, at: glam::Vec2) -> Order {
     let quarry = view.enemies.iter().filter(|e| e.seen).min_by(|a, b| a.at.distance(at).total_cmp(&b.at.distance(at)));
     match quarry {
         Some(e) => Order::Intercept(e.k),
@@ -310,6 +310,34 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
     };
     out.push(entry("balanced, hunter", with_hunter(find("balanced")), &hunter, true));
     out.push(entry("raid, jammer", find("raid"), &jammer, true));
+    // Tacticians: the commander's towers, with the v4 tools (crate::tactics).
+    let tactician = |name: &'static str, loadout: &Loadout, quiet: bool| -> (&'static str, Make) {
+        let loadout = loadout.clone();
+        (
+            name,
+            Box::new(move || {
+                let t = crate::Tactician::new(rules);
+                let captain = if quiet { t } else { t.loud() };
+                Box::new(Loaded { captain, loadout: loadout.clone() })
+            }),
+        )
+    };
+    // A jammer on the third standard drone, a tagger on the light one, a light spare: 20.
+    let jam_hunt = {
+        let mut a = jammer.airframes.clone();
+        a[4] = Airframe::new(Class::Light, recreation_towers::Payload::Tagger);
+        Loadout { airframes: a }
+    };
+    // Two heavy drones, a tagger on the light one, a light spare: 19.
+    let heavy_hunt = {
+        let mut a = heavies.airframes.clone();
+        a[4] = Airframe::new(Class::Light, recreation_towers::Payload::Tagger);
+        Loadout { airframes: a }
+    };
+    out.push(tactician("tactician", &hunter, true));
+    out.push(tactician("tactician, loud", &hunter, false));
+    out.push(tactician("tactician, jammer", &jam_hunt, true));
+    out.push(tactician("tactician, heavies", &heavy_hunt, true));
     out.push(entry("balanced, jammer", find("balanced"), &jammer, true));
     out.push(entry("raid, hunter", with_hunter(find("raid")), &hunter, true));
     out.push(entry(
@@ -321,6 +349,67 @@ fn v4_formations(rules: Rules) -> Vec<(&'static str, Make)> {
         &hunters,
         true,
     ));
+    out
+}
+
+/// `n` ways to play drawn from `seed` (v4): for each drone an airframe, a payload and a post of the
+/// layout (a hunter carries a tagger), quiet or loud, landing or circling, and light spares to the
+/// budget.
+pub fn mixes(rules: Rules, n: usize, seed: u64) -> Vec<(&'static str, Make)> {
+    use Post::*;
+    use recreation_towers::Payload;
+    let mut rng = fastrand::Rng::with_seed(seed);
+    let mut posts = vec![Centre, West, East, OwnHome, EnemyHome, Hunt];
+    if rules.layout == LayoutKind::Chain {
+        posts.extend([OwnWest, OwnMid, OwnEast, FarWest, FarMid, FarEast]);
+    }
+    let mut out: Vec<(&'static str, Make)> = vec![];
+    while out.len() < n {
+        let mut slots = [Centre; 5];
+        let mut airframes = vec![];
+        for slot in &mut slots {
+            *slot = posts[rng.usize(..posts.len())];
+            let class = match rng.u8(..4) {
+                0 => Class::Light,
+                3 => Class::Heavy,
+                _ => Class::Standard,
+            };
+            let a = if *slot == Hunt {
+                Airframe::new(if class == Class::Heavy { Class::Light } else { class }, Payload::Tagger)
+            } else {
+                let payload = match rng.u8(..10) {
+                    0 => Payload::Relay,
+                    1 | 2 => Payload::Jammer,
+                    _ => Payload::Camera,
+                };
+                Airframe::new(class, if payload.fits(class) { payload } else { Payload::Camera })
+            };
+            airframes.push(a);
+        }
+        let mut loadout = Loadout { airframes };
+        if rules.budget > 0.0 && loadout.cost() > rules.budget {
+            continue;
+        }
+        while loadout.airframes.len() < recreation_towers::MAX_AIRFRAMES
+            && (rules.budget <= 0.0 || loadout.cost() + Class::Light.cost() <= rules.budget)
+        {
+            loadout.airframes.push(Airframe::plain(Class::Light));
+        }
+        let (quiet, swap) = (rng.bool(), rng.bool());
+        let name: &'static str = Box::leak(format!("mix {:02}", out.len() + 1).into_boxed_str());
+        out.push((
+            name,
+            Box::new(move || {
+                Box::new(Loaded {
+                    captain: Prepared {
+                        captain: Formation::new(name, slots, rules).swapping(swap).hushed(quiet),
+                        autonomy: Persist,
+                    },
+                    loadout: loadout.clone(),
+                })
+            }),
+        ));
+    }
     out
 }
 
@@ -454,6 +543,33 @@ mod tests {
         assert_eq!(p[2].1, Posture::Jam);
         assert_eq!(p[0].1, Posture::Quiet);
         assert!(formations(rules).iter().any(|(n, _)| *n == "raid, jammer"));
+    }
+
+    #[test]
+    fn mixes_are_drawn_from_a_seed_within_the_budget_and_differ() {
+        for layout in [LayoutKind::Valley, LayoutKind::Chain] {
+            let rules = Rules { layout, ..Rules::v4() };
+            let a = mixes(rules, 20, 7);
+            assert_eq!(a.len(), 20);
+            let loadouts: Vec<Loadout> = a.iter().map(|(_, m)| m().loadout(&rules)).collect();
+            for l in &loadouts {
+                assert!(l.check(&rules).is_ok(), "{:?}: {:?}", l, l.check(&rules));
+            }
+            let again: Vec<Loadout> = mixes(rules, 20, 7).iter().map(|(_, m)| m().loadout(&rules)).collect();
+            assert_eq!(loadouts, again, "the same seed, the same mixes");
+            let distinct: std::collections::HashSet<String> = loadouts.iter().map(|l| format!("{l:?}")).collect();
+            assert!(distinct.len() > 10, "they differ");
+            let mut c = a[0].1();
+            assert_eq!(c.decide(&view(Team::Blue)).unwrap().len(), 5);
+        }
+    }
+
+    #[test]
+    fn the_v4_population_has_tacticians() {
+        let all = formations(Rules::v4());
+        for name in ["tactician", "tactician, loud", "tactician, jammer", "tactician, heavies"] {
+            assert!(all.iter().any(|(n, _)| *n == name), "{name}");
+        }
     }
 
     #[test]

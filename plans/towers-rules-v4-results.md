@@ -264,3 +264,36 @@ equilibrium is a corner. Next, in this order:
 3. **The pilot's vignettes** (section 8.3): the rules now give the pilot decisions (evade or keep
    capturing when a hunter is seen, chase or let go, break silence, land or stretch).
 4. C7 (snowball) and the game's length, then SITL for the top rows.
+
+## Step 8: a wider population (2026-11-20)
+
+Built: the `Tactician` (`cognition_towers::tactics`): the default commander's towers, with the v4
+tools: a tagger hunts (it counts for nothing in a circle), a drone attacking a tower its team does
+not hold goes quiet, a jammer is on within 250 m of the tower it attacks, and home is a landing.
+Four in the v4 population ("tactician" and "tactician, loud" with a light tagger and two light
+spares; "tactician, jammer" with a jammer and a tagger; "tactician, heavies" with two heavy
+drones and a tagger). `nash --mixes N [--mix-seed S]` adds N ways to play drawn from a seed: each
+drone's airframe, payload and post (a hunter carries a tagger), quiet or loud, landing or
+circling, light spares to the budget. The report now also counts the formations within 0.05 of
+the best against the equilibrium (the linear program gives one corner, which can understate how
+many are nearly as good).
+
+`nash --seeds 40 --set v4=1 --mixes 24` (and `--set layout=1` first for the chain):
+
+| Rules | Formations | Equilibrium | Within 0.05 of the best against it | Cycle share | Beats every other |
+| --- | --- | --- | --- | --- | --- |
+| Valley, all v4 rules | 50 | raid, hunter 100 % | 2 (two hunters, −0.03) | 22 % | none |
+| Chain, all v4 rules | 51 | tactician, heavies 100 % | 1 | 23 % | none |
+
+- **A wider population did not widen the equilibrium.** No mix and no tactician beats the
+  equilibrium's formation in its cell, on either layout. The table is mostly a ranking (77 %).
+- **The tagger is the ranking.** Every formation near the top has one, and in each step since 5 the
+  hunter variant of a formation beat its plain one by +0.66 to +1.75. A tagger costs 1 of the
+  budget, takes a drone out for good (the airframe is lost), and its counters (quiet raiders, the
+  weather) only hide targets from it; nothing makes it pay for being where it is. That is a rule to
+  tune, not a population to widen.
+- What to try next, each measured with the same table: a tag that costs the tagger (a net:
+  one tag, and the tagger is down too), taggers that are easy to tag (a hunter that chases is
+  loud: DF finds it, and the other team's hunters go for it), a higher price (3), or a tag only
+  from behind (the executor game's rear cone). The target: the hunter variant of a formation level
+  with the plain one on average, winning against some and losing to others.

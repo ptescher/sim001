@@ -10,7 +10,8 @@
 //! start  --champion X [--dir DIR]   (a new league: what was in DIR goes)
 //! status [--dir DIR]
 //! captain-seat                     (a captain on stdin and stdout, for the league to play)
-//! nash   [--seeds N] [--set rule=number ...]   (the table of Towers' formations and its equilibrium)
+//! nash   [--seeds N] [--set rule=number ...] [--mixes N] [--mix-seed S]
+//!        (the table of Towers' formations, and N more drawn from S, and its equilibrium)
 //! ```
 //!
 //! X and Y are `default`, a contest's own (`slow`, `timid`) or a JSON file of an entry. The
@@ -44,14 +45,18 @@ fn main() {
             let value = rest.next().unwrap_or_else(|| fail(format!("{a} wants a value")));
             match a.as_str() {
                 "--set" => cognition_towers::set_rule(&mut rules, value).unwrap_or_else(|e| fail(e)),
-                "--seeds" => {}
-                _ => fail(format!("nash: no option {a} (--seeds N, --set rule=number)")),
+                "--seeds" | "--mixes" | "--mix-seed" => {}
+                _ => fail(format!("nash: no option {a} (--seeds N, --set rule=number, --mixes N, --mix-seed S)")),
             }
         }
         let n: u64 = arg("--seeds").and_then(|s| s.parse().ok()).unwrap_or(40);
         let seeds: Vec<u64> = (0..n).collect();
         let t = Instant::now();
-        let table = cognition_league::nash::Table::play(rules, &seeds).unwrap_or_else(|e| fail(e));
+        let mixes: usize = arg("--mixes").and_then(|s| s.parse().ok()).unwrap_or(0);
+        let mix_seed: u64 = arg("--mix-seed").and_then(|s| s.parse().ok()).unwrap_or(1);
+        let mut entries = cognition_towers::formations(rules);
+        entries.extend(cognition_towers::mixes(rules, mixes, mix_seed));
+        let table = cognition_league::nash::Table::play_entries(rules, &seeds, entries).unwrap_or_else(|e| fail(e));
         print!("{}", table.report());
         println!("{} seeds, both sides, in {:.1} s", n, t.elapsed().as_secs_f32());
         return;

@@ -12,13 +12,15 @@
 mod autonomy;
 mod edge;
 mod formation;
+mod tactics;
 
 pub use autonomy::{
     After, Autonomy, Chain, Comparison, Failsafe, Persist, Prepared, Surface, Timed, compare, compare_captains,
     compare_with,
 };
 pub use edge::{Edge, EdgeUnit, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
-pub use formation::{Formation, Loaded, Make, Post, formations, set_rule};
+pub use formation::{Formation, Loaded, Make, Post, formations, mixes, set_rule};
+pub use tactics::Tactician;
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.
