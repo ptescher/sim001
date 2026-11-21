@@ -1,0 +1,26 @@
+Feature: The equilibrium of Towers
+  The league can measure Towers itself, and not only one [[captain]]. It plays each [[formation]]
+  of a set against each other formation, on both sides of each seed, and gives the
+  [[table of a game]]. A good test game has no formation that beats every other, and a wide
+  [[equilibrium]].
+
+  Type `cargo run --release -p cognition_league -- nash`. Add `--seeds N` for more games, and
+  `--set spire_score=1.5` (or another rule) to change a rule of the game. `--set layout=1` plays
+  the chain. The report gives the table, the equilibrium, the formations that have 5 % or more of
+  it, the [[cycle share]] of the table, and the formations that beat every other.
+
+  Expectation: The table plays each formation against each other formation
+    The valley has eight formations: the computer commander and seven fixed formations.
+
+    When the league makes the table of Towers
+    Then the formations in the table are 8
+    And the cells of the table are mirrored
+    And the report of the table is written
+
+  Expectation: No formation does better against the equilibrium than the equilibrium
+    The equilibrium is a mix of formations. It is a Nash equilibrium of the table: the best
+    formation against the mix gains nothing on the mix.
+
+    When the league makes the table of Towers
+    Then the sum of the equilibrium is 100 %
+    And the gain of the best answer to the equilibrium is at most 0.01

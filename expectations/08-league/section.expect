@@ -128,3 +128,18 @@ Vocabulary:
     Say: the Claude engineer changes `commander.rs` so that every drone goes home, and the league plays it as a process of its own
   Event: a Claude strategy gives a captain that changes the referee
     Say: the Claude engineer changes the rules of Towers in `recreation_towers`
+
+  # The equilibrium of Towers.
+  State: the formations in the table are 0..100
+    Shows: 8: the table has a row and a column for each of eight formations
+  State: the cells of the table are mirrored | not mirrored
+    Shows: mirrored: each formation against itself scores 0, and each cell is the opposite of the cell across the diagonal
+  State: the report of the table is written | missing
+    Shows: written: the report gives the table, the equilibrium, the formations with 5 % or more of it, the cycle share and the formations that beat every other
+  State: the sum of the equilibrium is 0..1000 %
+    Shows: 100 %: the shares of the formations in the equilibrium add up to 100 %
+  State: the gain of the best answer to the equilibrium is -10..10
+    Shows: at most 0.01: no formation scores more than 0.01 against the equilibrium
+
+  Event: the league makes the table of Towers
+    Say: type `cargo run --release -p cognition_league -- nash --seeds 2`

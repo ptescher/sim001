@@ -18,7 +18,7 @@ pub use autonomy::{
     compare_with,
 };
 pub use edge::{Edge, EdgeUnit, Edged, FinishThenReturn, Keep, Outnumbered, compare_edge};
-pub use formation::{Formation, Post};
+pub use formation::{Formation, Make, Post, formations, set_rule};
 
 use glam::Vec2;
 // Where a drone circles and how high: the game's own numbers, as the server flies them.

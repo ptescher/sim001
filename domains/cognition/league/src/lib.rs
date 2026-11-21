@@ -15,6 +15,7 @@ pub mod contest;
 pub mod entry;
 pub mod judge;
 pub mod league;
+pub mod nash;
 pub mod strategy;
 
 pub use entry::Entry;

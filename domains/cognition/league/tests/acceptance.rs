@@ -8,7 +8,7 @@ use cognition_league::contest::captain::CaptainContest;
 use cognition_league::contest::executor::ExecutorContest;
 use cognition_league::contest::{Code, Contest};
 use cognition_league::strategy::{Claude, Es};
-use cognition_league::{Entry, Generation, Judgement, League, Options, Strategy, judge};
+use cognition_league::{Entry, Generation, Judgement, League, Options, Strategy, judge, nash};
 use expectation_harness::{Acceptance, Bindings, Progress, RunOptions, Screenshot};
 use expectation_story::Status;
 use std::path::{Path, PathBuf};
@@ -39,6 +39,9 @@ struct World {
     captain_challenger: Entry,
     towers: Option<cognition_towers::TowersResult>,
     against_itself: f64,
+    /// The table of Towers and its report.
+    table: Option<nash::Table>,
+    table_report: String,
 }
 
 static FOLDERS: AtomicU32 = AtomicU32::new(0);
@@ -65,6 +68,8 @@ impl World {
             captain_challenger: CaptainContest.fixture("default").unwrap(),
             towers: None,
             against_itself: f64::NAN,
+            table: None,
+            table_report: String::new(),
         }
     }
 
@@ -342,6 +347,27 @@ fn bindings() -> Bindings<World> {
             w.claude_captain("captain-changes-rules.sh")
         })
         .observe("the mean difference of the captain challenger", |w| w.judged().map_or(f64::NAN, |j| j.mean as f64))
+        // The equilibrium of Towers: `nash --seeds 2`, which plays seeds 0 and 1.
+        .on("the league makes the table of Towers", |w| {
+            let t = nash::Table::play(recreation_towers::Rules::default(), &[0, 1]).unwrap();
+            w.table_report = t.report();
+            w.table = Some(t);
+        })
+        .observe("the formations in the table", |w| w.table.as_ref().map_or(0.0, |t| t.names.len() as f64))
+        .observe("the cells of the table", |w| {
+            if w.table.as_ref().is_some_and(|t| nash::mirrored(&t.cells)) { "mirrored" } else { "not mirrored" }
+        })
+        .observe("the report of the table", |w| {
+            let r = &w.table_report;
+            let all = ["equilibrium", "5 % or more", "cycle share", "beat every other"].iter().all(|k| r.contains(k));
+            if all { "written" } else { "missing" }
+        })
+        .observe("the sum of the equilibrium", |w| {
+            w.table.as_ref().map_or(0.0, |t| 100.0 * nash::equilibrium(&t.cells).iter().sum::<f64>())
+        })
+        .observe("the gain of the best answer to the equilibrium", |w| {
+            w.table.as_ref().map_or(f64::NAN, |t| nash::best_answer(&t.cells, &nash::equilibrium(&t.cells)))
+        })
         .on_reset(|w| *w = World::new())
         .on_advance(|_| Progress::Static)
         .on_screenshot(|w| Screenshot::svg(w.svg()))
