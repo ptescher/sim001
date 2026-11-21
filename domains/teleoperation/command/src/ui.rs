@@ -93,6 +93,8 @@ pub struct CommanderView {
     pub chips: RefCell<Vec<Option<Team>>>,
     /// The drone whose camera the PORTRAIT showed when last drawn.
     pub portrait: Cell<Option<usize>>,
+    /// The icon on each drone's card, by drone, as the cards were last built.
+    pub card_icons: RefCell<Vec<Option<Class>>>,
 }
 
 impl CommanderView {
@@ -156,6 +158,7 @@ impl CommanderView {
             routes: HashMap::new(),
             chips: RefCell::default(),
             portrait: Cell::new(None),
+            card_icons: RefCell::default(),
         }
     }
 
@@ -608,7 +611,7 @@ impl CommanderView {
             move |b, _, window, _| {
                 let (x, y, w, h) = rect(b);
                 fill_rect(window, x, y, w, h, c(0x000000));
-                unit_icon(window, x + w * 0.5, y + h * 0.5, class, c(tint));
+                unit_icon(window, x + w * 0.5, y + h * 0.5, 1.0, class, c(tint));
             },
         )
         .size_full();
@@ -622,12 +625,15 @@ impl CommanderView {
         )
     }
 
-    /// The card of each drone: its camera, its name, its altitude and its order.
-    fn cards(&self, images: &[Option<Arc<RenderImage>>], view: &Option<TeamView>, cx: &mut Context<Self>) -> Div {
+    /// The card of each drone: its icon, its name, its altitude and its order.
+    fn cards(&self, view: &Option<TeamView>, cx: &mut Context<Self>) -> Div {
         let mut cards = div().flex().flex_wrap().content_start().gap(px(6.0)).p(px(6.0));
         let Some(v) = view else { return cards };
         let tint = theme_team(v.team);
-        let battery = self.seat.state().rules.is_some_and(|r| r.battery(r.class(0)) > 0.0);
+        let rules = self.seat.state().rules;
+        let rules = rules.as_ref();
+        let battery = rules.is_some_and(|r| r.battery(r.class(0)) > 0.0);
+        let mut icons = vec![];
         for d in &v.drones {
             let k = d.k;
             let picked = self.selected.contains(&k);
@@ -646,13 +652,22 @@ impl CommanderView {
             if battery {
                 tags.push(format!("BAT {:.0} s", d.battery));
             }
-            let img = images.get(k).cloned().flatten().filter(|_| d.linked);
-            let tile = camera_tile(format!("camera-{k}"), &name, img, !d.linked, 118.0, 66.0, picked).on_click(
-                cx.listener(move |this, _, _, cx| {
-                    this.select(Some(k));
-                    cx.stop_propagation();
-                    cx.notify();
-                }),
+            // The icon of the drone, as in a strategy game: only the PORTRAIT shows a camera.
+            let class = rules.map(|r| r.class(k));
+            icons.push(class);
+            let colour = c(if d.linked && d.phase != Phase::Down { tint } else { GREY });
+            let tile = div().w(px(118.0)).h(px(66.0)).flex_none().border_1().border_color(c(BEZEL_EDGE)).child(
+                canvas(
+                    |_, _, _| {},
+                    move |b, _, window, _| {
+                        let (x, y, w, h) = rect(b);
+                        fill_rect(window, x, y, w, h, c(0x000000));
+                        if let Some(class) = class {
+                            unit_icon(window, x + w * 0.5, y + h * 0.5, 0.7, class, colour);
+                        }
+                    },
+                )
+                .size_full(),
             );
             let card = div()
                 .id(SharedString::from(format!("drone-{k}")))
@@ -687,6 +702,7 @@ impl CommanderView {
                 }));
             cards = cards.child(card);
         }
+        *self.card_icons.borrow_mut() = icons;
         cards
     }
 }
@@ -924,9 +940,11 @@ impl Render for CommanderView {
             );
 
         // The cards of the drones, the PORTRAIT and UNIT of the selected one, and the command card.
-        let images = self.camera_images(window);
-        let cards = self.cards(&images, &view, cx);
+        // Only the selected drone's camera: the 3D view renders no other.
         let first = self.selected.first().copied();
+        self.cameras.watch(first);
+        let images = self.camera_images(window);
+        let cards = self.cards(&view, cx);
         let linked = |k: usize| view.as_ref().and_then(|v| v.drones.get(k)).is_none_or(|d| d.linked);
         let portrait_img = first.and_then(|k| images.get(k).cloned().flatten().filter(|_| linked(k)));
         self.portrait.set(first.filter(|_| portrait_img.is_some()));
@@ -1028,22 +1046,24 @@ impl Render for CommanderView {
     }
 }
 
-/// A top-down silhouette of a drone of `class`, nose up, centred on (`x`, `y`) in an 84 pixel square.
-fn unit_icon(window: &mut Window, x: f32, y: f32, class: Class, colour: gpui::Hsla) {
+/// A top-down silhouette of a drone of `class`, nose up, centred on (`x`, `y`) in a square of 84 pixels
+/// times `k`.
+fn unit_icon(window: &mut Window, x: f32, y: f32, k: f32, class: Class, colour: gpui::Hsla) {
     match class {
         Class::Light => {
             // A quadcopter: two arms crossed, a rotor at each end.
+            let a = 24.0 * k;
             for (dx, dy) in [(-1.0, -1.0), (1.0, -1.0)] {
-                polyline(window, &[(x - dx * 24.0, y - dy * 24.0), (x + dx * 24.0, y + dy * 24.0)], 3.0, colour);
+                polyline(window, &[(x - dx * a, y - dy * a), (x + dx * a, y + dy * a)], 3.0 * k, colour);
             }
             for (dx, dy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-                circle(window, x + dx * 24.0, y + dy * 24.0, 11.0, 1.5, colour);
+                circle(window, x + dx * a, y + dy * a, 11.0 * k, 1.5, colour);
             }
-            fill_rect(window, x - 6.0, y - 6.0, 12.0, 12.0, colour);
+            fill_rect(window, x - 6.0 * k, y - 6.0 * k, 12.0 * k, 12.0 * k, colour);
         }
         Class::Standard | Class::Heavy => {
             // A VTOL aeroplane: fuselage, wing, tailplane; the heavy one is bigger.
-            let s = if class == Class::Heavy { 1.0 } else { 0.8 };
+            let s = if class == Class::Heavy { 1.0 } else { 0.8 } * k;
             fill_poly(
                 window,
                 &[
