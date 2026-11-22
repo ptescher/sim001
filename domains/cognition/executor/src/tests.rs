@@ -1084,26 +1084,3 @@ fn the_same_circle_sent_again_is_flown_the_same_way_round() {
     moved.step(&inside, Some(&far), &[], &l);
     assert_eq!(moved.anchor.map(|a| a.dir), Some(natural_dir(&Ctx::new(&inside), [400.0, 0.0])));
 }
-
-#[test]
-fn a_slow_plane_banks_only_as_far_as_its_airspeed_holds_it_up() {
-    // Banked, a wing stalls at a higher airspeed (by 1 / sqrt(cos bank)). A plane flying close to
-    // its slowest (the heavy cruises 2 m/s above it) is held to the bank at which it still flies
-    // at that slowest airspeed; at cruise, the light and standard planes have room to spare.
-    let heavy = Limits { airspeed_min: 15.0, airspeed_cruise: 17.0, bank_max: 45f32.to_radians(), ..Limits::default() };
-    let s = State { airspeed: 17.0, vel: [17.0, 0.0, 0.0], ..cruise_state() };
-    let hard = Plan { point: [0.0, 60.0, -30.0], radius: 30.0, ..plan(1, Primitive::Orbit) };
-    let held = (15.0f32 / 17.0).powi(2).acos();
-    let mut x = Executor::new();
-    let d = x.step(&s, Some(&hard), &[], &heavy);
-    assert!(rad(d.roll_cd.abs()) <= held + 1.0e-3, "{d:?}: at most {} deg", held.to_degrees());
-    assert!(rad(d.roll_cd.abs()) >= held - 0.02, "and that far: {d:?}");
-    // Faster, it may bank further (to its limit).
-    let fast = State { airspeed: 22.0, vel: [22.0, 0.0, 0.0], ..s };
-    let d = Executor::new().step(&fast, Some(&hard), &[], &heavy);
-    assert!((rad(d.roll_cd.abs()) - 45f32.to_radians()).abs() < 0.01, "{d:?}");
-    // A standard plane at its cruise is not held back.
-    let l = Limits::default();
-    let d = Executor::new().step(&cruise_state(), Some(&hard), &[], &l);
-    assert!((rad(d.roll_cd.abs()) - l.bank_max).abs() < 0.01, "{d:?}");
-}

@@ -5,7 +5,8 @@ Feature: Rewind
 
   Expectation: Backspace undoes a crash
     A crash a few seconds after the throw goes back to the moment before the throw: the plane
-    is in your hand again.
+    is in your hand again. The 10 s count back from the crash, however long the plane has lain on
+    the ground.
     Given the plane is crashed
     And the throttle is 0 %
     When the pilot rewinds
