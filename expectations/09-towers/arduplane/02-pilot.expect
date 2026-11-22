@@ -33,7 +33,7 @@ Feature: A person flies a drone
 
 
   A scripted pilot takes the second Blue drone after 40 seconds of play, flies a gentle bank by the
-  sticks for 25 seconds and lets go. The two computer commanders play on.
+  sticks for 10 seconds and lets go. The two computer commanders play on.
 
   Expectation: A drone that a person flies is not in AGENT mode, and it turns with the sticks
     The ground station of Blue leaves the drone alone while the pilot has it. Its telemetry still

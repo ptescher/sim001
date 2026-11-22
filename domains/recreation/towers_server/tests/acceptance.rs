@@ -232,7 +232,10 @@ fn game_time(lines: &[String]) -> Option<f32> {
 /// own process is stopped: the test never kills another game's SITL.
 fn play_piloted(bin: &Path) -> Result<PilotGame, String> {
     const JOIN_AT: f32 = 40.0;
-    const FLY_FOR: u64 = 25;
+    // About a minute of game time at 10x, at a bank that turns the drone 8 degrees a second. Not
+    // much more: a game ends at 200 to 250 s (Red wins fast while Blue's drone is with the pilot),
+    // and the hand-back must come well before that, on a busy machine too (25 s did not).
+    const FLY_FOR: u64 = 10;
     let mut child = Command::new(env!("CARGO_BIN_EXE_towers_server"))
         .args(["--speedup", "10", "--timeout", "350", "--seat-port", &PORT.to_string()])
         .env("SIM001_BIN", bin)
