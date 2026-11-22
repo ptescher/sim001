@@ -5,3 +5,5 @@ edition = "2024"
 description = "Communication domain: Remote ID (ASTM F3411, OpenDroneID) messages as they go on the air, encoded and decoded"
 
 [dependencies]
+# The F3411 Location codec, checked against opendroneid-core-c.
+remoteid = { version = "0.3.2", default-features = false }
