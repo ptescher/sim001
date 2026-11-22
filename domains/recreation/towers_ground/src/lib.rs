@@ -111,13 +111,13 @@ const MAV_CMD_DO_SET_MODE: u16 = 176;
 const LOW_FLOOR: f32 = 8.0;
 const HIGH_FLOOR: f32 = 35.0;
 /// How far a drone of `class` may bank (`ROLL_LIMIT_DEG`, degrees), if not as far as its parameter
-/// file says (50). The heavy drone (the T2 Cruza) cruises at 17 m/s and does not hold a bank of 50
-/// degrees: it stalls there (the stall speed grows with the root of 1 / cos(bank), and its
-/// airspeed minimum of 13 m/s is 15 m/s at 50 degrees), and a step in the roll it asks for
-/// overshoots to 70 or 80 degrees and ends in a spiral dive: 13 of the 33 crashes of 14 games, all
-/// but one of the drones that rolled past 60 degrees. 45 degrees is a bank with a margin of a tenth
-/// at 17 m/s, and the circle the executor flies at it (a turn radius and a tenth: 41 m) is still
-/// the ring of a standard drone.
+/// file says (50). The heavy drone (the T2 Cruza) is held to 45 degrees: at the 17 m/s it once
+/// cruised at, it stalled at 50 (the stall speed grows with the root of 1 / cos(bank), and its
+/// airspeed minimum of 13 m/s is 15 m/s at 50 degrees), and a step in the roll it asked for
+/// overshot to 70 or 80 degrees and ended in a spiral dive. It cruises at 20 m/s now
+/// (`t2-cruza.parm`), where 45 degrees leaves it a margin of more than a quarter; the circle the
+/// executor flies at that bank (a turn radius and a tenth: 57 m) is wider than either team's ring,
+/// and still inside the 60 m circle of a tower.
 pub fn bank_limit(class: recreation_towers::Class) -> Option<f32> {
     (class == recreation_towers::Class::Heavy).then_some(HEAVY_BANK)
 }
@@ -556,19 +556,32 @@ mod tests {
         assert!(plan_ttl(&rules, 2.0 * rules.duration) >= 2.0 * rules.duration, "or later");
     }
 
+    /// `AIRSPEED_CRUISE` of `ardupilot/t2-cruza.parm` (m/s).
+    const HEAVY_CRUISE: f32 = 20.0;
+
     #[test]
-    fn the_heavy_drone_is_held_to_a_bank_it_does_not_stall_in_and_still_fits_its_ring() {
+    fn the_heavy_drone_cruises_at_the_speed_the_tests_assume() {
+        let parm =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../ardupilot/t2-cruza.parm")).unwrap();
+        let cruise =
+            parm.lines().find_map(|l| l.strip_prefix("AIRSPEED_CRUISE ")).map(|v| v.trim().parse::<f32>().unwrap());
+        assert_eq!(cruise, Some(HEAVY_CRUISE));
+    }
+
+    #[test]
+    fn the_heavy_drone_is_held_to_a_bank_it_does_not_stall_in_and_still_fits_a_tower_circle() {
         use recreation_towers::{Class, Team, flight};
         assert_eq!(bank_limit(Class::Standard), None);
         assert_eq!(bank_limit(Class::Heavy), Some(HEAVY_BANK));
-        // At its cruise speed of 17 m/s (`t2-cruza.parm`) the stall speed in the bank, from its
-        // airspeed minimum of 13 m/s, leaves a margin of about a tenth.
+        // At its cruise speed of 20 m/s (`t2-cruza.parm`) the stall speed in the bank, from its
+        // airspeed minimum of 13 m/s, leaves a margin of more than a quarter.
         let stall = 13.0 / HEAVY_BANK.to_radians().cos().sqrt();
-        assert!(17.0 / stall >= 1.09, "{stall} m/s in a bank of {HEAVY_BANK} degrees");
+        assert!(HEAVY_CRUISE / stall >= 1.25, "{stall} m/s in a bank of {HEAVY_BANK} degrees");
         // The executor flies at least a turn radius of the cruise speed at 85 % of the bank, and a
-        // tenth more: that is no wider than the ring that it is asked to fly.
-        let flown = 1.1 * 17.0 * 17.0 / (9.80665 * (0.85 * HEAVY_BANK).to_radians().tan());
-        assert!(flown <= flight::orbit_radius(Team::Blue) + 2.0, "{flown} m");
+        // tenth more: wider than the rings, but inside the circle of a tower.
+        let flown = 1.1 * HEAVY_CRUISE * HEAVY_CRUISE / (9.80665 * (0.85 * HEAVY_BANK).to_radians().tan());
+        assert!(flown > flight::orbit_radius(Team::Red), "{flown} m");
+        assert!(flown < recreation_towers::Rules::default().circle_radius, "{flown} m");
     }
 
     #[test]

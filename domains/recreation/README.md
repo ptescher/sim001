@@ -164,6 +164,24 @@ QHOVER to 15 m, FBWA); once it flies on the wing, the ground switches it to AGEN
 plan for its order about once a second (a tower: an orbit 40 m out, Red's 50 m, at a height of its own) and the
 other drones as `ADSB_VEHICLE` traffic. A crashed drone is back at its base after 15 s.
 
+#### The flight recorder
+
+The server has no window, so games can be played in a row to measure something, and
+`--record DIR` records one:
+
+```bash
+cargo build --release -p recreation_towers_server
+tools/flightlog/games.sh 10 /tmp/games                  # ten recorded games, one after another
+.ardupilot-venv/bin/python tools/flightlog/crash.py /tmp/games/g3   # the last 14 s before each crash
+```
+
+A game's directory has every drone ten times a second for the whole game (`tracks.tsv`: position,
+height, airspeed, attitude, order, the leg the ground flies it on, the nearest other drone), its
+crashes (`crashes.tsv`) and each drone's ArduPilot log (`drone<i>.BIN`). The `AGNT` record of the
+log has the executor's every step: the roll, pitch and throttle it asked for, the envelope's rules
+that changed them and the separation escape. `crash.py` puts the two side by side. Compare two
+builds game by game, one after the other: how busy the machine is changes how many drones crash.
+
 Each team has a seat on TCP port 5955 (`recreation_towers::seat`, a JSON message a line), and it is
 one seat for a person and for a computer. A seat that commands is the team's ground station: it
 gets the umpire's word, what its towers and base report, and the way to its drones (the air), makes

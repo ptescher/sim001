@@ -110,6 +110,9 @@ pub mod safety {
     /// the circle is taken before one that leaves it, when it is clear of every zone: what is round
     /// the circle (trees round a clearing) is not on any track.
     pub const SEP_STAY: f32 = 0.4;
+    /// A new plan whose circle's centre is within this of the one being flown (m) is the same
+    /// circle: the plane goes on round it the same way.
+    pub const SAME_CIRCLE: f32 = 10.0;
     /// Stall: within this of the minimum airspeed, limit the climb; under it, nose down this much,
     /// wings within `STALL_BANK`, full throttle.
     pub const STALL_MARGIN: f32 = 2.0;
@@ -390,6 +393,9 @@ pub struct Executor {
     since: f32,
     /// The plan's circle and height, set on the first step after adoption (`None` until then).
     anchor: Option<Anchor>,
+    /// The circle flown before the last adoption: a new plan for the same circle goes on round it
+    /// the same way.
+    was: Option<Anchor>,
     /// Where to loiter when the plan expired or its target is lost.
     fallback: Option<Anchor>,
     /// Goto: the direction to circle the point, once there (0: not yet).
@@ -428,6 +434,7 @@ impl Executor {
             silent: 0.0,
             since: 0.0,
             anchor: None,
+            was: None,
             fallback: None,
             goto_dir: 0.0,
             pitch_i: 0.0,
@@ -462,7 +469,7 @@ impl Executor {
     fn adopt(&mut self, p: Plan) {
         self.plan = Some(p);
         self.since = 0.0;
-        self.anchor = None;
+        self.was = self.anchor.take();
         self.fallback = None;
         self.goto_dir = 0.0;
     }
@@ -512,6 +519,10 @@ impl Executor {
         let k = (s.dt / WIND_FILTER).min(1.0);
         self.wind = [self.wind[0] + (w[0] - self.wind[0]) * k, self.wind[1] + (w[1] - self.wind[1]) * k];
         lims.wind = norm2(self.wind);
+        // Banked, the wing stalls faster (by 1 / sqrt(cos bank)): the plane banks only as far as its
+        // airspeed still holds it up at the slowest it may fly. Everything this step (the primitive,
+        // the fence's turn back, the escapes) flies with that bank.
+        lims.bank = lims.bank.min(holding_bank(c.air, lims.v_min));
 
         match plan {
             Some(p) if plan_ok(p) && self.offered != Some(p.id) => {
@@ -552,7 +563,8 @@ impl Executor {
             throttle: cmd.throttle,
             fallback: fallback as u8,
             intervened: differs(&cmd, &raw) as u8,
-            _pad: [0; 2],
+            rules: self.rules,
+            escape: self.sep_option,
         };
         if !d.throttle.is_finite() {
             return bad_input();
@@ -566,13 +578,22 @@ impl Executor {
         match self.plan.and_then(|p| Primitive::from_u8(p.primitive).map(|q| (p, q))) {
             Some((p, Primitive::Orbit)) => {
                 let (centre, _) = l.fit_circle([p.point[0], p.point[1]], self.orbit_radius(&p, l));
-                Anchor { centre, height: -p.point[2], dir: natural_dir(c, centre) }
+                Anchor { centre, height: -p.point[2], dir: self.way_round(c, centre) }
             }
             Some((p, Primitive::Band)) => {
                 let (centre, _) = l.fit_circle([p.point[0], p.point[1]], band_radius(l));
-                Anchor { centre, height: c.h, dir: natural_dir(c, centre) }
+                Anchor { centre, height: c.h, dir: self.way_round(c, centre) }
             }
             _ => here,
+        }
+    }
+
+    /// Which way round a circle about `centre`: the way the plane went round the circle it flew
+    /// before, if that one had (nearly) the same centre; else the way it is heading now.
+    fn way_round(&self, c: &Ctx, centre: [f32; 2]) -> f32 {
+        match self.was {
+            Some(w) if norm2(sub2(w.centre, centre)) <= SAME_CIRCLE => w.dir,
+            _ => natural_dir(c, centre),
         }
     }
 
@@ -1032,6 +1053,17 @@ impl Executor {
     }
 }
 
+/// The steepest bank at which a plane at airspeed `air` still flies at `v_min` or above: cos(bank)
+/// = (v_min / air)^2. At or under `v_min`, `STALL_BANK` (the stall rule then levels the wings).
+fn holding_bank(air: f32, v_min: f32) -> f32 {
+    // (Also a NaN airspeed: the state check refuses it before this, but not the comparison.)
+    if air.is_nan() || air <= v_min {
+        return STALL_BANK;
+    }
+    let k = (v_min / air) * (v_min / air);
+    atan2(sqrt((1.0 - k * k).max(0.0)), k).max(STALL_BANK)
+}
+
 /// Escape `option` (1 + its index in `ESCAPES`); level, wings level, for anything else.
 fn escape(option: u8) -> (f32, f32) {
     ESCAPES.get((option as usize).wrapping_sub(1)).copied().unwrap_or((0.0, 0.0))
@@ -1069,7 +1101,15 @@ fn centidegrees(rad: f32) -> i32 {
 
 /// Wings level, nose level, throttle to the pilot: for inputs that can't be trusted.
 fn bad_input() -> Demand {
-    Demand { roll_cd: 0, pitch_cd: 0, throttle: -1.0, fallback: Fallback::BadInput as u8, intervened: 1, _pad: [0; 2] }
+    Demand {
+        roll_cd: 0,
+        pitch_cd: 0,
+        throttle: -1.0,
+        fallback: Fallback::BadInput as u8,
+        intervened: 1,
+        rules: 0,
+        escape: 0,
+    }
 }
 
 /// Wings level, nose level, throttle left to the pilot.

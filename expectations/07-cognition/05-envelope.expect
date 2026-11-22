@@ -70,7 +70,10 @@ Feature: What the envelope prevents
     Below the minimum airspeed, the envelope lowers the nose, sets the wings nearly level and
     sets full throttle. Near the floor, it holds the nose level instead. The plane says
     "Agent: fallback 3" when the recovery starts. The recovery is often shorter than the 1 s
-    between two AG_FALL reports.
+    between two AG_FALL reports. Above the minimum, the envelope also limits the bank. Banked, a
+    wing stalls at a higher airspeed, so the plane banks only as far as its airspeed still holds
+    it up at the minimum. The T1-S at its cruise has room to spare. The heavy T2 Cruza cruises 2 m/s
+    above its minimum, so at its cruise it banks at most about 39 degrees.
 
     Given the start is a slow climb
     When the plane flies on for 1 second

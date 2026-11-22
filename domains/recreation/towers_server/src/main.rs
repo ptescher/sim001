@@ -37,6 +37,13 @@
 //! team may play. A seat gets only its team's map. GO waits for the people, and for ArduPilot,
 //! which needs about a minute of its own time before it arms (`--warmup`). Needs the AGENT build:
 //! `SIM001_BIN`, else `.ardupilot-agent/build/sitl/bin`.
+//!
+//! The server has no window. `--record DIR` is its flight recorder: every drone ten times a second
+//! for the whole game (`DIR/tracks.tsv`), each crash (`DIR/crashes.tsv`), and at the end each
+//! drone's ArduPilot log (`DIR/drone<i>.BIN`), whose `AGNT` record has the executor's every step:
+//! what it asked for, the envelope's rules that changed it and the separation escape.
+//! `tools/flightlog/crash.py DIR` shows the last seconds before each crash from both, and
+//! `tools/flightlog/games.sh N OUT` plays N recorded games in a row.
 
 mod air;
 mod seats;
@@ -83,6 +90,8 @@ struct Args {
     stop_with_stdin: bool,
     /// The advisor beside each team's computer commander.
     advisors: [AdvisorChoice; 2],
+    /// The flight recorder's directory (`--record DIR`): see `world::Recording`.
+    record: Option<PathBuf>,
 }
 
 fn args() -> Args {
@@ -100,6 +109,7 @@ fn args() -> Args {
         nobody: [nobody("--blue"), nobody("--red")],
         on_leave_computer: arg("--on-leave").is_none_or(|v| v != "wait"),
         stop_with_stdin: args.iter().any(|a| a == "--stop-with-stdin"),
+        record: arg("--record").map(PathBuf::from),
         advisors: ["--blue-advisor", "--red-advisor"].map(|flag| {
             arg(flag).map_or(AdvisorChoice::Lookahead, |v| {
                 v.parse().unwrap_or_else(|e| {
@@ -207,6 +217,20 @@ fn main() {
     let rules = Rules::default().without_batteries();
     let world = Arc::new(Mutex::new(World::new(rules, a.warmup)));
     let n = 2 * rules.drones;
+    let instances = std::env::temp_dir().join("sim001-towers");
+    if let Some(dir) = &a.record {
+        match world::Recording::create(dir) {
+            Ok(r) => world.lock().unwrap().recording = Some(r),
+            Err(e) => {
+                eprintln!("--record {}: {e}", dir.display());
+                std::process::exit(2);
+            }
+        }
+        // Each drone's ArduPilot log of this game is the only one in its instance's logs.
+        for k in 1..=n {
+            clear_logs(&instances.join(format!("instance{k}")));
+        }
+    }
 
     // A sim or another game may hold the ports of the instances: take the next free block.
     let socks = loop {
@@ -293,14 +317,7 @@ fn main() {
             eprintln!("can't take a seat port from {} up", a.seat_port);
             std::process::exit(2);
         });
-    let fleet = match start_fleet(
-        &root,
-        &std::env::temp_dir().join("sim001-towers"),
-        &rules,
-        a.first_instance,
-        n as u16,
-        a.speedup,
-    ) {
+    let fleet = match start_fleet(&root, &instances, &rules, a.first_instance, n as u16, a.speedup) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("{e}");
@@ -451,9 +468,15 @@ fn main() {
             println!("RESULT air_carried={}", air.iter().map(|c| c.counts.carried()).sum::<u64>());
             println!("RESULT air_dropped={}", air.iter().map(|c| c.counts.dropped()).sum::<u64>());
             println!("RESULT sensed={}", air.iter().map(|c| c.counts.sensed()).sum::<u64>());
+            if let Some(r) = &mut w.recording {
+                r.flush();
+            }
             drop(w);
             std::thread::sleep(Duration::from_millis(500));
             drop(fleet);
+            if let Some(dir) = &a.record {
+                keep_logs(&instances, n, dir);
+            }
             return;
         }
         if stop.load(Ordering::SeqCst) {
@@ -470,6 +493,40 @@ fn main() {
             drop(w);
             drop(fleet);
             std::process::exit(1);
+        }
+    }
+}
+
+/// Deletes the ArduPilot logs in an instance's directory (`logs/*.BIN`, `LASTLOG.TXT`).
+fn clear_logs(instance: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(instance.join("logs")) else { return };
+    for e in entries.flatten() {
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        if name.ends_with(".BIN") || name == "LASTLOG.TXT" {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+/// Copies each drone's ArduPilot log of the game into the recorder's directory, as
+/// `drone<i>.BIN` (drone `i` is instance `i + 1`).
+fn keep_logs(instances: &std::path::Path, n: usize, dir: &std::path::Path) {
+    for k in 1..=n {
+        let logs = instances.join(format!("instance{k}")).join("logs");
+        let newest = std::fs::read_dir(&logs)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".BIN"))
+            .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+        match newest {
+            Some(e) => {
+                if let Err(err) = std::fs::copy(e.path(), dir.join(format!("drone{}.BIN", k - 1))) {
+                    eprintln!("record: {}: {err}", e.path().display());
+                }
+            }
+            None => eprintln!("record: no ArduPilot log in {}", logs.display()),
         }
     }
 }
