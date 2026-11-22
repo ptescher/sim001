@@ -412,6 +412,8 @@ Vocabulary:
     Say: press CIRCLE, or C. Press the mouse on the point, drag out 120 m, and let go
   Event: the commander adds a point to the route of the selected drone
     Say: hold Shift and right-click a point of the battlefield
+  Event: the commander adds two points to the route of the selected drone
+    Say: hold Shift and right-click a point of the battlefield, then another point
   # The battlefield: the 3D view of the valley, from the commander's camera (02-battlefield).
   State: the battlefield picture in the app is live | missing
     Shows: live: the battlefield shows the valley in 3D, with the forest, the lanes, the lake and the mountains
