@@ -519,10 +519,6 @@ impl Executor {
         let k = (s.dt / WIND_FILTER).min(1.0);
         self.wind = [self.wind[0] + (w[0] - self.wind[0]) * k, self.wind[1] + (w[1] - self.wind[1]) * k];
         lims.wind = norm2(self.wind);
-        // Banked, the wing stalls faster (by 1 / sqrt(cos bank)): the plane banks only as far as its
-        // airspeed still holds it up at the slowest it may fly. Everything this step (the primitive,
-        // the fence's turn back, the escapes) flies with that bank.
-        lims.bank = lims.bank.min(holding_bank(c.air, lims.v_min));
 
         match plan {
             Some(p) if plan_ok(p) && self.offered != Some(p.id) => {
@@ -1051,17 +1047,6 @@ impl Executor {
         }
         far
     }
-}
-
-/// The steepest bank at which a plane at airspeed `air` still flies at `v_min` or above: cos(bank)
-/// = (v_min / air)^2. At or under `v_min`, `STALL_BANK` (the stall rule then levels the wings).
-fn holding_bank(air: f32, v_min: f32) -> f32 {
-    // (Also a NaN airspeed: the state check refuses it before this, but not the comparison.)
-    if air.is_nan() || air <= v_min {
-        return STALL_BANK;
-    }
-    let k = (v_min / air) * (v_min / air);
-    atan2(sqrt((1.0 - k * k).max(0.0)), k).max(STALL_BANK)
 }
 
 /// Escape `option` (1 + its index in `ESCAPES`); level, wings level, for anything else.

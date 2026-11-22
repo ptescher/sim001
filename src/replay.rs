@@ -103,6 +103,9 @@ pub struct Recorder {
     /// The sim's reset count when this flight started: a reset (R, or the tests' driver)
     /// starts a new one.
     resets: u16,
+    /// The step at which the plane crashed, while it lies crashed: a rewind counts back from
+    /// there, not from now (the time it lay on the ground is nothing to go back through).
+    crashed_at: Option<u64>,
 }
 
 impl Recorder {
@@ -113,6 +116,7 @@ impl Recorder {
             every: ((SNAPSHOT_EVERY / dt).round() as u64).max(1),
             ring: VecDeque::from([(0, core.snapshot())]),
             resets: core.resets,
+            crashed_at: None,
         }
     }
 
@@ -146,6 +150,11 @@ impl Recorder {
         }
         self.step += 1;
         self.tape.end(self.step);
+        if core.state.phase != simulation_physics::Phase::Crashed {
+            self.crashed_at = None;
+        } else if self.crashed_at.is_none() {
+            self.crashed_at = Some(self.step);
+        }
         if self.step.is_multiple_of(self.every) {
             self.ring.push_back((self.step, core.snapshot()));
             if self.ring.len() > SNAPSHOTS {
@@ -165,12 +174,14 @@ impl Recorder {
     }
 
     /// Go back `secs` of sim time (no further than the oldest snapshot kept), and record a new
-    /// branch from there. False if there is nothing to go back to.
+    /// branch from there: from now, or, for a plane that lies crashed, from the crash. False if
+    /// there is nothing to go back to.
     pub fn rewind(&mut self, core: &mut SimCore, secs: f32) -> bool {
         self.new_flight_if_reset(core);
         let back = (secs / self.tape.dt).round() as u64;
         let oldest = self.ring.front().map_or(0, |(s, _)| *s);
-        let target = self.step.saturating_sub(back).max(oldest);
+        let from = self.crashed_at.unwrap_or(self.step);
+        let target = from.saturating_sub(back).max(oldest);
         let Some((from, snap)) = self.ring.iter().rev().find(|(s, _)| *s <= target).cloned() else {
             return false;
         };
@@ -357,6 +368,30 @@ mod recorder_tests {
         assert_eq!(r.step_count(), (20.0 / DT) as u64);
         assert_eq!(fingerprint(&c), at_20);
         assert!(!c.high_rates, "the rates as they were at 20 s");
+    }
+
+    /// A plane that has lain crashed for a while goes back to 10 s before the crash, not 10 s
+    /// before now: a crash a few seconds after the throw goes back to the hand, however long the
+    /// pilot took to press Backspace.
+    #[test]
+    fn a_rewind_after_a_crash_counts_back_from_the_crash() {
+        let mut c = sim();
+        let mut r = Recorder::new(&c, DT);
+        r.input(&mut c, Input::Sticks(Sticks { throttle: 1.0, pitch: -1.0, ..Sticks::default() }));
+        r.input(&mut c, Input::Throw);
+        let mut crashed = None;
+        for _ in 0..(30.0 / DT) as u64 {
+            r.step(&mut c);
+            if crashed.is_none() && c.state.phase == simulation_physics::Phase::Crashed {
+                crashed = Some(r.step_count());
+            }
+        }
+        let crashed = crashed.expect("a dive into the ground crashes");
+        assert!(r.step_count() > crashed + (12.0 / DT) as u64, "it lay crashed for a while");
+        assert_eq!(c.state.phase, simulation_physics::Phase::Crashed);
+        assert!(r.rewind(&mut c, 10.0));
+        assert_ne!(c.state.phase, simulation_physics::Phase::Crashed, "back before the crash");
+        assert_eq!(r.step_count(), crashed.saturating_sub((10.0 / DT) as u64));
     }
 
     /// After a rewind the pilot flies on: the tape is cut there, and what is new is recorded.
