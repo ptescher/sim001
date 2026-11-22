@@ -319,10 +319,15 @@ impl Commander {
             }
         }
         let on = |orders: &[Option<Order>], t: usize| orders.contains(&Some(Order::Take(t)));
+        // A drone that flies an order it took from advice keeps it: the defence does not call it
+        // back (or the two would trade it at every decision the advisor sees its chance again).
+        let advised: Vec<bool> = (0..self.orders.len())
+            .map(|k| self.queues[k].as_ref().is_some_and(|(o, _)| self.orders[k] == Some(*o)))
+            .collect();
         let nearest = |orders: &[Option<Order>], t: usize, any: bool| {
             view.drones
                 .iter()
-                .filter(|d| up[d.k] && !away[d.k][t] && (any || orders[d.k].is_none()))
+                .filter(|d| up[d.k] && !away[d.k][t] && (orders[d.k].is_none() || (any && !advised[d.k])))
                 .min_by(|a, b| a.at.distance(view.towers[t].at).total_cmp(&b.at.distance(view.towers[t].at)))
                 .map(|d| d.k)
         };
@@ -718,6 +723,31 @@ mod tests {
         g.drones[scout].at = Vec2::new(300.0, 250.0);
         g.step(5.0);
         assert_ne!(decide(&mut c, &g)[0], Some(Order::Take(home)));
+    }
+
+    #[test]
+    fn a_drone_sent_away_by_advice_is_not_called_back_to_defend_at_the_next_decision() {
+        // The nearest drone defends the home tower; an advisor sends it to attack instead, and the
+        // commander takes it. At the next decision the defence must not take that drone back: the
+        // two would trade it every time the advisor sees the chance again, and a heavy drone that
+        // turns back and forth low at a tower ends up in the trees.
+        let mut g = Game::new(Rules::default());
+        let mut c = bare(&g);
+        decide(&mut c, &g);
+        let (home, red_home) = (g.tower("Blue home"), g.tower("Red home"));
+        let i = g.drone(Team::Blue, 0);
+        g.drones[i] = crate::Drone { at: Vec2::new(-400.0, -30.0), alt: 50.0, phase: Phase::Flying, ..g.drones[i] };
+        let scout = g.drone(Team::Red, 0);
+        g.drones[scout] =
+            crate::Drone { at: Vec2::new(-330.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[scout] };
+        g.step(0.1);
+        assert_eq!(decide(&mut c, &g)[0], Some(Order::Take(home)), "it defends");
+        c.advise([Proposal { until: 100.0, ..proposal(0, Order::Take(red_home), 8.0) }]);
+        assert_eq!(decide(&mut c, &g)[0], Some(Order::Take(red_home)), "the advice is taken");
+        g.step(1.0);
+        let orders = decide(&mut c, &g);
+        assert_eq!(orders[0], Some(Order::Take(red_home)), "and kept: {orders:?}");
+        assert!(orders[1..].contains(&Some(Order::Take(home))), "another drone defends: {orders:?}");
     }
 
     /// A game with the batteries on, Blue's first drone flying at `at` with `left` s of battery.

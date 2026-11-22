@@ -203,7 +203,12 @@ pub struct Demand {
     pub fallback: u8,
     /// 1 if the envelope changed the demand on this step (the caller counts them).
     pub intervened: u8,
-    pub _pad: [u8; 2],
+    /// The envelope's rules that changed the demand on this step, as bits: 1 separation, 2 fence,
+    /// 4 ceiling, 8 floor, 16 stall, 32 the final clamp (for the flight log).
+    pub rules: u8,
+    /// The separation escape flown on this step: 0 none, else 1 + its index in the executor's
+    /// escapes (for the flight log). It was padding: the layout is the same as before.
+    pub escape: u8,
 }
 
 /// The wire side: the station's (and the tests') end. The plane decodes the commands in C++, so

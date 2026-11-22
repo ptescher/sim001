@@ -78,7 +78,10 @@ struct agent_demand {
                          // 2 bad input (a NaN, an inf or an absurd value): wings level, nose level,
                          // throttle negative; 3 recovery (under airspeed_min, or below the floor)
     uint8_t intervened;  // 1: the safety envelope changed the demand on this step
-    uint8_t pad[2];
+    uint8_t rules;       // the envelope's rules that changed it, as bits: 1 separation, 2 fence,
+                         // 4 ceiling, 8 floor, 16 stall, 32 the final clamp (for the log)
+    uint8_t escape;      // the separation escape flown: 0 none, else 1 + its index (for the log)
+                         // (these two were padding: the layout is unchanged)
 };
 
 uint32_t agent_exec_abi_version(void);

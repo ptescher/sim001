@@ -209,6 +209,8 @@ pub struct World {
     leg: Vec<(f32, Option<recreation_towers::flight::Leg>)>,
     /// What each drone's executor reports (`AG_PLAN`, `AG_ENV`, `AG_FALL`), set by the server.
     pub env: Vec<[i32; 3]>,
+    /// The flight recorder (`--record`): every sample of every drone, for the whole game.
+    pub recording: Option<Recording>,
     /// Towers each team took (Blue's, Red's).
     pub taken: [u32; 2],
     /// When each drone was first 100 m from where it started (the game's time, s).
@@ -254,6 +256,7 @@ impl World {
             next_trail: vec![0.0; n],
             leg: vec![(f32::MIN, None); n],
             env: vec![[-1; 3]; n],
+            recording: None,
             taken: [0; 2],
             away: vec![None; n],
             top_speed: vec![0.0; n],
@@ -375,6 +378,9 @@ impl World {
             order: self.orders[i],
             low: self.lows[i],
         };
+        if let Some(r) = &mut self.recording {
+            r.write(i, &sample);
+        }
         let trail = &mut self.trail[i];
         trail.push_back(sample);
         while trail.len() as f32 * TRAIL_EVERY > TRAIL_SECONDS {
@@ -572,6 +578,9 @@ impl World {
                 self.crashes += 1;
                 let (at, alt) = to_field(self.planes[i].pos);
                 println!("crash: drone {i}: {} at {at} (north, east), {alt:.1} m", self.planes[i].crash_reason);
+                if let Some(r) = &mut self.recording {
+                    r.crash(i, self.game.time, &self.planes[i].crash_reason, at, alt);
+                }
                 self.dump_crash(i);
                 // What it was doing, and who was near: to tell a mid-air from a tree, a drone in a
                 // shadow from one in contact.
@@ -783,6 +792,69 @@ impl World {
         } else {
             Referee::Ground
         };
+    }
+}
+
+/// The flight recorder of a game (`--record DIR`): `tracks.tsv`, a line for every drone ten times a
+/// second from take-off to the end (what the crash dump shows of the last 10 s, for the whole game),
+/// and `crashes.tsv`, a line for each crash. ArduPilot's own log of each drone, with the executor's
+/// every step (`AGNT`: its demand, the envelope's rules and the escape), is copied beside them at the
+/// end (see `main.rs`).
+pub struct Recording {
+    tracks: std::io::BufWriter<std::fs::File>,
+    crashes: std::io::BufWriter<std::fs::File>,
+}
+
+impl Recording {
+    pub const TRACKS: &str = "t\tdrone\tx\ty\talt\tvx\tvy\tairspeed\troll\tpitch\theading\tplan\tenv\tfall\torder\tlow\tleg_orbit\tleg_x\tleg_y\tleg_alt\tleg_r\tnear\tnear_d\tnear_dz\tsilent";
+
+    pub fn create(dir: &std::path::Path) -> std::io::Result<Recording> {
+        use std::io::Write;
+        std::fs::create_dir_all(dir)?;
+        let mut tracks = std::io::BufWriter::new(std::fs::File::create(dir.join("tracks.tsv"))?);
+        writeln!(tracks, "{}", Self::TRACKS)?;
+        let mut crashes = std::io::BufWriter::new(std::fs::File::create(dir.join("crashes.tsv"))?);
+        writeln!(crashes, "t\tdrone\treason\tx\ty\talt")?;
+        Ok(Recording { tracks, crashes })
+    }
+
+    fn write(&mut self, i: usize, s: &Sample) {
+        use std::io::Write;
+        let leg = s.leg.map_or("\t\t\t\t".to_string(), |l| {
+            format!("{}\t{:.1}\t{:.1}\t{:.1}\t{:.1}", l.orbit as u8, l.point.x, l.point.y, l.alt, l.radius)
+        });
+        let near = s.near.map_or("\t\t".to_string(), |(j, d, dz)| format!("{j}\t{d:.1}\t{dz:.1}"));
+        let _ = writeln!(
+            self.tracks,
+            "{:.1}\t{i}\t{:.1}\t{:.1}\t{:.1}\t{:.1}\t{:.1}\t{:.1}\t{:.0}\t{:.0}\t{:.0}\t{}\t{}\t{}\t{}\t{}\t{leg}\t{near}\t{:.1}",
+            s.t,
+            s.at.x,
+            s.at.y,
+            s.alt,
+            s.vel.x,
+            s.vel.y,
+            s.airspeed,
+            s.roll,
+            s.pitch,
+            s.heading,
+            s.env[0],
+            s.env[1],
+            s.env[2],
+            s.order.map_or("-".to_string(), |o| format!("{o:?}")),
+            s.low as u8,
+            s.silent,
+        );
+    }
+
+    fn crash(&mut self, i: usize, t: f32, reason: &str, at: Vec2, alt: f32) {
+        use std::io::Write;
+        let _ = writeln!(self.crashes, "{t:.1}\t{i}\t{reason}\t{:.1}\t{:.1}\t{alt:.1}", at.x, at.y);
+    }
+
+    pub fn flush(&mut self) {
+        use std::io::Write;
+        let _ = self.tracks.flush();
+        let _ = self.crashes.flush();
     }
 }
 

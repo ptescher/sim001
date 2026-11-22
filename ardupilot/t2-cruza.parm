@@ -49,8 +49,12 @@ Q_M_SPIN_MIN 0.10
 # Airspeeds (on top of the T1-S's 11, 15 and 22): the Cruza is heavier on a wing that is not as
 # much bigger, so it stalls at about 12 m/s and the AGENT mode's envelope, which flies between
 # AIRSPEED_MIN + AGENT_ASPD_MRG and AIRSPEED_MAX and cruises at AIRSPEED_CRUISE, has to be told.
+# The cruise has room over the envelope's stall margin (AIRSPEED_MIN + AGENT_ASPD_MRG + 2 m/s, 17):
+# at 17 the heavy flew inside it nearly half the time, could not climb in a turn, stalled in its
+# banked turns at the towers and dropped a wing (in Towers games on SITL, 2026-11-21: 21 crashes in
+# 52 games at 17, 1 in 12 at 20).
 AIRSPEED_MIN 13
-AIRSPEED_CRUISE 17
+AIRSPEED_CRUISE 20
 AIRSPEED_MAX 26
 
 # Flying. Below Q_ASSIST_SPEED (just under the stall speed) the rotors help in forward flight.

@@ -36,6 +36,8 @@ fn assert_within(d: &Demand, l: &Limits) {
 #[test]
 fn the_c_abi_steps_and_resets_the_global_executor() {
     assert_eq!(agent_exec_abi_version(), 3);
+    // The rules and the escape took the demand's padding: its layout is the one ABI 3 has.
+    assert_eq!((core::mem::size_of::<Demand>(), core::mem::align_of::<Demand>()), (16, 4));
     use core::ptr::{null, null_mut};
     assert_eq!(unsafe { agent_exec_step(null(), null(), null(), null(), null_mut()) }, -1);
 
@@ -275,6 +277,8 @@ fn a_track_inside_the_separation_zone_is_escaped_from() {
     let d = x.step(&s, Some(&p), &[t], &l);
     assert_eq!((d.intervened, x.rules() & rules::SEPARATION), (1, rules::SEPARATION));
     assert!(d.pitch_cd <= 0 && (d.roll_cd.abs() > 4900 || d.pitch_cd < -1000), "{d:?}");
+    // The demand says so too, for the flight log: the rule, and which escape.
+    assert_eq!((d.rules & rules::SEPARATION, d.escape != 0), (rules::SEPARATION, true), "{d:?}");
     // A little below: never a dive.
     let t = track(9, [12.0, -3.0, -27.0], [0.0, 0.0, 0.0]);
     let mut x = Executor::new();
@@ -1052,4 +1056,54 @@ fn an_escape_from_a_plane_met_on_a_circle_stays_near_the_circle() {
     assert!(escapes > 0, "they never met: {ra} {far_a} {far_b} {:?} {:?}", a.pos, b.pos);
     assert!(far_a <= ra * (1.0 + SEP_STAY) + 3.0, "the inner plane got {far_a} m out, circling at {ra}");
     assert!(far_b <= rb.max(ra) * (1.0 + SEP_STAY) + 3.0, "the outer plane got {far_b} m out, circling at {rb}");
+}
+
+#[test]
+fn the_same_circle_sent_again_is_flown_the_same_way_round() {
+    // The ground sends its plan again, with a new id, about once a second. A plane that is inside
+    // its circle (after an escape, say), heading the other way round, keeps going round the way it
+    // was: turning back each second would swing it from full bank one way to the other.
+    let l = Limits::default();
+    let p1 = Plan { point: [0.0, 0.0, -30.0], radius: 60.0, ..plan(1, Primitive::Orbit) };
+    let p2 = Plan { id: 2, ..p1 };
+    let on = State { pos: [60.0, 0.0, -30.0], vel: [0.0, 18.0, 0.0], yaw: HALF_PI, ..cruise_state() };
+    let inside = State { pos: [10.0, 0.0, -30.0], vel: [0.0, -18.0, 0.0], yaw: -HALF_PI, ..cruise_state() };
+    let mut kept = Executor::new();
+    kept.step(&on, Some(&p1), &[], &l);
+    let same_plan = kept.step(&inside, Some(&p1), &[], &l);
+    let mut resent = Executor::new();
+    resent.step(&on, Some(&p1), &[], &l);
+    let new_id = resent.step(&inside, Some(&p2), &[], &l);
+    let way = |x: &Executor| x.anchor.map(|a| a.dir);
+    assert_eq!(way(&kept), Some(1.0), "clockwise, as it came onto the circle");
+    assert_eq!(way(&resent), way(&kept), "{same_plan:?} {new_id:?}");
+    // A circle somewhere else is a new circle: its way round is chosen afresh.
+    let far = Plan { id: 3, point: [400.0, 0.0, -30.0], ..p1 };
+    let mut moved = Executor::new();
+    moved.step(&on, Some(&p1), &[], &l);
+    moved.step(&inside, Some(&far), &[], &l);
+    assert_eq!(moved.anchor.map(|a| a.dir), Some(natural_dir(&Ctx::new(&inside), [400.0, 0.0])));
+}
+
+#[test]
+fn a_slow_plane_banks_only_as_far_as_its_airspeed_holds_it_up() {
+    // Banked, a wing stalls at a higher airspeed (by 1 / sqrt(cos bank)). A plane flying close to
+    // its slowest (the heavy cruises 2 m/s above it) is held to the bank at which it still flies
+    // at that slowest airspeed; at cruise, the light and standard planes have room to spare.
+    let heavy = Limits { airspeed_min: 15.0, airspeed_cruise: 17.0, bank_max: 45f32.to_radians(), ..Limits::default() };
+    let s = State { airspeed: 17.0, vel: [17.0, 0.0, 0.0], ..cruise_state() };
+    let hard = Plan { point: [0.0, 60.0, -30.0], radius: 30.0, ..plan(1, Primitive::Orbit) };
+    let held = (15.0f32 / 17.0).powi(2).acos();
+    let mut x = Executor::new();
+    let d = x.step(&s, Some(&hard), &[], &heavy);
+    assert!(rad(d.roll_cd.abs()) <= held + 1.0e-3, "{d:?}: at most {} deg", held.to_degrees());
+    assert!(rad(d.roll_cd.abs()) >= held - 0.02, "and that far: {d:?}");
+    // Faster, it may bank further (to its limit).
+    let fast = State { airspeed: 22.0, vel: [22.0, 0.0, 0.0], ..s };
+    let d = Executor::new().step(&fast, Some(&hard), &[], &heavy);
+    assert!((rad(d.roll_cd.abs()) - 45f32.to_radians()).abs() < 0.01, "{d:?}");
+    // A standard plane at its cruise is not held back.
+    let l = Limits::default();
+    let d = Executor::new().step(&cruise_state(), Some(&hard), &[], &l);
+    assert!((rad(d.roll_cd.abs()) - l.bank_max).abs() < 0.01, "{d:?}");
 }
