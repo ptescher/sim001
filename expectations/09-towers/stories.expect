@@ -77,9 +77,7 @@ Story: Circle a point, then fly a route
     When the game runs for 2 minutes
     Then the distance of the first Blue drone from the centre of its circle is at least 80 m
     And the distance of the first Blue drone from the centre of its circle is at most 170 m
-    When the commander adds a point to the route of the selected drone
-    Then the points in the route of the first Blue drone are 1
-    When the commander adds a point to the route of the selected drone
+    When the commander adds two points to the route of the selected drone
     Then the points in the route of the first Blue drone are 2
     When the game runs for 2 minutes
     Then the points in the route of the first Blue drone are 1

@@ -97,6 +97,7 @@ const EVENTS: &[&str] = &[
     "the commander centres the battlefield on the selected drone",
     "the commander draws a circle of 120 m on the battlefield",
     "the commander adds a point to the route of the selected drone",
+    "the commander adds two points to the route of the selected drone",
 ];
 
 const OBSERVED: &[&str] = &[
@@ -884,6 +885,12 @@ impl Driver for AppDriver {
             "the commander centres the battlefield on the selected drone" => self.press_key("space"),
             "the commander draws a circle of 120 m on the battlefield" => self.draw_circle(120.0),
             "the commander adds a point to the route of the selected drone" => self.add_route_point(),
+            // Both in one step: at the speed the suite's games run, a drone could get to the first
+            // point while the steps between two of them are checked and pictured.
+            "the commander adds two points to the route of the selected drone" => {
+                self.add_route_point()?;
+                self.add_route_point()
+            }
             // The game's clock runs past the time of the proposal that the panel lists.
             "the time of the proposal is over" => {
                 let (now, until) = self.call(|v, _, _| {

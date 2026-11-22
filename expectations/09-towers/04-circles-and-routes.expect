@@ -45,6 +45,15 @@ Feature: Circles and routes
     When the commander adds a point to the route of the selected drone
     Then the points in the route of the first Blue drone are 2
 
+  Expectation: Two points in a row give a route of two
+    The first point is the drone's goal; the second waits for its turn.
+
+    Given the selected drone is the first Blue drone
+    And the points in the route of the first Blue drone are 0
+    When the commander adds two points to the route of the selected drone
+    Then the points in the route of the first Blue drone are 2
+    And the order of the first Blue drone is go to a point
+
   Expectation: A drone flies its route one point after the other
     Each time that it gets to a point, the drone goes on to the next. At the last point it circles.
 
