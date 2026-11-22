@@ -12,6 +12,8 @@
 
 use std::fmt;
 
+use remoteid as rid;
+
 /// Every message is this many bytes.
 pub const MESSAGE_SIZE: usize = 25;
 /// A message pack holds at most this many messages.
@@ -352,28 +354,28 @@ pub fn encode(m: &Message) -> [u8; MESSAGE_SIZE] {
             put_text(&mut b[2..2 + ID_SIZE], &x.uas_id);
         }
         Message::Location(x) => {
-            b[0] = header(TYPE_LOCATION);
-            let dir = x.direction.map_or(361, |d| (d.round() as i32).rem_euclid(360) as u32);
-            let (dir_byte, ew) = if dir >= 180 { ((dir - 180) as u8, 1) } else { (dir as u8, 0) };
-            let (speed_byte, mult) = match x.speed {
-                None => (255, 0),
-                Some(s) if s <= 255.0 * 0.25 => ((s / 0.25).round().clamp(0.0, 255.0) as u8, 0),
-                Some(s) => (((s - 255.0 * 0.25) / 0.75).round().clamp(0.0, 254.0) as u8, 1),
+            // The bytes come from `remoteid`, which matches opendroneid.c: an unknown vertical speed is
+            // 63 m/s (raw 126) and an unknown ground speed is 255 m/s (raw 255 with the multiplier).
+            let l = rid::Location {
+                status: rid::Status::from(x.status.code()),
+                height_type: rid::HeightType::from(x.height_above_ground as u8),
+                direction: x.direction.map(|d| d.round().rem_euclid(360.0)),
+                speed_horizontal: x.speed.map(|s| s.clamp(0.0, 254.25)),
+                speed_vertical: x.vertical_speed.map(|v| v.clamp(-62.0, 62.0)),
+                latitude: x.lat.clamp(-90.0, 90.0),
+                longitude: x.lon.clamp(-180.0, 180.0),
+                altitude_baro: x.pressure_alt.map(|a| a.clamp(-1000.0, 31767.5)),
+                altitude_geo: x.geodetic_alt.map(|a| a.clamp(-1000.0, 31767.5)),
+                height: x.height.map(|a| a.clamp(-1000.0, 31767.5)),
+                horizontal_accuracy: rid::HorizontalAccuracy(x.horizontal_accuracy & 0xF),
+                vertical_accuracy: rid::VerticalAccuracy(x.vertical_accuracy & 0xF),
+                baro_accuracy: rid::VerticalAccuracy(x.baro_accuracy & 0xF),
+                speed_accuracy: rid::SpeedAccuracy(x.speed_accuracy & 0xF),
+                timestamp_accuracy: rid::TimestampAccuracy(x.timestamp_accuracy & 0xF),
+                timestamp: x.timestamp.map(|t| t.clamp(0.0, 3600.0)),
+                ..rid::Location::default()
             };
-            b[1] = x.status.code() << 4 | (x.height_above_ground as u8) << 2 | ew << 1 | mult;
-            b[2] = dir_byte;
-            b[3] = speed_byte;
-            b[4] = x.vertical_speed.map_or(63, |v| (v / 0.5).round().clamp(-124.0, 124.0) as i8) as u8;
-            b[5..9].copy_from_slice(&encode_degrees(x.lat));
-            b[9..13].copy_from_slice(&encode_degrees(x.lon));
-            b[13..15].copy_from_slice(&encode_altitude(x.pressure_alt));
-            b[15..17].copy_from_slice(&encode_altitude(x.geodetic_alt));
-            b[17..19].copy_from_slice(&encode_altitude(x.height));
-            b[19] = x.vertical_accuracy << 4 | (x.horizontal_accuracy & 0xF);
-            b[20] = x.baro_accuracy << 4 | (x.speed_accuracy & 0xF);
-            let ts = x.timestamp.map_or(0xFFFF, |t| (t * 10.0).round().clamp(0.0, 36000.0) as u16);
-            b[21..23].copy_from_slice(&ts.to_le_bytes());
-            b[23] = x.timestamp_accuracy & 0xF;
+            b = l.encode().expect("every field is clamped to its range");
         }
         Message::Authentication(raw) => b = *raw,
         Message::SelfId(x) => {
@@ -416,28 +418,24 @@ pub fn decode(b: &[u8]) -> Result<Message, Error> {
             uas_id: text(&b[2..2 + ID_SIZE]),
         }),
         TYPE_LOCATION => {
-            let ew = b[1] >> 1 & 1;
-            let direction = (b[2] != 181 || ew == 0).then(|| b[2] as f32 + if ew == 1 { 180.0 } else { 0.0 });
-            let speed = (b[3] != 255)
-                .then(|| if b[1] & 1 == 1 { b[3] as f32 * 0.75 + 255.0 * 0.25 } else { b[3] as f32 * 0.25 });
-            let ts = u16::from_le_bytes([b[21], b[22]]);
+            let l = rid::Location::decode(b.try_into().unwrap()).expect("byte 0 says Location");
             Message::Location(Location {
-                status: Status::from_code(b[1] >> 4),
-                direction,
-                speed,
-                vertical_speed: (b[4] as i8 != 63).then(|| b[4] as i8 as f32 * 0.5),
-                lat: decode_degrees(&b[5..9]),
-                lon: decode_degrees(&b[9..13]),
-                pressure_alt: decode_altitude(&b[13..15]),
-                geodetic_alt: decode_altitude(&b[15..17]),
-                height: decode_altitude(&b[17..19]),
-                height_above_ground: b[1] >> 2 & 1 == 1,
-                vertical_accuracy: b[19] >> 4,
-                horizontal_accuracy: b[19] & 0xF,
-                baro_accuracy: b[20] >> 4,
-                speed_accuracy: b[20] & 0xF,
-                timestamp_accuracy: b[23] & 0xF,
-                timestamp: (ts != 0xFFFF).then(|| ts as f32 / 10.0),
+                status: Status::from_code(u8::from(l.status)),
+                direction: l.direction,
+                speed: l.speed_horizontal,
+                vertical_speed: l.speed_vertical,
+                lat: l.latitude,
+                lon: l.longitude,
+                pressure_alt: l.altitude_baro,
+                geodetic_alt: l.altitude_geo,
+                height: l.height,
+                height_above_ground: l.height_type == rid::HeightType::AboveGround,
+                vertical_accuracy: l.vertical_accuracy.0,
+                horizontal_accuracy: l.horizontal_accuracy.0,
+                baro_accuracy: l.baro_accuracy.0,
+                speed_accuracy: l.speed_accuracy.0,
+                timestamp_accuracy: l.timestamp_accuracy.0,
+                timestamp: l.timestamp,
             })
         }
         TYPE_AUTH => Message::Authentication(b.try_into().unwrap()),
@@ -584,13 +582,20 @@ mod tests {
         let m = Message::Location(Location { lat: 10.0, lon: 20.0, ..Location::default() });
         let b = encode(&m);
         assert_eq!(b[2], 181, "unknown direction is 361, stored as 181 with the east-west flag");
-        assert_eq!(b[3], 255);
-        assert_eq!(b[4], 63);
+        assert_eq!((b[3], b[1] & 1), (255, 1), "unknown speed is 255 m/s: raw 255 with the multiplier");
+        assert_eq!(b[4], 126, "unknown vertical speed is 63 m/s, raw 126 (raw 63 is a 31.5 m/s climb)");
         assert_eq!(&b[13..19], &[0; 6], "unknown altitudes are -1000 m");
         assert_eq!(&b[21..23], &[0xFF, 0xFF]);
         let Message::Location(l) = decode(&b).unwrap() else { panic!() };
         assert_eq!((l.direction, l.speed, l.vertical_speed), (None, None, None));
         assert_eq!((l.pressure_alt, l.geodetic_alt, l.height, l.timestamp), (None, None, None, None));
+    }
+
+    #[test]
+    fn a_climb_of_31_5_m_s_is_not_unknown() {
+        let b = encode(&Message::Location(Location { vertical_speed: Some(31.5), ..flying() }));
+        let Message::Location(l) = decode(&b).unwrap() else { panic!() };
+        assert_eq!(l.vertical_speed, Some(31.5));
     }
 
     #[test]
