@@ -5,7 +5,7 @@
 //! strategy that improves commanders may change; the rules, the referee, the fog and the view
 //! are elsewhere.
 
-use crate::{Advise, Hand, Kind, Lookahead, Order, Phase, Proposal, Queued, Rules, TeamView};
+use crate::{Advise, Board, Entry, Hand, Kind, Lookahead, Order, Phase, Proposal, Queued, Rules, TeamView};
 use serde::{Deserialize, Serialize};
 
 /// Declares the tunable numbers: for each, a constant (its default) and a field of
@@ -98,8 +98,12 @@ pub struct Commander {
     /// time) between the map it is shown and the moment its proposals reach the commander. A
     /// commander with none does not think ahead.
     advisors: Vec<(Box<dyn Advise>, f32)>,
-    /// Proposals on their way: when each arrives (game time, s).
-    late: Vec<(f32, Proposal)>,
+    /// What the advisors posted that is on its way: when each arrives (game time, s).
+    late: Vec<(f32, Entry)>,
+    /// The team's board: every entry that has arrived (`plans/advisors.md`).
+    board: Board,
+    /// For each advisor, the last entry on the board it was shown.
+    seen: Vec<u64>,
     /// Proposals in hand, not yet taken and not yet stale.
     proposals: Vec<Proposal>,
     /// A proposal must gain more than this many points to be taken.
@@ -127,6 +131,8 @@ impl Commander {
             last: None,
             advisors: vec![],
             late: vec![],
+            board: Board::default(),
+            seen: vec![],
             proposals: vec![],
             advice_margin: ADVICE_MARGIN,
             queues: vec![None; n],
@@ -175,7 +181,10 @@ impl Commander {
     /// one that a person accepted. The commander takes them at its next decision, or lets them go
     /// if they are stale or do not fit then.
     pub fn advise(&mut self, proposals: impl IntoIterator<Item = Proposal>) {
-        self.proposals.extend(proposals);
+        for p in proposals {
+            self.board.post(Entry::proposal("seat", p.clone()));
+            self.proposals.push(p);
+        }
     }
 
     /// The queue that goes with drone `k`'s order: the one a proposal gave it, while it flies that
@@ -193,6 +202,11 @@ impl Commander {
     /// decision.
     pub fn hand(&self) -> Option<&Hand> {
         self.hand.as_ref()
+    }
+
+    /// The team's board: what the advisors posted and the seat passed on, in the order it arrived.
+    pub fn board(&self) -> &Board {
+        &self.board
     }
 
     pub fn tuning(&self) -> CommanderTuning {
@@ -414,16 +428,26 @@ impl Commander {
     /// little waits for its time to run out.
     fn take_advice(&mut self, view: &TeamView, free: Vec<bool>, away: Vec<Vec<bool>>) {
         let hand = Hand { orders: self.orders.clone(), free, away };
-        for (advisor, delay) in &mut self.advisors {
-            for p in advisor.advise(view, &hand) {
-                self.late.push((view.time + *delay, p));
+        // Each advisor is shown what went on the board since its last look, others' entries and
+        // its own, and what it posts reaches the board after its delay.
+        self.seen.resize(self.advisors.len(), 0);
+        for ((advisor, delay), seen) in self.advisors.iter_mut().zip(&mut self.seen) {
+            let shown = self.board.since(*seen);
+            *seen = self.board.last();
+            for e in advisor.look(view, &hand, shown) {
+                self.late.push((view.time + *delay, e));
             }
         }
         let now = view.time;
         let (arrived, waiting): (Vec<_>, Vec<_>) =
             std::mem::take(&mut self.late).into_iter().partition(|(at, _)| *at <= now);
         self.late = waiting;
-        self.proposals.extend(arrived.into_iter().map(|(_, p)| p));
+        for (_, e) in arrived {
+            if let Some(p) = e.as_proposal() {
+                self.proposals.push(p.clone());
+            }
+            self.board.post(e);
+        }
         self.proposals.retain(|p| p.until >= now);
         let mut best: Option<usize> = None;
         let mut keep = vec![true; self.proposals.len()];
@@ -818,6 +842,58 @@ mod tests {
         fn clone_box(&self) -> Box<dyn Advise> {
             Box::new(self.clone())
         }
+    }
+
+    /// An advisor that posts nothing and writes down what it was shown at each look.
+    #[derive(Clone, Debug, Default)]
+    struct Reader(std::sync::Arc<std::sync::Mutex<Vec<Shown>>>);
+
+    /// The entries an advisor was shown at one look: their ids and authors.
+    type Shown = Vec<(u64, String)>;
+
+    impl Advise for Reader {
+        fn look(&mut self, _: &TeamView, _: &Hand, board: &[Entry]) -> Vec<Entry> {
+            self.0.lock().unwrap().push(board.iter().map(|e| (e.id, e.author.clone())).collect());
+            vec![]
+        }
+
+        fn name(&self) -> String {
+            "reader".into()
+        }
+
+        fn clone_box(&self) -> Box<dyn Advise> {
+            Box::new(self.clone())
+        }
+    }
+
+    #[test]
+    fn an_advisor_is_shown_what_the_others_posted_since_its_last_look() {
+        let g = Game::new(Rules::default());
+        let red_home = Order::Take(g.tower("Red home"));
+        let reader = Reader::default();
+        let shown = reader.0.clone();
+        let mut c = bare(&g).with_advisor(Fixed(proposal(0, red_home, 2.0)), 0.0).with_advisor(reader, 0.0);
+        c.decide(&g.view(Team::Blue));
+        c.decide(&g.view(Team::Blue));
+        c.decide(&g.view(Team::Blue));
+        let shown = shown.lock().unwrap().clone();
+        // The first look: nothing on the board yet. Then each time the proposal the other advisor
+        // posted at the decision before, and only that (not what it was shown already).
+        assert_eq!(shown, vec![vec![], vec![(1, "advisor".to_string())], vec![(2, "advisor".to_string())]]);
+        let board = c.board().entries();
+        assert_eq!(board.len(), 3);
+        assert_eq!(board[0].as_proposal().map(|p| p.order), Some(red_home));
+        assert_eq!(c.board().since(2).len(), 1);
+    }
+
+    #[test]
+    fn what_a_seat_passes_on_goes_on_the_board_too() {
+        let g = Game::new(Rules::default());
+        let mut c = bare(&g);
+        c.advise([proposal(0, Order::Take(g.tower("Red home")), 8.0)]);
+        assert_eq!(c.board().entries().iter().map(|e| (e.id, e.author.as_str())).collect::<Vec<_>>(), [(1, "seat")]);
+        assert_eq!(c.board().in_force(5.0).count(), 1);
+        assert_eq!(c.board().in_force(11.0).count(), 0, "a proposal holds until its time");
     }
 
     fn proposal(drone: usize, order: Order, gain: f32) -> Proposal {
