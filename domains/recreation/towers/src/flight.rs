@@ -20,18 +20,27 @@ pub fn orbit_radius(team: Team) -> f32 {
     ORBIT_RADIUS + if team == Team::Red { RED_RING } else { 0.0 }
 }
 
+/// Of the two drones with the same number, one in each team, the one that flies the higher (by 4 m
+/// circling, 0.35 m low): Blue's even drones and Red's odd ones. Each team has about as many
+/// drones above their twins as below (with five a team, Blue three and Red two), so neither team
+/// is the one that always comes down last into a tower's circle. (When Red's all flew higher, the Blue seat won 68 % of the arena's games between two
+/// equal commanders.)
+pub fn higher(team: Team, k: usize) -> bool {
+    k.is_multiple_of(2) == (team == Team::Blue)
+}
+
 /// The height drone `k` of `team` circles at (m): each its own, 4 m apart, so that drones at the
 /// same tower are apart above and below. Well over the trees (20 to 30 m): a drone dips 15 m or
 /// more in a hard turn.
 pub fn orbit_height(team: Team, k: usize) -> f32 {
-    55.0 + 8.0 * k as f32 + if team == Team::Red { 4.0 } else { 0.0 }
+    55.0 + 8.0 * k as f32 + if higher(team, k) { 4.0 } else { 0.0 }
 }
 
 /// The height drone `k` of `team` circles at when it flies low (m): below the treetops (20 m),
 /// where it takes a tower, and over the AGENT envelope's least height (its floor of 8 m and 8 m
 /// more), each its own: all five drones of a team fit in the 4 m between.
 pub fn low_height(team: Team, k: usize) -> f32 {
-    16.0 + 0.7 * k as f32 + if team == Team::Red { 0.35 } else { 0.0 }
+    16.0 + 0.7 * k as f32 + if higher(team, k) { 0.35 } else { 0.0 }
 }
 
 /// How far ahead along its way a drone aims, so that it follows a lane (m).
@@ -213,6 +222,17 @@ fn ahead(path: &[Vec2], pos: Vec2, d: f32) -> Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn neither_team_always_flies_above_the_other_and_twins_stay_apart() {
+        for k in 0..5 {
+            assert_ne!(higher(Team::Blue, k), higher(Team::Red, k), "one of the two twins is higher");
+            assert!((orbit_height(Team::Blue, k) - orbit_height(Team::Red, k)).abs() >= 4.0);
+            assert!((low_height(Team::Blue, k) - low_height(Team::Red, k)).abs() >= 0.35);
+        }
+        let above = |t: Team| (0..5).filter(|&k| higher(t, k)).count();
+        assert!(above(Team::Blue) >= 2 && above(Team::Red) >= 2, "each team has drones above and below");
+    }
     use crate::Rules;
 
     fn map() -> Map {
