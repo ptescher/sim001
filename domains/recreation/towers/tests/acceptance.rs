@@ -601,6 +601,10 @@ fn bindings() -> Bindings<World> {
         .observe("the points in the route of the first Blue drone", |_| 0.0)
         .arrange("the points in the route of the first Blue drone", |_, _| {})
         .observe("the Red scout on the Blue map", |w| w.scout_seen())
+        .observe("the Red scout on the Red map", |w| {
+            let k = w.scout() % w.game.rules.drones;
+            if w.game.view(Team::Red).drones[k].spotted { "spotted" } else { "not spotted" }
+        })
         .observe("the age of the Red scout on the Blue map", |w| {
             w.game.maps[Team::Blue.index()].drones[w.scout()].map_or(0.0, |s| tenth(w.game.time - s.time))
         })

@@ -10,3 +10,5 @@ fastrand.workspace = true
 glam = { workspace = true, features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
+# The video of a recorded game (towers_video): frames drawn as SVG and rasterised.
+resvg = "0.45.1"

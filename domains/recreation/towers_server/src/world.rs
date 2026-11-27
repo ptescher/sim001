@@ -211,6 +211,9 @@ pub struct World {
     pub env: Vec<[i32; 3]>,
     /// The flight recorder (`--record`): every sample of every drone, for the whole game.
     pub recording: Option<Recording>,
+    /// The game's record (`--record`, `plans/game-tooling.md`): what the replay page, the video
+    /// and the report read, as from the arena.
+    pub record: Option<recreation_towers::record::Recorder>,
     /// Towers each team took (Blue's, Red's).
     pub taken: [u32; 2],
     /// When each drone was first 100 m from where it started (the game's time, s).
@@ -257,6 +260,7 @@ impl World {
             leg: vec![(f32::MIN, None); n],
             env: vec![[-1; 3]; n],
             recording: None,
+            record: None,
             taken: [0; 2],
             away: vec![None; n],
             top_speed: vec![0.0; n],
@@ -318,6 +322,10 @@ impl World {
             }
             let before: Vec<_> = self.game.towers.iter().map(|t| t.holder).collect();
             self.game.step(dt);
+            if let Some(rec) = &mut self.record {
+                // The computer commanders' boards are at their seats, not here (yet).
+                rec.step(&self.game, &self.orders, [None, None]);
+            }
             self.link_up();
             for (t, was) in self.game.towers.iter().zip(before) {
                 if let Some(team) = t.holder

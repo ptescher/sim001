@@ -127,6 +127,10 @@ impl<C: Captain> Captain for Loaded<C> {
     fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
         self.captain.advised_by(advisor, delay)
     }
+
+    fn board(&self) -> Option<&recreation_towers::Board> {
+        self.captain.board()
+    }
 }
 
 impl Captain for Formation {

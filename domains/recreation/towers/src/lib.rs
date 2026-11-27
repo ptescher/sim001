@@ -25,6 +25,7 @@ mod instruction;
 mod loadout;
 mod lookahead;
 pub mod map;
+pub mod record;
 pub mod seat;
 pub mod svg;
 mod view;

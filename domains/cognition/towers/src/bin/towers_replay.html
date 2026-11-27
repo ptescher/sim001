@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Towers replay</title>
+<style>
+  :root {
+    --bg: #11151a; --panel: #1a2027; --line: #2b343e; --text: #e6ebf0; --muted: #94a0ad;
+    --blue: #4f9cf9; --red: #f0625f; --grey: #8b95a1; --field: #17231c; --lane: #2f4034; --lake: #1d3447;
+    --take: #e0b341;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f6f8; --panel: #ffffff; --line: #d6dce3; --text: #1b2430; --muted: #5f6b79;
+      --blue: #2a73d6; --red: #d6403d; --grey: #7b8591; --field: #e5eee6; --lane: #c6d6c8; --lake: #bcd6ea;
+      --take: #a77a00; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 16px; display: grid; gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 360px; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; }
+  canvas { width: 100%; display: block; border-radius: 8px; background: var(--bg); touch-action: none; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .bar input[type=range] { flex: 1 1 200px; min-width: 0; }
+  button, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 10px; font: inherit; cursor: pointer; }
+  .score { display: grid; grid-template-columns: 52px 1fr 48px; gap: 8px; align-items: center; margin: 4px 0; }
+  .track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  .fill { height: 100%; }
+  .entries { display: grid; gap: 6px; max-height: 340px; overflow: auto; }
+  .entry { border-left: 3px solid var(--line); padding: 2px 8px; font-size: 13px; }
+  .entry .who { color: var(--muted); font-size: 12px; }
+  .entry.taken { border-color: var(--take); }
+  .entry.stale { opacity: 0.45; }
+  .events { display: grid; gap: 2px; max-height: 200px; overflow: auto; font-size: 12px; color: var(--muted); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .tabs button.on { border-color: var(--text); }
+  .legend { font-size: 12px; color: var(--muted); display: grid; gap: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1 id="title">Towers replay</h1>
+    <div class="sub" id="sides"></div>
+    <canvas id="map" width="1100" height="1100" aria-label="The field of Towers, replayed"></canvas>
+    <div class="bar">
+      <button id="play">Play</button>
+      <select id="speed" aria-label="Speed"><option>1</option><option>2</option><option selected>5</option><option>10</option><option>30</option></select>
+      <input id="time" type="range" min="0" max="0" step="0.5" value="0" aria-label="Game time">
+      <span id="clock" class="sub"></span>
+    </div>
+    <div class="bar">
+      <span class="sub">View:</span>
+      <select id="view" aria-label="Whose view"><option value="all">Everything</option><option value="0">Blue's</option><option value="1">Red's</option></select>
+      <label class="sub"><input type="checkbox" id="trails" checked> trails</label>
+      <label class="sub"><input type="checkbox" id="orders" checked> orders</label>
+      <label class="sub"><input type="checkbox" id="seen" checked> who is seen</label>
+    </div>
+    <canvas id="chart" width="1100" height="160" aria-label="The score over time" style="margin-top:10px"></canvas>
+  </div>
+  <div style="display:grid; gap:16px; align-content:start; min-width:0">
+    <div class="card">
+      <h2>Score</h2>
+      <div class="score"><b style="color:var(--blue)">Blue</b><div class="track"><div class="fill" id="sb" style="background:var(--blue)"></div></div><span id="nb"></span></div>
+      <div class="score"><b style="color:var(--red)">Red</b><div class="track"><div class="fill" id="sr" style="background:var(--red)"></div></div><span id="nr"></span></div>
+      <div class="sub" id="outcome"></div>
+    </div>
+    <div class="card">
+      <h2>Board</h2>
+      <div class="tabs"><button id="bb" class="on" style="color:var(--blue)">Blue</button><button id="br" style="color:var(--red)">Red</button></div>
+      <div class="entries" id="entries"></div>
+    </div>
+    <div class="card">
+      <h2>Events</h2>
+      <div class="events" id="events"></div>
+    </div>
+    <div class="card legend">
+      <div><b>Circle round a drone</b>: the other team sees it now.</div>
+      <div><b>Line from a drone</b>: the tower or point of its order.</div>
+      <div><b>Bar under a tower</b>: control, from Red (left) to Blue (right).</div>
+      <div><b>Faint drone</b>: on the ground, down, or (dashed) out of contact.</div>
+      <div><b>Gold edge on the board</b>: a proposal the commander took.</div>
+    </div>
+  </div>
+</div>
+<script>
+const LINES = __RECORD__;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const header = LINES.find(l => l.Header).Header;
+const ticks = LINES.filter(l => l.Tick).map(l => l.Tick);
+const end = (LINES.find(l => l.End) || {}).End;
+const events = [];
+for (const l of LINES) {
+  const [kind] = Object.keys(l);
+  if (['Spotted', 'Lost', 'Taken', 'Down', 'Up'].includes(kind)) events.push({ kind, ...l[kind] });
+}
+const boards = [[], []];
+const took = new Set();
+for (const l of LINES) {
+  if (l.Board) boards[l.Board.team === 'Blue' ? 0 : 1].push({ t: l.Board.t, e: l.Board.entry });
+  if (l.Took) took.add((l.Took.team === 'Blue' ? 0 : 1) + ':' + l.Took.entry);
+}
+const teamIx = t => (t === 'Blue' ? 0 : 1);
+const names = header.towers.map(t => t.name);
+const droneName = i => { const [team] = header.drones[i]; const k = header.drones.slice(0, i).filter(d => d[0] === team).length + 1; return team[0] + k; };
+const W = header.rules.win_score || header.rules.points_to_win || 600;
+document.getElementById('title').textContent = `Towers, seed ${header.seed}`;
+document.getElementById('sides').innerHTML = `<span style="color:var(--blue)">Blue: ${header.sides[0]}</span> · <span style="color:var(--red)">Red: ${header.sides[1]}</span>`;
+
+// Seen by the other team at time t: from the Spotted / Lost events.
+function seenAt(t) {
+  const seen = [new Set(), new Set()];
+  for (const ev of events) {
+    if (ev.t > t) break;
+    if (ev.kind === 'Spotted') seen[teamIx(ev.by)].add(ev.drone);
+    if (ev.kind === 'Lost') seen[teamIx(ev.by)].delete(ev.drone);
+  }
+  return seen;
+}
+function tickAt(t) {
+  let lo = 0, hi = ticks.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ticks[m].t <= t) lo = m; else hi = m - 1; }
+  return lo;
+}
+
+const map = document.getElementById('map');
+const ctx = map.getContext('2d');
+const R = header.field.radius * 1.08;
+const S = map.width / (2 * R);
+// North up, east to the right (as the commander app and svg.rs draw).
+const P = p => [map.width / 2 + p[1] * S, map.height / 2 - p[0] * S];
+
+function orderTarget(o) {
+  if (!o) return null;
+  if (o.Take !== undefined) return header.towers[o.Take].at;
+  if (o.Goto) return o.Goto;
+  if (o.Circle) return o.Circle[0];
+  if (o === 'Home' || o.Home !== undefined) return null;
+  return null;
+}
+function orderText(o) {
+  if (!o) return 'nothing';
+  if (o.Take !== undefined) return 'take ' + names[o.Take];
+  if (o.Goto) return 'go to a point';
+  if (o.Circle) return 'circle a point';
+  if (typeof o === 'string') return o.toLowerCase();
+  return Object.keys(o)[0].toLowerCase();
+}
+
+function draw(t) {
+  const i = tickAt(t), f = ticks[i];
+  const view = document.getElementById('view').value;
+  const seen = seenAt(t);
+  ctx.clearRect(0, 0, map.width, map.height);
+  ctx.fillStyle = css('--field');
+  ctx.beginPath(); const c = P([0, 0]); ctx.arc(c[0], c[1], header.field.radius * S, 0, 7); ctx.fill();
+  ctx.fillStyle = css('--lake'); ctx.beginPath();
+  header.field.lake.forEach((p, k) => { const q = P(p); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+  ctx.fill();
+  ctx.strokeStyle = css('--lane'); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = 2 * header.field.lane_half_width * S;
+  for (const lane of header.field.lanes) { ctx.beginPath(); lane.forEach((p, k) => { const q = P(p); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }); ctx.stroke(); }
+  ctx.fillStyle = css('--lane');
+  for (const [at, r] of header.field.clearings) { const q = P(at); ctx.beginPath(); ctx.arc(q[0], q[1], r * S, 0, 7); ctx.fill(); }
+  const col = [css('--blue'), css('--red')];
+  // Towers: the capture circle, the holder's colour, the control bar.
+  header.towers.forEach((tw, k) => {
+    const [control, holder] = f.towers[k];
+    const q = P(tw.at);
+    ctx.strokeStyle = holder ? col[teamIx(holder)] : css('--grey'); ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(q[0], q[1], header.rules.circle_radius * S, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = holder ? col[teamIx(holder)] : css('--grey');
+    const s = tw.kind === 'spire' ? 13 : 10;
+    ctx.fillRect(q[0] - s / 2, q[1] - s / 2, s, s);
+    ctx.fillStyle = css('--bg'); ctx.fillRect(q[0] - 24, q[1] + 14, 48, 6);
+    ctx.fillStyle = control >= 0 ? col[0] : col[1];
+    ctx.fillRect(q[0], q[1] + 14, control * 24, 6);
+    ctx.fillStyle = css('--muted'); ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(tw.name, q[0], q[1] - 16);
+  });
+  // Trails: the last 30 s.
+  const shown = d => view === 'all' || teamIx(header.drones[d][0]) === +view || seen[+view].has(d);
+  if (document.getElementById('trails').checked) {
+    const from = tickAt(t - 30);
+    f.drones.forEach((_, d) => {
+      if (!shown(d)) return;
+      ctx.strokeStyle = col[teamIx(header.drones[d][0])]; ctx.globalAlpha = 0.35; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let j = from; j <= i; j++) { const x = ticks[j].drones[d]; if (x.phase !== 'Flying') { ctx.stroke(); ctx.beginPath(); continue; } const q = P(x.at); ctx.lineTo(q[0], q[1]); }
+      ctx.stroke(); ctx.globalAlpha = 1;
+    });
+  }
+  f.drones.forEach((d, k) => {
+    if (!shown(k)) return;
+    const [team, cls] = header.drones[k];
+    const ti = teamIx(team), q = P(d.at);
+    const r = cls === 'heavy' ? 9 : cls === 'light' ? 5 : 7;
+    if (document.getElementById('orders').checked && d.phase === 'Flying') {
+      const tgt = orderTarget(d.order);
+      if (tgt) { const g = P(tgt); ctx.strokeStyle = col[ti]; ctx.globalAlpha = 0.25; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(q[0], q[1]); ctx.lineTo(g[0], g[1]); ctx.stroke(); ctx.globalAlpha = 1; }
+    }
+    if (document.getElementById('seen').checked && seen[1 - ti].has(k)) {
+      ctx.strokeStyle = col[1 - ti]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(q[0], q[1], r + 6, 0, 7); ctx.stroke();
+    }
+    ctx.globalAlpha = d.phase === 'Flying' ? 1 : 0.35;
+    ctx.fillStyle = col[ti];
+    ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, 7); ctx.fill();
+    if (!d.linked) { ctx.strokeStyle = css('--text'); ctx.setLineDash([2, 2]); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(q[0], q[1], r + 2, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = css('--text'); ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(droneName(k), q[0], q[1] - r - 4);
+  });
+  ctx.fillStyle = css('--text'); ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText(`${f.t.toFixed(0)} s   Blue ${f.score[0].toFixed(0)}   Red ${f.score[1].toFixed(0)}`, 12, 24);
+  // The side panel.
+  document.getElementById('clock').textContent = `${f.t.toFixed(1)} s of ${ticks[ticks.length - 1].t.toFixed(0)} s`;
+  document.getElementById('sb').style.width = Math.min(100, 100 * f.score[0] / W) + '%';
+  document.getElementById('sr').style.width = Math.min(100, 100 * f.score[1] / W) + '%';
+  document.getElementById('nb').textContent = f.score[0].toFixed(0);
+  document.getElementById('nr').textContent = f.score[1].toFixed(0);
+  document.getElementById('outcome').textContent = end && t >= end.t ? `Over at ${end.t.toFixed(0)} s: ${end.outcome === 'Draw' ? 'a draw' : (end.outcome.Won + ' won')}` : '';
+  drawBoard(t); drawEvents(t); drawChart(t);
+}
+
+let boardTeam = 0;
+function entryText(e) {
+  const k = e.kind;
+  if (k.Proposal) return `${droneName(header.drones.findIndex(d => d[0] === ['Blue', 'Red'][boardTeam]) + k.Proposal.drone)}: ${orderText(k.Proposal.order)}, ${k.Proposal.gain.toFixed(1)} points. ${k.Proposal.why}`;
+  if (k.Intent) return 'Intent: ' + k.Intent.why;
+  return JSON.stringify(k);
+}
+function drawBoard(t) {
+  const list = document.getElementById('entries');
+  const items = boards[boardTeam].filter(b => b.t <= t).slice(-40).reverse();
+  list.innerHTML = '';
+  for (const b of items) {
+    const div = document.createElement('div');
+    const isTaken = took.has(boardTeam + ':' + b.e.id);
+    div.className = 'entry' + (isTaken ? ' taken' : '') + (b.e.until < t ? ' stale' : '');
+    div.innerHTML = `<div class="who">${b.t.toFixed(0)} s · ${b.e.author}${isTaken ? ' · taken' : ''}</div>`;
+    div.append(document.createTextNode(entryText(b.e)));
+    list.append(div);
+  }
+  if (!items.length) list.innerHTML = '<div class="sub">Nothing on the board yet.</div>';
+}
+document.getElementById('bb').onclick = () => { boardTeam = 0; bb.classList.add('on'); br.classList.remove('on'); draw(now); };
+document.getElementById('br').onclick = () => { boardTeam = 1; br.classList.add('on'); bb.classList.remove('on'); draw(now); };
+function drawEvents(t) {
+  const list = document.getElementById('events');
+  const items = events.filter(e => e.t <= t && e.kind !== 'Lost').slice(-30).reverse();
+  list.innerHTML = '';
+  for (const e of items) {
+    const d = document.createElement('div');
+    d.textContent = `${e.t.toFixed(0)} s  ` + ({
+      Spotted: () => `${e.by} spotted ${droneName(e.drone)}`,
+      Taken: () => e.by ? `${e.by} took the ${names[e.tower]}` : `the ${names[e.tower]} is neutral`,
+      Down: () => `${droneName(e.drone)} is down`,
+      Up: () => `${droneName(e.drone)} is back`,
+    }[e.kind])();
+    list.append(d);
+  }
+}
+const chart = document.getElementById('chart'), cx2 = chart.getContext('2d');
+function drawChart(t) {
+  const w = chart.width, h = chart.height, T = ticks[ticks.length - 1].t || 1;
+  cx2.clearRect(0, 0, w, h);
+  cx2.strokeStyle = css('--line'); cx2.strokeRect(0.5, 0.5, w - 1, h - 1);
+  [0, 1].forEach(s => {
+    cx2.strokeStyle = [css('--blue'), css('--red')][s]; cx2.lineWidth = 2; cx2.beginPath();
+    ticks.forEach((k, j) => { const x = k.t / T * w, y = h - Math.min(1, k.score[s] / W) * (h - 8) - 4; j ? cx2.lineTo(x, y) : cx2.moveTo(x, y); });
+    cx2.stroke();
+  });
+  cx2.strokeStyle = css('--muted'); cx2.beginPath(); cx2.moveTo(t / T * w, 0); cx2.lineTo(t / T * w, h); cx2.stroke();
+}
+
+const slider = document.getElementById('time');
+slider.max = ticks[ticks.length - 1].t;
+let now = 0, playing = false, last = 0;
+slider.oninput = () => { now = +slider.value; draw(now); };
+document.getElementById('play').onclick = () => { playing = !playing; document.getElementById('play').textContent = playing ? 'Pause' : 'Play'; last = performance.now(); if (playing) requestAnimationFrame(loop); };
+for (const id of ['view', 'trails', 'orders', 'seen']) document.getElementById(id).onchange = () => draw(now);
+chart.onclick = e => { const r = chart.getBoundingClientRect(); now = (e.clientX - r.left) / r.width * +slider.max; slider.value = now; draw(now); };
+function loop(ts) {
+  if (!playing) return;
+  now = Math.min(+slider.max, now + (ts - last) / 1000 * +document.getElementById('speed').value);
+  last = ts; slider.value = now; draw(now);
+  if (now >= +slider.max) { playing = false; document.getElementById('play').textContent = 'Play'; return; }
+  requestAnimationFrame(loop);
+}
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => draw(now));
+// A link to a moment: #t=120 (s of game time), and optionally &view=0 (Blue's) or 1 (Red's) and
+// &team=1 (Red's board).
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.has('view')) document.getElementById('view').value = hash.get('view');
+if (hash.get('team') === '1') { boardTeam = 1; br.classList.add('on'); bb.classList.remove('on'); }
+now = Math.min(+slider.max, Math.max(0, +(hash.get('t') || 0)));
+slider.value = now;
+draw(now);
+</script>
+</body>
+</html>

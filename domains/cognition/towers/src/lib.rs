@@ -95,6 +95,11 @@ pub trait Captain {
     fn advised_by(&mut self, _advisor: Box<dyn Advise>, _delay: f32) -> bool {
         false
     }
+
+    /// The team's board, for a record of the game (see [`Command::board`]); none by default.
+    fn board(&self) -> Option<&recreation_towers::Board> {
+        None
+    }
 }
 
 impl<C: Captain + ?Sized> Captain for &mut C {
@@ -125,6 +130,10 @@ impl<C: Captain + ?Sized> Captain for &mut C {
     fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
         (**self).advised_by(advisor, delay)
     }
+
+    fn board(&self) -> Option<&recreation_towers::Board> {
+        (**self).board()
+    }
 }
 
 impl Captain for recreation_towers::Commander {
@@ -140,6 +149,10 @@ impl Captain for recreation_towers::Commander {
     fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
         self.add_advisor(advisor, delay);
         true
+    }
+
+    fn board(&self) -> Option<&recreation_towers::Board> {
+        Some(recreation_towers::Commander::board(self))
     }
 }
 
@@ -163,6 +176,10 @@ impl<C: Captain> Command for Directing<C> {
 
     fn advised_by(&mut self, advisor: Box<dyn Advise>, delay: f32) -> bool {
         self.0.advised_by(advisor, delay)
+    }
+
+    fn board(&self) -> Option<&recreation_towers::Board> {
+        self.0.board()
     }
 }
 
@@ -382,6 +399,8 @@ pub struct Match<'u> {
     took_off: Vec<bool>,
     /// The unit of each drone: its own brain, run on every step.
     units: Vec<Box<dyn Unit + 'u>>,
+    /// The record of the game, if it is being recorded (`plans/game-tooling.md`).
+    pub recorder: Option<recreation_towers::record::Recorder>,
 }
 
 impl<'u> Match<'u> {
@@ -454,6 +473,7 @@ impl<'u> Match<'u> {
             downs: [0; 2],
             took_off: vec![false; 2 * rules.drones],
             units,
+            recorder: None,
         }
     }
 
@@ -485,7 +505,12 @@ impl<'u> Match<'u> {
             self.next_decision += DECIDE_EVERY;
             for team in Team::BOTH {
                 let commander: &mut dyn Command = if team == Team::Blue { &mut *blue } else { &mut *red };
-                for d in commander.decide(&game.view(team))?.into_iter().filter(|d| d.drone < drones) {
+                let directives = commander.decide(&game.view(team))?;
+                if let Some(rec) = &mut self.recorder {
+                    let orders: Vec<(usize, Order)> = directives.iter().map(|d| (d.drone, d.order)).collect();
+                    rec.orders(game.time, team, &orders);
+                }
+                for d in directives.into_iter().filter(|d| d.drone < drones) {
                     self.pending.push((game.time + self.delay, game.drone(team, d.drone), d));
                 }
             }
@@ -545,6 +570,10 @@ impl<'u> Match<'u> {
         for (_, d) in game.drones.iter().enumerate().filter(|(i, _)| game.jammed[*i]) {
             self.dark[d.team.index()] += DT;
         }
+        if let Some(rec) = &mut self.recorder {
+            let flown: Vec<Option<Order>> = flyers.iter().map(|f| f.order).collect();
+            rec.step(game, &flown, [blue.board(), red.board()]);
+        }
         Ok(())
     }
 
@@ -590,6 +619,30 @@ pub fn play_with(
     let mut m = Match::of_loadouts(rules, seed, [&mut *blue, &mut *red])?;
     loop {
         if let Some(result) = m.result() {
+            return Ok(result);
+        }
+        m.step(blue, red)?;
+    }
+}
+
+/// Plays one game between two captains, as [`play_with`] does, and writes its record to `out`
+/// (`plans/game-tooling.md`); `sides` says who plays each side, for the record's header.
+pub fn play_recorded(
+    rules: Rules,
+    blue: &mut dyn Captain,
+    red: &mut dyn Captain,
+    seed: u64,
+    sides: [String; 2],
+    out: Box<dyn std::io::Write + Send>,
+) -> Result<TowersResult, String> {
+    let mut m = Match::of_loadouts(rules, seed, [&mut *blue, &mut *red])?;
+    let header = recreation_towers::record::Header::of(&m.game, seed, sides);
+    m.recorder = Some(recreation_towers::record::Recorder::new(out, &m.game, header));
+    loop {
+        if let Some(result) = m.result() {
+            if let Some(e) = m.recorder.as_ref().and_then(|r| r.error.clone()) {
+                return Err(format!("the record: {e}"));
+            }
             return Ok(result);
         }
         m.step(blue, red)?;
@@ -750,6 +803,43 @@ pub fn serve_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A writer that keeps what it is given.
+    #[derive(Clone, Default)]
+    struct Kept(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Kept {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_recorded_game_plays_as_an_unrecorded_one_and_its_record_ends_as_it_did() {
+        use recreation_towers::record::{self, Line};
+        let rules = Rules::default();
+        let advised = || recreation_towers::Commander::new(rules);
+        let plain = play_with(rules, &mut advised(), &mut advised(), 5).unwrap();
+        let kept = Kept::default();
+        let sides = ["commander".to_string(), "commander".to_string()];
+        let recorded = play_recorded(rules, &mut advised(), &mut advised(), 5, sides, Box::new(kept.clone())).unwrap();
+        assert_eq!(plain, recorded);
+        let lines = record::read(&String::from_utf8(kept.0.lock().unwrap().clone()).unwrap()).unwrap();
+        assert!(matches!(&lines[0], Line::Header(h) if h.seed == 5));
+        let Some(Line::End(end)) = lines.last() else { panic!("{:?}", lines.last()) };
+        assert_eq!(end.outcome, recorded.outcome);
+        let ticks = lines.iter().filter(|l| matches!(l, Line::Tick(_))).count();
+        assert!(ticks as f32 >= recorded.length / record::TICK_EVERY - 2.0, "{ticks} ticks in {} s", recorded.length);
+        assert!(lines.iter().any(|l| matches!(l, Line::Orders { .. })));
+        assert!(lines.iter().any(|l| matches!(l, Line::Spotted { .. })));
+        assert!(lines.iter().any(|l| matches!(l, Line::Taken { .. })));
+        // The default commander has the lookahead: its proposals are on the board in the record.
+        assert!(lines.iter().any(|l| matches!(l, Line::Board { .. })));
+    }
 
     fn default() -> Commander {
         Commander::new(Rules::default())

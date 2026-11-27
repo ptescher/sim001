@@ -138,6 +138,9 @@ Vocabulary:
     Shows: seen: the Blue map shows the Red scout where it is now
     Shows: last seen: the Blue map shows the Red scout dim, where Blue last saw it, with the time since then
     Shows: unknown: the Blue map does not show the Red scout
+  State: the Red scout on the Red map is spotted | not spotted
+    Shows: spotted: the Red map marks the Red scout: Blue sees it
+    Shows: not spotted: the Red map does not mark the Red scout
   State: the age of the Red scout on the Blue map is 0..600 s
     Shows: the Blue map shows the Red scout with the age {value} s
   State: the east tower on the Blue map is held by Blue | held by Red | neutral

@@ -66,6 +66,8 @@ pub fn build(
                 silent: 0.0,
                 battery: 0.0,
                 payload: Default::default(),
+                // The game tells the team which of its drones the enemy sees.
+                spotted: sites.spotted.contains(&k),
             };
             match own.get(k).copied().flatten() {
                 Some(r) => {

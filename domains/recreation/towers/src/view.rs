@@ -76,6 +76,10 @@ pub struct OwnDrone {
     /// What it carries (v4).
     #[serde(default)]
     pub payload: Payload,
+    /// The enemy sees it now: the game tells the team (`plans/game-tooling.md`, the owner's rule of
+    /// 2026-11-26), as it tells the team which enemy drones the team sees.
+    #[serde(default)]
+    pub spotted: bool,
 }
 
 fn in_contact() -> bool {
@@ -144,6 +148,9 @@ pub struct Sites {
     pub team: Team,
     pub towers: Vec<TowerView>,
     pub enemies: Vec<EnemyDrone>,
+    /// The team's drones (by their number in the team) that the enemy sees now: the game tells it.
+    #[serde(default)]
+    pub spotted: Vec<usize>,
 }
 
 impl Game {
@@ -155,7 +162,8 @@ impl Game {
     /// What the sites of `team` report.
     pub fn sites(&self, team: Team) -> Sites {
         let v = self.site_view(team);
-        Sites { team, towers: v.towers, enemies: v.enemies }
+        let spotted = v.drones.iter().filter(|d| d.spotted).map(|d| d.k).collect();
+        Sites { team, towers: v.towers, enemies: v.enemies, spotted }
     }
 
     /// What `team` knows.
@@ -211,6 +219,7 @@ impl Game {
                     silent: self.silent[i],
                     battery: self.reported[i],
                     payload: d.payload,
+                    spotted: self.maps[team.other().index()].drones.get(i).copied().flatten().is_some_and(|s| s.seen),
                 }
             })
             .collect();
