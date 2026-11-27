@@ -133,7 +133,9 @@ impl Game {
         let pts = |v: &[[f32; 2]]| {
             v.iter().map(|&p| self.at(p)).map(|(x, y)| format!("{x:.1},{y:.1}")).collect::<Vec<_>>().join(" ")
         };
-        let _ = write!(s, r#"<polygon points="{}" fill="{LAKE}"/>"#, pts(&f.lake));
+        for lake in &f.lakes {
+            let _ = write!(s, r#"<polygon points="{}" fill="{LAKE}"/>"#, pts(lake));
+        }
         for lane in &f.lanes {
             let _ = write!(
                 s,

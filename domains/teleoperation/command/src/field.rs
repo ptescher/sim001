@@ -137,8 +137,10 @@ fn paint_plain_valley(window: &mut Window, lens: Lens, rules: &Rules, valley: &M
     if let Some(ring) = lens.ring(Vec2::ZERO, rules.field_radius * 1.15) {
         fill_poly(window, &ring, c(FIELD));
     }
-    if let Some(shore) = valley.lake.outline(72).into_iter().map(|p| lens.ground(p)).collect::<Option<Vec<_>>>() {
-        fill_poly(window, &shore, ca(LAKE, 0.9));
+    for lake in &valley.lakes {
+        if let Some(shore) = lake.outline(72).into_iter().map(|p| lens.ground(p)).collect::<Option<Vec<_>>>() {
+            fill_poly(window, &shore, ca(LAKE, 0.9));
+        }
     }
     for lane in &valley.lanes {
         for seg in lane.points.windows(2) {

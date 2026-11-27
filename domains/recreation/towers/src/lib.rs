@@ -464,6 +464,13 @@ impl Rules {
     }
 }
 
+/// Where drone `k` of `team` stands at its base: in a line across the field, 10 m apart, Red's line
+/// Blue's turned half round the centre (so that Blue's first drone and Red's first stand on
+/// opposite flanks, each as near its own side's depot as the other is to its own).
+pub fn base_spot(rules: &Rules, team: Team, k: usize) -> Vec2 {
+    rules.base(team) + Vec2::new(0.0, team.sign() * 10.0 * (k as f32 - 2.0))
+}
+
 /// What a drone is doing, as far as the referee cares.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Phase {
@@ -642,7 +649,7 @@ impl Game {
                 (0..rules.drones).map(move |k| Drone {
                     team,
                     class: rules.class(k),
-                    at: rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0)),
+                    at: base_spot(&rules, team, k),
                     alt: 0.0,
                     vel: Vec2::ZERO,
                     phase: Phase::Ground,
@@ -966,7 +973,7 @@ impl Game {
         let team = self.drones[i].team;
         let k = i % self.rules.drones;
         self.drones[i] = Drone {
-            at: self.rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0)),
+            at: base_spot(&self.rules, team, k),
             alt: 0.0,
             vel: Vec2::ZERO,
             phase: Phase::Ground,
@@ -1466,14 +1473,15 @@ mod tests {
 
     #[test]
     fn a_depot_the_team_holds_recharges_unless_the_circle_is_contested_and_a_fort_never_does() {
-        let (mut g, i) = charged(Vec2::new(45.0, -390.0) + Vec2::new(40.0, 0.0), 100.0);
+        let west_at = Game::new(Rules::default()).towers[1].at;
+        let (mut g, i) = charged(west_at + Vec2::new(40.0, 0.0), 100.0);
         let west = g.tower("west");
         g.towers[west].holder = Some(Team::Blue);
         g.towers[west].control = 1.0;
         run(&mut g, 10.0);
         assert!((g.battery[i] - 120.0).abs() < 0.01, "+3 -1: {}", g.battery[i]);
         // An enemy in the circle: contested, no recharge, and the drain is higher.
-        circle(&mut g, Team::Red, 0, Vec2::new(45.0, -390.0));
+        circle(&mut g, Team::Red, 0, west_at);
         g.battery[i] = 100.0;
         run(&mut g, 10.0);
         assert!((g.battery[i] - 75.0).abs() < 0.01, "{}", g.battery[i]);

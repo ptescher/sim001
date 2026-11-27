@@ -160,9 +160,12 @@ function draw(t) {
   ctx.clearRect(0, 0, map.width, map.height);
   ctx.fillStyle = css('--field');
   ctx.beginPath(); const c = P([0, 0]); ctx.arc(c[0], c[1], header.field.radius * S, 0, 7); ctx.fill();
-  ctx.fillStyle = css('--lake'); ctx.beginPath();
-  header.field.lake.forEach((p, k) => { const q = P(p); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
-  ctx.fill();
+  ctx.fillStyle = css('--lake');
+  for (const lake of header.field.lakes || [header.field.lake]) {
+    ctx.beginPath();
+    lake.forEach((p, k) => { const q = P(p); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+    ctx.fill();
+  }
   ctx.strokeStyle = css('--lane'); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.lineWidth = 2 * header.field.lane_half_width * S;
   for (const lane of header.field.lanes) { ctx.beginPath(); lane.forEach((p, k) => { const q = P(p); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }); ctx.stroke(); }

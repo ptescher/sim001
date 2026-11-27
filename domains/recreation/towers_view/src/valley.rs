@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 use recreation_towers::{Map, Rules};
-use visualization_world::terrain::{self, Arena, Tree};
+use visualization_world::terrain::{self, Arena, ArenaLake, Tree};
 
 /// The world point (x, z) of a field point (north, east).
 fn world(p: glam::Vec2) -> Vec2 {
@@ -26,15 +26,19 @@ pub fn set(rules: &Rules) -> Result<(), String> {
         })
         .collect();
     let mountains = map.clone();
-    let lake = world(map.lake.at);
-    let lake_radius = map.lake.outline(72).iter().map(|p| p.distance(map.lake.at)).fold(0.0, f32::max);
-    let shape = map.lake;
+    let lakes = map
+        .lakes
+        .iter()
+        .map(|&shape| ArenaLake {
+            centre: world(shape.at),
+            radius: shape.outline(72).iter().map(|p| p.distance(shape.at)).fold(0.0, f32::max),
+            // A world direction (x east, z south) is the field direction (north, east) = (-z, x).
+            shore: Box::new(move |d| shape.shore(glam::Vec2::new(-d.y, d.x))),
+        })
+        .collect();
     terrain::set_arena(Arena {
         radius: rules.field_radius,
-        lake_centre: lake,
-        lake_radius,
-        // A world direction (x east, z south) is the field direction (north, east) = (-z, x).
-        lake_shore: Box::new(move |d| shape.shore(glam::Vec2::new(-d.y, d.x))),
+        lakes,
         trees,
         open_distance: Box::new(move |x, z| map.open_distance(glam::Vec2::new(-z, x))),
         mountains: Box::new(move |x, z| mountains.mountain_height(glam::Vec2::new(-z, x))),
@@ -54,18 +58,20 @@ mod tests {
     }
 
     #[test]
-    fn the_world_has_its_lake_where_the_game_has_it() {
+    fn the_world_has_its_lakes_where_the_game_has_them() {
         let map = valley();
-        let at = world(map.lake.at);
-        assert!(terrain::is_water(at.x, at.y));
-        // Just inside and just outside the game's shore, on all sides.
-        for k in 0..8 {
-            let dir = Vec2::from_angle(k as f32 * std::f32::consts::FRAC_PI_4);
-            let shore = map.lake.shore(glam::Vec2::new(-dir.y, dir.x));
-            let inside = at + dir * (shore - 6.0);
-            let outside = at + dir * (shore + 6.0);
-            assert!(terrain::is_water(inside.x, inside.y), "inside, direction {k}");
-            assert!(!terrain::is_water(outside.x, outside.y), "outside, direction {k}");
+        for lake in &map.lakes {
+            let at = world(lake.at);
+            assert!(terrain::is_water(at.x, at.y));
+            // Just inside and just outside the game's shore, on all sides.
+            for k in 0..8 {
+                let dir = Vec2::from_angle(k as f32 * std::f32::consts::FRAC_PI_4);
+                let shore = lake.shore(glam::Vec2::new(-dir.y, dir.x));
+                let inside = at + dir * (shore - 6.0);
+                let outside = at + dir * (shore + 6.0);
+                assert!(terrain::is_water(inside.x, inside.y), "inside, direction {k}");
+                assert!(!terrain::is_water(outside.x, outside.y), "outside, direction {k}");
+            }
         }
     }
 
