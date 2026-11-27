@@ -896,6 +896,94 @@ mod tests {
         assert_eq!(c.board().in_force(11.0).count(), 0, "a proposal holds until its time");
     }
 
+    /// A game 12 s in, Blue's hand from a commander's first decision, and the map.
+    fn twelve_seconds_in() -> (Game, Hand, TeamView) {
+        let mut g = Game::new(Rules::default());
+        for _ in 0..120 {
+            g.step(0.1);
+        }
+        let mut c = bare(&g);
+        let view = g.view(Team::Blue);
+        c.decide(&view);
+        (g, c.hand().unwrap().clone(), view)
+    }
+
+    fn intent_of(author: &str, at: f32, aims: Vec<crate::Aim>) -> Entry {
+        Entry {
+            id: 1,
+            author: author.into(),
+            made: at,
+            until: at + 60.0,
+            confidence: 1.0,
+            kind: crate::EntryKind::Intent(crate::Intent { aims, why: "test".into() }),
+        }
+    }
+
+    fn proposed(e: &[Entry]) -> Option<Proposal> {
+        e.iter().find_map(|e| e.as_proposal().cloned())
+    }
+
+    #[test]
+    fn a_lookahead_follows_the_intent_on_the_board() {
+        let (g, hand, view) = twelve_seconds_in();
+        let rules = g.rules;
+        let towers = view.towers.len();
+        let mut alone = Lookahead::new(rules);
+        let first = proposed(&alone.look(&view, &hand, &[])).expect("a move on its own");
+        let t0 = match first.order {
+            Order::Take(t) => t,
+            o => panic!("{o:?}"),
+        };
+        // Told to leave that tower, it proposes another (or nothing), not that one.
+        let mut aims = vec![crate::Aim::Open; towers];
+        aims[t0] = crate::Aim::Leave;
+        let mut told = Lookahead::new(rules).following(FOLLOW_FOR_TESTS, FOLLOW_FOR_TESTS);
+        let moved = proposed(&told.look(&view, &hand, &[intent_of("deep", view.time, aims)]));
+        assert_ne!(moved.as_ref().map(|p| p.order), Some(Order::Take(t0)), "{moved:?}");
+        // Told to take another tower it may send a drone to, it proposes that, says whose intent
+        // it follows, and reports the model's gain, not the bias.
+        let other = (0..towers).find(|&t| t != t0 && view.towers[t].holder != Some(Team::Blue)).unwrap();
+        let mut aims = vec![crate::Aim::Open; towers];
+        aims[other] = crate::Aim::Take(1.0);
+        let mut told = Lookahead::new(rules).following(FOLLOW_FOR_TESTS, FOLLOW_FOR_TESTS);
+        let p = proposed(&told.look(&view, &hand, &[intent_of("deep", view.time, aims.clone())])).unwrap();
+        assert_eq!(p.order, Order::Take(other));
+        assert!(p.why.contains("deep's intent"), "{}", p.why);
+        assert!(p.gain < FOLLOW_FOR_TESTS / 2.0, "the gain is the model's: {}", p.gain);
+        // An intent that no longer holds is not followed.
+        let mut stale = intent_of("deep", view.time - 100.0, aims);
+        stale.until = view.time - 1.0;
+        let mut late = Lookahead::new(rules).following(FOLLOW_FOR_TESTS, FOLLOW_FOR_TESTS);
+        assert_eq!(proposed(&late.look(&view, &hand, &[stale])).map(|p| p.order), Some(first.order));
+    }
+
+    /// A bias that outweighs any gain in these games.
+    const FOLLOW_FOR_TESTS: f32 = 1000.0;
+
+    #[test]
+    fn the_deep_thinker_posts_an_intent_and_no_orders() {
+        let (g, hand, view) = twelve_seconds_in();
+        let mut deep = crate::Deep::new(g.rules);
+        let said = deep.look(&view, &hand, &[]);
+        assert_eq!(said.len(), 1, "{said:?}");
+        let e = &said[0];
+        assert_eq!((e.author.as_str(), e.made, e.until), ("deep", view.time, view.time + crate::advice::DEEP_HOLDS));
+        let intent = e.as_intent().expect("an intent");
+        assert_eq!(intent.aims.len(), view.towers.len());
+        for (t, a) in intent.aims.iter().enumerate() {
+            if view.towers[t].holder == Some(Team::Blue) {
+                assert_eq!(*a, crate::Aim::Open, "a tower Blue holds is not one to take");
+            }
+            // A tower to leave is one the commander sends a drone to.
+            if *a == crate::Aim::Leave {
+                assert!(hand.orders.contains(&Some(Order::Take(t))), "{intent:?} {:?}", hand.orders);
+            }
+        }
+        assert!(!intent.why.is_empty());
+        // It thinks again only after its time.
+        assert!(deep.look(&view, &hand, &[]).is_empty());
+    }
+
     fn proposal(drone: usize, order: Order, gain: f32) -> Proposal {
         Proposal { drone, order, queue: vec![], gain, made: 0.0, until: 10.0, why: "test".into() }
     }
