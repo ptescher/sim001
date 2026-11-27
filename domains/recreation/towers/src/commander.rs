@@ -958,6 +958,17 @@ mod tests {
         assert_eq!(proposed(&late.look(&view, &hand, &[stale])).map(|p| p.order), Some(first.order));
     }
 
+    #[test]
+    fn a_lookahead_draws_other_futures_in_another_game() {
+        // Two games that differ only in where the drones have got to by the first look: the key
+        // the belief is seeded with differs, so its draws do too.
+        let (_, _, view) = twelve_seconds_in();
+        let mut moved = view.clone();
+        moved.drones[0].at.x += 1.0;
+        assert_ne!(crate::advice::game_key(&view), crate::advice::game_key(&moved));
+        assert_eq!(crate::advice::game_key(&view), crate::advice::game_key(&view.clone()));
+    }
+
     /// A bias that outweighs any gain in these games.
     const FOLLOW_FOR_TESTS: f32 = 1000.0;
 

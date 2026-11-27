@@ -162,6 +162,12 @@ impl Belief {
     }
 
     /// Takes in the team's map at its time.
+    /// Mixes `key` into its random draws: a belief seeded only by its team would draw the same
+    /// futures in every game, and one seat would have the luckier draws in all of them.
+    pub fn reseed(&mut self, key: u64) {
+        self.rng ^= key.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    }
+
     pub fn update(&mut self, view: &TeamView) {
         let dt = (view.time - self.time).clamp(0.0, 5.0);
         self.time = view.time;

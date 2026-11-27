@@ -307,6 +307,10 @@ impl Advise for Lookahead {
         if view.time < LOOK_AFTER || view.time - self.last < LOOK_EVERY {
             return vec![];
         }
+        if self.last == f32::NEG_INFINITY {
+            // Its draws differ from game to game, or one seat would have the luckier ones in all.
+            self.belief.reseed(game_key(view));
+        }
         self.last = view.time;
         self.moved.resize(hand.orders.len(), f32::NEG_INFINITY);
         let hold: Vec<bool> = self.moved.iter().map(|&m| view.time - m < self.cooldown).collect();
@@ -476,4 +480,13 @@ impl Advise for Deep {
     fn clone_box(&self) -> Box<dyn Advise> {
         Box::new(self.clone())
     }
+}
+
+/// A number that differs from game to game: the team's own drones where they are now (at the
+/// first look, after the take-off, they are where each game's draws put them).
+pub(crate) fn game_key(view: &TeamView) -> u64 {
+    view.drones.iter().fold(0xCBF2_9CE4_8422_2325u64, |h, d| {
+        let h = (h ^ d.at.x.to_bits() as u64).wrapping_mul(0x0100_0000_01B3);
+        (h ^ d.at.y.to_bits() as u64).wrapping_mul(0x0100_0000_01B3)
+    })
 }
