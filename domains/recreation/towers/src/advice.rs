@@ -43,12 +43,108 @@ pub struct Hand {
     pub away: Vec<Vec<bool>>,
 }
 
+/// One entry on a team's board (`plans/advisors.md`): what an advisor posted, for the commander
+/// and for the other advisors to read.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Entry {
+    /// Its number on the board, from 1 in the order posted (0 before it is posted).
+    #[serde(default)]
+    pub id: u64,
+    /// The advisor that posted it.
+    pub author: String,
+    /// The game time (s) of the map it was made from.
+    pub made: f32,
+    /// The game time (s) after which it no longer holds.
+    pub until: f32,
+    /// How sure its author is, 0 to 1.
+    pub confidence: f32,
+    pub kind: EntryKind,
+}
+
+/// What an entry says. Proposals are orders for a drone; the other kinds come with the next steps
+/// of the plan (intents, assessments, critiques).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum EntryKind {
+    Proposal(Proposal),
+}
+
+impl Entry {
+    /// A proposal of `author`'s, as an entry: it holds as long as the proposal does.
+    pub fn proposal(author: impl Into<String>, p: Proposal) -> Entry {
+        Entry {
+            id: 0,
+            author: author.into(),
+            made: p.made,
+            until: p.until,
+            confidence: 1.0,
+            kind: EntryKind::Proposal(p),
+        }
+    }
+
+    /// The proposal, if the entry is one.
+    pub fn as_proposal(&self) -> Option<&Proposal> {
+        match &self.kind {
+            EntryKind::Proposal(p) => Some(p),
+        }
+    }
+}
+
+/// A team's board: every entry posted in a game, in the order posted.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Board {
+    entries: Vec<Entry>,
+}
+
+impl Board {
+    /// Posts `entry` (its `id` is set here) and returns its id.
+    pub fn post(&mut self, mut entry: Entry) -> u64 {
+        entry.id = self.entries.len() as u64 + 1;
+        self.entries.push(entry);
+        self.entries.len() as u64
+    }
+
+    /// The id of the last entry posted (0 for none).
+    pub fn last(&self) -> u64 {
+        self.entries.len() as u64
+    }
+
+    /// The entries posted after entry `id`.
+    pub fn since(&self, id: u64) -> &[Entry] {
+        &self.entries[(id as usize).min(self.entries.len())..]
+    }
+
+    /// The entries that still hold at game time `now`.
+    pub fn in_force(&self, now: f32) -> impl Iterator<Item = &Entry> {
+        self.entries.iter().filter(move |e| e.until >= now)
+    }
+
+    /// Every entry, in the order posted.
+    pub fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+}
+
 /// Looks at the team's map and proposes moves. It may be slow; it is called when the map is shown
 /// to it, and what it answers reaches the commander later.
 pub trait Advise: std::fmt::Debug + Send {
     /// The proposals on this map, if any. Called with each map the advisor is shown (the
-    /// commander shows it one each second); it decides for itself how often it thinks.
-    fn advise(&mut self, view: &TeamView, hand: &Hand) -> Vec<Proposal>;
+    /// commander shows it one each second); it decides for itself how often it thinks. An advisor
+    /// that reads the board answers [`Advise::look`] instead.
+    fn advise(&mut self, _view: &TeamView, _hand: &Hand) -> Vec<Proposal> {
+        vec![]
+    }
+
+    /// What it posts on this map, shown the entries that went on the board since its last look
+    /// (its own and the other advisors'). By default its proposals, from [`Advise::advise`].
+    fn look(&mut self, view: &TeamView, hand: &Hand, _board: &[Entry]) -> Vec<Entry> {
+        let name = self.name();
+        self.advise(view, hand).into_iter().map(|p| Entry::proposal(name.clone(), p)).collect()
+    }
+
+    /// The name its entries are posted under.
+    fn name(&self) -> String {
+        "advisor".into()
+    }
 
     /// A copy of the advisor, with its state (a commander can be cloned).
     fn clone_box(&self) -> Box<dyn Advise>;
@@ -157,6 +253,10 @@ impl Advise for Lookahead {
                 self.model.horizon
             ),
         }]
+    }
+
+    fn name(&self) -> String {
+        "lookahead".into()
     }
 
     fn clone_box(&self) -> Box<dyn Advise> {

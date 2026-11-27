@@ -30,7 +30,7 @@ pub mod svg;
 mod view;
 
 pub use actors::{Autopilot, Command, Directive, OnBoard, Unit};
-pub use advice::{Advise, Hand, Lookahead, Proposal};
+pub use advice::{Advise, Board, Entry, EntryKind, Hand, Lookahead, Proposal};
 pub use advisor::{Advice, AdviceKind, Advisor};
 pub use belief::Belief;
 pub use commander::{ADVICE_MARGIN, Commander, CommanderTuning};
