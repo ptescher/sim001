@@ -1,0 +1,53 @@
+# The full end-to-end run (`tasks docs`: every runner in turn, with ArduPlane SITL, windows and the
+# GPU) on the maintainer's own Mac, a self-hosted runner, so the free GitHub minutes are not spent.
+# Set the runner up with tools/runner/setup.sh.
+#
+# This repository is PUBLIC, and a self-hosted runner runs whatever a workflow says, on the
+# owner's machine. So nothing starts this by itself: no pull request, push or merge queue. It is a
+# one-off job, started by hand by someone with write access, and the job then waits for the
+# owner's approval (the `self-hosted-mac` environment's required reviewer):
+#
+#   gh workflow run e2e.yml --ref <branch>
+#   gh run watch
+name: E2E
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  e2e:
+    name: end-to-end (self-hosted Mac)
+    # Pauses until a required reviewer of this environment approves (Settings > Environments).
+    environment: self-hosted-mac
+    runs-on: [self-hosted, macOS, ARM64, sim001]
+    timeout-minutes: 120
+    steps:
+      # clean: false keeps target/ (and so the builds) between runs; the workspace is the same directory each time.
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      # ArduPlane is built once, in the main checkout (ardupilot/build_native.sh); every job links it.
+      - name: Link the built ArduPlane
+        run: |
+          : "${SIM001_ARDUPILOT:=$HOME/code/t1s_sim/.ardupilot}"
+          test -x "$SIM001_ARDUPILOT/build/sitl/bin/arduplane" || { echo "no ArduPlane at $SIM001_ARDUPILOT"; exit 1; }
+          ln -sfn "$SIM001_ARDUPILOT" .ardupilot
+      - name: Everything, with time limits
+        run: cargo run --release --locked -p sim001_tasks -- docs
+      - name: Results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: docs/results
+          if-no-files-found: ignore
