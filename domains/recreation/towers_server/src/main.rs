@@ -226,6 +226,29 @@ fn main() {
                 std::process::exit(2);
             }
         }
+        // The game's record, as the arena writes it: the replay page, the video and the report
+        // read it (tools in cognition_towers: towers_replay, towers_video, towers_report).
+        {
+            let mut w = world.lock().unwrap();
+            let side = |k: usize| {
+                let who = if a.people[k] {
+                    "a person"
+                } else if a.nobody[k] {
+                    "nobody"
+                } else {
+                    "the computer commander"
+                };
+                format!("{who} (SITL)")
+            };
+            let header = recreation_towers::record::Header::of(&w.game, 0, [side(0), side(1)]);
+            match recreation_towers::record::Recorder::to_file(&dir.join("game.jsonl"), &w.game, header) {
+                Ok(r) => w.record = Some(r),
+                Err(e) => {
+                    eprintln!("--record {}: {e}", dir.display());
+                    std::process::exit(2);
+                }
+            }
+        }
         // Each drone's ArduPilot log of this game is the only one in its instance's logs.
         for k in 1..=n {
             clear_logs(&instances.join(format!("instance{k}")));
