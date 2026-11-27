@@ -129,6 +129,24 @@ PR #138 was, and keeps the arena's results identical where it should change noth
    force. A `Deep` advisor: a lookahead with a long horizon and few looks, which posts only
    intents, run with a delay of 20 s. Measure: lookahead alone, against lookahead with `Deep`'s
    intents, and `Deep`'s intents with no delay (what lateness costs a slow thinker).
+   *Results (2026-11-26, development seeds 1 to 200, 400 games a row; leads, not confirmed on
+   fresh seeds).* Margin of lookahead + `Deep` against the lookahead alone, by how late `Deep`'s
+   intents reach the board:
+
+   | Delay | FOLLOW 10, LEAVE 20 | FOLLOW 10, LEAVE 0 | FOLLOW 0, LEAVE 20 | FOLLOW 3, LEAVE 5 |
+   |---|---|---|---|---|
+   | 0 s | +0.09 ± 0.06 | +0.12 ± 0.06 | +0.05 ± 0.06 | -0.02 ± 0.06 |
+   | 5 s | | +0.07 ± 0.06 | | |
+   | 10 s | | -0.06 ± 0.06 | | |
+   | 20 s | -0.06 ± 0.06 | -0.05 ± 0.06 | -0.04 ± 0.06 | -0.01 ± 0.06 |
+
+   With following off (FOLLOW 0, LEAVE 0) the games are the lookahead's alone, to the game
+   (+0.00). The local model answers a short summary of the map in about 9 s (`qwen3.5` on this
+   Mac, after a 4 s first load), which is where `Deep`'s intents are worth nothing. What `Deep`
+   posts is still a judgement on the commander's plan of the moment (what one more drone at a
+   tower would gain *now*), and it goes stale like a proposal. An intent that is to survive 10 to
+   20 s needs to say something that stays true that long.
+
 3. **Critiques and track records.** Critiques change a proposal's worth; each advisor's weight
    follows its record. Measure against step 2.
 4. **Assessments.** The `Assessment` entry; the lookahead's belief uses it. Measure.

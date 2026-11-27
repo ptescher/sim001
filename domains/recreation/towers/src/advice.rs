@@ -66,6 +66,43 @@ pub struct Entry {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum EntryKind {
     Proposal(Proposal),
+    Intent(Intent),
+}
+
+/// What an intent says of one tower.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Aim {
+    /// Take it, with this weight (0 to 1: how much more it matters than the other towers to take).
+    Take(f32),
+    /// Keep it, with this weight.
+    Hold(f32),
+    /// Leave it: do not send drones there.
+    Leave,
+    /// No view.
+    Open,
+}
+
+/// A strategy for the next minute or two (`plans/advisors.md`): an aim for each tower, by its
+/// number, and the words for a person. A slow thinker posts it; fast thinkers follow it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Intent {
+    pub aims: Vec<Aim>,
+    pub why: String,
+}
+
+impl Intent {
+    /// The bias that following this intent puts on sending a drone to each tower, in points:
+    /// `follow` times the weight for a tower to take or hold, minus `leave` for one to leave.
+    pub fn bias(&self, follow: f32, leave: f32) -> Vec<f32> {
+        self.aims
+            .iter()
+            .map(|a| match *a {
+                Aim::Take(w) | Aim::Hold(w) => follow * w.clamp(0.0, 1.0),
+                Aim::Leave => -leave,
+                Aim::Open => 0.0,
+            })
+            .collect()
+    }
 }
 
 impl Entry {
@@ -85,6 +122,15 @@ impl Entry {
     pub fn as_proposal(&self) -> Option<&Proposal> {
         match &self.kind {
             EntryKind::Proposal(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// The intent, if the entry is one.
+    pub fn as_intent(&self) -> Option<&Intent> {
+        match &self.kind {
+            EntryKind::Intent(i) => Some(i),
+            _ => None,
         }
     }
 }
@@ -178,7 +224,19 @@ pub struct Lookahead {
     /// A drone it proposed a move for is left alone this long (s), and when it proposed it last.
     cooldown: f32,
     moved: Vec<f32>,
+    /// The intent it follows (the last one posted that still holds), with its author.
+    intent: Option<(Entry, String)>,
+    /// Following an intent: points added per unit of a tower's weight, and taken off a tower to
+    /// leave, when it chooses which change to propose (not to the gain it reports).
+    follow: f32,
+    leave: f32,
 }
+
+/// Points a lookahead adds, per unit of weight, to a change that takes a tower an intent says to
+/// take or hold.
+pub const FOLLOW: f32 = 10.0;
+/// Points it takes off a change that sends a drone to a tower an intent says to leave.
+pub const LEAVE: f32 = 20.0;
 
 impl Lookahead {
     pub fn new(rules: Rules) -> Lookahead {
@@ -190,7 +248,18 @@ impl Lookahead {
             model: Model::default(),
             cooldown: 0.0,
             moved: vec![],
+            intent: None,
+            follow: FOLLOW,
+            leave: LEAVE,
         }
+    }
+
+    /// A lookahead that follows intents this much (points per unit of weight, and off a tower to
+    /// leave); 0 and 0 ignore them.
+    pub fn following(mut self, follow: f32, leave: f32) -> Lookahead {
+        self.follow = follow;
+        self.leave = leave;
+        self
     }
 
     /// A lookahead whose model has these rules (for measuring what each is worth).
@@ -226,7 +295,9 @@ impl Advise for Lookahead {
         self.last = view.time;
         self.moved.resize(hand.orders.len(), f32::NEG_INFINITY);
         let hold: Vec<bool> = self.moved.iter().map(|&m| view.time - m < self.cooldown).collect();
-        let Some((drone, tower, gain)) = lookahead::best_change_with(
+        let intent = self.intent.as_ref().filter(|(e, _)| e.until >= view.time);
+        let bias = intent.and_then(|(e, _)| e.as_intent()).map_or(vec![], |i| i.bias(self.follow, self.leave));
+        let Some((drone, tower, gain)) = lookahead::best_change_biased(
             &self.rules,
             view,
             &hand.orders,
@@ -235,9 +306,11 @@ impl Advise for Lookahead {
             &hand.away,
             &self.belief,
             self.model,
+            &bias,
         ) else {
             return vec![];
         };
+        let following = intent.filter(|_| bias.get(tower).is_some_and(|&b| b > 0.0)).map(|(_, a)| a.clone());
         self.moved[drone] = view.time;
         vec![Proposal {
             drone,
@@ -247,16 +320,142 @@ impl Advise for Lookahead {
             made: view.time,
             until: view.time + self.model.horizon,
             why: format!(
-                "Send drone {} to the {} tower: about {gain:.0} points over the next {:.0} s.",
+                "Send drone {} to the {} tower: about {gain:.0} points over the next {:.0} s{}.",
                 drone + 1,
                 view.towers[tower].name,
-                self.model.horizon
+                self.model.horizon,
+                following.map_or(String::new(), |a| format!(", as {a}'s intent says"))
             ),
         }]
     }
 
+    fn look(&mut self, view: &TeamView, hand: &Hand, board: &[Entry]) -> Vec<Entry> {
+        // The intent to follow: the last one posted.
+        if let Some(e) = board.iter().rev().find(|e| e.as_intent().is_some()) {
+            self.intent = Some((e.clone(), e.author.clone()));
+        }
+        let name = self.name();
+        self.advise(view, hand).into_iter().map(|p| Entry::proposal(name.clone(), p)).collect()
+    }
+
     fn name(&self) -> String {
         "lookahead".into()
+    }
+
+    fn clone_box(&self) -> Box<dyn Advise> {
+        Box::new(self.clone())
+    }
+}
+
+/// The slow thinker's stand-in (`plans/advisors.md`, step 2): every [`DEEP_EVERY`] s it plays the
+/// game [`DEEP_HORIZON`] s forward, for every drone it may send to every tower, and posts an intent
+/// for the next [`DEEP_HOLDS`] s, against what the commander means to do: take the towers that
+/// sending one more drone to would gain at (weighted by that gain), leave the ones that taking a
+/// drone off would gain at. It gives no orders.
+#[derive(Clone, Debug)]
+pub struct Deep {
+    rules: Rules,
+    belief: Belief,
+    last: f32,
+    model: Model,
+}
+
+/// A deep thinker looks this often (s)...
+pub const DEEP_EVERY: f32 = 15.0;
+/// ...this far ahead (s)...
+pub const DEEP_HORIZON: f32 = 120.0;
+/// ...and its intent holds this long (s).
+pub const DEEP_HOLDS: f32 = 60.0;
+/// A tower whose best move gains more than this (points) is one to take...
+const TAKE_AT: f32 = 1.0;
+/// ...and one that taking a drone off gains more than this at is one to leave.
+const LEAVE_AT: f32 = 5.0;
+
+impl Deep {
+    pub fn new(rules: Rules) -> Deep {
+        Deep {
+            rules,
+            belief: Belief::new(rules, Team::Blue),
+            last: f32::NEG_INFINITY,
+            model: Model { horizon: DEEP_HORIZON, ..Model::default() },
+        }
+    }
+
+    /// The intent it would post on this map.
+    pub fn intent(&self, view: &TeamView, hand: &Hand) -> Intent {
+        let none = vec![false; hand.orders.len()];
+        let gains = lookahead::change_gains(
+            &self.rules,
+            view,
+            &hand.orders,
+            &hand.free,
+            &none,
+            &hand.away,
+            &self.belief,
+            self.model,
+        );
+        // For each tower: the most that sending a drone to it gains, and the most that taking a
+        // drone off it (to any other tower) gains.
+        let n = view.towers.len();
+        let (mut to, mut off) = (vec![f32::NEG_INFINITY; n], vec![f32::NEG_INFINITY; n]);
+        for ((k, t), g) in gains.into_iter().filter(|(_, g)| g.is_finite()) {
+            to[t] = to[t].max(g);
+            if let Some(Order::Take(from)) = hand.orders[k] {
+                off[from] = off[from].max(g);
+            }
+        }
+        let top = to.iter().copied().fold(0.0f32, f32::max);
+        let aims: Vec<Aim> = (0..n)
+            .map(|t| {
+                if view.towers[t].holder == Some(view.team) {
+                    Aim::Open
+                } else if to[t] > TAKE_AT {
+                    Aim::Take((to[t] / top.max(TAKE_AT)).clamp(0.0, 1.0))
+                } else if off[t] > LEAVE_AT {
+                    Aim::Leave
+                } else {
+                    Aim::Open
+                }
+            })
+            .collect();
+        let names = |pick: fn(&Aim) -> bool| -> Vec<String> {
+            aims.iter().zip(&view.towers).filter(|(a, _)| pick(a)).map(|(_, t)| t.name.clone()).collect()
+        };
+        let take = names(|a| matches!(a, Aim::Take(_)));
+        let leave = names(|a| matches!(a, Aim::Leave));
+        let why = match (take.is_empty(), leave.is_empty()) {
+            (true, true) => "Nothing to take that would gain: hold what we have.".to_string(),
+            (false, true) => format!("Take the {}.", take.join(", ")),
+            (true, false) => format!("Leave the {}.", leave.join(", ")),
+            (false, false) => format!("Take the {}; leave the {}.", take.join(", "), leave.join(", ")),
+        };
+        Intent { aims, why }
+    }
+}
+
+impl Advise for Deep {
+    fn look(&mut self, view: &TeamView, hand: &Hand, _board: &[Entry]) -> Vec<Entry> {
+        if self.belief.team() != view.team {
+            self.belief = Belief::new(self.rules, view.team);
+        }
+        self.belief.update(view);
+        if view.time < LOOK_AFTER || view.time - self.last < DEEP_EVERY {
+            return vec![];
+        }
+        self.last = view.time;
+        let intent = self.intent(view, hand);
+        vec![Entry {
+            id: 0,
+            author: self.name(),
+            made: view.time,
+            until: view.time + DEEP_HOLDS,
+            confidence: 1.0,
+            kind: EntryKind::Intent(intent),
+        }]
+    }
+
+    fn name(&self) -> String {
+        "deep".into()
     }
 
     fn clone_box(&self) -> Box<dyn Advise> {

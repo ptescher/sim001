@@ -323,12 +323,15 @@ pub fn best_change(
     away: &[Vec<bool>],
     belief: &Belief,
 ) -> Option<(usize, usize, f32)> {
-    best_change_with(rules, view, orders, free, &vec![false; orders.len()], away, belief, Model::default())
+    best_change_biased(rules, view, orders, free, &vec![false; orders.len()], away, belief, Model::default(), &[])
 }
 
-/// The same with the model's rules chosen, and the drones `hold`ing back from a move.
+/// The change of one drone's order that gains most in the model, chosen by its gain plus `bias[t]`
+/// for the tower it sends a drone to (an intent's say: more for a tower to take, less for one to
+/// leave; no bias for a tower past the end of `bias`). The gain it returns is the model's, without
+/// the bias. The model's rules are `model`'s, and the drones `hold`ing back from a move are not moved.
 #[allow(clippy::too_many_arguments)]
-pub fn best_change_with(
+pub fn best_change_biased(
     rules: &Rules,
     view: &TeamView,
     orders: &[Option<Order>],
@@ -337,7 +340,30 @@ pub fn best_change_with(
     away: &[Vec<bool>],
     belief: &Belief,
     model: Model,
+    bias: &[f32],
 ) -> Option<(usize, usize, f32)> {
+    let gains = change_gains(rules, view, orders, free, hold, away, belief, model);
+    let biased = |&((_, t), g): &((usize, usize), f32)| g + bias.get(t).copied().unwrap_or(0.0);
+    gains
+        .into_iter()
+        .filter(|&(_, g)| g.is_finite())
+        .max_by(|a, b| biased(a).total_cmp(&biased(b)))
+        .map(|((k, t), g)| (k, t, g))
+}
+
+/// Every change the lookahead considers (drone `k` to take tower `t`) and its mean gain over the
+/// futures drawn.
+#[allow(clippy::too_many_arguments)]
+pub fn change_gains(
+    rules: &Rules,
+    view: &TeamView,
+    orders: &[Option<Order>],
+    free: &[bool],
+    hold: &[bool],
+    away: &[Vec<bool>],
+    belief: &Belief,
+    model: Model,
+) -> Vec<((usize, usize), f32)> {
     let towers = view.towers.len();
     let base = rules.base(view.team);
     // A drone is not sent where its battery cannot last the flight, the capture and the way home.
@@ -383,10 +409,7 @@ pub fn best_change_with(
             gain[c] += play(&changed, future) - base;
         }
     }
-    let (best, total) =
-        gain.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1)).filter(|&(_, g)| g.is_finite())?;
-    let (k, t) = candidates[best];
-    Some((k, t, total / model.futures as f32))
+    candidates.into_iter().zip(gain).map(|(c, g)| (c, g / model.futures.max(1) as f32)).collect()
 }
 
 #[cfg(test)]
