@@ -58,7 +58,30 @@ The record is what every other tool reads, so none of them needs the game's code
    sees and which of its drones the enemy sees (the owner's rule above), as the record already
    does.
 
+## Done (2026-11-27)
+
+All seven steps, in the first version:
+
+| Step | Where | Use |
+| --- | --- | --- |
+| 1. The record | `recreation_towers::record`; the arena's `play_recorded` | a recorded game plays as an unrecorded one |
+| 2. The batch runner | `cargo run --release -p cognition_towers --bin towers_games -- --games 20 --blue deep --red commander --swap --out DIR` | 40 arena games in under a second, a record each (about 650 kB) and `summary.tsv` |
+| 3. The replay page | `--bin towers_replay -- DIR/1.jsonl` | a page that stands alone; `#t=120` opens it at 120 s |
+| 4. Videos | `--bin towers_video -- DIR/1.jsonl [--view blue] [--speed 10]` | an MP4 with overlays; a 250 s game renders in about 30 s |
+| 5. The report | `--bin towers_report -- DIR [--out report.md]` | by side, by game, by advisor |
+| 6. SITL | `towers_server --record DIR` writes `DIR/game.jsonl` too | the same tools read it (no board lines yet: the computer commanders' boards are at their seats) |
+| 7. Sightings | `OwnDrone::spotted`, `Sites::spotted`; the fog spec | each team is told which of its drones the enemy sees |
+
+First things the tools showed: the Blue seat wins about a fifth of arena games (9 of 40, both
+sides the same commander); a team's drones are seen about 35 % of their flying time in the arena
+and about 60 % on SITL.
+
 ## Not settled
 
 - The 3D replay (step 4, later): `towers_view` playing a record and capturing frames.
+- The boards of a SITL game: the computer commanders run at their seats; the server needs them
+  (or the seats write their own part of the record).
+- What a proposal was worth: the report's "lead's move" says how things went over a taken
+  proposal's horizon, not what it gained against not taking it. The arena could replay the game
+  from that moment without it (a counterfactual), once a match can be snapshotted.
 - How long a batch's records are kept (a game's record is a few hundred kB).

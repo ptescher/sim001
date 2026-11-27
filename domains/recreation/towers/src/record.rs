@@ -382,6 +382,21 @@ mod tests {
     }
 
     #[test]
+    fn a_team_is_told_which_of_its_drones_the_enemy_sees() {
+        let mut g = Game::new(Rules::default());
+        let red = g.drone(Team::Red, 0);
+        let k = red % g.rules.drones;
+        assert!(!g.view(Team::Red).drones[k].spotted);
+        // Near Blue's home tower, which Blue holds and sees round.
+        g.drones[red] = crate::Drone { at: g.towers[0].at, alt: 20.0, phase: Phase::Flying, ..g.drones[red] };
+        g.step(0.1);
+        assert!(g.view(Team::Blue).enemies.iter().any(|e| e.k == k && e.seen), "Blue sees it");
+        assert!(g.view(Team::Red).drones[k].spotted, "and Red is told so");
+        assert!(g.sites(Team::Red).spotted.contains(&k), "a seat is told so too");
+        assert!(!g.view(Team::Red).drones[(k + 1) % g.rules.drones].spotted, "not the others");
+    }
+
+    #[test]
     fn a_board_goes_into_the_record_with_what_the_commander_took() {
         let g = Game::new(Rules::default());
         let kept = Kept::default();
