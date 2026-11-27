@@ -460,6 +460,7 @@ impl Commander {
         }
         if let Some(b) = best {
             let p = self.proposals[b].clone();
+            self.board.took(now, &p);
             self.orders[p.drone] = Some(p.order);
             self.queues[p.drone] = Some((p.order, p.queue.clone()));
             for (i, q) in self.proposals.iter().enumerate() {

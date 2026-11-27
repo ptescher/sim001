@@ -45,6 +45,11 @@ pub trait Command {
     fn advised_by(&mut self, _advisor: Box<dyn crate::Advise>, _delay: f32) -> bool {
         false
     }
+
+    /// The team's board (`plans/advisors.md`), for a recording of the game; none by default.
+    fn board(&self) -> Option<&crate::Board> {
+        None
+    }
 }
 
 impl<C: Command + ?Sized> Command for &mut C {
@@ -55,6 +60,10 @@ impl<C: Command + ?Sized> Command for &mut C {
     fn advised_by(&mut self, advisor: Box<dyn crate::Advise>, delay: f32) -> bool {
         (**self).advised_by(advisor, delay)
     }
+
+    fn board(&self) -> Option<&crate::Board> {
+        (**self).board()
+    }
 }
 
 impl<C: Command + ?Sized> Command for Box<C> {
@@ -64,6 +73,10 @@ impl<C: Command + ?Sized> Command for Box<C> {
 
     fn advised_by(&mut self, advisor: Box<dyn crate::Advise>, delay: f32) -> bool {
         (**self).advised_by(advisor, delay)
+    }
+
+    fn board(&self) -> Option<&crate::Board> {
+        (**self).board()
     }
 }
 
@@ -76,6 +89,10 @@ impl Command for crate::Commander {
     fn advised_by(&mut self, advisor: Box<dyn crate::Advise>, delay: f32) -> bool {
         self.add_advisor(advisor, delay);
         true
+    }
+
+    fn board(&self) -> Option<&crate::Board> {
+        Some(crate::Commander::board(self))
     }
 }
 

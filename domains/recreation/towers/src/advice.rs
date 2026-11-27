@@ -139,6 +139,8 @@ impl Entry {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Board {
     entries: Vec<Entry>,
+    /// The proposals the commander took: when (game time, s), and the entry's id.
+    taken: Vec<(f32, u64)>,
 }
 
 impl Board {
@@ -167,6 +169,19 @@ impl Board {
     /// Every entry, in the order posted.
     pub fn entries(&self) -> &[Entry] {
         &self.entries
+    }
+
+    /// The commander took proposal `p` at game time `at`: notes it against the last entry that
+    /// posted it (none if it was never posted).
+    pub fn took(&mut self, at: f32, p: &Proposal) {
+        if let Some(e) = self.entries.iter().rev().find(|e| e.as_proposal() == Some(p)) {
+            self.taken.push((at, e.id));
+        }
+    }
+
+    /// The proposals the commander took, in order: when, and the entry's id.
+    pub fn taken(&self) -> &[(f32, u64)] {
+        &self.taken
     }
 }
 
