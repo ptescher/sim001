@@ -24,13 +24,20 @@ pub struct Outbox {
     sent: Option<(u32, Instant)>,
     /// The number of the last picture that went out.
     frame: u32,
+    /// The app it went out to (see [`Outbox::send`]).
+    app: u32,
 }
 
 impl Outbox {
-    /// The picture rendered for `request` came back as `bytes` bytes at `now`: the header it goes
-    /// out with, or `None` if it does not go out (another size than asked for, older than one
-    /// sent, or too soon after the last).
-    pub fn send(&mut self, request: &Request, bytes: usize, now: Instant) -> Option<Frame> {
+    /// The picture rendered for `request` came back as `bytes` bytes at `now`, with `app` the number
+    /// of the app connected now: the header it goes out with, or `None` if it does not go out
+    /// (another size than asked for, older than one sent to this app, or too soon after the last).
+    pub fn send(&mut self, request: &Request, bytes: usize, now: Instant, app: u32) -> Option<Frame> {
+        if app != self.app {
+            // Another app: its requests are numbered from 1 again.
+            self.app = app;
+            self.sent = None;
+        }
         let (w, h) = (request.width.clamp(16, MAX_SIZE.0), request.height.clamp(16, MAX_SIZE.1));
         // Texture readbacks pad each row to 256 bytes.
         let stride = (w as u32 * 4).div_ceil(256) * 256;
@@ -87,7 +94,7 @@ mod tests {
         for k in 1..=10u32 {
             // A new camera every frame, 60 frames a second.
             let at = t0 + Duration::from_millis(17 * k as u64);
-            let f = out.send(&req(k), bytes(300, 200), at).expect("a picture each frame");
+            let f = out.send(&req(k), bytes(300, 200), at, 1).expect("a picture each frame");
             assert_eq!((f.seq, f.eye, f.width, f.height), (k, req(k).eye, 300, 200));
         }
     }
@@ -96,25 +103,35 @@ mod tests {
     fn a_picture_older_than_one_sent_does_not_go_out() {
         let t0 = Instant::now();
         let mut out = Outbox::default();
-        assert!(out.send(&req(5), bytes(300, 200), t0).is_some());
-        assert!(out.send(&req(4), bytes(300, 200), t0 + Duration::from_millis(20)).is_none());
-        assert!(out.send(&req(6), bytes(300, 200), t0 + Duration::from_millis(40)).is_some());
+        assert!(out.send(&req(5), bytes(300, 200), t0, 1).is_some());
+        assert!(out.send(&req(4), bytes(300, 200), t0 + Duration::from_millis(20), 1).is_none());
+        assert!(out.send(&req(6), bytes(300, 200), t0 + Duration::from_millis(40), 1).is_some());
+    }
+
+    /// An app that starts again numbers its cameras from 1 again: its pictures go out, though a
+    /// higher number went out to the app before it.
+    #[test]
+    fn a_new_app_numbers_its_cameras_from_one_again() {
+        let (mut out, t0) = (Outbox::default(), Instant::now());
+        assert!(out.send(&req(500), bytes(300, 200), t0, 1).is_some());
+        assert!(out.send(&req(1), bytes(300, 200), t0 + Duration::from_secs(1), 2).is_some());
+        assert!(out.send(&req(2), bytes(300, 200), t0 + Duration::from_secs(2), 2).is_some());
     }
 
     #[test]
     fn a_picture_of_another_size_than_its_request_does_not_go_out() {
         // The battlefield was resized and the texture had not caught up yet.
         let mut out = Outbox::default();
-        assert!(out.send(&req(1), bytes(640, 200), Instant::now()).is_none());
+        assert!(out.send(&req(1), bytes(640, 200), Instant::now(), 1).is_none());
     }
 
     #[test]
     fn at_most_max_fps_pictures_go_out() {
         let t0 = Instant::now();
         let mut out = Outbox::default();
-        assert!(out.send(&req(1), bytes(300, 200), t0).is_some());
-        assert!(out.send(&req(2), bytes(300, 200), t0 + Duration::from_millis(3)).is_none(), "too soon");
-        assert!(out.send(&req(3), bytes(300, 200), t0 + Duration::from_secs_f64(1.0 / MAX_FPS)).is_some());
+        assert!(out.send(&req(1), bytes(300, 200), t0, 1).is_some());
+        assert!(out.send(&req(2), bytes(300, 200), t0 + Duration::from_millis(3), 1).is_none(), "too soon");
+        assert!(out.send(&req(3), bytes(300, 200), t0 + Duration::from_secs_f64(1.0 / MAX_FPS), 1).is_some());
     }
 
     #[test]
@@ -122,15 +139,15 @@ mod tests {
         // The app connected again, or a picture was lost: a still camera still gets pictures.
         let t0 = Instant::now();
         let mut out = Outbox::default();
-        assert!(out.send(&req(1), bytes(300, 200), t0).is_some());
-        assert!(out.send(&req(1), bytes(300, 200), t0 + Duration::from_millis(20)).is_some());
+        assert!(out.send(&req(1), bytes(300, 200), t0, 1).is_some());
+        assert!(out.send(&req(1), bytes(300, 200), t0 + Duration::from_millis(20), 1).is_some());
     }
 
     #[test]
     fn a_battlefield_bigger_than_the_largest_picture_gets_the_largest_picture() {
         let mut out = Outbox::default();
         let huge = Request { width: MAX_SIZE.0 + 500, ..req(1) };
-        let f = out.send(&huge, bytes(MAX_SIZE.0 as u32, 200), Instant::now()).expect("the largest picture");
+        let f = out.send(&huge, bytes(MAX_SIZE.0 as u32, 200), Instant::now(), 1).expect("the largest picture");
         assert_eq!(f.width, MAX_SIZE.0);
     }
 }

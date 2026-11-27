@@ -187,8 +187,8 @@ Vocabulary:
     Shows: held by Red: the Red home tower is red
     Shows: neutral: the Red home tower is grey
   State: the link of the first Blue drone is in contact | cut | lost
-    Shows: in contact: the card of B1 shows its telemetry and the picture from its camera
-    Shows: cut: the card of B1 shows NO LINK, with the time since the last contact. The card has no picture
+    Shows: in contact: the card of B1 shows its telemetry, and the PORTRAIT of B1 the picture from its camera
+    Shows: cut: the card of B1 shows NO LINK, with the time since the last contact. The PORTRAIT of B1 has no picture
     Shows: lost: the card of B1 shows NO LINK, and the order of B1 is the last order that you gave. The drone flies home by itself
   State: the link filter lets the frames of the first Blue drone through is yes | no
     Shows: yes: the filter of the link passes the frames to and from B1
@@ -465,7 +465,7 @@ Vocabulary:
   Event: the commander joins the game
     Say: wait until the top bar says BLUE COMMANDER
   Event: the commander waits for the cameras
-    Say: wait until the card of each drone in the bottom bar shows a picture. The 3D view loads the valley first, which takes some minutes after a game starts
+    Say: wait until the PORTRAIT in the bottom bar shows a picture. The 3D view loads the valley first, which takes some minutes after a game starts
   Event: the commander selects the first Blue drone
     Say: click the card of B1 in the bottom bar, or press 1
   Event: the commander sends the selected drone to the west tower
@@ -476,8 +476,8 @@ Vocabulary:
     Say: click HOME, or press B
   Event: the commander flies the selected drone low
     Say: click LOW, or press L
-  Event: the commander clicks the camera of the second Blue drone
-    Say: click the picture in the card of B2
+  Event: the commander clicks the card of the second Blue drone
+    Say: click the card of B2 in the bottom bar
   State: the flight of the first Blue drone is high | low
     Set: select B1, and click LOW until it is {value}
     Shows: low: the card of B1 shows LOW under its order
@@ -489,7 +489,9 @@ Vocabulary:
   State: the maps of the game that the game server sent the app are 0..100000
     Shows: 0: the app got no map of its team from the game server: only the word of the umpire (the clock, the score and the outcome) and the reports of the towers and the base
   State: the camera feeds in the app are 0..5
-    Shows: 5: the card of each Blue drone shows the picture from its camera
+    Shows: 1: the PORTRAIT shows the picture from the camera of the selected drone, and the 3D view renders no other drone's camera
+  State: the icon on the card of the first Blue drone is a plane | a quadcopter | nothing
+    Shows: a plane: the card of B1 shows a plane, as the UNIT panel does for a standard drone
   Event: the game runs for 2 minutes
     Say: wait until the clock has run for 2 minutes
   Event: the game runs for 3 minutes

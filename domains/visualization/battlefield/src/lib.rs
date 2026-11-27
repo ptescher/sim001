@@ -15,7 +15,7 @@ use bevy::render::gpu_readback::{ReadbackComplete, ReadbackOnce};
 use bevy::render::render_resource::{Extent3d, TextureFormat, TextureUsages};
 use std::io::Read;
 use std::net::{TcpListener, TcpStream};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use teleoperation_shared::battlefield::{self, Eye, Frame, Request, write_frame};
@@ -35,6 +35,8 @@ const IDLE_SIZE: UVec2 = UVec2::new(64, 36);
 #[derive(Default)]
 struct Shared {
     clients: AtomicUsize,
+    /// How many apps have connected: an app that starts again numbers its requests from 1 again.
+    apps: AtomicU32,
     request: Mutex<Option<Request>>,
     latest: Mutex<Option<(Frame, Arc<Vec<u8>>)>>,
     new_frame: Condvar,
@@ -102,8 +104,12 @@ fn listen(shared: Arc<Shared>, port: u16) {
         let shared = shared.clone();
         std::thread::spawn(move || {
             shared.clients.fetch_add(1, Ordering::Relaxed);
+            shared.apps.fetch_add(1, Ordering::Relaxed);
             let err = viewer(&shared, stream);
-            shared.clients.fetch_sub(1, Ordering::Relaxed);
+            if shared.clients.fetch_sub(1, Ordering::Relaxed) == 1 {
+                // Nobody asks any more: the battlefield stops rendering.
+                *shared.request.lock().unwrap() = None;
+            }
             println!("battlefield on {port}: the app left ({err})");
         });
     }
@@ -111,9 +117,10 @@ fn listen(shared: Arc<Shared>, port: u16) {
 
 fn viewer(shared: &Arc<Shared>, mut stream: TcpStream) -> String {
     stream.set_nodelay(true).ok();
-    // The app's requests: the newest one counts.
+    // The app's requests: the newest one counts. When the app hangs up, the connection ends.
+    let gone = Arc::new(AtomicBool::new(false));
     if let Ok(mut rd) = stream.try_clone() {
-        let shared = shared.clone();
+        let (shared, gone) = (shared.clone(), gone.clone());
         std::thread::spawn(move || {
             let mut b = [0u8; Request::SIZE];
             while rd.read_exact(&mut b).is_ok() {
@@ -121,6 +128,8 @@ fn viewer(shared: &Arc<Shared>, mut stream: TcpStream) -> String {
                     *shared.request.lock().unwrap() = Some(r);
                 }
             }
+            gone.store(true, Ordering::Relaxed);
+            shared.new_frame.notify_all();
         });
     }
     let mut last = 0u32;
@@ -128,6 +137,9 @@ fn viewer(shared: &Arc<Shared>, mut stream: TcpStream) -> String {
         let (frame, pixels) = {
             let mut latest = shared.latest.lock().unwrap();
             loop {
+                if gone.load(Ordering::Relaxed) {
+                    return "it hung up".into();
+                }
                 if let Some((f, p)) = latest.as_ref().filter(|(f, _)| f.frame != last) {
                     break (*f, p.clone());
                 }
@@ -300,11 +312,52 @@ fn log_frames(links: Res<Links>, mut cams: ResMut<Cams>, mut log: ResMut<FrameLo
 /// The picture rendered for `r` is back: it goes out if the outbox says so.
 fn on_readback(i: usize, r: &Request, ev: &ReadbackComplete, links: &Links, cams: &mut Cams) {
     let cam = &mut cams.0[i];
-    let Some(frame) = cam.outbox.send(r, ev.data.len(), Instant::now()) else {
+    let shared = &links.0[i];
+    let app = shared.apps.load(Ordering::Relaxed);
+    let Some(frame) = cam.outbox.send(r, ev.data.len(), Instant::now(), app) else {
         return;
     };
     cam.sent += 1;
-    let shared = &links.0[i];
     *shared.latest.lock().unwrap() = Some((frame, Arc::new(ev.data.clone())));
     shared.new_frame.notify_all();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use teleoperation_shared::battlefield::Eye;
+
+    fn until(secs: f32, f: impl Fn() -> bool) -> bool {
+        let began = Instant::now();
+        while began.elapsed().as_secs_f32() < secs {
+            if f() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        false
+    }
+
+    /// A battlefield renders while an app asks for it: when the app leaves, its request goes, and
+    /// the battlefield stops rendering for nobody.
+    #[test]
+    fn when_the_app_leaves_its_request_goes() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let links = serve(port - 20, 1);
+        let shared = links.0[0].clone();
+        let began = Instant::now();
+        let mut app = loop {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(s) => break s,
+                Err(e) if began.elapsed() > Duration::from_secs(3) => panic!("no battlefield to connect to: {e}"),
+                Err(_) => std::thread::sleep(Duration::from_millis(20)),
+            }
+        };
+        let r = Request { eye: Eye::default(), width: 64, height: 36, seq: 1 };
+        app.write_all(&r.encode()).unwrap();
+        assert!(until(3.0, || shared.request.lock().unwrap().is_some()), "the request came");
+        drop(app);
+        assert!(until(3.0, || shared.request.lock().unwrap().is_none()), "the request stayed after the app left");
+    }
 }
