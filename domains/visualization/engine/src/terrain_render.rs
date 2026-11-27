@@ -124,7 +124,7 @@ fn coarse_fields(x: f32, z: f32, h: f32, n: Vec3) -> [f32; NF] {
     f[F_MOSS] = if f[F_FOREST] > 0.0 { smoothstep(0.55, 0.75, fbm(x / 6.0 + 9.0, z / 6.0, 3)) } else { 0.0 };
     f[F_DRIFT] = smoothstep(0.50, 0.75, fbm(x / 18.0 + 3.0, z / 18.0 - 8.0, 3));
     f[F_KIND] = fbm(x / 40.0 - 2.0, z / 40.0 + 5.0, 2);
-    f[F_LAKE] = if Vec2::new(x, z).distance(terrain::lake_center()) < terrain::lake_radius() * 2.0 {
+    f[F_LAKE] = if terrain::lakes().iter().any(|&(c, r)| Vec2::new(x, z).distance(c) < r * 2.0) {
         terrain::lake_factor(x, z)
     } else {
         9.0

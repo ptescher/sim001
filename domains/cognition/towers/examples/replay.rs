@@ -92,7 +92,7 @@ fn main() -> Result<(), String> {
         "circle": g.rules.circle_radius,
         "win": g.rules.win_score,
         "duration": g.rules.duration,
-        "lake": { "x": g.map.lake.at.y, "y": g.map.lake.at.x, "r": g.map.lake.radius },
+        "lakes": g.map.lakes.iter().map(|l| json!({ "x": l.at.y, "y": l.at.x, "r": l.radius })).collect::<Vec<_>>(),
         "lanes": g.map.lanes.iter().map(|l| l.points.iter().map(|p| json!([p.y, p.x])).collect::<Vec<_>>()).collect::<Vec<_>>(),
         "bases": g.map.bases.iter().map(|p| json!([p.y, p.x])).collect::<Vec<_>>(),
         "towers": g.towers.iter().map(|t| json!({

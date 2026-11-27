@@ -1,15 +1,19 @@
-//! The valley of Towers: where the towers and the bases stand, the lake, the forest, and the lanes
+//! The valley of Towers: where the towers and the bases stand, the lakes, the forest, and the lanes
 //! that are cut through it (see expectations/09-towers/rules/06-trees.expect).
 //!
 //! The forest covers the field. A drone that flies above the trees goes where it likes, but a drone
 //! that flies *low* (below the treetops) has to keep to open ground: the lanes, the clearings
-//! round the towers and the bases, and the lake. The trees hide a low drone: a team sees one only
+//! round the towers and the bases, and the lakes. The trees hide a low drone: a team sees one only
 //! along a line of open ground.
 //!
 //! Tall mountains stand round the edge of the field (see expectations/09-towers/rules/08-mountains.expect):
 //! they rise from [`MOUNTAINS_FROM`] to [`MOUNTAINS_FULL`] from the centre and are far higher than a drone flies.
-//! They leave a clearing round each base, each tower and the lake, so that the drones can start,
+//! They leave a clearing round each base, each tower and each lake, so that the drones can start,
 //! and fight, in the open. The edge of the field is no road from one base to the other.
+//!
+//! The valley is point-symmetric: Red's half is Blue's turned half round the centre (the towers,
+//! the lanes, the lakes, the forest's edge, the mountains and the trees), so that neither side has
+//! the better ground.
 //!
 //! Positions are on the field: north and east of its centre (m), as everywhere in the game. The
 //! map is worked out from the rules alone, so that the referee, the server, the 3D view and the
@@ -130,11 +134,14 @@ impl Lane {
 pub struct Lake {
     pub at: Vec2,
     pub radius: f32,
+    /// The other lake's shape turned half round (Red's lake, the image of Blue's).
+    pub turned: bool,
 }
 
 impl Lake {
     /// How far the shore is from `at` in the direction `dir` (m).
     pub fn shore(&self, dir: Vec2) -> f32 {
+        let dir = if self.turned { -dir } else { dir };
         let a = dir.y.atan2(dir.x);
         self.radius * (1.0 + 0.14 * (2.0 * a + 0.7).sin() + 0.07 * (3.0 * a + 2.9).sin() + 0.04 * (5.0 * a + 4.4).sin())
     }
@@ -257,7 +264,10 @@ impl Layout {
         Layout {
             towers: vec![
                 spec("Blue home", Kind::Fort, Vec2::new(-home, 0.0), Some(Team::Blue)),
-                spec("west", Kind::Depot, Vec2::new(45.0, -flank - 30.0), None),
+                // Where the east depot stands, turned half round the centre: Red's half of the valley
+                // is Blue's turned (the valley is point-symmetric, so that neither side has the
+                // better ground).
+                spec("west", Kind::Depot, -Vec2::new(-35.0, flank - 30.0), None),
                 spec("centre", Kind::Spire, Vec2::ZERO, None),
                 spec("east", Kind::Depot, Vec2::new(-35.0, flank - 30.0), None),
                 spec("Red home", Kind::Fort, Vec2::new(home, 0.0), Some(Team::Red)),
@@ -278,7 +288,8 @@ pub struct Map {
     pub towers: Vec<Vec2>,
     pub layout: Layout,
     pub bases: [Vec2; 2],
-    pub lake: Lake,
+    /// The lakes: Blue's, by the west lane, and Red's, its image turned half round the centre.
+    pub lakes: [Lake; 2],
     pub lanes: Vec<Lane>,
     /// The open ground apart from the lanes and the lake: round each tower and each base.
     pub clearings: Vec<Circle>,
@@ -322,6 +333,26 @@ impl Map {
             .enumerate()
             .map(|(k, (name, through))| lane(*name, through.iter().map(|&t| towers[t]).collect(), k as i32 * 10))
             .collect();
+        // Point-symmetric: the east lane is the west lane turned half round the centre, and the mid
+        // lane's half on Red's side is its half on Blue's side turned.
+        if let Some(west) = lanes.iter().find(|l| l.name == LaneName::West).cloned() {
+            for l in lanes.iter_mut() {
+                match l.name {
+                    LaneName::East => {
+                        l.points = west.points.iter().rev().map(|&p| -p).collect();
+                        l.through = west.through.iter().rev().map(|&p| -p).collect();
+                    }
+                    LaneName::Mid => {
+                        // Blue's half as it winds, and Red's its image (it passes through the centre).
+                        let n = l.points.len();
+                        for i in 0..n / 2 {
+                            l.points[n - 1 - i] = -l.points[i];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         // The lake lies on the far side of the west lane from the field's centre: the lane runs
         // along its shore, 20 m off the lane's middle where it passes halfway.
         let (a, b) = (towers[0], towers[1]);
@@ -335,14 +366,22 @@ impl Map {
             .map(|s| closest_on_segment(half, s[0], s[1]))
             .min_by(|p, q| p.distance(half).total_cmp(&q.distance(half)))
             .unwrap_or(half);
-        let shape = Lake { at: Vec2::ZERO, radius: LAKE_RADIUS };
-        let lake = Lake { at: near + out * (shape.shore(-out) + 20.0), radius: LAKE_RADIUS };
+        let shape = Lake { at: Vec2::ZERO, radius: LAKE_RADIUS, turned: false };
+        let lake = Lake { at: near + out * (shape.shore(-out) + 20.0), radius: LAKE_RADIUS, turned: false };
+        // Red's lake: Blue's, turned half round the centre.
+        let lakes = [lake, Lake { at: -lake.at, turned: true, ..lake }];
         let homes: Vec<usize> = [Team::Blue, Team::Red]
             .iter()
             .map(|&t| layout.towers.iter().position(|s| s.holder == Some(t)).expect("a home tower"))
             .collect();
         lanes.push(lane(LaneName::Road, vec![bases[0], towers[homes[0]]], 101));
-        lanes.push(lane(LaneName::Road, vec![bases[1], towers[homes[1]]], 211));
+        // Red's road is Blue's turned.
+        let red_road = Lane {
+            name: LaneName::Road,
+            points: lanes.last().map_or(vec![], |b| b.points.iter().map(|&p| -p).collect()),
+            through: vec![bases[1], towers[homes[1]]],
+        };
+        lanes.push(red_road);
         let clearings = towers
             .iter()
             .map(|&at| Circle { at, radius: TOWER_CLEARING })
@@ -354,7 +393,7 @@ impl Map {
             towers,
             layout,
             bases,
-            lake,
+            lakes,
             lanes,
             clearings,
             graph,
@@ -376,13 +415,18 @@ impl Map {
         let lanes = self.lane_distance(p) - LANE_HALF_WIDTH;
         let bulge = bulge(p);
         let rounds = self.clearings.iter().map(|c| c.at.distance(p) - c.radius - bulge);
-        (lanes.min(rounds.fold(f32::MAX, f32::min)) - rag).min(self.lake.distance(p))
+        (lanes.min(rounds.fold(f32::MAX, f32::min)) - rag).min(self.lake_distance(p))
     }
 
-    /// Is `p` in a clearing or on the lake: open ground wide enough to circle in?
+    /// How far `p` is from the nearer lake's shore: below 0 on the water (m).
+    pub fn lake_distance(&self, p: Vec2) -> f32 {
+        self.lakes.iter().map(|l| l.distance(p)).fold(f32::MAX, f32::min)
+    }
+
+    /// Is `p` in a clearing or on a lake: open ground wide enough to circle in?
     pub fn in_clearing(&self, p: Vec2) -> bool {
         let reach = ragged(p) + bulge(p);
-        self.clearings.iter().any(|c| c.at.distance(p) <= c.radius + reach) || self.lake.contains(p)
+        self.clearings.iter().any(|c| c.at.distance(p) <= c.radius + reach) || self.lakes.iter().any(|l| l.contains(p))
     }
 
     /// How far `p` is from the middle of the nearest lane (m).
@@ -406,7 +450,7 @@ impl Map {
         self.clearings
             .iter()
             .copied()
-            .chain([Circle { at: self.lake.at, radius: self.lake.shore(p - self.lake.at) }])
+            .chain(self.lakes.iter().map(|l| Circle { at: l.at, radius: l.shore(p - l.at) }))
             .min_by(|a, b| (a.at.distance(p) - a.radius).total_cmp(&(b.at.distance(p) - b.radius)))
             .expect("a map has clearings")
     }
@@ -431,7 +475,9 @@ impl Map {
         for c in &self.clearings {
             consider(c.at + (p - c.at).normalize_or_zero() * c.radius * 0.9);
         }
-        consider(self.lake.at + (p - self.lake.at).normalize_or_zero() * self.lake.shore(p - self.lake.at) * 0.9);
+        for l in &self.lakes {
+            consider(l.at + (p - l.at).normalize_or_zero() * l.shore(p - l.at) * 0.9);
+        }
         best.1
     }
 
@@ -502,7 +548,7 @@ impl Map {
     /// How tall the mountains are at `p` (m): 0 on the field, and up to [`MOUNTAIN_HEIGHT`] at its edge.
     pub fn mountain_height(&self, p: Vec2) -> f32 {
         if p.length() >= MOUNTAIN_GRID - 2.0 * MOUNTAIN_CELL {
-            return self.mountains_at(p, f32::MAX);
+            return self.turned_mountains(p, f32::MAX);
         }
         // Near the field, from the grid (worked out the first time).
         let grid = self.mountains.0.get_or_init(|| std::sync::Arc::new(self.mountain_grid()));
@@ -532,14 +578,21 @@ impl Map {
                     .iter()
                     .map(|b| b.distance(p) - BASE_CLEARING)
                     .chain(self.towers.iter().map(|t| t.distance(p) - TOWER_CLEARING))
-                    .chain([self.lake.distance(p), self.lane_distance(p) - LANE_HALF_WIDTH - RAGGED])
+                    .chain([self.lake_distance(p), self.lane_distance(p) - LANE_HALF_WIDTH - RAGGED])
                     .fold(f32::MAX, f32::min);
                 // Further back from the open ground in some places than in others.
-                let rim = RIM_WANDERS * (2.0 * value_noise(p / RIM_CELL, 59, -211) - 1.0);
-                grid[j * n + i] = self.mountains_at(p, clear + rim);
+                let rim = RIM_WANDERS * (2.0 * turned_mean(p, |q| value_noise(q / RIM_CELL, 59, -211)) - 1.0);
+                grid[j * n + i] = self.turned_mountains(p, clear + rim);
             }
         }
         grid
+    }
+
+    /// The mountains at `p`: [`Map::mountains_at`] on Blue's half, and on Red's half at `p` turned
+    /// half round the centre (blended across the middle), so that both sides have the same.
+    fn turned_mountains(&self, p: Vec2, clear: f32) -> f32 {
+        let w = smooth(-SEAM, SEAM, p.x);
+        (1.0 - w) * self.mountains_at(p, clear) + w * self.mountains_at(-p, clear)
     }
 
     /// The mountains at `p`, `clear` metres from the open ground they leave clear. Their foot and
@@ -625,11 +678,15 @@ impl Map {
                 // Stands of an age: tall in an old one, short in a young one.
                 let age = hash(ix.div_euclid(6) * 31 + 3, iz.div_euclid(6) * 17 + 11);
                 let height = (TREE_MIN + (TREE_MAX - TREE_MIN) * age) * (0.9 + 0.2 * hash(ix + 77, iz - 33));
-                out.push(TreeSpot {
-                    at,
-                    height: height.clamp(TREE_MIN, TREE_MAX),
-                    conifer: hash(ix - 5, iz + 9) > 0.18,
-                });
+                // Grown on Blue's half (south of the middle) and copied, turned half round the centre,
+                // onto Red's: the forest is point-symmetric as the rest of the valley.
+                if at.x >= 0.0 {
+                    continue;
+                }
+                let tree =
+                    TreeSpot { at, height: height.clamp(TREE_MIN, TREE_MAX), conifer: hash(ix - 5, iz + 9) > 0.18 };
+                out.push(tree);
+                out.push(TreeSpot { at: -at, ..tree });
             }
         }
         out
@@ -708,13 +765,33 @@ fn wind(through: &[Vec2], seed: i32) -> Vec<Vec2> {
 
 /// How much further the forest stands back from the open ground at `p` (m, -RAGGED to RAGGED).
 fn ragged(p: Vec2) -> f32 {
-    RAGGED * (2.0 * value_noise(p / RAGGED_CELL, -401, 733) - 1.0)
+    RAGGED * (2.0 * turned_mean(p, |q| value_noise(q / RAGGED_CELL, -401, 733)) - 1.0)
 }
+
+/// `f` made point-symmetric about the centre: on Blue's half (south of the middle line) `f` itself,
+/// on Red's half `f` at the point turned half round the centre, and across a band [`SEAM`] m each
+/// side of the middle line a blend of the two (stretched back to the range of one), so that there
+/// is no seam. For `f` between 0 and 1 with its mean at 1/2 (the value noise).
+fn turned_mean(p: Vec2, f: impl Fn(Vec2) -> f32) -> f32 {
+    let w = smooth(-SEAM, SEAM, p.x);
+    if w <= 0.0 {
+        return f(p);
+    }
+    if w >= 1.0 {
+        return f(-p);
+    }
+    let m = (1.0 - w) * f(p) + w * f(-p);
+    let spread = ((1.0 - w).powi(2) + w * w).sqrt();
+    (0.5 + (m - 0.5) / spread).clamp(0.0, 1.0)
+}
+
+/// Half the width of the band down the middle of the valley where its two halves are blended (m).
+const SEAM: f32 = 40.0;
 
 /// How far a clearing reaches past its circle at `p` (m): in by a fifth of
 /// [`CLEARING_BULGE`] at most, out by all of it.
 fn bulge(p: Vec2) -> f32 {
-    CLEARING_BULGE * (1.2 * value_noise(p / BULGE_CELL, 17, 905) - 0.2)
+    CLEARING_BULGE * (1.2 * turned_mean(p, |q| value_noise(q / BULGE_CELL, 17, 905)) - 0.2)
 }
 
 /// Smooth noise between 0 and 1 over cells of 1, the same every time for the same offsets.
@@ -778,11 +855,29 @@ mod tests {
     }
 
     #[test]
-    fn the_towers_are_not_laid_out_the_same_for_each_team() {
+    fn the_valley_is_point_symmetric_so_that_neither_side_has_the_better_ground() {
+        // Red's half is Blue's turned half round the centre: the towers, the lanes, the lakes, the
+        // open ground, the mountains and the trees.
         let m = map();
-        // The flank towers are not mirror images of each other.
-        assert!((m.towers[1].x - m.towers[3].x).abs() > 20.0, "{:?}", m.towers);
-        assert!((m.towers[1].length() - m.towers[3].length()).abs() > 20.0);
+        let near = |a: Vec2, b: Vec2| a.distance(b) < 0.01;
+        assert!(near(m.towers[1], -m.towers[3]) && near(m.towers[0], -m.towers[4]), "{:?}", m.towers);
+        assert!(near(m.bases[0], -m.bases[1]));
+        assert!(near(m.lakes[1].at, -m.lakes[0].at));
+        for (a, b) in m.lakes[0].outline(36).iter().zip(m.lakes[1].outline(36).iter().map(|&p| -p)) {
+            assert!(m.lakes[1].distance(-*a).abs() < 0.5 && m.lakes[0].distance(b).abs() < 0.5);
+        }
+        let lane = |name| m.lanes.iter().find(|l| l.name == name).unwrap();
+        let (west, east, mid) = (lane(LaneName::West), lane(LaneName::East), lane(LaneName::Mid));
+        assert!(west.points.iter().rev().zip(&east.points).all(|(&w, &e)| near(-w, e)));
+        assert!(mid.points.iter().rev().zip(&mid.points).all(|(&a, &b)| near(-a, b)));
+        for k in 0..400 {
+            let p = Vec2::new(-600.0 + 3.0 * k as f32, -580.0 + 2.9 * k as f32);
+            assert_eq!(m.open(p), m.open(-p), "{p}");
+            assert!((m.open_distance(p) - m.open_distance(-p)).abs() < 0.01, "{p}");
+            assert!((m.mountain_height(p) - m.mountain_height(-p)).abs() < 0.5, "{p}");
+        }
+        let trees = m.trees();
+        assert!(trees.iter().all(|t| trees.iter().any(|u| near(u.at, -t.at) && u.height == t.height)));
     }
 
     #[test]
@@ -790,19 +885,21 @@ mod tests {
         let m = map();
         let (a, b) = (m.towers[0], m.towers[1]);
         let mid = (a + b) * 0.5;
-        assert!(m.lake.at.distance(mid) < m.lake.radius * 2.0, "{:?}", m.lake);
-        assert!(m.lake.at.distance(a) > m.lake.radius * 2.0 && m.lake.at.distance(b) > m.lake.radius * 2.0);
+        assert!(m.lakes[0].at.distance(mid) < m.lakes[0].radius * 2.0, "{:?}", m.lakes[0]);
+        assert!(
+            m.lakes[0].at.distance(a) > m.lakes[0].radius * 2.0 && m.lakes[0].at.distance(b) > m.lakes[0].radius * 2.0
+        );
         // The west lane's middle is a few metres off the shore, so that its edge meets the lake.
         let west = m.lanes.iter().find(|l| l.name == LaneName::West).unwrap();
         let (d, near) = west
             .points
             .windows(2)
-            .map(|s| (segment_distance(m.lake.at, s[0], s[1]), closest_on_segment(m.lake.at, s[0], s[1])))
+            .map(|s| (segment_distance(m.lakes[0].at, s[0], s[1]), closest_on_segment(m.lakes[0].at, s[0], s[1])))
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .unwrap();
-        let shore = m.lake.shore(near - m.lake.at);
+        let shore = m.lakes[0].shore(near - m.lakes[0].at);
         assert!(d > shore && d < shore + LANE_HALF_WIDTH - 5.0, "{d} from the middle of the lake, the shore {shore}");
-        let far = m.lake.outline(72).iter().map(|p| p.length()).fold(0.0, f32::max);
+        let far = m.lakes[0].outline(72).iter().map(|p| p.length()).fold(0.0, f32::max);
         assert!(far < m.field_radius, "the lake is in the field");
     }
 
@@ -811,8 +908,8 @@ mod tests {
         let m = map();
         assert!(m.open(Vec2::new(-200.0, 5.0)), "on the mid lane");
         assert!(!m.open(Vec2::new(-200.0, 60.0)), "in the forest beside it");
-        assert!(m.open(m.lake.at), "the lake");
-        assert!(!m.open(Vec2::new(300.0, 300.0)));
+        assert!(m.open(m.lakes[0].at), "the lake");
+        assert!(!m.open(Vec2::new(200.0, -60.0)), "in the forest beside it on Red's side");
     }
 
     #[test]
@@ -832,7 +929,7 @@ mod tests {
         let out = Vec2::new(0.0, 1.0);
         let (a, b) = (m.open_distance(on + out * 50.0), m.open_distance(on + out * 60.0));
         assert!(a > 10.0 && (b - a - 10.0).abs() < 2.0, "{a} then {b}");
-        for p in [Vec2::new(-200.0, 70.0), Vec2::new(10.0, 10.0), m.lake.at, Vec2::new(300.0, 300.0)] {
+        for p in [Vec2::new(-200.0, 70.0), Vec2::new(10.0, 10.0), m.lakes[0].at, Vec2::new(300.0, 300.0)] {
             assert_eq!(m.open_distance(p) <= 0.0, m.open(p), "{p}");
         }
     }
@@ -843,8 +940,8 @@ mod tests {
         assert!(m.line_open(Vec2::new(-300.0, 0.0), Vec2::new(-180.0, 0.0)));
         assert!(!m.line_open(Vec2::new(-300.0, 0.0), Vec2::new(-300.0, 130.0)));
         let shore = (m.towers[0] + m.towers[1]) * 0.5;
-        assert!(m.line_open(shore, m.lake.at), "from the lane across the shore to the lake");
-        assert!(shore.distance(m.lake.at) < 150.0);
+        assert!(m.line_open(shore, m.lakes[0].at), "from the lane across the shore to the lake");
+        assert!(shore.distance(m.lakes[0].at) < 150.0);
     }
 
     #[test]
@@ -886,7 +983,7 @@ mod tests {
         for p in [Vec2::new(0.0, 600.0), Vec2::new(0.0, -600.0), Vec2::new(300.0, 500.0), Vec2::new(-300.0, -500.0)] {
             assert!(m.mountain_height(p) >= 250.0, "{p}: {}", m.mountain_height(p));
         }
-        for p in m.towers.iter().chain(&m.bases).chain([&m.lake.at]) {
+        for p in m.towers.iter().chain(&m.bases).chain([&m.lakes[0].at]) {
             assert_eq!(m.mountain_height(*p), 0.0, "{p}");
         }
         assert_eq!(m.mountain_height(Vec2::ZERO), 0.0);
@@ -1062,15 +1159,15 @@ mod tests {
     #[test]
     fn the_lake_shore_comes_in_and_goes_out() {
         let m = map();
-        let r: Vec<f32> = (0..72).map(|k| m.lake.shore(Vec2::from_angle(k as f32 * 5f32.to_radians()))).collect();
+        let r: Vec<f32> = (0..72).map(|k| m.lakes[0].shore(Vec2::from_angle(k as f32 * 5f32.to_radians()))).collect();
         let (lo, hi) = r.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &x| (lo.min(x), hi.max(x)));
         assert!(hi / lo >= 1.25, "the shore is {lo:.0} to {hi:.0} m from the middle: a circle");
         assert!(lo >= 0.75 * LAKE_RADIUS, "the lake narrows to {lo:.0} m");
         for w in r.windows(2) {
             assert!((w[1] - w[0]).abs() < 8.0, "the shore jumps from {:.0} to {:.0} m", w[0], w[1]);
         }
-        for p in m.lake.outline(36) {
-            assert!(m.open(p - (p - m.lake.at) * 0.02) && m.in_clearing(m.lake.at));
+        for p in m.lakes[0].outline(36) {
+            assert!(m.open(p - (p - m.lakes[0].at) * 0.02) && m.in_clearing(m.lakes[0].at));
         }
     }
 

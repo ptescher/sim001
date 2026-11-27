@@ -289,7 +289,7 @@ impl World {
 
     /// Where the middle of the west lane is nearest the lake.
     fn shore(&self) -> Vec2 {
-        let (lane, lake) = (self.lane(LaneName::West), self.game.map.lake.at);
+        let (lane, lake) = (self.lane(LaneName::West), self.game.map.lakes[0].at);
         (0..lane.length() as usize)
             .map(|m| lane.at(m as f32))
             .min_by(|a, b| a.distance(lake).total_cmp(&b.distance(lake)))
@@ -377,7 +377,7 @@ impl World {
                 self.lane(LaneName::Mid).at(330.0),
                 Some(LOW),
             ),
-            "low over the lake" => (new("low over the lake"), self.game.map.lake.at, Some(LOW)),
+            "low over the lake" => (new("low over the lake"), self.game.map.lakes[0].at, Some(LOW)),
             "5 m from the first Blue drone" => {
                 let b = self.game.drones[blue];
                 (new("5 m from the first Blue drone"), b.at + Vec2::new(5.0, 0.0), Some(b.alt))
@@ -1106,7 +1106,12 @@ fn bindings() -> Bindings<World> {
         .observe("the mountains at the west edge of the field", |w| w.mountains_at(Vec2::new(0.0, -600.0)))
         .observe("the mountains at the bases, the towers and the lake", |w| {
             let m = &w.game.map;
-            m.bases.iter().chain(&m.towers).chain([&m.lake.at]).map(|&p| w.mountains_at(p)).fold(0.0, f64::max)
+            m.bases
+                .iter()
+                .chain(&m.towers)
+                .chain(m.lakes.iter().map(|l| &l.at))
+                .map(|&p| w.mountains_at(p))
+                .fold(0.0, f64::max)
         })
         .observe("the way round the edge of the field from base to base", |w| {
             if w.game.map.edge_open(w.game.rules.ceiling) { "open" } else { "closed" }

@@ -16,12 +16,8 @@ static ARENA: OnceLock<Arena> = OnceLock::new();
 pub struct Arena {
     /// The ground is flat within this distance of the origin (m).
     pub radius: f32,
-    pub lake_centre: Vec2,
-    /// The farthest the shore is from `lake_centre` (m).
-    pub lake_radius: f32,
-    /// How far the shore is from `lake_centre` in the direction (x, z) (m): the lake need not be
-    /// round.
-    pub lake_shore: Box<dyn Fn(Vec2) -> f32 + Send + Sync>,
+    /// The lakes (the valley of Towers has two, one on each side).
+    pub lakes: Vec<ArenaLake>,
     /// The forest: every tree on the field.
     pub trees: Vec<Tree>,
     /// How far a point is from the nearest open ground (a lane, a clearing, the lake): below 0 on
@@ -29,6 +25,15 @@ pub struct Arena {
     pub open_distance: Box<dyn Fn(f32, f32) -> f32 + Send + Sync>,
     /// How tall the mountains round the field are at a point (x, z; m): 0 on the field.
     pub mountains: Box<dyn Fn(f32, f32) -> f32 + Send + Sync>,
+}
+
+/// A lake of the valley of Towers.
+pub struct ArenaLake {
+    pub centre: Vec2,
+    /// The farthest the shore is from `centre` (m).
+    pub radius: f32,
+    /// How far the shore is from `centre` in the direction (x, z) (m): the lake need not be round.
+    pub shore: Box<dyn Fn(Vec2) -> f32 + Send + Sync>,
 }
 
 /// Fills in the valley of Towers in place of the Alpine Valley. Call once, before anything asks
@@ -45,13 +50,23 @@ pub fn arena() -> Option<&'static Arena> {
     ARENA.get()
 }
 
-/// Where the lake is (x, z), and how big (m): the Alpine Valley's, or the arena's.
-pub fn lake_center() -> Vec2 {
-    arena().map_or(LAKE_CENTER, |a| a.lake_centre)
+/// Where each lake is (x, z), and how big (the farthest its shore is, m): the Alpine Valley's one,
+/// or the arena's.
+pub fn lakes() -> Vec<(Vec2, f32)> {
+    match arena() {
+        Some(a) => a.lakes.iter().map(|l| (l.centre, l.radius)).collect(),
+        None => vec![(LAKE_CENTER, LAKE_RADIUS)],
+    }
 }
 
+/// The first lake: where it is (x, z).
+pub fn lake_center() -> Vec2 {
+    lakes().first().map_or(LAKE_CENTER, |l| l.0)
+}
+
+/// The first lake: how big (m).
 pub fn lake_radius() -> f32 {
-    arena().map_or(LAKE_RADIUS, |a| a.lake_radius)
+    lakes().first().map_or(LAKE_RADIUS, |l| l.1)
 }
 
 /// Is this the Alpine Valley, with its runway, hangar and outcrops?
@@ -195,11 +210,18 @@ pub fn lake_factor(x: f32, z: f32) -> f32 {
     if real().is_some() {
         return 9.0;
     }
-    let d = Vec2::new(x, z) - lake_center();
-    // The Towers lake is the game's: what the referee and the maps say is water is water.
+    // The Towers lakes are the game's: what the referee and the maps say is water is water.
     if let Some(a) = arena() {
-        return d.length() / (a.lake_shore)(d).max(1.0);
+        return a
+            .lakes
+            .iter()
+            .map(|l| {
+                let d = Vec2::new(x, z) - l.centre;
+                d.length() / (l.shore)(d).max(1.0)
+            })
+            .fold(9.0, f32::min);
     }
+    let d = Vec2::new(x, z) - lake_center();
     let a = d.y.atan2(d.x);
     let wobble = 1.0
         + 0.22 * gradient_noise(a.cos() * 1.6 + 4.0, a.sin() * 1.6 - 2.0)

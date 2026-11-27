@@ -83,11 +83,13 @@ pub fn spawn_scenery(
             rt(meshes.add(sea.build()), water_mat, Transform::from_xyz(0.0, terrain::water_level(), 0.0)),
         ));
     } else {
-        let water = meshes.add(lake_mesh());
-        commands.spawn((
-            Water(water_mat.clone()),
-            rt(water, water_mat, Transform::from_xyz(0.0, terrain::WATER_LEVEL, 0.0)),
-        ));
+        for (centre, radius) in terrain::lakes() {
+            let water = meshes.add(lake_mesh(centre, radius));
+            commands.spawn((
+                Water(water_mat.clone()),
+                rt(water, water_mat.clone(), Transform::from_xyz(0.0, terrain::WATER_LEVEL, 0.0)),
+            ));
+        }
     }
 }
 
@@ -154,11 +156,10 @@ fn pebble_texture() -> Image {
     })
 }
 
-/// The Alpine Valley's lake: a flat grid at the water level (the shore hides its edges), with
-/// the colour under the surface in its vertices.
-fn lake_mesh() -> Mesh {
-    let half = terrain::lake_radius() * 2.0;
-    let c = terrain::lake_center();
+/// A lake (the Alpine Valley's, or one of the Towers valley's two): a flat grid at the water level
+/// (the shore hides its edges), with the colour under the surface in its vertices.
+fn lake_mesh(c: Vec2, radius: f32) -> Mesh {
+    let half = radius * 2.0;
     let n = 160u32;
     let mut b = crate::mesh_util::GeoBuilder::default();
     let mut colours = Vec::new();

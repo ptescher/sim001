@@ -95,7 +95,7 @@ document.getElementById('sub').textContent =
 const svg = document.getElementById('map');
 const base = el('g', {}, svg);
 el('circle', { cx: 0, cy: 0, r: D.field, fill: 'var(--field)', stroke: 'var(--line)', 'stroke-width': 2 }, base);
-el('circle', { cx: D.lake.x, cy: -D.lake.y, r: D.lake.r, fill: 'var(--lake)' }, base);
+for (const lake of D.lakes) el('circle', { cx: lake.x, cy: -lake.y, r: lake.r, fill: 'var(--lake)' }, base);
 for (const lane of D.lanes) {
   el('polyline', { points: lane.map(p => `${p[0]},${-p[1]}`).join(' '), fill: 'none', stroke: 'var(--lane)', 'stroke-width': 10, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, base);
 }

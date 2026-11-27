@@ -88,7 +88,7 @@ pub fn airborne(s: &FlightState) -> bool {
 /// the centre, and the take-off transition carries it out over the lane and the home tower's
 /// clearing and not into the forest behind the base.
 pub fn base_start(rules: &Rules, team: Team, k: usize) -> Start {
-    let at = rules.base(team) + Vec2::new(0.0, 10.0 * (k as f32 - 2.0));
+    let at = recreation_towers::base_spot(rules, team, k);
     let heading = if team == Team::Blue { std::f32::consts::PI } else { 0.0 };
     Start { pos: to_world(at, 0.0), heading }
 }

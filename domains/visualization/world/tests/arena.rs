@@ -2,15 +2,16 @@
 //! this is a test file of its own.
 
 use glam::{Vec2, Vec3};
-use visualization_world::terrain::{self, Arena, Tree};
+use visualization_world::terrain::{self, Arena, ArenaLake, Tree};
 
 fn arena() -> Arena {
     let trees = vec![Tree { pos: Vec3::new(300.0, 0.0, 300.0), height: 25.0, conifer: true, shade: 0, dead: false }];
     Arena {
         radius: 600.0,
-        lake_centre: Vec2::new(-250.0, 280.0),
-        lake_radius: 85.0,
-        lake_shore: Box::new(|_| 85.0),
+        lakes: vec![
+            ArenaLake { centre: Vec2::new(-250.0, 280.0), radius: 85.0, shore: Box::new(|_| 85.0) },
+            ArenaLake { centre: Vec2::new(250.0, -280.0), radius: 85.0, shore: Box::new(|_| 85.0) },
+        ],
         trees,
         // Open ground: a lane along the x axis.
         open_distance: Box::new(|_, z| z.abs() - 30.0),
@@ -35,6 +36,9 @@ fn the_ground_is_flat_over_the_field_with_a_lake_in_it_and_a_forest_cut_open_by_
     assert_eq!((c, terrain::lake_radius()), (Vec2::new(-250.0, 280.0), 85.0));
     assert!(terrain::is_water(c.x, c.y) && terrain::ground_height(c.x, c.y) < terrain::water_level());
     assert!(!terrain::is_water(0.0, 0.0));
+    // And the second lake too.
+    assert_eq!(terrain::lakes().len(), 2);
+    assert!(terrain::is_water(250.0, -280.0));
     // No runway, no buildings, no alpine undergrowth; the trees are the arena's.
     assert!(!terrain::is_runway(0.0, -30.0) && terrain::buildings().is_empty() && terrain::undergrowth().is_empty());
     assert_eq!(terrain::trees().len(), 1);

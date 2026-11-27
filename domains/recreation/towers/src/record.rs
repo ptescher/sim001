@@ -93,8 +93,8 @@ pub struct TowerAt {
 pub struct Field {
     pub radius: f32,
     pub bases: [[f32; 2]; 2],
-    /// The lake's shore, all the way round.
-    pub lake: Vec<[f32; 2]>,
+    /// The lakes' shores, all the way round each.
+    pub lakes: Vec<Vec<[f32; 2]>>,
     /// The lanes, each a line of points, and their half width.
     pub lanes: Vec<Vec<[f32; 2]>>,
     pub lane_half_width: f32,
@@ -160,7 +160,7 @@ impl Header {
             field: Field {
                 radius: map.field_radius,
                 bases: [p(map.bases[0]), p(map.bases[1])],
-                lake: map.lake.outline(72).into_iter().map(p).collect(),
+                lakes: map.lakes.iter().map(|l| l.outline(72).into_iter().map(p).collect()).collect(),
                 lanes: map.lanes.iter().map(|l| l.points.iter().map(|&q| p(q)).collect()).collect(),
                 lane_half_width: crate::map::LANE_HALF_WIDTH,
                 clearings: map.clearings.iter().map(|c| (p(c.at), r(c.radius))).collect(),
@@ -369,7 +369,7 @@ mod tests {
         let lines = read(&String::from_utf8(kept.0.lock().unwrap().clone()).unwrap()).unwrap();
         let Line::Header(h) = &lines[0] else { panic!("{:?}", lines[0]) };
         assert_eq!((h.seed, h.towers.len(), h.drones.len()), (7, g.towers.len(), g.drones.len()));
-        assert!(!h.field.lanes.is_empty() && !h.field.lake.is_empty());
+        assert!(!h.field.lanes.is_empty() && h.field.lakes.len() == 2);
         assert!(matches!(lines[1], Line::Tick(_)));
         assert!(lines.contains(&Line::Spotted { t: r(g.time), by: Team::Blue, drone: red }), "{lines:#?}");
         assert!(lines.contains(&Line::Taken { t: r(g.time), tower: 1, by: Some(Team::Red) }));
