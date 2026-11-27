@@ -18,10 +18,19 @@ Feature: What a team sees
     When the game runs for 10 seconds
     Then the Red scout on the Blue map is seen
 
+  Expectation: A team knows when the enemy sees one of its drones
+    The game tells each team which of its drones the enemy sees now, as it tells it which enemy
+    drones it sees. A team learns it from the game, it does not have to guess it.
+    Given the Red scout is near a Blue drone
+    When the game runs for 10 seconds
+    Then the Red scout on the Blue map is seen
+    And the Red scout on the Red map is spotted
+
   Expectation: A team does not see an enemy drone in the fog
     Given the Red scout is far from anything Blue
     When the game runs for 10 seconds
     Then the Red scout on the Blue map is unknown
+    And the Red scout on the Red map is not spotted
 
   Expectation: An enemy drone that goes into the fog stays where the team last saw it
     Given the Red scout is near a Blue drone
