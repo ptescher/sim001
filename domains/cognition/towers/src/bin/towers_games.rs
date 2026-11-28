@@ -6,13 +6,15 @@
 //! Plays seeds S+1 to S+N (S 0, N 20), Blue's SIDE against Red's, and with `--swap` each seed once
 //! more with the sides changed over. A SIDE is `commander` (the commander with the lookahead, the
 //! default), `plain` (the commander with no advisor), or `deep` / `deep:DELAY` (the lookahead and the
-//! deep thinker, whose intents are DELAY s late, 20 by default). DIR (`towers-games`) gets a record a
+//! deep thinker, whose intents are DELAY s late, 20 by default), each optionally followed by
+//! `+NAME=VALUE` for any of the commander's tuning numbers (`plain+contest_margin=15`), or
+//! `+advice_margin=POINTS`, what a proposal must gain to be taken. DIR (`towers-games`) gets a record a
 //! game, `<seed>.jsonl` (`<seed>-swap.jsonl` swapped), and `summary.tsv`, a line a game. The games run
 //! on T threads (all the machine's by default); each game is the same whatever the threads.
 
 use cognition_towers::{Captain, play_recorded};
 use recreation_towers::record::{self, Line};
-use recreation_towers::{Commander, Deep, Lookahead, Outcome, Rules, Team};
+use recreation_towers::{Commander, CommanderTuning, Deep, Lookahead, Outcome, Rules, Team};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -23,20 +25,54 @@ struct Side {
     name: String,
     deep: Option<f32>,
     lookahead: bool,
+    tuning: CommanderTuning,
+    /// The points a proposal must gain to be taken, if not the commander's own.
+    advice_margin: Option<f32>,
 }
 
 impl Side {
     fn parse(s: &str) -> Result<Side, String> {
+        let mut parts = s.split('+');
+        let mut side = Side::kind(parts.next().unwrap_or_default())?;
+        let mut numbers = side.tuning.to_array();
+        for p in parts {
+            let (name, value) = p.split_once('=').ok_or(format!("{p}: a tuning is NAME=VALUE"))?;
+            if name == "advice_margin" {
+                side.advice_margin = Some(value.parse().map_err(|_| format!("{p}: the value is a number"))?);
+                side.name = format!("{} {name}={value}", side.name);
+                continue;
+            }
+            let i = CommanderTuning::NAMES
+                .iter()
+                .position(|n| *n == name)
+                .ok_or(format!("{name}: not a tuning number (they are {})", CommanderTuning::NAMES.join(", ")))?;
+            numbers[i] = value.parse().map_err(|_| format!("{p}: the value is a number"))?;
+            side.name = format!("{} {name}={value}", side.name);
+        }
+        side.tuning = CommanderTuning::from_array(&numbers).ok_or(format!("{s}: a tuning out of its bounds"))?;
+        Ok(side)
+    }
+
+    fn kind(s: &str) -> Result<Side, String> {
+        let tuning = CommanderTuning::DEFAULT;
         let (kind, arg) = s.split_once(':').map_or((s, None), |(k, a)| (k, Some(a)));
         match kind {
-            "commander" => Ok(Side { name: "commander + lookahead".into(), deep: None, lookahead: true }),
-            "plain" => Ok(Side { name: "commander".into(), deep: None, lookahead: false }),
+            "commander" => Ok(Side {
+                name: "commander + lookahead".into(),
+                deep: None,
+                lookahead: true,
+                tuning,
+                advice_margin: None,
+            }),
+            "plain" => Ok(Side { name: "commander".into(), deep: None, lookahead: false, tuning, advice_margin: None }),
             "deep" => {
                 let delay: f32 = arg.map_or(Ok(20.0), |a| a.parse().map_err(|_| format!("deep:{a}: a delay in s")))?;
                 Ok(Side {
                     name: format!("commander + lookahead + deep ({delay} s late)"),
                     deep: Some(delay),
                     lookahead: true,
+                    tuning,
+                    advice_margin: None,
                 })
             }
             _ => Err(format!("{s}: a side is commander, plain, deep or deep:DELAY")),
@@ -44,9 +80,12 @@ impl Side {
     }
 
     fn captain(&self, rules: Rules) -> Box<dyn Captain> {
-        let mut c = Commander::new(rules).with_lookahead(false);
+        let mut c = Commander::with_tuning(rules, self.tuning).with_lookahead(false);
         if self.lookahead {
             c = c.with_advisor(Lookahead::new(rules), 0.0);
+        }
+        if let Some(m) = self.advice_margin {
+            c = c.with_advice_margin(m);
         }
         if let Some(delay) = self.deep {
             c = c.with_advisor(Deep::new(rules), delay);

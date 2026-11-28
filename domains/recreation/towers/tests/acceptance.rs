@@ -681,10 +681,12 @@ fn bindings() -> Bindings<World> {
         .arrange("the proposal in the hand of the Blue commander", |w, v| {
             w.proposed = v.as_str().unwrap_or("none").to_string();
             match v.as_str() {
-                Some("the Red home tower for 8 points") => w.propose(8.0, 60.0, 0.0),
-                Some("the Red home tower for 4 points") => w.propose(4.0, 60.0, 0.0),
-                Some("the Red home tower for 8 points, good for 5 seconds") => w.propose(8.0, 5.0, 0.0),
-                Some("the Red home tower for 8 points, from the map of 3 seconds before") => w.propose(8.0, 60.0, 3.0),
+                Some("the Red home tower for 48 points") => w.propose(48.0, 60.0, 0.0),
+                Some("the Red home tower for 30 points") => w.propose(30.0, 60.0, 0.0),
+                Some("the Red home tower for 48 points, good for 5 seconds") => w.propose(48.0, 5.0, 0.0),
+                Some("the Red home tower for 48 points, from the map of 3 seconds before") => {
+                    w.propose(48.0, 60.0, 3.0)
+                }
                 _ => {}
             }
         })
@@ -1321,7 +1323,7 @@ mod advice {
     #[test]
     fn a_proposal_that_gains_enough_is_taken() {
         let mut w = World::new();
-        w.propose(8.0, 60.0, 0.0);
+        w.propose(48.0, 60.0, 0.0);
         w.blue_decides();
         assert_eq!(w.blue.order(0), red_home(&w));
     }
@@ -1329,7 +1331,7 @@ mod advice {
     #[test]
     fn a_proposal_that_gains_little_is_not_taken() {
         let mut w = World::new();
-        w.propose(4.0, 60.0, 0.0);
+        w.propose(30.0, 60.0, 0.0);
         w.blue_decides();
         assert_eq!(w.say(w.blue.order(0)), "take the west tower");
     }
@@ -1337,7 +1339,7 @@ mod advice {
     #[test]
     fn a_stale_proposal_is_not_taken() {
         let mut w = World::new();
-        w.propose(8.0, 5.0, 0.0);
+        w.propose(48.0, 5.0, 0.0);
         w.run(10.0);
         w.blue_decides();
         assert_ne!(w.blue.order(0), red_home(&w));
@@ -1350,19 +1352,24 @@ mod advice {
         w.blue_holds(2);
         w.hold("west", &Value::from("neutral"));
         w.hold("Red home", &Value::from("held by Blue"));
-        w.propose(8.0, 60.0, 3.0);
+        w.propose(48.0, 60.0, 3.0);
         w.blue_decides();
         assert_eq!(w.say(w.blue.order(0)), "take the west tower");
     }
 
     #[test]
     fn a_commander_with_no_advisor_does_not_think_ahead() {
-        assert_eq!(sits_at_west(false), Some(Order::Take(World::new().game.tower("west"))));
-        // The same fight, with the lookahead for an advisor, is not stayed in.
-        assert_ne!(sits_at_west(true), Some(Order::Take(World::new().game.tower("west"))));
+        let west = Some(Order::Take(World::new().game.tower("west")));
+        let (order, proposed) = sits_at_west(false);
+        assert_eq!(order, west);
+        assert!(proposed.is_empty(), "no advisor, no proposal: {proposed:?}");
+        // The same fight, with the lookahead for an advisor: it proposes a free tower for the
+        // first drone (and the commander takes it only if it gains enough).
+        let (_, proposed) = sits_at_west(true);
+        assert!(proposed.iter().any(|p| p.drone == 0 && Some(p.order) != west), "{proposed:?}");
     }
 
-    fn sits_at_west(lookahead: bool) -> Option<Order> {
+    fn sits_at_west(lookahead: bool) -> (Option<Order>, Vec<Proposal>) {
         let mut w = World::new();
         w.blue = Commander::new(w.game.rules).with_lookahead(lookahead);
         let west = w.game.tower("west");
@@ -1380,6 +1387,7 @@ mod advice {
         }
         w.blue_decides();
         assert_eq!(w.blue.advisors(), usize::from(lookahead));
-        w.blue.order(0)
+        let proposed = w.blue.board().entries().iter().filter_map(|e| e.as_proposal().cloned()).collect();
+        (w.blue.order(0), proposed)
     }
 }

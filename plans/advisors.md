@@ -33,7 +33,7 @@ map of the moment.
 | --- | --- | --- |
 | `Advise` | `recreation_towers::advice` | `advise(view, hand) -> Vec<Proposal>`: one order for one drone, its gain, the map's time, how long it holds, why |
 | `Lookahead` | `recreation_towers::advice`, `lookahead` | The fast advisor: every 5 s it plays 45 s forward in a small model and proposes the one change that gains most |
-| `Commander` | `recreation_towers::commander` | Takes the best proposal that gains over `ADVICE_MARGIN` (5); an advised order is kept, the defence does not take it back |
+| `Commander` | `recreation_towers::commander` | Takes the best proposal that gains over `ADVICE_MARGIN` (40 since `plans/towers-ai.md`; 5 before); an advised order is kept, the defence does not take it back |
 | Seat side | `recreation_towers_ground::advisors` | Runs advisors on threads or as processes (`{"Look":{view,hand}}` → a list of proposals); `towers_advisor`, the Claude advisor (`claude.rs`, never run against real `claude`) |
 | App | `teleoperation_command` | The ADVISOR rows over the battlefield: proposals, accepted with a click or Y |
 | Arena | `cognition_towers` | `Roster::with_advisor(team, advisor, delay)`: an advisor's answer reaches the commander `delay` s of game time late; examples `advice`, `lookahead`, `margin` |

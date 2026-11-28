@@ -67,6 +67,12 @@ tunable! {
     /// A drone counts as behind at a contested tower when the control is more than this on the
     /// other team's side (0..1 of the bar).
     behind_by / BEHIND_BY = 0.0, 0.0, 0.9;
+    /// The seconds of the refuel margin a drone in a contested circle keeps at the faster drain
+    /// there, on top of the margin at the plain rate (s). 0: a contest is a war of batteries, and
+    /// the side that stays wins it when the other goes home; the bingo and the plain margin still
+    /// bring the drone home (15 kept the light drone out of every contest: it went home the moment
+    /// it saw an enemy in the circle). 0 beat 15 in 78 % of 2000 arena games (plans/towers-ai.md).
+    contest_margin / CONTEST_MARGIN = 0.0, 0.0, 30.0;
 }
 
 /// A drone flies about this fast (m/s), for the time it takes to get home.
@@ -76,8 +82,10 @@ const CRUISE: f32 = 16.0;
 const REFUEL_MARGIN: f32 = 15.0;
 const BACK_TO_WORK: f32 = 0.9;
 /// A commander takes a proposal of an advisor only if it gains more than this many points.
-/// 5, not 2: on 800 fresh seeds it beat 2 head to head (plans/actors.md, step 4).
-pub const ADVICE_MARGIN: f32 = 5.0;
+/// 40: with the lookahead, it beat 5 in 72 % of 2000 arena games, and 20 and 60 by less (the
+/// lookahead's small model is too sure of small gains; plans/towers-ai.md). 5 had beaten 2 on 800
+/// fresh seeds (plans/actors.md, step 4).
+pub const ADVICE_MARGIN: f32 = 40.0;
 
 /// A computer in a team's seat.
 #[derive(Clone, Debug)]
@@ -282,8 +290,9 @@ impl Commander {
                     .map(|e| self.rules.class(e.k).weight())
                     .sum()
             });
-            let rate = 1.0 + self.rules.contest_drain * enemy;
-            let need = self.rules.bingo + home / CRUISE + REFUEL_MARGIN * rate;
+            let extra = self.rules.contest_drain * enemy;
+            let margin = REFUEL_MARGIN + self.tuning.contest_margin * extra;
+            let need = self.rules.bingo + home / CRUISE + margin;
             if self.recharging[d.k] {
                 self.recharging[d.k] = d.battery < BACK_TO_WORK * full;
             } else {
@@ -767,7 +776,7 @@ mod tests {
             crate::Drone { at: Vec2::new(-330.0, 0.0), alt: 50.0, phase: Phase::Flying, ..g.drones[scout] };
         g.step(0.1);
         assert_eq!(decide(&mut c, &g)[0], Some(Order::Take(home)), "it defends");
-        c.advise([Proposal { until: 100.0, ..proposal(0, Order::Take(red_home), 8.0) }]);
+        c.advise([Proposal { until: 100.0, ..proposal(0, Order::Take(red_home), ADVICE_MARGIN + 3.0) }]);
         assert_eq!(decide(&mut c, &g)[0], Some(Order::Take(red_home)), "the advice is taken");
         g.step(1.0);
         let orders = decide(&mut c, &g);
@@ -891,7 +900,7 @@ mod tests {
     fn what_a_seat_passes_on_goes_on_the_board_too() {
         let g = Game::new(Rules::default());
         let mut c = bare(&g);
-        c.advise([proposal(0, Order::Take(g.tower("Red home")), 8.0)]);
+        c.advise([proposal(0, Order::Take(g.tower("Red home")), ADVICE_MARGIN + 3.0)]);
         assert_eq!(c.board().entries().iter().map(|e| (e.id, e.author.as_str())).collect::<Vec<_>>(), [(1, "seat")]);
         assert_eq!(c.board().in_force(5.0).count(), 1);
         assert_eq!(c.board().in_force(11.0).count(), 0, "a proposal holds until its time");
@@ -1009,7 +1018,7 @@ mod tests {
         let g = Game::new(Rules::default());
         let red_home = Order::Take(g.tower("Red home"));
         let mut c = bare(&g);
-        c.advise([proposal(0, red_home, 8.0)]);
+        c.advise([proposal(0, red_home, ADVICE_MARGIN + 3.0)]);
         c.decide(&g.view(Team::Blue));
         assert_eq!(c.order(0), Some(red_home));
     }
@@ -1031,7 +1040,7 @@ mod tests {
         c.decide(&g.view(Team::Blue));
         let before = c.order(0);
         g.step(10.0);
-        c.advise([Proposal { made: 0.0, until: 5.0, ..proposal(0, red_home, 9.0) }]);
+        c.advise([Proposal { made: 0.0, until: 5.0, ..proposal(0, red_home, ADVICE_MARGIN + 4.0) }]);
         c.decide(&g.view(Team::Blue));
         assert_eq!(c.order(0), before);
     }
@@ -1043,7 +1052,7 @@ mod tests {
         let i = g.drone(Team::Blue, 0);
         g.drones[i].phase = Phase::Down;
         let mut c = bare(&g);
-        c.advise([proposal(0, Order::Hold, 9.0), proposal(99, red_home, 9.0)]);
+        c.advise([proposal(0, Order::Hold, ADVICE_MARGIN + 4.0), proposal(99, red_home, ADVICE_MARGIN + 4.0)]);
         c.decide(&g.view(Team::Blue));
         assert_ne!(c.order(0), Some(Order::Hold));
         // It is not kept for later either: the drone is up again, and the proposal is gone.
@@ -1062,7 +1071,7 @@ mod tests {
         g.towers[west].holder = Some(Team::Blue);
         g.towers[west].control = 1.0;
         g.look();
-        c.advise([proposal(1, Order::Take(west), 9.0)]);
+        c.advise([proposal(1, Order::Take(west), ADVICE_MARGIN + 4.0)]);
         c.decide(&g.view(Team::Blue));
         assert_ne!(c.order(1), Some(Order::Take(west)));
     }
@@ -1072,7 +1081,11 @@ mod tests {
         let g = Game::new(Rules::default());
         let (a, b) = (Order::Take(g.tower("Red home")), Order::Take(g.tower("east")));
         let mut c = bare(&g);
-        c.advise([proposal(0, a, 7.0), proposal(0, b, 9.0), proposal(2, Order::Hold, 6.0)]);
+        c.advise([
+            proposal(0, a, ADVICE_MARGIN + 2.0),
+            proposal(0, b, ADVICE_MARGIN + 4.0),
+            proposal(2, Order::Hold, ADVICE_MARGIN + 1.0),
+        ]);
         c.decide(&g.view(Team::Blue));
         assert_eq!((c.order(0), c.order(2) == Some(Order::Hold)), (Some(b), false));
         c.decide(&g.view(Team::Blue));
@@ -1085,7 +1098,7 @@ mod tests {
         let red_home = Order::Take(g.tower("Red home"));
         let mut c = bare(&g);
         let q = vec![Queued::done(Order::Home)];
-        c.advise([Proposal { queue: q.clone(), ..proposal(0, red_home, 8.0) }]);
+        c.advise([Proposal { queue: q.clone(), ..proposal(0, red_home, ADVICE_MARGIN + 3.0) }]);
         c.decide(&g.view(Team::Blue));
         assert_eq!(c.advised_queue(0), q);
         assert!(c.advised_queue(1).is_empty());
@@ -1095,7 +1108,7 @@ mod tests {
     fn an_advisor_that_is_late_is_taken_when_its_proposal_arrives() {
         let mut g = Game::new(Rules::default());
         let red_home = Order::Take(g.tower("Red home"));
-        let mut c = bare(&g).with_advisor(Fixed(proposal(0, red_home, 8.0)), 3.0);
+        let mut c = bare(&g).with_advisor(Fixed(proposal(0, red_home, ADVICE_MARGIN + 3.0)), 3.0);
         for _ in 0..3 {
             c.decide(&g.view(Team::Blue));
             assert_ne!(c.order(0), Some(red_home), "at {}", g.time);
@@ -1109,11 +1122,11 @@ mod tests {
     fn an_advisor_with_no_delay_is_taken_at_once_and_one_that_is_later_than_its_proposal_lasts_is_not() {
         let mut g = Game::new(Rules::default());
         let red_home = Order::Take(g.tower("Red home"));
-        let mut now = bare(&g).with_advisor(Fixed(proposal(0, red_home, 8.0)), 0.0);
+        let mut now = bare(&g).with_advisor(Fixed(proposal(0, red_home, ADVICE_MARGIN + 3.0)), 0.0);
         now.decide(&g.view(Team::Blue));
         assert_eq!(now.order(0), Some(red_home));
         // Good for 5 s, and 8 s late: stale when it arrives.
-        let mut late = bare(&g).with_advisor(Fixed(proposal(0, red_home, 8.0)), 8.0);
+        let mut late = bare(&g).with_advisor(Fixed(proposal(0, red_home, ADVICE_MARGIN + 3.0)), 8.0);
         for _ in 0..30 {
             late.decide(&g.view(Team::Blue));
             assert_ne!(late.order(0), Some(red_home), "at {}", g.time);
